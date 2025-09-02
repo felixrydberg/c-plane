@@ -1,0 +1,24 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+/* Define custom fonts in @theme for Tailwind CSS v4 */
+@theme {
+  --font-audiowide: "Audiowide", sans-serif;
+  --font-space-mono: "Space Mono", monospace;
+  --font-space-grotesk: "Space Grotesk", sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px];
+    @apply font-space-grotesk;
+  }
+  h1, h2 {
+    @apply font-audiowide;
+  }
+}
+
+:root {
+  --ui-radius: 0.375rem;
+  --ui-primary: black;
+}

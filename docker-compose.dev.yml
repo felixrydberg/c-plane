@@ -1,0 +1,141 @@
+services:
+  ui:
+    container_name: ui
+    build:
+      context: ./packages/c-plane-ui
+      target: "development"
+    environment:
+      NODE_ENV: development
+    ports:
+      - 3000:3000
+      - 24678:24678
+    volumes:
+      - ./packages/c-plane-ui:/usr/src/app/src
+
+  kratos:
+    depends_on:
+      kratos-migrate:
+        condition: service_completed_successfully
+    image: oryd/kratos:v1.3.1
+    ports:
+      - '4433:4433' # public
+      - '4434:4434' # admin
+    restart: unless-stopped
+    environment:
+      - DSN=postgres://kratos:${POSTGRES_PASSWORD}@postgresd:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
+      - LOG_LEVEL=trace
+      - SERVE_PUBLIC_BASE_URL=http://127.0.0.1:4455/.ory/kratos/public/
+    command: serve -c /etc/config/kratos/kratos.yml --dev --watch-courier
+    volumes:
+      - type: bind
+        source: ./dev/kratos
+        target: /etc/config/kratos
+    networks:
+      - intranet
+
+  oathkeeper:
+    image: oryd/oathkeeper:v0.37
+    depends_on:
+      - kratos
+    ports:
+      - 4455:4455
+      - 4456:4456
+    command: serve proxy -c "/etc/config/oathkeeper/oathkeeper.yml"
+    environment:
+      - CACHING_ENABLED=true
+      - CACHING_REDIS_ADDRESSES=valkey:6379
+      - LOG_LEVEL=debug
+    restart: on-failure
+    networks:
+      - intranet
+    volumes:
+      - type: bind
+        source: ./dev/oathkeeper
+        target: /etc/config/oathkeeper
+
+  kratos-migrate:
+    image: oryd/kratos:v1.3.1
+    depends_on:
+      postgresd:
+        condition: service_healthy
+    environment:
+      - DSN=postgres://kratos:${POSTGRES_PASSWORD}@postgresd:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
+    volumes:
+      - type: bind
+        source: ./dev/kratos
+        target: /etc/config/kratos
+    command: -c /etc/config/kratos/kratos.yml migrate sql -e --yes
+    restart: on-failure
+    networks:
+      - intranet
+
+  postgresd:
+    image: postgres:17.6
+    environment:
+      POSTGRES_DB: kratos
+      POSTGRES_USER: kratos
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - intranet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kratos"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  valkey:
+    image: valkey/valkey:8.1.3
+    environment:
+      - VALKEY_PASSWORD=${VALKEY_PASSWORD}
+    volumes:
+      - valkey-data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - intranet
+
+  drizzle-gateway:
+    image: ghcr.io/drizzle-team/gateway:latest
+    container_name: drizzle-gateway
+    depends_on:
+      - postgresd
+    environment:
+      PORT: 4983
+      DATABASE_URL_DEFAULT: postgresql://kratos:${POSTGRES_PASSWORD}@postgresd:5432/kratos
+    ports:
+      - "8001:4983"
+    volumes:
+      - drizzle-gateway:/app
+    networks:
+      - intranet
+
+  redisinsight:
+    image: redislabs/redisinsight:latest
+    depends_on:
+      - valkey
+    environment:
+      - RI_HOSTS=local-valkey:valkey:6379
+    ports:
+      - "8002:5540"
+    networks:
+      - intranet
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    ports:
+      - "8003:8025" # web ui
+      - "1025:1025" # smtp
+    networks:
+      - intranet
+
+networks:
+  intranet:
+
+volumes:
+  postgres_data:
+  valkey-data:
+  drizzle-gateway:

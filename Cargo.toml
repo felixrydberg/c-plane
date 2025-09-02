@@ -1,0 +1,3 @@
+[workspace]
+resolver = "3"
+members = ["packages/c-plane", "packages/cell-agent"]
