@@ -1,6 +1,5 @@
 services:
   ui:
-    container_name: ui
     build:
       context: ./packages/c-plane-ui
       target: "development"
@@ -11,6 +10,21 @@ services:
       - 24678:24678
     volumes:
       - ./packages/c-plane-ui:/usr/src/app/src
+    networks:
+      - intranet
+
+  # api:
+  #   build:
+  #     context: ./packages/c-plane
+  #     target: "development"
+  #   environment:
+  #     NODE_ENV: development
+  #   ports:
+  #     - 3001:3000
+  #   volumes:
+  #     - ./packages/c-plane:/usr/src/app/src
+  #   networks:
+  #     - intranet
 
   kratos:
     depends_on:
@@ -44,7 +58,6 @@ services:
     environment:
       - CACHING_ENABLED=true
       - CACHING_REDIS_ADDRESSES=valkey:6379
-      - LOG_LEVEL=debug
     restart: on-failure
     networks:
       - intranet
@@ -100,7 +113,6 @@ services:
 
   drizzle-gateway:
     image: ghcr.io/drizzle-team/gateway:latest
-    container_name: drizzle-gateway
     depends_on:
       - postgresd
     environment:
