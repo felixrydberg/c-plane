@@ -1,4 +1,9 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+  const request = () => {
+    console.log('Requesting...');
+    useFetch('/api/health');
+  }
+</script>
 
 <template>
   <UDashboardPanel id="home">
@@ -21,6 +26,9 @@
     </template>
 
     <template #body>
+      <UButton @click="request">
+        Test
+      </UButton>
     </template>
   </UDashboardPanel>
 </template>

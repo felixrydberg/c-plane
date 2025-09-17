@@ -19,7 +19,7 @@ pub fn load_config() -> Result<Config, AppError> {
         return Err(AppError::Config(ConfigError::MissingDatabaseUrl));
     }
 
-    let server_host = env::var("SERVER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let server_host = env::var("SERVER_HOST").unwrap_or_else(|_| "localhost".to_string());
 
     let server_port = env::var("SERVER_PORT")
         .unwrap_or_else(|_| "8080".to_string())

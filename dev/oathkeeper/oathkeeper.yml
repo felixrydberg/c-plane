@@ -1,5 +1,5 @@
 log:
-  level: fatal
+  level: info
   format: json
 
 serve:
@@ -86,3 +86,9 @@ mutators:
         {
           "session": {{ .Extra | toJson }}
         }
+
+  header:
+    enabled: true
+    config:
+      headers:
+        X-User: "{{ print .Subject }}"

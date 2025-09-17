@@ -1,6 +1,6 @@
-# Multi-stage Dockerfile for c-plane package
-# Designed to be built from workspace root with:
-# docker build -f packages/c-plane/Dockerfile -t c-plane .
+# Multi-stage Dockerfile for c-plane package (standalone)
+# Build from the package directory with:
+# docker build -t c-plane .
 
 # Base stage with common dependencies
 FROM rust:1.88-slim as base
@@ -12,15 +12,11 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory to workspace root
-WORKDIR /workspace
+# Set working directory
+WORKDIR /app
 
-# Copy workspace Cargo files for dependency caching
+# Copy Cargo files for dependency caching
 COPY Cargo.toml Cargo.lock ./
-
-# Copy all package Cargo.toml files (needed for workspace resolution)
-COPY packages/c-plane/Cargo.toml ./packages/c-plane/
-COPY packages/cplane-agent/Cargo.toml ./packages/cplane-agent/
 
 # Development stage
 FROM base as development
@@ -34,36 +30,32 @@ RUN apt-get update && apt-get install -y \
 # Install cargo-watch for hot reloading
 RUN cargo install cargo-watch
 
-# Copy all source code
+# Copy source code
 COPY . .
 
-# Build the c-plane package in debug mode
-RUN cargo build -p c-plane
+# Build in debug mode
+RUN cargo build
 
 # Expose port
 EXPOSE 8080
 
 # Default command for development (with hot reload)
-CMD ["cargo", "watch", "-x", "run", "-p", "c-plane"]
+CMD ["cargo", "watch", "-x", "run"]
 
 # Builder stage for production
 FROM base as builder
 
-# Create dummy projects to cache dependencies
-RUN mkdir -p packages/c-plane/src packages/cplane-agent/src
-RUN echo "fn main() {}" > packages/c-plane/src/main.rs
-RUN echo "fn main() {}" > packages/cplane-agent/src/main.rs
+# Create a dummy project to cache dependencies
+RUN mkdir src && echo "fn main() {}" > src/main.rs
 
 # Build dependencies (this layer will be cached)
-RUN cargo build --release -p c-plane && rm -rf packages/*/src target/release/deps/*c_plane*
+RUN cargo build --release && rm -rf src target/release/deps/c_plane*
 
-# Copy actual source code for c-plane and its dependencies
-COPY packages/c-plane/ ./packages/c-plane/
-# Copy any shared packages that c-plane might depend on
-# COPY packages/shared/ ./packages/shared/  # Example if you have shared code
+# Copy source code
+COPY src ./src
 
-# Build the c-plane application in release mode
-RUN cargo build --release -p c-plane
+# Build the application in release mode
+RUN cargo build --release
 
 # Production stage
 FROM debian:bookworm-slim as production
@@ -80,8 +72,8 @@ RUN useradd -r -s /bin/false appuser
 # Create app directory
 WORKDIR /app
 
-# Copy the c-plane binary from builder stage
-COPY --from=builder /workspace/target/release/c-plane ./c-plane
+# Copy the binary from builder stage
+COPY --from=builder /app/target/release/c-plane ./c-plane
 
 # Change ownership to appuser
 RUN chown appuser:appuser /app/c-plane
@@ -96,5 +88,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
-# Run the c-plane application
+# Run the application
 CMD ["./c-plane"]

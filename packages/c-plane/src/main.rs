@@ -24,9 +24,10 @@ async fn main() -> std::io::Result<()> {
     let config = config::load_config()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
 
+    log_info!("Starting Actix at {}:{}", config.server_host, config.server_port);
     HttpServer::new(move || {
         App::new()
-            .wrap(CustomLogger)
+            // .wrap(CustomLogger)
             .configure(handlers::api::config)
     })
     .bind(format!("{}:{}", config.server_host, config.server_port))?

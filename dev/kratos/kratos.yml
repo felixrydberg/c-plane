@@ -62,7 +62,19 @@ selfservice:
       after:
         password:
           hooks:
-            - hook: session
+            - hook: web_hook
+              config:
+                url: http://your-backend.local/after-registration
+                method: POST
+                response:
+                  parse: false
+                auth:
+                  type: api_key
+                  config:
+                    in: header
+                    name: X-Api-Key
+                    value: your-secret
+            - hook: session 
 
 log:
   level: info

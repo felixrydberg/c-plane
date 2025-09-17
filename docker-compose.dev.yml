@@ -13,18 +13,23 @@ services:
     networks:
       - intranet
 
-  # api:
-  #   build:
-  #     context: ./packages/c-plane
-  #     target: "development"
-  #   environment:
-  #     NODE_ENV: development
-  #   ports:
-  #     - 3001:3000
-  #   volumes:
-  #     - ./packages/c-plane:/usr/src/app/src
-  #   networks:
-  #     - intranet
+  api:
+    build:
+      context: ./packages/c-plane
+      target: "development"
+    depends_on:
+      postgresd:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://kratos:${POSTGRES_PASSWORD}@postgresd:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4&search_path=public
+      RUST_LOG: debug
+      RUST_BACKTRACE: 1
+    ports:
+      - 3001:8080
+    volumes:
+      - ./packages/c-plane:/app
+    networks:
+      - intranet
 
   kratos:
     depends_on:
