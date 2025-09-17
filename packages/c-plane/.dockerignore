@@ -1,0 +1,41 @@
+# Target directory (build artifacts)
+target/
+**/target/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile*
+.dockerignore
+
+# Documentation
+README.md
+*.md
+
+# Logs
+*.log
+
+# Environment files (be careful with secrets)
+.env
+.env.local
+.env.*.local
+
+# Test files
+tests/
+
+# Temporary files
+tmp/
+temp/
