@@ -1,7 +1,13 @@
 <script setup lang="ts">
   import * as z from 'zod'
-  import type { FormSubmitEvent } from '@nuxt/ui'
+  import type { FormSubmitEvent, FormFieldProps } from '@nuxt/ui'
   import type { RegistrationFlow, UiNodeInputAttributes } from '@ory/client'
+
+  type AuthFormField = FormFieldProps & {
+    name: string
+    type?: 'checkbox' | 'select' | 'password' | 'text' | 'otp' | 'email'
+    placeholder?: string
+  }
 
   const loading = ref(false);
   const fields = reactive([{
@@ -10,36 +16,31 @@
     label: 'Email',
     placeholder: 'Enter your email',
     required: true,
-    error: null as string | null
   }, {
     name: 'first',
     label: 'Firstname',
     type: 'text' as const,
     placeholder: 'Enter your firstname',
     required: true,
-    error: null as string | null
   }, {
     name: 'last',
     label: 'Lastname',
     type: 'text' as const,
     placeholder: 'Enter your lastname',
     required: true,
-    error: null as string | null
   }, {
     name: 'password',
     label: 'Password',
     type: 'password' as const,
     placeholder: 'Enter your password',
-    required: true,
-    error: null as string | null
+    required: true
   }, {
     name: 'confirmPassword',
     label: 'Confirm Password',
     type: 'password' as const,
     placeholder: 'Confirm your password',
-    required: true,
-    error: null as string | null
-  }])
+    required: true
+  }] as AuthFormField[])
 
   const toast = useToast();
   const schema = z.object({

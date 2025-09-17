@@ -23,5 +23,12 @@ export default defineNuxtConfig({
       { name: "Space Grotesk", provider: "google" },
       { name: "Audiowide", provider: "google" }
     ]
-  }
+  },
+  icon: {
+    clientBundle: {
+      scan: true,
+      includeCustomCollections: true, 
+      sizeLimitKb: 256,
+    },
+  },
 });

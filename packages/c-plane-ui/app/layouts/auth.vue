@@ -9,9 +9,9 @@
     <UContainer class="h-full flex items-end justify-between">
     </UContainer>
   </header>
-  <main class="min-h-[100dvh]">
+  <UMain>
     <slot />
-  </main>
+  </UMain>
   <footer>
     <UContainer class="h-16 flex items-center justify-center text-sm text-neutral-400">
       &copy; 2024 Cloud44. All rights reserved.

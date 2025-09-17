@@ -1,8 +1,15 @@
 <script setup lang="ts">
   import * as z from 'zod'
-  import type { FormSubmitEvent } from '@nuxt/ui'
-  import type { UiNodeInputAttributes } from '@ory/client'
+  import type { FormSubmitEvent, FormFieldProps } from '@nuxt/ui'
+  import type { LoginFlow, UiNodeInputAttributes } from '@ory/client'
 
+  type AuthFormField = FormFieldProps & {
+    name: string
+    type?: 'checkbox' | 'select' | 'password' | 'text' | 'otp' | 'email'
+    placeholder?: string
+  }
+
+  const loading = ref(false);
   const fields = reactive([{
     name: 'email',
     type: 'text' as const,
@@ -17,7 +24,7 @@
     placeholder: 'Enter your password',
     required: true,
     error: null as string | null
-  }])
+  }] as AuthFormField[])
 
   const toast = useToast();
   const schema = z.object({
@@ -34,7 +41,6 @@
       throw createError("Login flow not initialized");
     }
 
-    const formData = new FormData();
     const attributes = flow.value.ui.nodes.filter(node => node.type === 'input').map(node => node.attributes as UiNodeInputAttributes);
     const csrf_token = attributes.find(attr => attr.name === 'csrf_token')?.value;
 
@@ -42,11 +48,53 @@
       throw createError("CSRF token not found in the login flow");
     }
 
-    formData.append('csrf_token', csrf_token);
-    formData.append('identifier', payload.data.email);
-    formData.append('password', payload.data.password);
+    loading.value = true;
+    try {
+      const result = await $ory.updateLoginFlow({
+        flow: flow.value.id,
+        updateLoginFlowBody: {
+          csrf_token,
+          password: payload.data.password,
+          method: "password",
+          identifier: payload.data.email
+        }
+      })
 
-    console.log(formData);
+      const { data } = result;
+      const { identity, session } = data;
+
+    } catch (err) {
+      if (err && typeof err === 'object' && 'response' in err && typeof err.response === 'object' && err.response && 'data' in err.response) {
+        const error = err.response.data as LoginFlow;
+        const nodes = error.ui.nodes.filter(node => node.type === 'input');
+        for (let i = 0; i < nodes.length; i++) {
+          const node = nodes[i];
+          if (node?.messages && node.messages.length > 0) {
+            const message = node.messages[0];
+            if (!message) {
+              continue;
+            }
+            const field = fields.find(f => f.name === (node.attributes as UiNodeInputAttributes).name);
+            if (field) {
+              field.error = message.text;
+            }
+            toast.add({
+              title: 'Success',
+              description: message?.text,
+              color: 'success'
+            })
+          }
+        }
+      } else {
+        toast.add({
+          title: 'Error',
+          description: 'An unexpected error occurred. Please try again later.',
+          color: 'error'
+        })
+      }
+    } finally {
+      loading.value = false;
+    }
   }
 </script>
 
