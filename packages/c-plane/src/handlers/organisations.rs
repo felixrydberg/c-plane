@@ -11,7 +11,7 @@ use crate::models::{OrganisationRole, organisation_member};
 use crate::services::organisations::{
     CreateOrganisationData, create_organisation, get_organisation,
 };
-use crate::middleware::auth::UserId;
+use crate::middleware::auth::{UserId, AuthMiddleware};
 use crate::state::get_app_state;
 
 #[derive(Serialize, Deserialize)]
@@ -80,15 +80,16 @@ struct CreateOrganisationResponse {
 pub fn config(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/organisations")
+            .wrap(AuthMiddleware)
             .service(create_organisation_handler)
-            .service(get_organisation_handler),
+            .service(get_organisation_handler)
     );
 }
 
 #[post("/")]
 async fn create_organisation_handler(
     request: web::Json<CreateOrganisationRequest>,
-    user_id: UserId,  // Automatically extracted by middleware!
+    user_id: UserId,
 ) -> Result<HttpResponse, AppError> {
     let created_by = user_id.into_inner();
     let state = get_app_state();

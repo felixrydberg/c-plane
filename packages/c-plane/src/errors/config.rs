@@ -3,6 +3,7 @@ use std::fmt;
 #[derive(Debug)]
 pub enum ConfigError {
     MissingDatabaseUrl,
+    MissingKratosApiKey,
     InvalidServerPort(String),
 }
 
@@ -13,6 +14,12 @@ impl fmt::Display for ConfigError {
                 write!(
                     f,
                     "DATABASE_URL environment variable is required and cannot be empty"
+                )
+            }
+            ConfigError::MissingKratosApiKey => {
+                write!(
+                    f,
+                    "KRATOS_API_KEY environment variable is required and cannot be empty"
                 )
             }
             ConfigError::InvalidServerPort(port) => {

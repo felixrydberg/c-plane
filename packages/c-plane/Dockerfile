@@ -1,8 +1,3 @@
-# Multi-stage Dockerfile for c-plane package (standalone)
-# Build from the package directory with:
-# docker build -t c-plane .
-
-# Base stage with common dependencies
 FROM rust:1.88-slim as base
 
 # Install system dependencies
@@ -15,8 +10,12 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
-# Copy Cargo files for dependency caching
+# Copy workspace Cargo files for dependency caching
 COPY Cargo.toml Cargo.lock ./
+
+# Copy all package Cargo.toml files for workspace dependency resolution
+COPY packages/c-plane/Cargo.toml ./packages/c-plane/
+COPY packages/cplane-agent/Cargo.toml ./packages/cplane-agent/
 
 # Development stage
 FROM base as development
@@ -30,32 +29,43 @@ RUN apt-get update && apt-get install -y \
 # Install cargo-watch for hot reloading
 RUN cargo install cargo-watch
 
-# Copy source code
-COPY . .
+# Create dummy src files for dependency caching
+RUN mkdir -p packages/c-plane/src packages/cplane-agent/src && \
+    echo "fn main() {}" > packages/c-plane/src/main.rs && \
+    echo "fn main() {}" > packages/cplane-agent/src/main.rs
+
+# Build dependencies for c-plane package
+RUN cargo build --package c-plane
+
+# Copy actual source code for c-plane
+COPY packages/c-plane/src ./packages/c-plane/src
 
 # Build in debug mode
-RUN cargo build
+RUN cargo build --package c-plane
 
 # Expose port
 EXPOSE 8080
 
 # Default command for development (with hot reload)
-CMD ["cargo", "watch", "-x", "run"]
+CMD ["cargo", "watch", "--package", "c-plane", "-x", "run --package c-plane"]
 
 # Builder stage for production
 FROM base as builder
 
-# Create a dummy project to cache dependencies
-RUN mkdir src && echo "fn main() {}" > src/main.rs
+# Create dummy src files for dependency caching
+RUN mkdir -p packages/c-plane/src packages/cplane-agent/src && \
+    echo "fn main() {}" > packages/c-plane/src/main.rs && \
+    echo "fn main() {}" > packages/cplane-agent/src/main.rs
 
 # Build dependencies (this layer will be cached)
-RUN cargo build --release && rm -rf src target/release/deps/c_plane*
+RUN cargo build --release --package c-plane && \
+    rm -rf packages/c-plane/src packages/cplane-agent/src target/release/deps/c_plane*
 
-# Copy source code
-COPY src ./src
+# Copy actual source code for c-plane
+COPY packages/c-plane/src ./packages/c-plane/src
 
 # Build the application in release mode
-RUN cargo build --release
+RUN cargo build --release --package c-plane
 
 # Production stage
 FROM debian:bookworm-slim as production

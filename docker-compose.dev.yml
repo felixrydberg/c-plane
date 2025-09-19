@@ -15,19 +15,22 @@ services:
 
   api:
     build:
-      context: ./packages/c-plane
+      context: .
+      dockerfile: packages/c-plane/Dockerfile
       target: "development"
     depends_on:
       postgresd:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://kratos:${POSTGRES_PASSWORD}@postgresd:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4&search_path=public
+      SERVER_HOST: 0.0.0.0
       RUST_LOG: debug
       RUST_BACKTRACE: 1
+      KRATOS_API_KEY: ${KRATOS_API_KEY}
     ports:
       - 3001:8080
     volumes:
-      - ./packages/c-plane:/app
+      - .:/app
     networks:
       - intranet
 

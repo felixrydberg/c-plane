@@ -28,7 +28,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             // .wrap(CustomLogger)
-            .configure(handlers::api::config)
+            .configure(handlers::config)
     })
     .bind(format!("{}:{}", config.server_host, config.server_port))?
     .run()
