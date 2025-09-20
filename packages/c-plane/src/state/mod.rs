@@ -20,7 +20,11 @@ pub async fn create_app_state() -> Result<State, AppError> {
     let db = Database::connect(options)
         .await
         .map_err(|err| AppError::Database(DatabaseError::ConnectionFailed(err.to_string())))?;
-    Ok(State { db, config })
+
+    let state = State { db, config };
+    STATE.set(state)
+        .map_err(|_| AppError::Internal(format!("Couldnt set STATE")))?;
+    Ok(get_app_state())
 }
 
 pub fn get_app_state() -> State {

@@ -47,7 +47,7 @@ where
             .get("X-API-KEY")
             .and_then(|h| h.to_str().ok())
             .map(|s| s.to_string());
-
+        
         if let Some(key) = api_key {
             req.extensions_mut().insert(key);  // Store API key as String
             let fut = self.service.call(req);
@@ -81,7 +81,7 @@ impl FromRequest for ApiKey {
     fn from_request(req: &actix_web::HttpRequest, _: &mut actix_web::dev::Payload) -> Self::Future {
         let result = req
             .extensions()
-            .get::<String>()  // Get String directly
+            .get::<String>()
             .cloned()
             .map(ApiKey)
             .ok_or_else(|| crate::errors::AppError::Unauthorized("API key not provided".to_string()));

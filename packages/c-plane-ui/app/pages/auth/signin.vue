@@ -2,6 +2,7 @@
   import * as z from 'zod'
   import type { FormSubmitEvent, FormFieldProps } from '@nuxt/ui'
   import type { LoginFlow, UiNodeInputAttributes } from '@ory/client'
+  import useStore from '~/stores/store'
 
   type AuthFormField = FormFieldProps & {
     name: string
@@ -9,6 +10,8 @@
     placeholder?: string
   }
 
+  const store = useStore();
+  const router = useRouter();
   const loading = ref(false);
   const fields = reactive([{
     name: 'email',
@@ -61,8 +64,27 @@
       })
 
       const { data } = result;
-      const { identity, session } = data;
+      const { session, continue_with } = data;
+      store.session = session;
+      if (session.identity) {
+        store.identity = session.identity;
+      }
 
+      if (continue_with) {
+        const url = useRequestURL();
+        for (let i = 0; i < continue_with.length; i++) {
+          const _action = continue_with[i];
+          if (!_action) {
+            continue;
+          }
+
+          switch (_action.action) {
+            case "redirect_browser_to":
+              router.push(_action.redirect_browser_to.replace(url.origin, ''));
+              break;
+          }
+        }
+      }
     } catch (err) {
       if (err && typeof err === 'object' && 'response' in err && typeof err.response === 'object' && err.response && 'data' in err.response) {
         const error = err.response.data as LoginFlow;

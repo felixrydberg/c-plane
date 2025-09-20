@@ -3,8 +3,8 @@
   const open = ref(false)
 
   const links = [[{
-    label: 'Home',
-    icon: 'i-lucide-house',
+    label: 'Overview',
+    icon: 'i-heroicons:rectangle-stack',
     to: '/',
     onSelect: () => {
       open.value = false

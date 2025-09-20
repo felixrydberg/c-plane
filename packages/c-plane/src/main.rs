@@ -9,7 +9,7 @@ mod utils;
 
 use crate::state::create_app_state;
 use crate::utils::logger::CustomLogger;
-use actix_web::{App, HttpServer};
+use actix_web::{App, HttpServer, middleware::Logger};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -27,6 +27,7 @@ async fn main() -> std::io::Result<()> {
     log_info!("Starting Actix at {}:{}", config.server_host, config.server_port);
     HttpServer::new(move || {
         App::new()
+            .wrap(Logger::default())
             // .wrap(CustomLogger)
             .configure(handlers::config)
     })
