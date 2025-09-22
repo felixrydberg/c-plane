@@ -15,51 +15,51 @@ COPY Cargo.toml Cargo.lock ./
 
 # Copy all package Cargo.toml files for workspace dependency resolution
 COPY packages/c-plane/Cargo.toml ./packages/c-plane/
-COPY packages/cplane-agent/Cargo.toml ./packages/cplane-agent/
 
 # Development stage
 FROM base as development
 
-# Install development tools
+# Install development tools and cargo-watch for hot reloading
 RUN apt-get update && apt-get install -y \
     git \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install cargo-watch for hot reloading
+# Install cargo-watch for development hot reloading
 RUN cargo install cargo-watch
 
 # Create dummy src files for dependency caching
-RUN mkdir -p packages/c-plane/src packages/cplane-agent/src && \
-    echo "fn main() {}" > packages/c-plane/src/main.rs && \
-    echo "fn main() {}" > packages/cplane-agent/src/main.rs
+RUN mkdir -p packages/c-plane/src && \
+    echo "fn main() {}" > packages/c-plane/src/main.rs
 
-# Build dependencies for c-plane package
+# Build dependencies ONLY (this layer will be cached unless Cargo.toml changes)
 RUN cargo build --package c-plane
+
+# Remove dummy files and the dummy binary (but keep dependencies compiled)
+RUN rm -rf packages/c-plane/src target/debug/deps/c_plane* target/debug/c-plane*
 
 # Copy actual source code for c-plane
 COPY packages/c-plane/src ./packages/c-plane/src
 
-# Build in debug mode
+# Pre-build the application in debug mode (this layer caches unless source changes)
 RUN cargo build --package c-plane
 
 # Expose port
 EXPOSE 8080
 
-# Default command for development (with hot reload)
+# Use cargo-watch for instant recompilation on file changes
 CMD ["cargo", "watch", "--package", "c-plane", "-x", "run --package c-plane"]
 
 # Builder stage for production
 FROM base as builder
 
 # Create dummy src files for dependency caching
-RUN mkdir -p packages/c-plane/src packages/cplane-agent/src && \
-    echo "fn main() {}" > packages/c-plane/src/main.rs && \
-    echo "fn main() {}" > packages/cplane-agent/src/main.rs
+RUN mkdir -p packages/c-plane/src && \
+    echo "fn main() {}" > packages/c-plane/src/main.rs
 
 # Build dependencies (this layer will be cached)
 RUN cargo build --release --package c-plane && \
-    rm -rf packages/c-plane/src packages/cplane-agent/src target/release/deps/c_plane*
+    rm -rf packages/c-plane/src target/release/deps/c_plane*
 
 # Copy actual source code for c-plane
 COPY packages/c-plane/src ./packages/c-plane/src

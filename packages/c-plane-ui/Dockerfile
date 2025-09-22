@@ -32,6 +32,7 @@ COPY package*.json ./
 RUN --mount=type=bind,source=package.json,target=package.json \
 --mount=type=bind,source=package-lock.json,target=package-lock.json
 RUN npm install
+COPY . .
 CMD ["sh", "-c", "npm install && npm run dev"]
 
 FROM build AS production-prepack

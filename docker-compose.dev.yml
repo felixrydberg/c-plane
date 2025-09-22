@@ -8,10 +8,19 @@ services:
     ports:
       - 3000:3000
       - 24678:24678
-    volumes:
-      - ./packages/c-plane-ui:/usr/src/app/src
     networks:
       - intranet
+    develop:
+      watch:
+        - action: sync
+          path: ./packages/c-plane-ui
+          target: /usr/src/app/src
+          ignore:
+            - node_modules/
+            - .nuxt/
+            - .output/
+        - action: rebuild
+          path: ./packages/c-plane-ui/package.json
 
   api:
     build:
@@ -21,18 +30,50 @@ services:
     depends_on:
       postgresd:
         condition: service_healthy
+      api-migrations:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgres://kratos:${POSTGRES_PASSWORD}@postgresd:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4&search_path=public
       SERVER_HOST: 0.0.0.0
+      SERVER_PORT: 8080
       RUST_LOG: debug
       RUST_BACKTRACE: 1
       KRATOS_API_KEY: ${KRATOS_API_KEY}
     ports:
       - 3001:8080
-    volumes:
-      - .:/app
     networks:
       - intranet
+    restart: unless-stopped
+    develop:
+      watch:
+        - action: sync
+          path: ./packages/c-plane/src
+          target: /app/packages/c-plane/src
+        - action: rebuild
+          path: ./packages/c-plane/Cargo.toml
+        - action: rebuild
+          path: ./Cargo.toml
+        - action: rebuild
+          path: ./Cargo.lock
+
+  api-migrations:
+    build:
+      context: .
+      dockerfile: packages/c-plane-migrations/Dockerfile
+    depends_on:
+      postgresd:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://kratos:${POSTGRES_PASSWORD}@postgresd:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4&search_path=public
+    networks:
+      - intranet
+    restart: "no"
+    develop:
+      watch:
+        - action: rebuild
+          path: ./packages/c-plane-migrations/src
+        - action: rebuild
+          path: ./packages/c-plane-migrations/Cargo.toml
 
   kratos:
     depends_on:

@@ -10,8 +10,6 @@ pub struct Model {
     pub description: Option<String>,
     pub avatar_url: Option<String>,
     pub is_active: bool,
-    #[cfg(feature = "cloud")]
-    pub stripe_customer_id: Option<String>,
     pub created_at: DateTime,
     pub updated_at: DateTime,
     pub created_by: Uuid,
