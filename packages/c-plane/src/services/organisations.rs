@@ -12,7 +12,6 @@ use crate::models::entities::{
 pub struct CreateOrganisationData {
     pub name: String,
     pub description: Option<String>,
-    pub avatar_url: Option<String>,
     pub identity_id: Uuid,
 }
 
@@ -33,7 +32,6 @@ pub async fn create_organisation(
                     created_at: Set(now),
                     updated_at: Set(now),
                     created_by: Set(created_by),
-                    avatar_url: Set(data.avatar_url.clone()),
                     is_active: Set(true),
                 };
                 let organisation: OrganisationModel = organisation.insert(transaction).await?;

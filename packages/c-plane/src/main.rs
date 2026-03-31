@@ -1,37 +1,27 @@
 mod config;
 mod errors;
-mod handlers;
-mod middleware;
+mod routes;
 mod models;
 mod services;
+mod middleware;
 mod state;
+mod handlers;
 mod utils;
 
+use crate::errors::AppError;
 use crate::state::create_app_state;
-use crate::utils::logger::CustomLogger;
-use actix_web::{App, HttpServer, middleware::Logger};
 
-#[actix_web::main]
+#[tokio::main]
 async fn main() -> std::io::Result<()> {
-    if let Err(e) = create_app_state().await {
-        eprintln!("Failed to create app state: {}", e);
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("App state creation failed: {}", e),
-        ));
-    }
-
+    create_app_state().await?;
     let config = config::load_config()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
 
-    log_info!("Starting Actix at {}:{}", config.server_host, config.server_port);
-    HttpServer::new(move || {
-        App::new()
-            .wrap(Logger::default())
-            // .wrap(CustomLogger)
-            .configure(handlers::config)
-    })
-    .bind(format!("{}:{}", config.server_host, config.server_port))?
-    .run()
-    .await
+    let app = routes::create_routes();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
+    axum::serve(listener, app)
+        .await
+        .map_err(|err| AppError::Internal(err.to_string()))?;
+
+    Ok(())
 }

@@ -8,7 +8,6 @@ pub struct Model {
     pub id: Uuid,
     pub name: String,
     pub description: Option<String>,
-    pub avatar_url: Option<String>,
     pub is_active: bool,
     pub created_at: DateTime,
     pub updated_at: DateTime,
