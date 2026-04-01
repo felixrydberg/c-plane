@@ -2,6 +2,4 @@
 resolver = "2"
 members = [
     "packages/c-plane",
-    "packages/c-plane-migrations",
-    "packages/c-plane-agent",
 ]

@@ -1,0 +1,38 @@
+import { index, integer, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { organization } from "../organization/schema";
+
+export const api_keys = pgTable("api_keys", {
+  id: uuid("id").primaryKey(),
+  organization_id: uuid("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  key_hash: text("key_hash").notNull(),
+  created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+  expires_at: integer("expires_at"),
+  allowed_ips: text("allowed_ips"),
+}, (table) => [
+  index("api_keys_organization_id_idx").on(table.organization_id),
+  index("api_keys_key_hash_idx").on(table.key_hash),
+]);
+
+export const api_key_scopes_type = pgEnum("api_key_scopes_type", [
+  "read:sessions",
+  "write:sessions",
+]);
+
+export const api_key_scopes = pgTable("api_key_scopes", {
+  id: uuid("id").primaryKey(),
+  api_key_id: uuid("api_key_id")
+    .notNull()
+    .references(() => api_keys.id, { onDelete: "cascade" }),
+  organization_id: uuid("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  scope: api_key_scopes_type("scope").notNull(),
+  created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  index("api_key_scopes_api_key_id_idx").on(table.api_key_id),
+  index("api_key_scopes_scope_idx").on(table.scope),
+  index("api_key_scopes_organization_id_idx").on(table.organization_id),
+]);

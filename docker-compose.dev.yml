@@ -1,150 +1,94 @@
+name: cplane
 services:
   ui:
     build:
-      context: ./packages/c-plane-ui
+      context: .
+      dockerfile: Dockerfile.bun
+      args:
+        PACKAGE: ui
       target: "development"
     environment:
       NODE_ENV: development
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "250"
+      WATCHPACK_POLLING: "true"
+      NUXT_DATABASE_URL: postgresql://ui:${POSTGRES_UI_PASSWORD}@postgresd:5432/cplane
+      NUXT_REDIS_URL: redis://valkey:6379
+      NUXT_RESEND_API_KEY: ${RESEND_API_KEY}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
     ports:
       - 3000:3000
       - 24678:24678
-    networks:
-      - intranet
     develop:
       watch:
         - action: sync
-          path: ./packages/c-plane-ui
-          target: /usr/src/app/src
+          path: ./packages/ui
+          target: /usr/src/app/packages/ui
           ignore:
             - node_modules/
             - .nuxt/
             - .output/
+        - action: sync
+          path: ./packages/ui-shared
+          target: /usr/src/app/packages/ui-shared
+          ignore:
+            - node_modules/
         - action: rebuild
-          path: ./packages/c-plane-ui/package.json
+          path: ./packages/ui/package.json
+        - action: rebuild
+          path: ./packages/ui-shared/package.json
 
-  api:
+  ui-studio:
     build:
       context: .
-      dockerfile: packages/c-plane/Dockerfile
+      dockerfile: Dockerfile.bun
+      args:
+        PACKAGE: ui-studio
       target: "development"
-    depends_on:
-      postgresd:
-        condition: service_healthy
-      api-migrations:
-        condition: service_completed_successfully
     environment:
-      DATABASE_URL: postgres://kratos:${POSTGRES_PASSWORD}@postgresd:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4&search_path=public
-      SERVER_HOST: 0.0.0.0
-      SERVER_PORT: 8080
-      RUST_LOG: debug
-      RUST_BACKTRACE: 1
-      KRATOS_API_KEY: ${KRATOS_API_KEY}
+      NODE_ENV: development
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "250"
+      WATCHPACK_POLLING: "true"
+      NUXT_DATABASE_URL: postgresql://ui:${POSTGRES_UI_PASSWORD}@postgresd:5432/cplane
+      NUXT_REDIS_URL: redis://valkey:6379
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
     ports:
-      - 3001:8080
-    networks:
-      - intranet
-    restart: unless-stopped
+      - 3001:3001
+      - 24679:24679
     develop:
       watch:
         - action: sync
-          path: ./packages/c-plane/src
-          target: /app/packages/c-plane/src
+          path: ./packages/ui-studio
+          target: /usr/src/app/packages/ui-studio
+          ignore:
+            - node_modules/
+            - .nuxt/
+            - .output/
+        - action: sync
+          path: ./packages/ui-shared
+          target: /usr/src/app/packages/ui-shared
+          ignore:
+            - node_modules/
         - action: rebuild
-          path: ./packages/c-plane/Cargo.toml
+          path: ./packages/ui-studio/package.json
         - action: rebuild
-          path: ./Cargo.toml
-        - action: rebuild
-          path: ./Cargo.lock
-
-  api-migrations:
-    build:
-      context: .
-      dockerfile: packages/c-plane-migrations/Dockerfile
-    depends_on:
-      postgresd:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgres://kratos:${POSTGRES_PASSWORD}@postgresd:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4&search_path=public
-    networks:
-      - intranet
-    restart: "no"
-    develop:
-      watch:
-        - action: rebuild
-          path: ./packages/c-plane-migrations/src
-        - action: rebuild
-          path: ./packages/c-plane-migrations/Cargo.toml
-
-  kratos:
-    depends_on:
-      kratos-migrate:
-        condition: service_completed_successfully
-    image: oryd/kratos:v1.3.1
-    ports:
-      - '4433:4433' # public
-      - '4434:4434' # admin
-    restart: unless-stopped
-    environment:
-      - DSN=postgres://kratos:${POSTGRES_PASSWORD}@postgresd:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
-      - LOG_LEVEL=trace
-      - SERVE_PUBLIC_BASE_URL=http://127.0.0.1:4455/.ory/kratos/public/
-    command: serve -c /etc/config/kratos/kratos.yml --dev --watch-courier
-    volumes:
-      - type: bind
-        source: ./dev/kratos
-        target: /etc/config/kratos
-    networks:
-      - intranet
-
-  oathkeeper:
-    image: oryd/oathkeeper:v0.37
-    depends_on:
-      - kratos
-    ports:
-      - 4455:4455
-      - 4456:4456
-    command: serve proxy -c "/etc/config/oathkeeper/oathkeeper.yml"
-    environment:
-      - CACHING_ENABLED=true
-      - CACHING_REDIS_ADDRESSES=valkey:6379
-    restart: on-failure
-    networks:
-      - intranet
-    volumes:
-      - type: bind
-        source: ./dev/oathkeeper
-        target: /etc/config/oathkeeper
-
-  kratos-migrate:
-    image: oryd/kratos:v1.3.1
-    depends_on:
-      postgresd:
-        condition: service_healthy
-    environment:
-      - DSN=postgres://kratos:${POSTGRES_PASSWORD}@postgresd:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
-    volumes:
-      - type: bind
-        source: ./dev/kratos
-        target: /etc/config/kratos
-    command: -c /etc/config/kratos/kratos.yml migrate sql -e --yes
-    restart: on-failure
-    networks:
-      - intranet
+          path: ./packages/ui-shared/package.json
 
   postgresd:
-    image: postgres:17.6
+    image: postgres:18
     environment:
-      POSTGRES_DB: kratos
-      POSTGRES_USER: kratos
+      POSTGRES_DB: cplane
+      POSTGRES_USER: cplane
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_UI_PASSWORD: ${POSTGRES_UI_PASSWORD}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
+      - ./packages/postgres/init.sh:/docker-entrypoint-initdb.d/init.sh
     ports:
       - "5432:5432"
-    networks:
-      - intranet
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kratos"]
+      test: ["CMD-SHELL", "pg_isready -U cplane"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -157,8 +101,6 @@ services:
       - valkey-data:/data
     ports:
       - "6379:6379"
-    networks:
-      - intranet
 
   drizzle-gateway:
     image: ghcr.io/drizzle-team/gateway:latest
@@ -166,35 +108,21 @@ services:
       - postgresd
     environment:
       PORT: 4983
-      DATABASE_URL_DEFAULT: postgresql://kratos:${POSTGRES_PASSWORD}@postgresd:5432/kratos
+      DATABASE_URL_DEFAULT: postgresql://cplane:${POSTGRES_PASSWORD}@postgresd:5432/cplane
     ports:
       - "8001:4983"
     volumes:
       - drizzle-gateway:/app
-    networks:
-      - intranet
 
-  redisinsight:
-    image: redislabs/redisinsight:latest
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     depends_on:
-      - valkey
-    environment:
-      - RI_HOSTS=local-valkey:valkey:6379
-    ports:
-      - "8002:5540"
-    networks:
-      - intranet
-
-  mailhog:
-    image: mailhog/mailhog:v1.0.1
-    ports:
-      - "8003:8025" # web ui
-      - "1025:1025" # smtp
-    networks:
-      - intranet
+      - ui
 
 networks:
-  intranet:
+  default:
+    driver: bridge
 
 volumes:
   postgres_data:

@@ -1,0 +1,47 @@
+ARG PACKAGE=ui
+
+FROM cgr.dev/chainguard/wolfi-base:latest AS wolfi-bun
+RUN apk add --no-cache bash curl unzip ca-certificates
+RUN curl -fsSL https://bun.com/install | bash
+ENV BUN_INSTALL=/root/.bun
+ENV PATH=${BUN_INSTALL}/bin:${PATH}
+
+FROM wolfi-bun AS base
+ARG PACKAGE
+WORKDIR /usr/src/app
+
+# Copy root workspace files and workspace package manifests for dependency install.
+COPY package.json ./package.json
+COPY bun.lock ./bun.lock
+COPY packages/ui-shared/package.json ./packages/ui-shared/package.json
+COPY packages/ui/package.json ./packages/ui/package.json
+COPY packages/ui-studio/package.json ./packages/ui-studio/package.json
+
+# Install dependencies for the selected workspace through bun workspaces.
+RUN bun install --frozen-lockfile --filter "./packages/${PACKAGE}"
+
+# Copy only the shared files needed by runtime/types and selected app source.
+COPY packages/ui-shared/schema ./packages/ui-shared/schema
+COPY packages/ui-shared/types ./packages/ui-shared/types
+COPY packages/ui-shared/utils ./packages/ui-shared/utils
+COPY packages/${PACKAGE} ./packages/${PACKAGE}
+
+WORKDIR /usr/src/app/packages/${PACKAGE}
+
+FROM base AS development
+WORKDIR /usr/src/app/packages/${PACKAGE}
+ENV CHOKIDAR_USEPOLLING=true
+ENV CHOKIDAR_INTERVAL=250
+ENV WATCHPACK_POLLING=true
+CMD ["bun", "--bun", "run", "dev"]
+
+FROM base AS production-prepack
+WORKDIR /usr/src/app/packages/${PACKAGE}
+RUN bun run --bun build
+
+FROM wolfi-bun AS production
+ARG PACKAGE
+WORKDIR /usr/src/app/packages/${PACKAGE}
+RUN apk add --no-cache ca-certificates
+COPY --from=production-prepack /usr/src/app/packages/${PACKAGE}/.output ./.output
+CMD ["bun", "run", "./.output/server/index.mjs"]

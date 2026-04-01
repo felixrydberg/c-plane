@@ -1,0 +1,43 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+@theme static {
+  --color-sepia-50: #FCFBFA;
+  --color-sepia-100: #F7F5F2;
+  --color-sepia-200: #F0EBE4;
+  --color-sepia-300: #D8D0C4;
+  --color-sepia-400: #BFB4A3;
+  --color-sepia-500: #948A79;
+  --color-sepia-600: #695F4D;
+  --color-sepia-700: #474030;
+  --color-sepia-800: #393224;
+  --color-sepia-900: #2B2718;
+  --color-sepia-950: #1A170E;
+}
+
+@theme {
+  /* For special case headings */
+  --font-space-mono: "Space Mono", monospace;
+  /* General font used */
+  --font-space-grotesk: "Space Grotesk", sans-serif;
+}
+
+@layer base {
+  html {
+    @apply min-h-screen;
+  }
+  body {
+    @apply font-space-grotesk;
+    @apply min-h-screen;
+  }
+}
+
+:root {
+  --ui-radius: 0.375rem;
+  --ui-primary: #0c0a09;
+  /* --ui-header-height: 0; */
+}
+
+.dark {
+  --ui-primary: #fafaf9;
+}

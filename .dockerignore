@@ -1,0 +1,46 @@
+# Dependencies
+node_modules
+packages/*/node_modules
+packages/*/*/node_modules
+.bun
+
+# Build outputs
+.next
+.nuxt
+.output
+**/.nuxt
+**/.output
+packages/ui/.nuxt
+packages/ui/.output
+packages/ui-studio/.nuxt
+packages/ui-studio/.output
+dist
+build
+.turbo
+
+# Version control
+.git
+.gitignore
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE/Editor
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Development
+.nuxt
+.cache
+.tmp
+
+# Docker artifacts
+Dockerfile*
+docker-compose*
+.dockerignore

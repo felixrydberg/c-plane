@@ -1,0 +1,38 @@
+ARG PACKAGE=vault
+ARG RUST_VERSION=1.92.0
+
+FROM rust:${RUST_VERSION} AS builder
+
+ARG PACKAGE
+
+WORKDIR /usr/src/app
+
+COPY Cargo.toml Cargo.lock ./
+COPY packages/vault ./packages/vault
+COPY packages/cronner ./packages/cronner
+
+RUN cd packages/${PACKAGE} && \
+    cargo build --release --target x86_64-unknown-linux-gnu
+
+FROM debian:bookworm-slim AS runtime-builder
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM cgr.dev/chainguard/glibc-dynamic AS runtime-default
+COPY --from=runtime-builder /usr/lib/x86_64-linux-gnu/libssl.so* /usr/lib/
+COPY --from=runtime-builder /usr/lib/x86_64-linux-gnu/libcrypto.so* /usr/lib/
+
+FROM runtime-default AS runtime-vault
+
+FROM runtime-default AS runtime-cronner
+
+FROM runtime-${PACKAGE}
+
+ARG PACKAGE
+
+WORKDIR /app
+
+COPY --from=builder --chmod=755 /usr/src/app/target/x86_64-unknown-linux-gnu/release/${PACKAGE} /app/binary
+
+ENTRYPOINT ["/app/binary"]
