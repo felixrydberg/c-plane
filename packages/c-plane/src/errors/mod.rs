@@ -12,7 +12,7 @@ pub use organisation::OrganisationError;
 pub use project::ProjectError;
 pub use user::UserError;
 
-use actix_web::{HttpResponse, ResponseError};
+use axum::{Json, http::StatusCode, response::IntoResponse};
 use serde::Serialize;
 use std::fmt;
 
@@ -86,48 +86,67 @@ impl fmt::Display for AppError {
 
 impl std::error::Error for AppError {}
 
-impl ResponseError for AppError {
-    fn error_response(&self) -> HttpResponse {
-        match self {
-            AppError::Project(_) | AppError::User(_) | AppError::Organisation(_) => {
-                HttpResponse::BadRequest().json(ErrorResponse {
+impl IntoResponse for AppError {
+    fn into_response(self) -> axum::response::Response {
+        let (status, body) = match self {
+            AppError::Project(_) | AppError::User(_) | AppError::Organisation(_) => (
+                StatusCode::BAD_REQUEST,
+                ErrorResponse {
                     error: "validation_error".to_string(),
                     message: self.to_string(),
                     details: None,
-                })
-            }
-            AppError::Database(_) | AppError::External(_) | AppError::Internal(_) => {
-                HttpResponse::InternalServerError().json(ErrorResponse {
+                },
+            ),
+            AppError::Database(_) | AppError::External(_) | AppError::Internal(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ErrorResponse {
                     error: "internal_error".to_string(),
                     message: "An internal error occurred".to_string(),
                     details: None,
-                })
-            }
-            AppError::Config(_) => HttpResponse::InternalServerError().json(ErrorResponse {
-                error: "configuration_error".to_string(),
-                message: "Service configuration error".to_string(),
-                details: None,
-            }),
-            AppError::Unauthorized(msg) => HttpResponse::Unauthorized().json(ErrorResponse {
-                error: "unauthorized".to_string(),
-                message: msg.clone(),
-                details: None,
-            }),
-            AppError::Forbidden(msg) => HttpResponse::Forbidden().json(ErrorResponse {
-                error: "forbidden".to_string(),
-                message: msg.clone(),
-                details: None,
-            }),
-            AppError::NotFound(msg) => HttpResponse::NotFound().json(ErrorResponse {
-                error: "not_found".to_string(),
-                message: msg.clone(),
-                details: None,
-            }),
-            AppError::Conflict(msg) => HttpResponse::Conflict().json(ErrorResponse {
-                error: "conflict".to_string(),
-                message: msg.clone(),
-                details: None,
-            }),
-        }
+                },
+            ),
+            AppError::Config(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ErrorResponse {
+                    error: "configuration_error".to_string(),
+                    message: "Service configuration error".to_string(),
+                    details: None,
+                },
+            ),
+            AppError::Unauthorized(msg) => (
+                StatusCode::UNAUTHORIZED,
+                ErrorResponse {
+                    error: "unauthorized".to_string(),
+                    message: msg,
+                    details: None,
+                },
+            ),
+            AppError::Forbidden(msg) => (
+                StatusCode::FORBIDDEN,
+                ErrorResponse {
+                    error: "forbidden".to_string(),
+                    message: msg,
+                    details: None,
+                },
+            ),
+            AppError::NotFound(msg) => (
+                StatusCode::NOT_FOUND,
+                ErrorResponse {
+                    error: "not_found".to_string(),
+                    message: msg,
+                    details: None,
+                },
+            ),
+            AppError::Conflict(msg) => (
+                StatusCode::CONFLICT,
+                ErrorResponse {
+                    error: "conflict".to_string(),
+                    message: msg,
+                    details: None,
+                },
+            ),
+        };
+
+        (status, Json(body)).into_response()
     }
 }

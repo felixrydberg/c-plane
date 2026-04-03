@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '@nuxt/ui'
-const links = computed(() => [{
+
+const links = computed(() => {
+  const items: NavigationMenuItem[] = [{
   type: "link",
   label: 'Overview',
   to: `/`,
@@ -31,7 +33,29 @@ const links = computed(() => [{
       to: `/api-keys`,
     }
   ]
-}] as NavigationMenuItem[]);
+}, {
+  type: "link",
+  label: 'Infrastructure',
+  exact: true,
+  open: true,
+  children: [
+    {
+      type: "link",
+      label: 'Regions',
+      to: `/regions`,
+      exact: true,
+    },
+    {
+      type: "link",
+      label: 'Clusters',
+      to: `/clusters`,
+      exact: true,
+    }
+  ]
+}]
+
+  return items
+})
 </script>
 
 <template>

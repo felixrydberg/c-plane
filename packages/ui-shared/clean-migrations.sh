@@ -8,10 +8,7 @@ echo "Generated initial migration: $initial_migration"
 
 # Array of custom migrations with their migration numbers
 declare -A migrations
-# migrations["seed-base-data"]="0001"
-# migrations["vault"]="0002"
-# migrations["cronner"]="0003"
-# migrations["verification_asset_trigger"]="0004"
+migrations["seed-base-data"]="0001"
 
 # Iterate migrations in numeric order, since associative array key order is not stable.
 ordered_migrations=()

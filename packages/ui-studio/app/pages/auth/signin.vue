@@ -142,7 +142,7 @@ const onUserAuthenticated = async () => {
   } else if (session) {
     toast.add({
       title: 'Success',
-      description: 'Signed in to IDProval Admin.',
+      description: 'Signed in to CPlane Admin.',
       icon: 'i-heroicons:check-circle',
       color: 'success',
     })
@@ -202,7 +202,7 @@ const TOTPForm = useTemplateRef("TOTPForm");
           {{ showTwoFactor ? 'Secure admin sign in' : 'Welcome back, admin' }}
         </h2>
         <p class="text-base text-muted">
-          {{ showTwoFactor && !useBackupCode ? 'Enter the 6-digit code from your authenticator app to continue to IDProval Admin.' : showTwoFactor && useBackupCode ? 'Enter one of your backup codes to finish admin sign in.' : 'Sign in to access the IDProval Admin console.' }}
+          {{ showTwoFactor && !useBackupCode ? 'Enter the 6-digit code from your authenticator app to continue to CPlane Admin.' : showTwoFactor && useBackupCode ? 'Enter one of your backup codes to finish admin sign in.' : 'Sign in to access the CPlane Admin console.' }}
         </p>
       </div>
     </div>
