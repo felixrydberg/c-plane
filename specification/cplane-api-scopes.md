@@ -55,8 +55,8 @@ Monorepo layout:
 ```
 repo/
  ├─ ui-shared/        ← SOURCE OF TRUTH (schemas + migrations)
- ├─ rust-api/         ← THIS PROJECT
- └─ frontend/
+ ├─ cplane/         ← THIS PROJECT
+ └─ ui/
 ```
 
 ---
@@ -76,18 +76,7 @@ repo/
 * querying
 * relations
 * models
-
-❌ SeaORM must NOT:
-
-* auto-generate migrations
-* modify schema definitions
-
-SeaORM migrations exist only for:
-
-* RLS policies
-* permissions
-* roles
-* database configuration
+* NOT SCHEMA FOR MIGRATIONS. THAT IS ALL HANDLED BY `ui-shared` & DRIZZLE.
 
 ---
 
@@ -111,15 +100,15 @@ Accessible only by `app_identity`.
 
 ```
 users
-workspaces
-workspace_memberships
+organization
+organization_memberships
 api_keys
 ```
 
 Used for:
 
 * authentication
-* workspace resolution
+* organization resolution
 * API key lookup
 
 ---
@@ -129,7 +118,7 @@ Used for:
 Contain:
 
 ```
-workspace_id UUID NOT NULL
+organization_id UUID NOT NULL
 ```
 
 RLS enabled.
@@ -150,8 +139,8 @@ All tenant tables follow:
 
 ```sql
 USING (
-  workspace_id = ANY(
-    current_setting('app.allowed_workspaces')::uuid[]
+  organization_id = ANY(
+    current_setting('app.allowed_organizations')::uuid[]
   )
 );
 ```
@@ -251,7 +240,7 @@ Responsibilities:
 Must use:
 
 ```sql
-SET LOCAL app.allowed_workspaces = '{uuid1,uuid2}';
+SET LOCAL app.allowed_organizations = '{uuid1,uuid2}';
 ```
 
 NEVER use `SET` (pgBouncer unsafe).
@@ -273,7 +262,7 @@ Create WorkspaceContext
    ↓
 Create TenantDatabase transaction
    ↓
-SET LOCAL workspace context
+SET LOCAL app.allowed_organizations = '{uuid1,uuid2}';
    ↓
 Handler executes SeaORM queries
    ↓
