@@ -4,24 +4,30 @@ use crate::errors::{AppError, ConfigError};
 
 #[derive(Clone)]
 pub struct Config {
-    pub database_url: String,
+    pub identity_database_url: String,
+    pub tenant_database_url: String,
     pub server_host: String,
     pub server_port: u16,
-    pub kratos_api_key: String,
+    pub better_auth_session_url: String,
 }
 
 pub fn load_config() -> Result<Config, AppError> {
     dotenvy::dotenv().ok();
 
-    let database_url = env::var("DATABASE_URL").map_err(|_| ConfigError::MissingDatabaseUrl)?;
-    if database_url.trim().is_empty() {
-        return Err(AppError::Config(ConfigError::MissingDatabaseUrl));
+    let identity_database_url = env::var("IDENTITY_DATABASE_URL")
+        .map_err(|_| ConfigError::MissingIdentityDatabaseUrl)?;
+    if identity_database_url.trim().is_empty() {
+        return Err(AppError::Config(ConfigError::MissingIdentityDatabaseUrl));
     }
 
-    let kratos_api_key = env::var("KRATOS_API_KEY").map_err(|_| ConfigError::MissingKratosApiKey)?;
-    if kratos_api_key.trim().is_empty() {
-        return Err(AppError::Config(ConfigError::MissingKratosApiKey));
+    let tenant_database_url = env::var("TENANT_DATABASE_URL")
+        .map_err(|_| ConfigError::MissingTenantDatabaseUrl)?;
+    if tenant_database_url.trim().is_empty() {
+        return Err(AppError::Config(ConfigError::MissingTenantDatabaseUrl));
     }
+
+    let better_auth_session_url = env::var("BETTER_AUTH_SESSION_URL")
+        .unwrap_or_else(|_| "http://ui:3000/api/auth/get-session".to_string());
 
     let server_host = env::var("SERVER_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
 
@@ -35,9 +41,10 @@ pub fn load_config() -> Result<Config, AppError> {
         })?;
 
     Ok(Config {
-        database_url,
+        identity_database_url,
+        tenant_database_url,
         server_host,
         server_port,
-        kratos_api_key
+        better_auth_session_url,
     })
 }

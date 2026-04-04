@@ -1,5 +1,23 @@
 name: cplane
 services:
+  cplane:
+    build:
+      context: .
+      dockerfile: Dockerfile.rust
+      args:
+        PACKAGE: c-plane
+    environment:
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: 8080
+      BETTER_AUTH_SESSION_URL: http://ui:3000/api/auth/get-session
+      APP_IDENTITY_DATABASE_URL: postgresql://cplane_identity:${POSTGRES_IDENTITY_PASSWORD}@postgresd:5432/cplane
+      APP_TENANT_DATABASE_URL: postgresql://cplane_tenant:${POSTGRES_TENANT_PASSWORD}@postgresd:5432/cplane
+    depends_on:
+      - postgresd
+      - ui
+    ports:
+      - 8080:8080
+
   ui:
     build:
       context: .
@@ -82,6 +100,9 @@ services:
       POSTGRES_USER: cplane
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_UI_PASSWORD: ${POSTGRES_UI_PASSWORD}
+      POSTGRES_IDENTITY_PASSWORD: ${POSTGRES_IDENTITY_PASSWORD}
+      POSTGRES_TENANT_PASSWORD: ${POSTGRES_TENANT_PASSWORD}
+      POSTGRES_ADMIN_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql
       - ./packages/postgres/init.sh:/docker-entrypoint-initdb.d/init.sh

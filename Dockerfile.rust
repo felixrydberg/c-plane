@@ -8,8 +8,7 @@ ARG PACKAGE
 WORKDIR /usr/src/app
 
 COPY Cargo.toml Cargo.lock ./
-COPY packages/vault ./packages/vault
-COPY packages/cronner ./packages/cronner
+COPY packages/c-plane ./packages/c-plane
 
 RUN cd packages/${PACKAGE} && \
     cargo build --release --target x86_64-unknown-linux-gnu
@@ -23,9 +22,7 @@ FROM cgr.dev/chainguard/glibc-dynamic AS runtime-default
 COPY --from=runtime-builder /usr/lib/x86_64-linux-gnu/libssl.so* /usr/lib/
 COPY --from=runtime-builder /usr/lib/x86_64-linux-gnu/libcrypto.so* /usr/lib/
 
-FROM runtime-default AS runtime-vault
-
-FROM runtime-default AS runtime-cronner
+FROM runtime-default AS runtime-c-plane
 
 FROM runtime-${PACKAGE}
 

@@ -1,5 +1,6 @@
 import {
   pgTable,
+  pgPolicy,
   text,
   timestamp,
   index,
@@ -7,8 +8,10 @@ import {
   pgEnum,
   uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { user } from "../better-auth/studio/schema";
 import { relations } from "drizzle-orm";
+import { app_tenant } from "../rls";
 
 export const organization = pgTable(
   "organization",

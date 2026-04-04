@@ -1,5 +1,6 @@
 import { index, integer, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { organization } from "../organization/schema";
+import { API_KEY_SCOPE_VALUES } from "../../utils/api-key-scopes";
 
 export const api_keys = pgTable("api_keys", {
   id: uuid("id").primaryKey(),
@@ -16,10 +17,7 @@ export const api_keys = pgTable("api_keys", {
   index("api_keys_key_hash_idx").on(table.key_hash),
 ]);
 
-export const api_key_scopes_type = pgEnum("api_key_scopes_type", [
-  "read:sessions",
-  "write:sessions",
-]);
+export const api_key_scopes_type = pgEnum("api_key_scopes_type", API_KEY_SCOPE_VALUES);
 
 export const api_key_scopes = pgTable("api_key_scopes", {
   id: uuid("id").primaryKey(),

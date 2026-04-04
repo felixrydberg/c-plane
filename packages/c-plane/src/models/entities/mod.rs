@@ -7,10 +7,6 @@ pub use organisation::{
 };
 
 pub use organisation_member::{
-    ActiveModel as OrganisationMemberActiveModel, Entity as OrganisationMember,
-    Model as OrganisationMemberModel, OrganisationRole,
-};
-
-pub use project::{
-    ActiveModel as ProjectActiveModel, Entity as Project, Model as ProjectModel,
+    ActiveModel as OrganisationMemberActiveModel, Model as OrganisationMemberModel,
+    OrganisationRole,
 };

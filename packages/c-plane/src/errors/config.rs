@@ -2,24 +2,31 @@ use std::fmt;
 
 #[derive(Debug)]
 pub enum ConfigError {
-    MissingDatabaseUrl,
-    MissingKratosApiKey,
+    MissingIdentityDatabaseUrl,
+    MissingTenantDatabaseUrl,
+    MissingBetterAuthSessionUrl,
     InvalidServerPort(String),
 }
 
 impl fmt::Display for ConfigError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ConfigError::MissingDatabaseUrl => {
+            ConfigError::MissingIdentityDatabaseUrl => {
                 write!(
                     f,
-                    "DATABASE_URL environment variable is required and cannot be empty"
+                    "IDENTITY_DATABASE_URL environment variable is required and cannot be empty"
                 )
             }
-            ConfigError::MissingKratosApiKey => {
+            ConfigError::MissingTenantDatabaseUrl => {
                 write!(
                     f,
-                    "KRATOS_API_KEY environment variable is required and cannot be empty"
+                    "TENANT_DATABASE_URL environment variable is required and cannot be empty"
+                )
+            }
+            ConfigError::MissingBetterAuthSessionUrl => {
+                write!(
+                    f,
+                    "BETTER_AUTH_SESSION_URL environment variable is required and cannot be empty"
                 )
             }
             ConfigError::InvalidServerPort(port) => {

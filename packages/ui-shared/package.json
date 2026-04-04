@@ -7,6 +7,14 @@
     "./schema": {
       "types": "./schema/index.ts",
       "default": "./schema/index.ts"
+    },
+    "./types": {
+      "types": "./types/index.ts",
+      "default": "./types/index.ts"
+    },
+    "./utils": {
+      "types": "./utils/index.ts",
+      "default": "./utils/index.ts"
     }
   },
   "scripts": {
