@@ -165,6 +165,7 @@ CREATE TABLE "event" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE "event" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "regions" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"slug" text NOT NULL,
@@ -248,4 +249,5 @@ CREATE INDEX "clusters_slug_idx" ON "clusters" USING btree ("slug");--> statemen
 CREATE INDEX "clusters_status_idx" ON "clusters" USING btree ("status");--> statement-breakpoint
 CREATE INDEX "clusters_health_status_idx" ON "clusters" USING btree ("health_status");--> statement-breakpoint
 CREATE UNIQUE INDEX "region_capabilities_region_id_scope_uidx" ON "region_capabilities" USING btree ("region_id","scope");--> statement-breakpoint
-CREATE INDEX "region_capabilities_scope_idx" ON "region_capabilities" USING btree ("scope");
+CREATE INDEX "region_capabilities_scope_idx" ON "region_capabilities" USING btree ("scope");--> statement-breakpoint
+CREATE POLICY "event_org_rls" ON "event" AS PERMISSIVE FOR INSERT TO "app_tenant" WITH CHECK ("event"."organization_id" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[])));

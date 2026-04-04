@@ -10,8 +10,8 @@ services:
       SERVER_HOST: 0.0.0.0
       SERVER_PORT: 8080
       BETTER_AUTH_SESSION_URL: http://ui:3000/api/auth/get-session
-      APP_IDENTITY_DATABASE_URL: postgresql://cplane_identity:${POSTGRES_IDENTITY_PASSWORD}@postgresd:5432/cplane
-      APP_TENANT_DATABASE_URL: postgresql://cplane_tenant:${POSTGRES_TENANT_PASSWORD}@postgresd:5432/cplane
+      IDENTITY_DATABASE_URL: postgresql://cplane_identity:${POSTGRES_IDENTITY_PASSWORD}@postgresd:5432/cplane
+      TENANT_DATABASE_URL: postgresql://cplane_tenant:${POSTGRES_TENANT_PASSWORD}@postgresd:5432/cplane
     depends_on:
       - postgresd
       - ui

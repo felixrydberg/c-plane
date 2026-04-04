@@ -1,6 +1,6 @@
 {
-  "id": "1fe0eb7b-8383-45a0-b6ec-121ac5de9fc7",
-  "prevId": "f0364a31-801f-4bc7-a8e8-6c5869916a66",
+  "id": "2281d641-d05e-4ca2-8fbf-32c436e83555",
+  "prevId": "4a644dfb-ed88-4868-9b18-9f7670836fe2",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1509,9 +1509,19 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
+      "policies": {
+        "event_org_rls": {
+          "name": "event_org_rls",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "app_tenant"
+          ],
+          "withCheck": "\"event\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+        }
+      },
       "checkConstraints": {},
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
     "public.regions": {
       "name": "regions",
