@@ -7,6 +7,7 @@ import { z } from "zod";
 const createRegionSchema = z.object({
   slug: z.string().trim().min(1, "slug is required"),
   display_name: z.string().trim().min(1, "display_name is required"),
+  s3_provider_id: z.uuid("s3_provider_id must be a valid UUID").nullable().optional(),
   status: z.enum(["active", "inactive", "maintenance"]).optional(),
 });
 
@@ -22,6 +23,7 @@ export default defineEventHandler(async (event) => {
     id: uuidv7(),
     slug: body.slug,
     display_name: body.display_name,
+    s3_provider_id: body.s3_provider_id ?? null,
     status: body.status ?? "active",
   }).returning();
 

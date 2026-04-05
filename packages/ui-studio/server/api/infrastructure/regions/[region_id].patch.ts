@@ -7,6 +7,7 @@ import { z } from "zod";
 const updateRegionSchema = z.object({
   slug: z.string().trim().min(1).optional(),
   display_name: z.string().trim().min(1).optional(),
+  s3_provider_id: z.uuid("s3_provider_id must be a valid UUID").nullable().optional(),
   status: z.enum(["active", "inactive", "maintenance"]).optional(),
 }).refine((value) => Object.keys(value).length > 0, {
   message: "At least one field is required",
@@ -30,6 +31,7 @@ export default defineEventHandler(async (event) => {
     .set({
       slug: body.slug,
       display_name: body.display_name,
+      s3_provider_id: body.s3_provider_id,
       status: body.status,
       updated_at: new Date().toISOString(),
     })

@@ -1,6 +1,6 @@
 import { index, integer, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { region } from "../regions/schema";
-import { studio_user } from "~~/server/schema";
+import { user as studio_user } from "../better-auth/studio/schema";
 
 export const cluster_status = pgEnum("cluster_status", ["pending", "bootstrapping", "healthy", "draining", "offline", "removed"]);
 export const cluster_health_status = pgEnum("cluster_health_status", ["healthy", "degraded", "offline"]);

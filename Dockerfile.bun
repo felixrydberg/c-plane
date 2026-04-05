@@ -23,6 +23,7 @@ RUN bun install --frozen-lockfile --filter "./packages/${PACKAGE}"
 # Copy only the shared files needed by runtime/types and selected app source.
 COPY packages/ui-shared/schema ./packages/ui-shared/schema
 COPY packages/ui-shared/types ./packages/ui-shared/types
+COPY packages/ui-shared/utils ./packages/ui-shared/utils
 COPY packages/${PACKAGE} ./packages/${PACKAGE}
 
 WORKDIR /usr/src/app/packages/${PACKAGE}

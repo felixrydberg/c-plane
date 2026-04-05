@@ -50,6 +50,12 @@ const links = computed(() => {
       label: 'Clusters',
       to: `/clusters`,
       exact: true,
+    },
+    {
+      type: "link",
+      label: 'S3 Providers',
+      to: `/s3-providers`,
+      exact: true,
     }
   ]
 }]
