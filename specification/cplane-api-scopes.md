@@ -1,14 +1,3 @@
-Here is a **production-grade implementation prompt** you can give to an AI coding agent (or use as an internal architecture spec) to build your Rust API correctly from the start.
-
-It encodes everything we designed:
-
-* Postgres RLS multi-tenancy
-* SeaORM integration
-* Better Auth frontend
-* API key authentication
-* schema ownership via `ui-shared`
-* dual database contexts
-* pgBouncer safety
 
 ---
 
@@ -417,13 +406,3 @@ The system must guarantee:
 * schema authority remains in `ui-shared`
 
 ---
-
-If you want, I can next produce a **“v2 implementation prompt”** that senior teams use — adding:
-
-✅ background workers
-✅ admin bypass safely
-✅ service-to-service auth
-✅ audit logging via RLS context
-✅ zero-cost permission expansion later
-
-(which fits extremely well with your Rust + API-key model).
