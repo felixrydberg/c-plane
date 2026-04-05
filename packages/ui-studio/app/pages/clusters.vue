@@ -14,7 +14,7 @@ interface Cluster {
   name: string;
   agent_id: string;
   agent_endpoint: string;
-  status: "active" | "inactive" | "draining" | "offline";
+  status: "pending" | "bootstrapping" | "healthy" | "draining" | "offline" | "removed";
   capacity_allocatable: number;
   capacity_used: number;
   health_status: "healthy" | "degraded" | "offline";
@@ -73,7 +73,7 @@ const createForm = reactive({
   name: "",
   agent_id: "",
   agent_endpoint: "",
-  status: "active" as Cluster["status"],
+  status: "pending" as Cluster["status"],
   capacity_allocatable: 0,
   capacity_used: 0,
   health_status: "healthy" as Cluster["health_status"],
@@ -85,7 +85,7 @@ const editForm = reactive({
   name: "",
   agent_id: "",
   agent_endpoint: "",
-  status: "active" as Cluster["status"],
+  status: "pending" as Cluster["status"],
   capacity_allocatable: 0,
   capacity_used: 0,
   health_status: "healthy" as Cluster["health_status"],
@@ -97,7 +97,7 @@ const resetCreateForm = () => {
   createForm.name = "";
   createForm.agent_id = "";
   createForm.agent_endpoint = "";
-  createForm.status = "active";
+  createForm.status = "pending";
   createForm.capacity_allocatable = 0;
   createForm.capacity_used = 0;
   createForm.health_status = "healthy";

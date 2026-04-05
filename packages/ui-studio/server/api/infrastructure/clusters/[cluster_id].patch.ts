@@ -10,7 +10,7 @@ const updateClusterSchema = z.object({
   name: z.string().trim().min(1).optional(),
   agent_id: z.string().trim().min(1).optional(),
   agent_endpoint: z.string().trim().min(1).optional(),
-  status: z.enum(["active", "inactive", "draining", "offline"]).optional(),
+  status: z.enum(["pending", "bootstrapping", "healthy", "draining", "offline", "removed"]).optional(),
   capacity_allocatable: z.number().int().nonnegative().optional(),
   capacity_used: z.number().int().nonnegative().optional(),
   health_status: z.enum(["healthy", "degraded", "offline"]).optional(),
