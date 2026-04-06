@@ -30,14 +30,14 @@ Those belong to platform subsystems.
 
 # 1. Core Principle
 
-A deployment exists **inside a tenant (workspace)**.
+A deployment exists **inside a tenant (organization)**.
 
 Networking is inherited automatically:
 
 ```text
 Deployment
     ↓
-Workspace
+Organization
     ↓
 Tenant Virtual Network (TVN)
     ↓
@@ -55,7 +55,7 @@ Each deployment is uniquely identified by:
 ```yaml
 deployment:
   id: dep_xxxx
-  workspace_id: ws_xxxx
+  organization_id: ws_xxxx
   region: eu-west
 ```
 
@@ -76,7 +76,7 @@ kind: Deployment
 
 metadata:
   name: api
-  workspace: ws-123
+  organization: ws-123
 
 spec:
   runtime: {}
@@ -163,7 +163,7 @@ Meaning:
 
 ⚠️ **This is intentionally minimal.**
 
-Networking belongs to the **workspace virtual network**.
+Networking belongs to the **organization virtual network**.
 
 ```yaml
 network:
@@ -180,7 +180,7 @@ That’s it.
 
 The platform automatically:
 
-* attaches deployment to workspace network
+* attaches deployment to organization network
 * assigns service identity
 * creates DNS records
 * generates Cilium policies
@@ -265,7 +265,7 @@ To preserve platform architecture:
 
 When a deployment is created:
 
-1. Validate workspace ownership
+1. Validate organization ownership
 2. Attach deployment → tenant network
 3. Allocate service identity
 4. Generate desired state
@@ -285,7 +285,7 @@ Platform actually does:
 ```text
 Deployment Spec
      ↓
-Workspace Network
+Organization Network
      ↓
 Regional Scheduler
      ↓
@@ -304,7 +304,7 @@ kind: Deployment
 
 metadata:
   name: api
-  workspace: ws-123
+  organization: ws-123
 
 spec:
   runtime:
@@ -329,6 +329,6 @@ User never touches networking beyond naming intent.
 
 # ✅ One-Sentence Definition
 
-> A deployment specifies workload intent while inheriting connectivity automatically from the workspace’s tenant virtual network.
+> A deployment specifies workload intent while inheriting connectivity automatically from the organization’s tenant virtual network.
 
 ---
