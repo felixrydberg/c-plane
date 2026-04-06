@@ -49,8 +49,8 @@ packages/c-plane-agent
 
 Requirements:
 
-* Written in Rust
-* Integrated into the existing Rust workspace
+* Written in Go
+* Integrated into the existing Go workspace/module structure
 * Built as an independent binary
 * Deployable inside Kubernetes clusters
 * Shares workspace tooling and dependency standards
@@ -149,6 +149,7 @@ The agent acts as a reconciliation component.
 It is responsible for:
 
 * receiving desired workload placements
+* installing and reconciling required platform operators (for example, Cilium and Kata Containers)
 * applying platform state to Kubernetes
 * reporting cluster health
 * reporting capacity and availability
@@ -159,6 +160,28 @@ The agent does not make scheduling decisions.
 
 ---
 
+## Ingress Metadata Reporting
+
+To support region ingress routing, the agent must publish normalized ingress metadata to the control plane.
+
+Population flow:
+
+1. Agent watches Kubernetes Service state for cluster ingress exposure.
+2. Agent observes cluster health and ingress readiness.
+3. Agent reports observed values to the control plane.
+4. Control plane persists routing metadata and serves it to ingress.
+
+Required reported fields:
+
+* `ingress_endpoint`: derived from cluster ingress Service VIP or external address.
+* `ingress_enabled`: whether cluster endpoint is currently eligible for new ingress traffic.
+* `ingress_weight`: balancing weight used by ingress selection policy.
+
+Cilium remains the networking primitive provider (service reachability, VIP advertisement, policy enforcement).
+The control plane remains the routing source of truth consumed by ingress.
+
+---
+
 ## Control Plane Responsibilities
 
 The control plane:
@@ -166,6 +189,7 @@ The control plane:
 * stores cluster registry state
 * validates cluster identity
 * assigns workloads
+* defines required operator policy (including approved operators and versions) per region or cluster class
 * evaluates cluster health
 * performs recovery reconciliation
 * determines placement across clusters
@@ -202,6 +226,7 @@ Cluster permissions are constrained by:
 Clusters may:
 
 * receive workload instructions
+* install and update control-plane-approved cluster operators
 * report state
 * reconcile resources
 
@@ -209,6 +234,7 @@ Clusters may not:
 
 * access other regions
 * modify scheduling decisions
+* install non-approved operators outside assigned policy
 * access workspace data
 * query platform databases
 
@@ -242,6 +268,8 @@ The agent is deployed into Kubernetes using platform-provided installation tooli
 
 Installation establishes identity but does not embed long-term credentials into manifests.
 
+After identity establishment, operator reconciliation is driven by control-plane policy so required cluster capabilities (such as networking via Cilium and sandboxed execution via Kata Containers) converge automatically.
+
 Clusters remain safely replaceable infrastructure units.
 
 ---
@@ -254,6 +282,7 @@ The system must guarantee:
 * revocable cluster identity
 * automatic credential rotation
 * least-privilege infrastructure access
+* policy-bound operator lifecycle management for required cluster operators (including Cilium and Kata Containers)
 * isolation from tenant data systems
 * compatibility with transaction-scoped authorization architecture
 
