@@ -1,11 +1,19 @@
 import { requireSession } from "~~/server/utils/authorization";
 import { db } from "~~/server/utils/auth";
 import { region } from "~~/server/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { z } from "zod";
+import { isReservedRegionSlug, normalizeRegionSlug, REGION_SLUG_REGEX } from "~~/server/utils/regions";
 
 const updateRegionSchema = z.object({
-  slug: z.string().trim().min(1).optional(),
+  slug: z
+    .string()
+    .trim()
+    .min(1)
+    .transform((value) => normalizeRegionSlug(value))
+    .refine((value) => REGION_SLUG_REGEX.test(value), "slug is invalid")
+    .refine((value) => !isReservedRegionSlug(value), "slug is reserved")
+    .optional(),
   display_name: z.string().trim().min(1).optional(),
   s3_provider_id: z.uuid("s3_provider_id must be a valid UUID").nullable().optional(),
   status: z.enum(["active", "inactive", "maintenance"]).optional(),
@@ -25,6 +33,15 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: parsed.error.issues[0]?.message || "Invalid request body" });
   }
   const body = parsed.data;
+
+  if (body.slug) {
+    const existingSlug = await db.query.region.findFirst({
+      where: and(eq(region.slug, body.slug), ne(region.id, regionId)),
+    });
+    if (existingSlug) {
+      throw createError({ statusCode: 409, statusMessage: "Region slug is already in use" });
+    }
+  }
 
   const [updated] = await db
     .update(region)
