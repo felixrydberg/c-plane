@@ -1,6 +1,6 @@
 use axum::{
     Router,
-    extract::DefaultBodyLimit,
+    routing::any,
     routing::get,
 };
 
@@ -9,7 +9,7 @@ use crate::handlers::{
 };
 
 pub fn create_routes() -> Router {
+
     Router::new()
         .route("/health", get(health_check))
-        .layer(DefaultBodyLimit::max(1 * 1024 * 1024 * 1024)) // 1GB limit
 }
