@@ -1,4 +1,4 @@
-import { index, integer, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { region } from "../regions/schema";
 import { user as studio_user } from "../better-auth/studio/schema";
 
@@ -14,6 +14,9 @@ export const cluster = pgTable("clusters", {
   name: text("name").notNull(),
   agent_id: text("agent_id").notNull().unique(),
   agent_endpoint: text("agent_endpoint").notNull(),
+  ingress_endpoint: text("ingress_endpoint"),
+  ingress_enabled: boolean("ingress_enabled").notNull().default(true),
+  ingress_weight: integer("ingress_weight").notNull().default(100),
   status: cluster_status("status").notNull().default("pending"),
   capacity_allocatable: integer("capacity_allocatable").notNull().default(0),
   capacity_used: integer("capacity_used").notNull().default(0),
@@ -27,6 +30,8 @@ export const cluster = pgTable("clusters", {
   index("clusters_slug_idx").on(table.slug),
   index("clusters_status_idx").on(table.status),
   index("clusters_health_status_idx").on(table.health_status),
+  index("clusters_ingress_enabled_idx").on(table.ingress_enabled),
+  index("clusters_ingress_weight_idx").on(table.ingress_weight),
 ]);
 
 export const cluster_join_credential = pgTable("cluster_join_credentials", {
