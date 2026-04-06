@@ -1,5 +1,7 @@
-import { index, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { index, pgEnum, pgPolicy, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { s3_provider } from "../s3/schema";
+import { app_tenant } from "../rls";
 
 export const region_status = pgEnum("region_status", ["active", "inactive", "maintenance"]);
 export const region_routing_mode = pgEnum("region_routing_mode", ["active", "draining", "disabled"]);
@@ -18,4 +20,10 @@ export const region = pgTable("regions", {
   index("regions_status_idx").on(table.status),
   index("regions_routing_mode_idx").on(table.routing_mode),
   index("regions_s3_provider_id_idx").on(table.s3_provider_id),
-]);
+  pgPolicy("regions_tenant_select_rls", {
+    as: "permissive",
+    for: "select",
+    to: app_tenant,
+    using: sql`true`,
+  }),
+]).enableRLS();

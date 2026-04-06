@@ -28,8 +28,15 @@ export const organization = pgTable(
     uniqueIndex("organization_slug_uidx").on(table.slug),
     index("organization_polar_customer_id_idx").on(table.polar_customer_id),
     index("organization_id_idx").on(table.id),
+    pgPolicy("organization_tenant_rls", {
+      as: "permissive",
+      for: "all",
+      to: app_tenant,
+      using: sql`${table.id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
+      withCheck: sql`${table.id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
+    }),
   ],
-);
+).enableRLS();
 
 export const organization_member = pgTable(
   "organization_member",
@@ -51,8 +58,15 @@ export const organization_member = pgTable(
     ),
     index("organization_member_organization_id_idx").on(table.organization_id),
     index("organization_member_user_id_idx").on(table.user_id),
+    pgPolicy("organization_member_tenant_rls", {
+      as: "permissive",
+      for: "all",
+      to: app_tenant,
+      using: sql`${table.organization_id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
+      withCheck: sql`${table.organization_id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
+    }),
   ],
-);
+).enableRLS();
 
 export const organization_invitation_status = pgEnum(
   "organization_invitation_status",
@@ -80,8 +94,15 @@ export const organization_invitation = pgTable(
       table.organization_id,
     ),
     index("organization_invitation_email_idx").on(table.email),
+    pgPolicy("organization_invitation_tenant_rls", {
+      as: "permissive",
+      for: "all",
+      to: app_tenant,
+      using: sql`${table.organization_id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
+      withCheck: sql`${table.organization_id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
+    }),
   ],
-);
+).enableRLS();
 
 export const active_organization = pgTable("active_organization", {
   user_id: uuid("user_id")
@@ -92,7 +113,7 @@ export const active_organization = pgTable("active_organization", {
     .references(() => organization.id, { onDelete: "cascade" }),
 }, (table) => [
   index("active_organization_user_id_idx").on(table.user_id),
-]);
+]).enableRLS();
 
 export const organizationRelations = relations(organization, ({ many }) => ({
   organization_members: many(organization_member),

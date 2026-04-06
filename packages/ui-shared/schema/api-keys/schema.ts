@@ -1,5 +1,7 @@
-import { index, integer, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { index, integer, pgEnum, pgPolicy, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { organization } from "../organization/schema";
+import { app_tenant } from "../rls";
 import { API_KEY_SCOPE_VALUES } from "../../utils/api-key-scopes";
 
 export const api_keys = pgTable("api_keys", {
@@ -15,7 +17,14 @@ export const api_keys = pgTable("api_keys", {
 }, (table) => [
   index("api_keys_organization_id_idx").on(table.organization_id),
   index("api_keys_key_hash_idx").on(table.key_hash),
-]);
+  pgPolicy("api_keys_tenant_rls", {
+    as: "permissive",
+    for: "all",
+    to: app_tenant,
+    using: sql`${table.organization_id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
+    withCheck: sql`${table.organization_id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
+  }),
+]).enableRLS();
 
 export const api_key_scopes_type = pgEnum("api_key_scopes_type", API_KEY_SCOPE_VALUES);
 
@@ -33,4 +42,11 @@ export const api_key_scopes = pgTable("api_key_scopes", {
   index("api_key_scopes_api_key_id_idx").on(table.api_key_id),
   index("api_key_scopes_scope_idx").on(table.scope),
   index("api_key_scopes_organization_id_idx").on(table.organization_id),
-]);
+  pgPolicy("api_key_scopes_tenant_rls", {
+    as: "permissive",
+    for: "all",
+    to: app_tenant,
+    using: sql`${table.organization_id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
+    withCheck: sql`${table.organization_id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
+  }),
+]).enableRLS();

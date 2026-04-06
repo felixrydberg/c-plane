@@ -1,4 +1,6 @@
-import { boolean, index, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { boolean, index, pgEnum, pgPolicy, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { app_tenant } from "../rls";
 import { region } from "../regions/schema";
 import { organization } from "../organization/schema";
 
@@ -22,7 +24,7 @@ export const s3_provider = pgTable("s3_providers", {
 }, (table) => [
   index("s3_providers_provider_type_idx").on(table.provider_type),
   index("s3_providers_is_active_idx").on(table.is_active),
-]);
+]).enableRLS();
 
 export const organization_s3_bucket = pgTable("organization_s3_buckets", {
   id: uuid("id").primaryKey(),
@@ -46,4 +48,11 @@ export const organization_s3_bucket = pgTable("organization_s3_buckets", {
   index("organization_s3_buckets_region_id_idx").on(table.region_id),
   index("organization_s3_buckets_organization_id_idx").on(table.organization_id),
   index("organization_s3_buckets_provider_id_idx").on(table.provider_id),
-]);
+  pgPolicy("organization_s3_buckets_org_rls", {
+    as: "permissive",
+    for: "all",
+    to: app_tenant,
+    using: sql`${table.organization_id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
+    withCheck: sql`${table.organization_id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
+  }),
+]).enableRLS();

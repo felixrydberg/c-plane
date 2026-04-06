@@ -32,7 +32,7 @@ export const cluster = pgTable("clusters", {
   index("clusters_health_status_idx").on(table.health_status),
   index("clusters_ingress_enabled_idx").on(table.ingress_enabled),
   index("clusters_ingress_weight_idx").on(table.ingress_weight),
-]);
+]).enableRLS();
 
 export const cluster_join_credential = pgTable("cluster_join_credentials", {
   id: uuid("id").primaryKey(),
@@ -52,7 +52,7 @@ export const cluster_join_credential = pgTable("cluster_join_credentials", {
   index("cluster_join_credentials_cluster_id_idx").on(table.cluster_id),
   index("cluster_join_credentials_expires_at_idx").on(table.expires_at),
   index("cluster_join_credentials_token_hash_idx").on(table.token_hash),
-]);
+]).enableRLS();
 
 export const cluster_runtime_identity = pgTable("cluster_runtime_identities", {
   id: uuid("id").primaryKey(),
@@ -71,4 +71,4 @@ export const cluster_runtime_identity = pgTable("cluster_runtime_identities", {
 }, (table) => [
   uniqueIndex("cluster_runtime_identities_cluster_id_uidx").on(table.cluster_id),
   index("cluster_runtime_identities_revoked_at_idx").on(table.revoked_at),
-]);
+]).enableRLS();
