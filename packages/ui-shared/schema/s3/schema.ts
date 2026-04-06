@@ -41,7 +41,7 @@ export const organization_s3_bucket = pgTable("organization_s3_buckets", {
   created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
   updated_at: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 }, (table) => [
-  uniqueIndex("organization_s3_buckets_org_region_bucket_uidx").on(table.organization_id, table.region_id, table.bucket_name),
+  uniqueIndex("organization_s3_buckets_org_bucket_uidx").on(table.organization_id, table.bucket_name),
   uniqueIndex("organization_s3_buckets_provider_bucket_uidx").on(table.provider_id, table.provider_bucket_name),
   index("organization_s3_buckets_region_id_idx").on(table.region_id),
   index("organization_s3_buckets_organization_id_idx").on(table.organization_id),
