@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import type { ContextMenuItem, TableColumn, TableRow } from "@nuxt/ui";
+import type { ContextMenuItem, FormSubmitEvent, TableColumn, TableRow } from "@nuxt/ui";
 import { h } from "vue";
+import * as z from "zod";
 
 interface Region {
   id: string;
@@ -67,17 +68,28 @@ const isSaving = ref(false);
 const isDeleting = ref(false);
 const selected = ref<Cluster | null>(null);
 
-const createForm = reactive({
+const createSchema = z.object({
+  region_id: z.string().uuid("Please select a region"),
+  name: z.string().trim().min(1, "Name is required"),
+  slug: z.string().trim().min(1, "Slug is required"),
+});
+
+type CreateSchema = z.output<typeof createSchema>;
+
+const createForm = reactive<CreateSchema>({
   region_id: "",
   slug: "",
   name: "",
-  agent_id: "",
-  agent_endpoint: "",
-  status: "pending" as Cluster["status"],
-  capacity_allocatable: 0,
-  capacity_used: 0,
-  health_status: "healthy" as Cluster["health_status"],
 });
+
+interface JoinCredential {
+  id: string;
+  cluster_id: string;
+  token: string;
+  expires_at: string;
+}
+
+const joinCredential = ref<JoinCredential | null>(null);
 
 const editForm = reactive({
   region_id: "",
@@ -95,12 +107,12 @@ const resetCreateForm = () => {
   createForm.region_id = "";
   createForm.slug = "";
   createForm.name = "";
-  createForm.agent_id = "";
-  createForm.agent_endpoint = "";
-  createForm.status = "pending";
-  createForm.capacity_allocatable = 0;
-  createForm.capacity_used = 0;
-  createForm.health_status = "healthy";
+};
+
+const closeCreateModal = () => {
+  createOpen.value = false;
+  joinCredential.value = null;
+  resetCreateForm();
 };
 
 const openEdit = (row: TableRow<Cluster>) => {
@@ -129,15 +141,14 @@ const contextItems = (row: TableRow<Cluster>): ContextMenuItem[] => [
   { label: "Delete", color: "error", onSelect: () => openDelete(row) },
 ];
 
-const createCluster = async () => {
+const createCluster = async (event: FormSubmitEvent<CreateSchema>) => {
   isSaving.value = true;
   try {
-    await $fetch("/api/infrastructure/clusters", {
+    const result = await $fetch<{ cluster: Cluster; join_credential: JoinCredential }>("/api/infrastructure/clusters", {
       method: "POST",
-      body: { ...createForm },
+      body: event.data,
     });
-    createOpen.value = false;
-    resetCreateForm();
+    joinCredential.value = result.join_credential;
     await refresh();
     toast.add({ title: "Cluster created", color: "success" });
   } catch {
@@ -197,10 +208,10 @@ const deleteCluster = async () => {
         />
       </UiPageContainer>
 
-      <UModal v-model:open="createOpen" title="Create Cluster" description="Register an execution cluster">
+      <UModal v-model:open="createOpen" :title="joinCredential ? 'Cluster Created' : 'Create Cluster'" :description="joinCredential ? 'Save the join token — it will not be shown again.' : 'Register an execution cluster'">
         <template #body>
-          <div class="space-y-4">
-            <UFormField label="Region" required>
+          <UForm v-if="!joinCredential" :schema="createSchema" :state="createForm" class="space-y-4" @submit="createCluster">
+            <UFormField label="Region" name="region_id" required>
               <USelect
                 v-model="createForm.region_id"
                 :items="regionOptions"
@@ -210,17 +221,20 @@ const deleteCluster = async () => {
                 class="w-full"
               />
             </UFormField>
-            <UFormField label="Name" required><UInput v-model="createForm.name" class="w-full" /></UFormField>
-            <UFormField label="Slug" required><UInput v-model="createForm.slug" class="w-full" /></UFormField>
-            <UFormField label="Agent ID" required><UInput v-model="createForm.agent_id" class="w-full" /></UFormField>
-            <UFormField label="Agent Endpoint" required><UInput v-model="createForm.agent_endpoint" class="w-full" /></UFormField>
-            <UFormField label="Status"><UInput v-model="createForm.status" class="w-full" /></UFormField>
-            <UFormField label="Health Status"><UInput v-model="createForm.health_status" class="w-full" /></UFormField>
-            <UFormField label="Capacity Allocatable"><UInput v-model="createForm.capacity_allocatable" type="number" class="w-full" /></UFormField>
-            <UFormField label="Capacity Used"><UInput v-model="createForm.capacity_used" type="number" class="w-full" /></UFormField>
+            <UFormField label="Name" name="name" required><UInput v-model="createForm.name" class="w-full" /></UFormField>
+            <UFormField label="Slug" name="slug" required><UInput v-model="createForm.slug" class="w-full" /></UFormField>
             <div class="flex justify-end gap-2">
-              <UButton variant="soft" @click="createOpen = false">Cancel</UButton>
-              <UButton :loading="isSaving" @click="createCluster">Create</UButton>
+              <UButton variant="soft" @click="closeCreateModal">Cancel</UButton>
+              <UButton type="submit" :loading="isSaving">Create</UButton>
+            </div>
+          </UForm>
+          <div v-else class="space-y-4">
+            <p class="text-sm text-muted">Pass this token to the cluster agent. It expires at {{ new Date(joinCredential.expires_at).toLocaleString() }} and can only be used once.</p>
+            <UFormField label="Join Token">
+              <UInput :model-value="joinCredential.token" readonly class="w-full font-mono" />
+            </UFormField>
+            <div class="flex justify-end">
+              <UButton @click="closeCreateModal">Done</UButton>
             </div>
           </div>
         </template>
