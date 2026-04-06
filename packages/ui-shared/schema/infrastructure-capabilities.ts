@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { index, pgPolicy, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { region } from "../regions/schema";
-import { app_tenant } from "../rls";
+import { region } from "./regions";
+import { app_tenant } from "./rls";
 
 export const region_capability = pgTable("region_capabilities", {
   id: uuid("id").primaryKey(),
