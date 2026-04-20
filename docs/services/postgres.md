@@ -19,7 +19,7 @@
 - If a cluster dies: new cluster restores from S3, replays WAL, resumes service.
 - Minimum self-host requirement: Kubernetes + S3-compatible storage. No Ceph required.
 
-## High Availability Modes
+## High Availability Modes (Future)
 
 - **Single primary (reactive)** — one primary, backups to S3. On failure, restore from backup and start new primary. Simplest mode.
 - **Regional HA (preferred, control-plane orchestrated)** — primary in one Kubernetes cluster, CloudNativePG replica cluster(s) in others (distributed topology). On primary cluster failure, control plane promotes a replica cluster and switches routing/endpoint. No full backup restore step, but cross-cluster failover is not automatic without this orchestration.
