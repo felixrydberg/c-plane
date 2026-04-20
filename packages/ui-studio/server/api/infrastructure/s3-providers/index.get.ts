@@ -2,8 +2,8 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { s3_provider } from "~~/server/schema";
-import { db } from "~~/server/utils/auth";
-import { requireSession } from "~~/server/utils/authorization";
+import { withAdminDb } from "~~/server/utils/db";
+import { requireAdmin } from "~~/server/utils/authorization";
 import { serializeProvider } from "~~/server/utils/s3-providers";
 
 const listProvidersQuerySchema = z.object({
@@ -11,7 +11,7 @@ const listProvidersQuerySchema = z.object({
 });
 
 export default defineEventHandler(async (event) => {
-  await requireSession(event);
+  await requireAdmin(event);
 
   const parsed = listProvidersQuerySchema.safeParse(getQuery(event));
   if (!parsed.success) {
@@ -25,21 +25,23 @@ export default defineEventHandler(async (event) => {
     predicates.push(eq(s3_provider.is_active, is_active === "true"));
   }
 
-  const rows = await db
-    .select({
-      id: s3_provider.id,
-      provider_type: s3_provider.provider_type,
-      endpoint_url: s3_provider.endpoint_url,
-      provider_region: s3_provider.provider_region,
-      access_key_id: s3_provider.access_key_id,
-      is_active: s3_provider.is_active,
-      has_session_token: s3_provider.session_token_encrypted,
-      has_secret_access_key: s3_provider.secret_access_key_encrypted,
-      created_at: s3_provider.created_at,
-      updated_at: s3_provider.updated_at,
-    })
-    .from(s3_provider)
-    .where(predicates.length > 0 ? and(...predicates) : undefined);
+  const rows = await withAdminDb((db) => {
+    return db
+      .select({
+        id: s3_provider.id,
+        provider_type: s3_provider.provider_type,
+        endpoint_url: s3_provider.endpoint_url,
+        provider_region: s3_provider.provider_region,
+        access_key_id: s3_provider.access_key_id,
+        is_active: s3_provider.is_active,
+        has_session_token: s3_provider.session_token_encrypted,
+        has_secret_access_key: s3_provider.secret_access_key_encrypted,
+        created_at: s3_provider.created_at,
+        updated_at: s3_provider.updated_at,
+      })
+      .from(s3_provider)
+      .where(predicates.length > 0 ? and(...predicates) : undefined);
+  });
 
   return rows.map((row) => serializeProvider({
     ...row,

@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { index, pgEnum, pgPolicy, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
-import { s3_provider } from "../s3/schema";
-import { app_tenant } from "../rls";
+import { s3_provider } from "./s3";
+import { app_tenant } from "./rls";
 
 export const region_status = pgEnum("region_status", ["active", "inactive", "maintenance"]);
 export const region_routing_mode = pgEnum("region_routing_mode", ["active", "draining", "disabled"]);

@@ -15,9 +15,9 @@ export default defineEventHandler(async (event) => {
       id: organization_member.user_id,
       role: organization_member.role,
     },
-  }).from(organization)
-    .innerJoin(organization_member, eq(organization.id, organization_member.organization_id))
-    .innerJoin(active_organization, eq(organization.id, active_organization.organization_id))
+  }).from(active_organization)
+    .innerJoin(organization_member, eq(active_organization.organization_id, organization_member.organization_id))
+    .innerJoin(organization, eq(organization.id, active_organization.organization_id))
     .where(eq(organization_member.user_id, session.user.id))
     .limit(1);
 

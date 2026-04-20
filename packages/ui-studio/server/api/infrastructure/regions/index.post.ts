@@ -1,5 +1,5 @@
-import { requireSession } from "~~/server/utils/authorization";
-import { db } from "~~/server/utils/auth";
+import { requireAdmin } from "~~/server/utils/authorization";
+import { withAdminDb } from "~~/server/utils/db";
 import { region } from "~~/server/schema";
 import { eq } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
@@ -20,27 +20,31 @@ const createRegionSchema = z.object({
 });
 
 export default defineEventHandler(async (event) => {
-  await requireSession(event);
+  await requireAdmin(event);
   const parsed = createRegionSchema.safeParse(await readBody(event));
   if (!parsed.success) {
     throw createError({ statusCode: 400, statusMessage: parsed.error.issues[0]?.message || "Invalid request body" });
   }
   const body = parsed.data;
 
-  const existingSlug = await db.query.region.findFirst({
-    where: eq(region.slug, body.slug),
-  });
-  if (existingSlug) {
-    throw createError({ statusCode: 409, statusMessage: "Region slug is already in use" });
-  }
+  const created = await withAdminDb(async (db) => {
+    const existingSlug = await db.query.region.findFirst({
+      where: eq(region.slug, body.slug),
+    });
+    if (existingSlug) {
+      throw createError({ statusCode: 409, statusMessage: "Region slug is already in use" });
+    }
 
-  const [created] = await db.insert(region).values({
-    id: uuidv7(),
-    slug: body.slug,
-    display_name: body.display_name,
-    s3_provider_id: body.s3_provider_id ?? null,
-    status: body.status ?? "active",
-  }).returning();
+    const [newRegion] = await db.insert(region).values({
+      id: uuidv7(),
+      slug: body.slug,
+      display_name: body.display_name,
+      s3_provider_id: body.s3_provider_id ?? null,
+      status: body.status ?? "active",
+    }).returning();
+
+    return newRegion;
+  });
 
   event.res.status = 201;
   return created;

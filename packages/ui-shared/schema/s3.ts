@@ -1,8 +1,7 @@
-import { sql } from "drizzle-orm";
 import { boolean, index, pgEnum, pgPolicy, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { app_tenant } from "../rls";
-import { region } from "../regions/schema";
-import { organization } from "../organization/schema";
+import { app_tenant, orgAllowed } from "./rls";
+import { region } from "./regions";
+import { organization } from "./organization";
 
 export const S3_PROVIDER_TYPES = ["aws_s3", "cloudflare_r2"] as const;
 export const ORGANIZATION_S3_BUCKET_STATUSES = ["active", "deleting", "error"] as const;
@@ -52,7 +51,7 @@ export const organization_s3_bucket = pgTable("organization_s3_buckets", {
     as: "permissive",
     for: "all",
     to: app_tenant,
-    using: sql`${table.organization_id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
-    withCheck: sql`${table.organization_id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
+    using: orgAllowed(table.organization_id),
+    withCheck: orgAllowed(table.organization_id),
   }),
 ]).enableRLS();

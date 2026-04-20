@@ -72,7 +72,7 @@ export default defineNuxtConfig({
     provider: 'none',
     collections: ['heroicons', 'heroicons-solid', 'lucide'],
     clientBundle: {
-      icons: ['lucide:x', 'lucide:chevron-down', 'lucide:check'],
+      icons: ['lucide:x', 'lucide:chevron-down', 'lucide:check', 'lucide:loader-circle'],
       scan: {
         globInclude: ['app/**/*.{vue,ts,tsx,md,mdc,mdx}'],
       },

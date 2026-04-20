@@ -8,10 +8,9 @@ import {
   pgEnum,
   uuid,
 } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
-import { user } from "../better-auth/studio/schema";
+import { user } from "./better-auth/studio";
 import { relations } from "drizzle-orm";
-import { app_tenant } from "../rls";
+import { app_tenant, orgAllowed } from "./rls";
 
 export const organization = pgTable(
   "organization",
@@ -32,8 +31,8 @@ export const organization = pgTable(
       as: "permissive",
       for: "all",
       to: app_tenant,
-      using: sql`${table.id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
-      withCheck: sql`${table.id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
+      using: orgAllowed(table.id),
+      withCheck: orgAllowed(table.id),
     }),
   ],
 ).enableRLS();
@@ -62,8 +61,8 @@ export const organization_member = pgTable(
       as: "permissive",
       for: "all",
       to: app_tenant,
-      using: sql`${table.organization_id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
-      withCheck: sql`${table.organization_id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
+      using: orgAllowed(table.organization_id),
+      withCheck: orgAllowed(table.organization_id),
     }),
   ],
 ).enableRLS();
@@ -98,8 +97,8 @@ export const organization_invitation = pgTable(
       as: "permissive",
       for: "all",
       to: app_tenant,
-      using: sql`${table.organization_id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
-      withCheck: sql`${table.organization_id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
+      using: orgAllowed(table.organization_id),
+      withCheck: orgAllowed(table.organization_id),
     }),
   ],
 ).enableRLS();

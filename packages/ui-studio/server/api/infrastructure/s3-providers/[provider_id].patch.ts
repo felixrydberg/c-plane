@@ -2,8 +2,8 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { s3_provider, S3_PROVIDER_TYPES } from "~~/server/schema";
-import { db } from "~~/server/utils/auth";
-import { requireSession } from "~~/server/utils/authorization";
+import { withAdminDb } from "~~/server/utils/db";
+import { requireAdmin } from "~~/server/utils/authorization";
 import { serializeProvider } from "~~/server/utils/s3-providers";
 import { encryptCredential } from "~~/server/utils/storage-credentials";
 
@@ -20,7 +20,7 @@ const updateProviderSchema = z.object({
 });
 
 export default defineEventHandler(async (event) => {
-  await requireSession(event);
+  await requireAdmin(event);
 
   const providerId = getRouterParam(event, "provider_id");
   if (!providerId) {
@@ -34,26 +34,28 @@ export default defineEventHandler(async (event) => {
 
   const body = parsed.data;
 
-  const [updated] = await db
-    .update(s3_provider)
-    .set({
-      provider_type: body.provider_type,
-      endpoint_url: body.endpoint_url,
-      provider_region: body.provider_region,
-      access_key_id: body.access_key_id,
-      secret_access_key_encrypted: body.secret_access_key
-        ? encryptCredential(body.secret_access_key)
-        : undefined,
-      session_token_encrypted: body.session_token === undefined
-        ? undefined
-        : body.session_token === null
-          ? null
-          : encryptCredential(body.session_token),
-      is_active: body.is_active,
-      updated_at: new Date().toISOString(),
-    })
-    .where(eq(s3_provider.id, providerId))
-    .returning();
+  const [updated] = await withAdminDb((db) => {
+    return db
+      .update(s3_provider)
+      .set({
+        provider_type: body.provider_type,
+        endpoint_url: body.endpoint_url,
+        provider_region: body.provider_region,
+        access_key_id: body.access_key_id,
+        secret_access_key_encrypted: body.secret_access_key
+          ? encryptCredential(body.secret_access_key)
+          : undefined,
+        session_token_encrypted: body.session_token === undefined
+          ? undefined
+          : body.session_token === null
+            ? null
+            : encryptCredential(body.session_token),
+        is_active: body.is_active,
+        updated_at: new Date().toISOString(),
+      })
+      .where(eq(s3_provider.id, providerId))
+      .returning();
+  });
 
   if (!updated) {
     throw createError({ statusCode: 404, statusMessage: "Provider config not found" });

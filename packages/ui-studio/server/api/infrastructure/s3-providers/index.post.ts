@@ -2,8 +2,8 @@ import { z } from "zod";
 import { uuidv7 } from "uuidv7";
 
 import { s3_provider, S3_PROVIDER_TYPES } from "~~/server/schema";
-import { db } from "~~/server/utils/auth";
-import { requireSession } from "~~/server/utils/authorization";
+import { withAdminDb } from "~~/server/utils/db";
+import { requireAdmin } from "~~/server/utils/authorization";
 import { encryptCredential } from "~~/server/utils/storage-credentials";
 import { serializeProvider } from "~~/server/utils/s3-providers";
 
@@ -18,7 +18,7 @@ const createProviderSchema = z.object({
 });
 
 export default defineEventHandler(async (event) => {
-  await requireSession(event);
+  await requireAdmin(event);
 
   const parsed = createProviderSchema.safeParse(await readBody(event));
   if (!parsed.success) {
@@ -27,16 +27,18 @@ export default defineEventHandler(async (event) => {
 
   const body = parsed.data;
 
-  const [created] = await db.insert(s3_provider).values({
-    id: uuidv7(),
-    provider_type: body.provider_type,
-    endpoint_url: body.endpoint_url,
-    provider_region: body.provider_region,
-    access_key_id: body.access_key_id,
-    secret_access_key_encrypted: encryptCredential(body.secret_access_key),
-    session_token_encrypted: body.session_token ? encryptCredential(body.session_token) : null,
-    is_active: body.is_active ?? true,
-  }).returning();
+  const [created] = await withAdminDb((db) => {
+    return db.insert(s3_provider).values({
+      id: uuidv7(),
+      provider_type: body.provider_type,
+      endpoint_url: body.endpoint_url,
+      provider_region: body.provider_region,
+      access_key_id: body.access_key_id,
+      secret_access_key_encrypted: encryptCredential(body.secret_access_key),
+      session_token_encrypted: body.session_token ? encryptCredential(body.session_token) : null,
+      is_active: body.is_active ?? true,
+    }).returning();
+  });
 
   if (!created) {
     throw createError({ statusCode: 500, statusMessage: "Failed to create provider configuration" });

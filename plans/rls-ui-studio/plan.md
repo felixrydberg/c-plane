@@ -87,8 +87,6 @@ based on actual route behavior in ui and ui-studio.
 - packages/ui-shared/schema/events/schema.ts
 - packages/ui-shared/schema/api-keys/schema.ts
 - packages/ui-shared/schema/index.ts
-- packages/ui-shared/drizzle/meta/_journal.json (generated updates)
-- packages/ui-shared/drizzle/*.sql (generated migration files)
 - packages/ui/server/utils/authorization.ts
 - packages/ui/server/utils/db.ts (or equivalent helper module)
 - packages/ui/server/api/**

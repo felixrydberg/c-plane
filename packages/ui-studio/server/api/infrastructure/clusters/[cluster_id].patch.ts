@@ -1,5 +1,5 @@
-import { requireSession } from "~~/server/utils/authorization";
-import { db } from "~~/server/utils/auth";
+import { requireAdmin } from "~~/server/utils/authorization";
+import { withAdminDb } from "~~/server/utils/db";
 import { cluster } from "~~/server/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -19,7 +19,7 @@ const updateClusterSchema = z.object({
 });
 
 export default defineEventHandler(async (event) => {
-  await requireSession(event);
+  await requireAdmin(event);
   const clusterId = getRouterParam(event, "cluster_id");
   if (!clusterId) {
     throw createError({ statusCode: 400, statusMessage: "Missing cluster_id" });
@@ -31,22 +31,24 @@ export default defineEventHandler(async (event) => {
   }
   const body = parsed.data;
 
-  const [updated] = await db
-    .update(cluster)
-    .set({
-      region_id: body.region_id,
-      slug: body.slug,
-      name: body.name,
-      agent_id: body.agent_id,
-      agent_endpoint: body.agent_endpoint,
-      status: body.status,
-      capacity_allocatable: body.capacity_allocatable,
-      capacity_used: body.capacity_used,
-      health_status: body.health_status,
-      updated_at: new Date().toISOString(),
-    })
-    .where(eq(cluster.id, clusterId))
-    .returning();
+  const [updated] = await withAdminDb((db) => {
+    return db
+      .update(cluster)
+      .set({
+        region_id: body.region_id,
+        slug: body.slug,
+        name: body.name,
+        agent_id: body.agent_id,
+        agent_endpoint: body.agent_endpoint,
+        status: body.status,
+        capacity_allocatable: body.capacity_allocatable,
+        capacity_used: body.capacity_used,
+        health_status: body.health_status,
+        updated_at: new Date().toISOString(),
+      })
+      .where(eq(cluster.id, clusterId))
+      .returning();
+  });
 
   if (!updated) {
     throw createError({ statusCode: 404, statusMessage: "Cluster not found" });

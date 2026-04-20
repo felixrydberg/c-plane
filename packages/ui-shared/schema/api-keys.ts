@@ -1,7 +1,6 @@
-import { sql } from "drizzle-orm";
 import { index, integer, pgEnum, pgPolicy, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { organization } from "./organization";
-import { app_tenant } from "./rls";
+import { app_tenant, orgAllowed } from "./rls";
 import { API_KEY_SCOPE_VALUES } from "../utils/api-key-scopes";
 
 export const api_keys = pgTable("api_keys", {
@@ -21,8 +20,8 @@ export const api_keys = pgTable("api_keys", {
     as: "permissive",
     for: "all",
     to: app_tenant,
-    using: sql`${table.organization_id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
-    withCheck: sql`${table.organization_id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
+    using: orgAllowed(table.organization_id),
+    withCheck: orgAllowed(table.organization_id),
   }),
 ]).enableRLS();
 
@@ -46,7 +45,7 @@ export const api_key_scopes = pgTable("api_key_scopes", {
     as: "permissive",
     for: "all",
     to: app_tenant,
-    using: sql`${table.organization_id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
-    withCheck: sql`${table.organization_id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
+    using: orgAllowed(table.organization_id),
+    withCheck: orgAllowed(table.organization_id),
   }),
 ]).enableRLS();

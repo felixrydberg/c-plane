@@ -1,8 +1,7 @@
-import { sql } from "drizzle-orm";
 import { boolean, index, json, pgEnum, pgPolicy, pgTable, timestamp, uuid } from "drizzle-orm/pg-core";
-import { organization } from "../organization/schema";
-import { EVENT_TYPE_VALUES } from "../../utils/event-types";
-import { app_tenant } from "../rls";
+import { organization } from "./organization";
+import { EVENT_TYPE_VALUES } from "../utils/event-types";
+import { app_tenant, orgAllowed } from "./rls";
 
 export const event_types = pgEnum("event_types", EVENT_TYPE_VALUES);
 
@@ -20,8 +19,8 @@ export const event = pgTable("event", {
   index("event_type_idx").on(table.type),
   pgPolicy("event_org_rls", {
     as: "permissive",
-    for: "insert",
+    for: "all",
     to: app_tenant,
-    withCheck: sql`${table.organization_id} = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))`,
+    withCheck: orgAllowed(table.organization_id),
   }),
 ]).enableRLS();

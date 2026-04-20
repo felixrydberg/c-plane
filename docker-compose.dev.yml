@@ -31,6 +31,8 @@ services:
       CHOKIDAR_INTERVAL: "250"
       WATCHPACK_POLLING: "true"
       NUXT_DATABASE_URL: postgresql://ui:${POSTGRES_UI_PASSWORD}@postgresd:5432/cplane
+      NUXT_IDENTITY_DATABASE_URL: postgresql://cplane_identity:${POSTGRES_IDENTITY_PASSWORD}@postgresd:5432/cplane
+      NUXT_TENANT_DATABASE_URL: postgresql://cplane_tenant:${POSTGRES_TENANT_PASSWORD}@postgresd:5432/cplane
       NUXT_REDIS_URL: redis://valkey:6379
       NUXT_RESEND_API_KEY: ${RESEND_API_KEY}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
@@ -69,6 +71,9 @@ services:
       CHOKIDAR_INTERVAL: "250"
       WATCHPACK_POLLING: "true"
       NUXT_DATABASE_URL: postgresql://ui:${POSTGRES_UI_PASSWORD}@postgresd:5432/cplane
+      NUXT_IDENTITY_DATABASE_URL: postgresql://cplane_identity:${POSTGRES_IDENTITY_PASSWORD}@postgresd:5432/cplane
+      NUXT_TENANT_DATABASE_URL: postgresql://cplane_tenant:${POSTGRES_TENANT_PASSWORD}@postgresd:5432/cplane
+      NUXT_ADMIN_DATABASE_URL: postgresql://cplane_admin:${POSTGRES_ADMIN_PASSWORD}@postgresd:5432/cplane
       NUXT_REDIS_URL: redis://valkey:6379
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
     ports:

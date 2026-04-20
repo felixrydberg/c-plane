@@ -1,8 +1,8 @@
-import { requireSession } from "~~/server/utils/authorization";
-import { db } from "~~/server/utils/auth";
+import { requireAdmin } from "~~/server/utils/authorization";
+import { withAdminDb } from "~~/server/utils/db";
 import { region } from "~~/server/schema";
 
 export default defineEventHandler(async (event) => {
-  await requireSession(event);
-  return db.select().from(region);
+  await requireAdmin(event);
+  return withAdminDb((db) => db.select().from(region));
 });

@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 
-import { db } from "~~/server/utils/auth";
+import { withAdminDb } from "~~/server/utils/db";
 import { requireAdmin } from "~~/server/utils/authorization";
 import { cluster } from "~~/server/schema";
 import { issueJoinCredential, issueJoinCredentialSchema } from "~~/server/utils/cluster-join-credentials";
@@ -18,19 +18,21 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: parsed.error.issues[0]?.message || "Invalid request body" });
   }
 
-  const foundCluster = await db.query.cluster.findFirst({
-    where: eq(cluster.id, clusterId),
-  });
+  const created = await withAdminDb(async (db) => {
+    const foundCluster = await db.query.cluster.findFirst({
+      where: eq(cluster.id, clusterId),
+    });
 
-  if (!foundCluster) {
-    throw createError({ statusCode: 404, statusMessage: "Cluster not found" });
-  }
+    if (!foundCluster) {
+      throw createError({ statusCode: 404, statusMessage: "Cluster not found" });
+    }
 
-  const created = await issueJoinCredential(db, {
-    clusterId,
-    issuedByUserId: session.user.id,
-    ttlMinutes: parsed.data.ttl_minutes,
-    revokeExisting: parsed.data.revoke_existing,
+    return issueJoinCredential(db, {
+      clusterId,
+      issuedByUserId: session.user.id,
+      ttlMinutes: parsed.data.ttl_minutes,
+      revokeExisting: parsed.data.revoke_existing,
+    });
   });
 
   event.res.status = 201;

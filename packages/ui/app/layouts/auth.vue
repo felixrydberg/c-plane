@@ -15,6 +15,24 @@ const links = computed(() => [{
   exact: true,
 }, {
   type: "link",
+  label: 'Deployments',
+  icon: "i-heroicons:rectangle-stack",
+  onSelect: () => {
+    open.value = false
+  },
+  open: true,
+  children: [
+    {
+      type: "link",
+      label: 'Containers',
+      to: `/${store.organization?.slug}/deployments/containers`,
+      onSelect: () => {
+        open.value = false
+      }
+    },
+  ]
+}, {
+  type: "link",
   label: 'Settings',
   icon: "i-heroicons:adjustments-horizontal",
   onSelect: () => {

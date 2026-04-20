@@ -22,6 +22,11 @@ interface Cluster {
   updated_at: string;
 }
 
+interface ClusterIngressEndpointInput {
+  address: string;
+  port?: number | string;
+}
+
 const NuxtTime = resolveComponent("NuxtTime");
 const toast = useToast();
 
@@ -82,6 +87,8 @@ const createForm = reactive<CreateSchema>({
   name: "",
 });
 
+const createIngressEndpoints = ref<ClusterIngressEndpointInput[]>([]);
+
 interface JoinCredential {
   id: string;
   cluster_id: string;
@@ -107,6 +114,15 @@ const resetCreateForm = () => {
   createForm.region_id = "";
   createForm.slug = "";
   createForm.name = "";
+  createIngressEndpoints.value = [];
+};
+
+const addCreateIngressEndpoint = () => {
+  createIngressEndpoints.value.push({ address: "", port: 443 });
+};
+
+const removeCreateIngressEndpoint = (index: number) => {
+  createIngressEndpoints.value.splice(index, 1);
 };
 
 const closeCreateModal = () => {
@@ -144,9 +160,28 @@ const contextItems = (row: TableRow<Cluster>): ContextMenuItem[] => [
 const createCluster = async (event: FormSubmitEvent<CreateSchema>) => {
   isSaving.value = true;
   try {
+    const ingressEndpoints = createIngressEndpoints.value
+      .map((endpoint) => {
+        const address = endpoint.address.trim();
+        const parsedPort = endpoint.port === "" || endpoint.port === undefined
+          ? null
+          : Number(endpoint.port);
+
+        return {
+          address,
+          port: parsedPort !== null && Number.isInteger(parsedPort) && parsedPort > 0 && parsedPort <= 65535
+            ? parsedPort
+            : undefined,
+        };
+      })
+      .filter((endpoint) => endpoint.address.length > 0);
+
     const result = await $fetch<{ cluster: Cluster; join_credential: JoinCredential }>("/api/infrastructure/clusters", {
       method: "POST",
-      body: event.data,
+      body: {
+        ...event.data,
+        ingress_endpoints: ingressEndpoints.length > 0 ? ingressEndpoints : undefined,
+      },
     });
     joinCredential.value = result.join_credential;
     await refresh();
@@ -223,6 +258,39 @@ const deleteCluster = async () => {
             </UFormField>
             <UFormField label="Name" name="name" required><UInput v-model="createForm.name" class="w-full" /></UFormField>
             <UFormField label="Slug" name="slug" required><UInput v-model="createForm.slug" class="w-full" /></UFormField>
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <p class="text-sm font-medium">Ingress Endpoints (optional)</p>
+                <UButton type="button" size="xs" variant="soft" icon="i-heroicons-plus" @click="addCreateIngressEndpoint">Add</UButton>
+              </div>
+              <p class="text-xs text-muted">Provide public endpoint addresses now, or leave empty and configure later.</p>
+              <div
+                v-for="(endpoint, index) in createIngressEndpoints"
+                :key="`endpoint-${index}`"
+                class="grid grid-cols-[1fr_auto_auto] gap-2"
+              >
+                <UInput
+                  v-model="endpoint.address"
+                  placeholder="lb.example.com or 203.0.113.10"
+                  class="w-full"
+                />
+                <UInput
+                  v-model="endpoint.port"
+                  type="number"
+                  min="1"
+                  max="65535"
+                  placeholder="443"
+                  class="w-24"
+                />
+                <UButton
+                  type="button"
+                  color="neutral"
+                  variant="ghost"
+                  icon="i-heroicons-trash"
+                  @click="removeCreateIngressEndpoint(index)"
+                />
+              </div>
+            </div>
             <div class="flex justify-end gap-2">
               <UButton variant="soft" @click="closeCreateModal">Cancel</UButton>
               <UButton type="submit" :loading="isSaving">Create</UButton>

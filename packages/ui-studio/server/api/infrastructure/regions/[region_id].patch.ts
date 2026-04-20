@@ -1,5 +1,5 @@
-import { requireSession } from "~~/server/utils/authorization";
-import { db } from "~~/server/utils/auth";
+import { requireAdmin } from "~~/server/utils/authorization";
+import { withAdminDb } from "~~/server/utils/db";
 import { region } from "~~/server/schema";
 import { and, eq, ne } from "drizzle-orm";
 import { z } from "zod";
@@ -22,7 +22,7 @@ const updateRegionSchema = z.object({
 });
 
 export default defineEventHandler(async (event) => {
-  await requireSession(event);
+  await requireAdmin(event);
   const regionId = getRouterParam(event, "region_id");
   if (!regionId) {
     throw createError({ statusCode: 400, statusMessage: "Missing region_id" });
@@ -34,26 +34,28 @@ export default defineEventHandler(async (event) => {
   }
   const body = parsed.data;
 
-  if (body.slug) {
-    const existingSlug = await db.query.region.findFirst({
-      where: and(eq(region.slug, body.slug), ne(region.id, regionId)),
-    });
-    if (existingSlug) {
-      throw createError({ statusCode: 409, statusMessage: "Region slug is already in use" });
+  const [updated] = await withAdminDb(async (db) => {
+    if (body.slug) {
+      const existingSlug = await db.query.region.findFirst({
+        where: and(eq(region.slug, body.slug), ne(region.id, regionId)),
+      });
+      if (existingSlug) {
+        throw createError({ statusCode: 409, statusMessage: "Region slug is already in use" });
+      }
     }
-  }
 
-  const [updated] = await db
-    .update(region)
-    .set({
-      slug: body.slug,
-      display_name: body.display_name,
-      s3_provider_id: body.s3_provider_id,
-      status: body.status,
-      updated_at: new Date().toISOString(),
-    })
-    .where(eq(region.id, regionId))
-    .returning();
+    return db
+      .update(region)
+      .set({
+        slug: body.slug,
+        display_name: body.display_name,
+        s3_provider_id: body.s3_provider_id,
+        status: body.status,
+        updated_at: new Date().toISOString(),
+      })
+      .where(eq(region.id, regionId))
+      .returning();
+  });
 
   if (!updated) {
     throw createError({ statusCode: 404, statusMessage: "Region not found" });

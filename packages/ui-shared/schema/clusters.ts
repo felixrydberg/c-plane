@@ -4,6 +4,8 @@ import { user as studio_user } from "./better-auth/studio";
 
 export const cluster_status = pgEnum("cluster_status", ["pending", "bootstrapping", "healthy", "draining", "offline", "removed"]);
 export const cluster_health_status = pgEnum("cluster_health_status", ["healthy", "degraded", "offline"]);
+export const cluster_provider = pgEnum("cluster_provider", ["aws", "gcp", "azure", "metal"]);
+export const cluster_ingress_endpoint_health_status = pgEnum("cluster_ingress_endpoint_health_status", ["healthy", "degraded", "unreachable"]);
 
 export const cluster = pgTable("clusters", {
   id: uuid("id").primaryKey(),
@@ -14,10 +16,8 @@ export const cluster = pgTable("clusters", {
   name: text("name").notNull(),
   agent_id: text("agent_id").unique(),
   agent_endpoint: text("agent_endpoint"),
-  ingress_endpoint: text("ingress_endpoint"),
-  ingress_enabled: boolean("ingress_enabled").notNull().default(true),
-  ingress_weight: integer("ingress_weight").notNull().default(100),
   status: cluster_status("status").notNull().default("pending"),
+  provider: cluster_provider("provider").notNull().default("aws"),
   capacity_allocatable: integer("capacity_allocatable").notNull().default(0),
   capacity_used: integer("capacity_used").notNull().default(0),
   health_status: cluster_health_status("health_status").notNull().default("healthy"),
@@ -30,8 +30,26 @@ export const cluster = pgTable("clusters", {
   index("clusters_slug_idx").on(table.slug),
   index("clusters_status_idx").on(table.status),
   index("clusters_health_status_idx").on(table.health_status),
-  index("clusters_ingress_enabled_idx").on(table.ingress_enabled),
-  index("clusters_ingress_weight_idx").on(table.ingress_weight),
+  index("clusters_provider_idx").on(table.provider),
+]).enableRLS();
+
+export const cluster_ingress_endpoint = pgTable("cluster_ingress_endpoints", {
+  id: uuid("id").primaryKey(),
+  cluster_id: uuid("cluster_id")
+    .notNull()
+    .references(() => cluster.id, { onDelete: "cascade" }),
+  address: text("address").notNull(),
+  port: integer("port").notNull().default(443),
+  enabled: boolean("enabled").notNull().default(true),
+  health_status: cluster_ingress_endpoint_health_status("health_status").notNull().default("healthy"),
+  last_seen_at: timestamp("last_seen_at", { withTimezone: true, mode: "string" }),
+  created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+  updated_at: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("cluster_ingress_endpoints_cluster_id_address_uidx").on(table.cluster_id, table.address),
+  index("cluster_ingress_endpoints_cluster_id_idx").on(table.cluster_id),
+  index("cluster_ingress_endpoints_health_status_idx").on(table.health_status),
+  index("cluster_ingress_endpoints_enabled_idx").on(table.enabled),
 ]).enableRLS();
 
 export const cluster_join_credential = pgTable("cluster_join_credentials", {
