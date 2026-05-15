@@ -36,6 +36,27 @@
       "when": 1775500366664,
       "tag": "0004_confused_stingray",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1776882266819,
+      "tag": "0005_great_malice",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1776885237864,
+      "tag": "0006_large_franklin_richards",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1776889000000,
+      "tag": "0007_storage_class_affinity",
+      "breakpoints": true
     }
   ]
 }

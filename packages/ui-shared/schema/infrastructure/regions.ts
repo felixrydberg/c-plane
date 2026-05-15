@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
-import { index, pgEnum, pgPolicy, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
-import { s3_provider } from "./s3";
-import { app_tenant } from "./rls";
+import { index, pgEnum, pgPolicy, pgTable, text, uniqueIndex, timestamp, uuid } from "drizzle-orm/pg-core";
+import { s3_provider } from "./durability";
+import { app_tenant } from "../rls";
 
 export const region_status = pgEnum("region_status", ["active", "inactive", "maintenance"]);
 export const region_routing_mode = pgEnum("region_routing_mode", ["active", "draining", "disabled"]);
@@ -21,6 +21,25 @@ export const region = pgTable("regions", {
   index("regions_routing_mode_idx").on(table.routing_mode),
   index("regions_s3_provider_id_idx").on(table.s3_provider_id),
   pgPolicy("regions_tenant_select_rls", {
+    as: "permissive",
+    for: "select",
+    to: app_tenant,
+    using: sql`true`,
+  }),
+]).enableRLS();
+
+export const region_capability = pgEnum("region_capability", ["nvme", "gpu", "arm", "x86"]);
+export const region_capabilities = pgTable("region_capabilities", {
+  id: uuid("id").primaryKey(),
+  region_id: uuid("region_id")
+    .notNull()
+    .references(() => region.id, { onDelete: "cascade" }),
+  capability: region_capability("capability").notNull(),
+  created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("region_capabilities_region_id_capability_uidx").on(table.region_id, table.capability),
+  index("region_capabilities_capability_idx").on(table.capability),
+  pgPolicy("region_capabilities_tenant_select_rls", {
     as: "permissive",
     for: "select",
     to: app_tenant,

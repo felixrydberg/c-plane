@@ -21,8 +21,8 @@
     "migrate:generate": "bunx drizzle-kit generate --config=drizzle.config.ts",
     "migrate": "bunx drizzle-kit migrate --config=drizzle.config.ts",
     "migrate:push": "bunx drizzle-kit push --config=drizzle.config.ts",
-    "better-auth:generate:ui": "bunx @better-auth/cli generate --config ../ui/server/utils/auth.ts --y --output ./schema/better-auth/studio.ts",
-    "better-auth:generate:ui-studio": "bunx @better-auth/cli generate --config ../ui-studio/server/utils/auth.ts --y --output ./schema/better-auth/ui-studio.ts",
+    "better-auth:generate:ui": "bunx @better-auth/cli generate --config ../ui/server/utils/auth.ts --y --output ./schema/tenants/studio.ts",
+    "better-auth:generate:ui-studio": "bunx @better-auth/cli generate --config ../ui-studio/server/utils/auth.ts --y --output ./schema/tenants/ui-studio.ts",
     "better-auth:generate": "bun run better-auth:generate:ui; bun run better-auth:generate:ui-studio"
   },
   "peerDependencies": {

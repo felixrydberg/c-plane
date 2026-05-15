@@ -1,1 +1,1 @@
-export * from "./tables"
+export * from "@cplane/ui-shared/schema"

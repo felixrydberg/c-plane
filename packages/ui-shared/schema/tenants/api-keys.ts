@@ -1,7 +1,7 @@
 import { index, integer, pgEnum, pgPolicy, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { organization } from "./organization";
-import { app_tenant, orgAllowed } from "./rls";
-import { API_KEY_SCOPE_VALUES } from "../utils/api-key-scopes";
+import { app_tenant, orgAllowed } from "../rls";
+import { API_KEY_SCOPE_VALUES } from "../../utils/api-key-scopes";
 
 export const api_keys = pgTable("api_keys", {
   id: uuid("id").primaryKey(),

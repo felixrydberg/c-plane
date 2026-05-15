@@ -1,6 +1,8 @@
-import { boolean, index, integer, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { region } from "./regions";
-import { user as studio_user } from "./better-auth/studio";
+import { boolean, index, integer, pgEnum, pgPolicy, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { region, region_capability } from "./regions";
+import { studio_user } from "../tenants/ui-studio";
+import { app_tenant } from "../rls";
+import { sql } from "drizzle-orm";
 
 export const cluster_status = pgEnum("cluster_status", ["pending", "bootstrapping", "healthy", "draining", "offline", "removed"]);
 export const cluster_health_status = pgEnum("cluster_health_status", ["healthy", "degraded", "offline"]);
@@ -31,6 +33,24 @@ export const cluster = pgTable("clusters", {
   index("clusters_status_idx").on(table.status),
   index("clusters_health_status_idx").on(table.health_status),
   index("clusters_provider_idx").on(table.provider),
+]).enableRLS();
+
+export const cluster_capabilities = pgTable("cluster_capabilities", {
+  id: uuid("id").primaryKey(),
+  cluster_id: uuid("cluster_id")
+    .notNull()
+    .references(() => cluster.id, { onDelete: "cascade" }),
+  capability: region_capability("capability").notNull(),
+  created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("cluster_capabilities_cluster_id_capability_uidx").on(table.cluster_id, table.capability),
+  index("cluster_capabilities_capability_idx").on(table.capability),
+  pgPolicy("cluster_capabilities_tenant_select_rls", {
+    as: "permissive",
+    for: "select",
+    to: app_tenant,
+    using: sql`true`,
+  }),
 ]).enableRLS();
 
 export const cluster_ingress_endpoint = pgTable("cluster_ingress_endpoints", {

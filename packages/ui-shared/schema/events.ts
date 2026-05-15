@@ -1,5 +1,5 @@
 import { boolean, index, json, pgEnum, pgPolicy, pgTable, timestamp, uuid } from "drizzle-orm/pg-core";
-import { organization } from "./organization";
+import { organization } from "./tenants/organization";
 import { EVENT_TYPE_VALUES } from "../utils/event-types";
 import { app_tenant, orgAllowed } from "./rls";
 

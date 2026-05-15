@@ -8,9 +8,9 @@ import {
   pgEnum,
   uuid,
 } from "drizzle-orm/pg-core";
-import { user } from "./better-auth/studio";
+import { user } from "./studio";
 import { relations } from "drizzle-orm";
-import { app_tenant, orgAllowed } from "./rls";
+import { app_tenant, orgAllowed } from "../rls";
 
 export const organization = pgTable(
   "organization",
