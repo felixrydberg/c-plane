@@ -24,7 +24,6 @@
 ## High Availability
 
 - HA is achieved by running multiple clusters per region.
-- Replicas of a deployment can be distributed across clusters (active-active).
 - If one cluster fails, the control plane reschedules workloads on remaining healthy clusters.
 - No user action is required for recovery.
 
