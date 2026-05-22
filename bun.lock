@@ -64,8 +64,8 @@
         "drizzle-orm": "^0.45.1",
       },
     },
-    "packages/ui-studio": {
-      "name": "@cplane/ui-studio",
+    "packages/control-plane-ui": {
+      "name": "@cplane/control-plane-ui",
       "dependencies": {
         "@cplane/ui-shared": "workspace:*",
         "@iconify-json/lucide": "1.2.97",
@@ -227,7 +227,7 @@
 
     "@cplane/ui-shared": ["@cplane/ui-shared@workspace:packages/ui-shared"],
 
-    "@cplane/ui-studio": ["@cplane/ui-studio@workspace:packages/ui-studio"],
+    "@cplane/control-plane-ui": ["@cplane/control-plane-ui@workspace:packages/control-plane-ui"],
 
     "@drizzle-team/brocli": ["@drizzle-team/brocli@0.10.2", "", {}, ""],
 

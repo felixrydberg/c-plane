@@ -4,7 +4,7 @@
 
 ### What EXISTS:
 1. **Polar Integration Foundation**
-   - `@polar-sh/nuxt` (v0.5.5) & `@polar-sh/sdk` (v0.46.3) in packages/ui & ui-studio
+   - `@polar-sh/nuxt` (v0.5.5) & `@polar-sh/sdk` (v0.46.3) in packages/ui & control-plane-ui
    - Polar customer ID stored in `organization.polar_customer_id` (UUID field, unique)
    - Organization deletion triggers Polar customer deletion via `await polar.customers.delete()`
 

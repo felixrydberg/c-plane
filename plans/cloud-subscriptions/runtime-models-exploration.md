@@ -69,9 +69,9 @@ The c-plane project currently defines organizational, user, and API management s
 - `tracing` listed but not actively used
 - No `prometheus`, `opentelemetry`, or `jaeger` crates in main package
 
-### Nuxt Apps (`packages/ui/`, `packages/ui-studio/`)
+### Nuxt Apps (`packages/ui/`, `packages/control-plane-ui/`)
 **Telemetry Status**:
-- `disable-telemetry` flag in hero components ([ui/hero.vue#L8](ui/app/components/auth/hero.vue#L8), [ui-studio/hero.vue#L8](ui-studio/app/components/auth/hero.vue#L8))
+- `disable-telemetry` flag in hero components ([ui/hero.vue#L8](ui/app/components/auth/hero.vue#L8), [control-plane-ui/hero.vue#L8](control-plane-ui/app/components/auth/hero.vue#L8))
 - No custom metrics/telemetry ingestion implemented
 - No @nuxt/telemetry configured for custom events
 
@@ -86,7 +86,7 @@ The c-plane project currently defines organizational, user, and API management s
 
 ### Nuxt
 - [ui/nuxt.config.ts](ui/nuxt.config.ts#L50) - Experimental WebSocket & OpenAPI
-- [ui-studio/nuxt.config.ts](ui-studio/nuxt.config.ts#L50) - Same config plus HMR on port 24679
+- [control-plane-ui/nuxt.config.ts](control-plane-ui/nuxt.config.ts#L50) - Same config plus HMR on port 24679
 
 ---
 
@@ -95,7 +95,7 @@ The c-plane project currently defines organizational, user, and API management s
 ### Docker Setup
 - [Dockerfile.rust](c-plane/Dockerfile) - Multi-stage build with non-root user
 - HEALTHCHECK: `curl -f http://localhost:8080/health || exit 1`
-- [docker-compose.dev.yml](docker-compose.dev.yml) - Dev environment with ui, ui-studio, c-plane services
+- [docker-compose.dev.yml](docker-compose.dev.yml) - Dev environment with ui, control-plane-ui, c-plane services
 
 ### Environment Variables in Compose
 - `NUXT_DATABASE_URL` - PostgreSQL connection

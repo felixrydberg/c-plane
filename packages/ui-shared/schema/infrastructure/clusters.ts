@@ -1,6 +1,6 @@
 import { boolean, index, integer, pgEnum, pgPolicy, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { region, region_capability } from "./regions";
-import { studio_user } from "../tenants/ui-studio";
+import { studio_user } from "../tenants/control-plane-ui";
 import { app_tenant } from "../rls";
 import { sql } from "drizzle-orm";
 

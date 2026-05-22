@@ -5,7 +5,7 @@
   "workspaces": [
     "packages/ui-shared",
     "packages/ui",
-    "packages/ui-studio"
+    "packages/control-plane-ui"
   ],
   "dependencies": {
     "@nuxt/image": "2.0.0",
@@ -21,11 +21,11 @@
     "typescript": "5.9.3"
   },
   "scripts": {
-    "build": "bun run --filter './packages/ui' build && bun run --filter './packages/ui-studio' build",
-    "lint": "bun run --filter './packages/ui' lint && bun run --filter './packages/ui-studio' lint",
-    "typecheck": "bun run --filter './packages/ui' typecheck && bun run --filter './packages/ui-studio' typecheck",
+    "build": "bun run --filter './packages/ui' build && bun run --filter './packages/control-plane-ui' build",
+    "lint": "bun run --filter './packages/ui' lint && bun run --filter './packages/control-plane-ui' lint",
+    "typecheck": "bun run --filter './packages/ui' typecheck && bun run --filter './packages/control-plane-ui' typecheck",
     "dev:ui": "bun run --filter './packages/ui' dev",
-    "dev:ui-studio": "bun run --filter './packages/ui-studio' dev"
+    "dev:control-plane-ui": "bun run --filter './packages/control-plane-ui' dev"
   },
   "overrides": {
     "nuxt": "4.4.2",

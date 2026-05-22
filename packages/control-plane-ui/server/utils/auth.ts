@@ -8,7 +8,7 @@ import { sendEmail } from "./email";
 import { createResetPasswordEmailTemplate, createVerifyEmailTemplate } from "./email-templates";
 
 const { NUXT_REDIS_URL, NUXT_DATABASE_URL } = process.env;
-const db_table_prefix = "studio_";
+const db_table_prefix = "cplane_";
 if (!NUXT_DATABASE_URL) {
   throw new Error("Database connection string is not defined")
 }

@@ -12,8 +12,8 @@ packages/*/*/node_modules
 **/.output
 packages/ui/.nuxt
 packages/ui/.output
-packages/ui-studio/.nuxt
-packages/ui-studio/.output
+packages/control-plane-ui/.nuxt
+packages/control-plane-ui/.output
 dist
 build
 .turbo

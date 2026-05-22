@@ -15,7 +15,7 @@ COPY package.json ./package.json
 COPY bun.lock ./bun.lock
 COPY packages/ui-shared/package.json ./packages/ui-shared/package.json
 COPY packages/ui/package.json ./packages/ui/package.json
-COPY packages/ui-studio/package.json ./packages/ui-studio/package.json
+COPY packages/control-plane-ui/package.json ./packages/control-plane-ui/package.json
 
 # Install dependencies for the selected workspace through bun workspaces.
 RUN bun install --frozen-lockfile --filter "./packages/${PACKAGE}"

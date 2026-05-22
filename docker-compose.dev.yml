@@ -58,12 +58,12 @@ services:
         - action: rebuild
           path: ./packages/ui-shared/package.json
 
-  ui-studio:
+  control-plane-ui:
     build:
       context: .
       dockerfile: Dockerfile.bun
       args:
-        PACKAGE: ui-studio
+        PACKAGE: control-plane-ui
       target: "development"
     environment:
       NODE_ENV: development
@@ -82,8 +82,8 @@ services:
     develop:
       watch:
         - action: sync
-          path: ./packages/ui-studio
-          target: /usr/src/app/packages/ui-studio
+          path: ./packages/control-plane-ui
+          target: /usr/src/app/packages/control-plane-ui
           ignore:
             - node_modules/
             - .nuxt/
@@ -94,7 +94,7 @@ services:
           ignore:
             - node_modules/
         - action: rebuild
-          path: ./packages/ui-studio/package.json
+          path: ./packages/control-plane-ui/package.json
         - action: rebuild
           path: ./packages/ui-shared/package.json
 

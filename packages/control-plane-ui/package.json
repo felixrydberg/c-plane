@@ -1,5 +1,5 @@
 {
-  "name": "@cplane/ui-studio",
+  "name": "@cplane/control-plane-ui",
   "private": false,
   "type": "module",
   "scripts": {
