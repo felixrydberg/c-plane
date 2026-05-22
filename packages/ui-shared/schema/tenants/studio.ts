@@ -54,8 +54,8 @@ export const account = pgTable(
   (table) => [index("account_userId_idx").on(table.userId)],
 );
 
-export const auth_verification = pgTable(
-  "auth_verification",
+export const verification = pgTable(
+  "verification",
   {
     id: uuid("id")
       .default(sql`pg_catalog.gen_random_uuid()`)
@@ -69,7 +69,7 @@ export const auth_verification = pgTable(
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [index("auth_verification_identifier_idx").on(table.identifier)],
+  (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
 
 export const twoFactor = pgTable(

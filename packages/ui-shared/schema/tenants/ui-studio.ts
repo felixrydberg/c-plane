@@ -54,8 +54,8 @@ export const studio_account = pgTable(
   (table) => [index("studio_account_userId_idx").on(table.userId)],
 );
 
-export const studio_auth_verification = pgTable(
-  "studio_auth_verification",
+export const studio_verification = pgTable(
+  "studio_verification",
   {
     id: uuid("id")
       .default(sql`pg_catalog.gen_random_uuid()`)
@@ -70,7 +70,7 @@ export const studio_auth_verification = pgTable(
       .notNull(),
   },
   (table) => [
-    index("studio_auth_verification_identifier_idx").on(table.identifier),
+    index("studio_verification_identifier_idx").on(table.identifier),
   ],
 );
 

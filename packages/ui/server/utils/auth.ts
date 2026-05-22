@@ -88,9 +88,6 @@ export const auth = betterAuth({
       enabled: true,
     }
   },
-  verification: {
-    modelName: "auth_verification",
-  },
   emailAndPassword: {
     enabled: true,
     sendResetPassword: async ({ user, url }) => {
