@@ -21,6 +21,7 @@ export const event = pgTable("event", {
     as: "permissive",
     for: "all",
     to: app_tenant,
+    using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
 ]).enableRLS();

@@ -202,198 +202,111 @@ const onDisable2FASubmit = async () => {
 </script>
 
 <template>
-  <div>
-    <UPageCard
-      title="Two-Factor Authentication"
-      description="Add an extra layer of security to your account."
-      orientation="horizontal"
-      variant="naked"
-      class="mb-4"
-    />
+  <div class="w-full border border-default rounded-lg p-6 space-y-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <p class="font-semibold">Two-Factor Authentication</p>
+        <p class="text-sm text-muted">Add an extra layer of security to your account.</p>
+      </div>
+    </div>
 
-    <UPageCard class="flex flex-row gap-3">
-      <div class="flex items-center justify-between p-4 rounded-lg ring" :class="store.user?.twoFactorEnabled ? 'ring-success/30' : 'ring-error/30'">
-        <template v-if="store.user?.twoFactorEnabled">
-          <div class="flex items-center gap-3">
-            <UIcon name="i-heroicons:shield-check" class="w-5 h-5 text-success" />
-            <div>
-              <p class="text-sm font-medium">Two-Factor Authentication Active</p>
-              <p class="text-sm text-muted">Your account is protected</p>
-            </div>
+    <div class="flex items-center justify-between p-4 rounded-lg border border-dashed" :class="store.user?.twoFactorEnabled ? 'border-success/30' : 'border-error/30'">
+      <template v-if="store.user?.twoFactorEnabled">
+        <div class="flex items-center gap-3">
+          <UIcon name="i-heroicons:shield-check" class="w-5 h-5 text-success" />
+          <div>
+            <p class="text-sm font-medium">Two-Factor Authentication Active</p>
+            <p class="text-sm text-muted">Your account is protected</p>
           </div>
-          <UButton color="success" size="sm" variant="soft">
-            Enabled
-          </UButton>
-        </template>
-        <template v-else>
-          <div class="flex items-center gap-3">
-            <UIcon name="i-heroicons:shield-exclamation" class="w-5 h-5 text-error" />
-            <div>
-              <p class="text-sm font-medium">Enable Two-Factor Authentication</p>
-              <p class="text-sm text-muted">Secure your account with TOTP</p>
-            </div>
+        </div>
+        <UButton color="success" size="sm" variant="soft">
+          Enabled
+        </UButton>
+      </template>
+      <template v-else>
+        <div class="flex items-center gap-3">
+          <UIcon name="i-heroicons:shield-exclamation" class="w-5 h-5 text-error" />
+          <div>
+            <p class="text-sm font-medium">Enable Two-Factor Authentication</p>
+            <p class="text-sm text-muted">Secure your account with TOTP</p>
           </div>
-          <UButton
-            color="error"
-            size="sm"
-            variant="soft"
-            @click="onTOTPModalClick"
-          >
-            Enable
-          </UButton>
-          <UModal
-            v-model:open="totpModalOpen"
-            title="Enable 2FA"
-            description="Set up two-factor authentication to enhance the security of your account."
-          >
-            <template #body>
-              <UStepper v-model="step" :items="stepperItems" class="mb-4" />
-              <template v-if="step === 0">
-                <!-- Step 1: Enter Password -->
-                <UForm :schema="twofaSchema" :state="twofaState" @submit.prevent="on2FAPasswordSubmit">
-                  <UFormField
-                    label="Password"
-                    :error="twofaError"
-                    description="Please enter your account password to proceed."
-                    name="password"
-                  >
-                    <UInput
-                      v-model="twofaState.password"
-                      type="password"
-                      class="w-full"
-                      placeholder="Enter your password"
-                      autocomplete="password"
-                    />
-                  </UFormField>
-                  <UButton
-                    class="w-full flex justify-center mt-4"
-                    type="submit"
-                  >
-                    Continue
-                  </UButton>
-                </UForm>
-              </template>
-              <template v-if="step === 1">
-                <UForm ref="totpForm" :schema="totpSchema" :state="totpState" @submit.prevent="on2FACodeSubmit">
-                  <div class="mx-auto w-fit">
-                    <UFormField
-                      label="Scan with your Authentication app"
-                    >
-                      <img :src="qrcode" alt="QR Code" class="mx-auto" >
-                    </UFormField>
-                    <UFormField
-                      label="Enter the code from your app"
-                    >
-                      <UPinInput v-model="totpState.code" class="mx-auto" otp :length="6" @complete="totpForm?.submit()" />
-                    </UFormField>
-                  </div>
-                  <UButton
-                    class="w-full flex justify-center mt-4"
-                    type="submit"
-                    :disabled="totpState.code.length !== 6"
-                  >
-                    Continue
-                  </UButton>
-                </UForm>
-              </template>
+        </div>
+        <UButton color="error" size="sm" variant="soft" @click="onTOTPModalClick">
+          Enable
+        </UButton>
+        <UModal v-model:open="totpModalOpen" title="Enable 2FA" description="Set up two-factor authentication to enhance the security of your account.">
+          <template #body>
+            <UStepper v-model="step" :items="stepperItems" class="mb-4" />
+            <template v-if="step === 0">
+              <UForm :schema="twofaSchema" :state="twofaState" @submit.prevent="on2FAPasswordSubmit">
+                <UFormField label="Password" :error="twofaError" description="Please enter your account password to proceed." name="password">
+                  <UInput v-model="twofaState.password" type="password" class="w-full" placeholder="Enter your password" autocomplete="password" />
+                </UFormField>
+                <UButton class="w-full flex justify-center mt-4" type="submit">Continue</UButton>
+              </UForm>
             </template>
-          </UModal>
-        </template>
+            <template v-if="step === 1">
+              <UForm ref="totpForm" :schema="totpSchema" :state="totpState" @submit.prevent="on2FACodeSubmit">
+                <div class="mx-auto w-fit">
+                  <UFormField label="Scan with your Authentication app">
+                    <img :src="qrcode" alt="QR Code" class="mx-auto" />
+                  </UFormField>
+                  <UFormField label="Enter the code from your app">
+                    <UPinInput v-model="totpState.code" class="mx-auto" otp :length="6" @complete="totpForm?.submit()" />
+                  </UFormField>
+                </div>
+                <UButton class="w-full flex justify-center mt-4" type="submit" :disabled="totpState.code.length !== 6">Continue</UButton>
+              </UForm>
+            </template>
+          </template>
+        </UModal>
+      </template>
+    </div>
+
+    <template v-if="store.user?.twoFactorEnabled">
+      <USeparator />
+      <div class="flex items-center justify-between p-4 rounded-lg border border-dashed border-default">
+        <div class="flex items-center gap-3">
+          <UIcon name="i-heroicons:key" class="w-5 h-5 text-muted" />
+          <div>
+            <p class="text-sm font-medium">Backup Codes</p>
+            <p class="text-sm text-muted">Re-generate recovery codes</p>
+          </div>
+        </div>
+        <UButton size="sm" @click="regenerate2FAModal = true">Manage</UButton>
+        <UModal v-model:open="regenerate2FAModal" title="Regenerate Backup Codes" description="This will invalidate your current backup codes.">
+          <template #body>
+            <UForm :schema="Management2FASchema" :state="management2FAState" @submit.prevent="onManagement2FASubmit">
+              <UFormField label="Password" description="Please enter your account password to proceed." :error="management2FAError" name="password">
+                <UInput v-model="management2FAState.password" type="password" class="w-full" placeholder="Enter your password" autocomplete="password" />
+              </UFormField>
+              <UButton class="w-full flex justify-center mt-4" type="submit">Continue</UButton>
+            </UForm>
+          </template>
+        </UModal>
       </div>
 
-      <template v-if="store.user?.twoFactorEnabled">
-        <USeparator />
-        <div class="flex items-center justify-between p-4 ring ring-default rounded-lg">
-          <div class="flex items-center gap-3">
-            <UIcon name="i-heroicons:key" class="w-5 h-5 text-muted" />
-            <div>
-              <p class="text-sm font-medium">Backup Codes</p>
-              <p class="text-sm text-muted">Re-generate recovery codes</p>
-            </div>
+      <div class="flex items-center justify-between p-4 rounded-lg border border-dashed border-error/30">
+        <div class="flex items-center gap-3">
+          <UIcon name="i-heroicons:shield-exclamation" class="w-5 h-5 text-error" />
+          <div>
+            <p class="text-sm font-medium">Disable 2FA</p>
+            <p class="text-sm text-muted">Remove two-factor authentication</p>
           </div>
-          <UButton
-            color="neutral"
-            variant="soft"
-            size="sm"
-            @click="regenerate2FAModal = true"
-          >
-            Manage
-          </UButton>
-          <UModal v-model:open="regenerate2FAModal" title="Regenerate Backup Codes" description="This will invalidate your current backup codes.">
-            <template #body>
-              <UForm :schema="Management2FASchema" :state="management2FAState" @submit.prevent="onManagement2FASubmit">
-                <UFormField
-                  label="Password"
-                  description="Please enter your account password to proceed."
-                  :error="management2FAError"
-                  name="password"
-                >
-                  <UInput
-                    v-model="management2FAState.password"
-                    type="password"
-                    class="w-full"
-                    placeholder="Enter your password"
-                    autocomplete="password"
-                  />
-                </UFormField>
-                <UButton
-                  class="w-full flex justify-center mt-4"
-                  color="neutral"
-                  type="submit"
-                >
-                  Continue
-                </UButton>
-              </UForm>
-            </template>
-          </UModal>
         </div>
-
-        <div class="flex items-center justify-between p-4 ring ring-error/30 rounded-lg">
-          <div class="flex items-center gap-3">
-            <UIcon name="i-heroicons:shield-exclamation" class="w-5 h-5 text-error" />
-            <div>
-              <p class="text-sm font-medium">Disable 2FA</p>
-              <p class="text-sm text-muted">Remove two-factor authentication</p>
-            </div>
-          </div>
-          <UButton
-            color="error"
-            variant="soft"
-            size="sm"
-            @click="disable2FAModal = true"
-          >
-            Disable
-          </UButton>
-          <UModal v-model:open="disable2FAModal" title="Disable 2FA" description="This will reduce the security of your account.">
-            <template #body>
-              <UForm :schema="disable2FASchema" :state="disable2FAState" @submit.prevent="onDisable2FASubmit">
-                <UFormField
-                  label="Password"
-                  description="Please enter your account password to proceed."
-                  :error="disable2FAError"
-                  name="password"
-                >
-                  <UInput
-                    v-model="disable2FAState.password"
-                    type="password"
-                    placeholder="Enter your password"
-                    class="w-full"
-                    autocomplete="password"
-                  />
-                </UFormField>
-                <UButton
-                  class="w-full flex justify-center mt-4"
-                  color="error"
-                  type="submit"
-                >
-                  Continue
-                </UButton>
-              </UForm>
-            </template>
-          </UModal>
-        </div>
-      </template>
-    </UPageCard>
+        <UButton color="error" variant="soft" size="sm" @click="disable2FAModal = true">Disable</UButton>
+        <UModal v-model:open="disable2FAModal" title="Disable 2FA" description="This will reduce the security of your account.">
+          <template #body>
+            <UForm :schema="disable2FASchema" :state="disable2FAState" @submit.prevent="onDisable2FASubmit">
+              <UFormField label="Password" description="Please enter your account password to proceed." :error="disable2FAError" name="password">
+                <UInput v-model="disable2FAState.password" type="password" placeholder="Enter your password" class="w-full" autocomplete="password" />
+              </UFormField>
+              <UButton class="w-full flex justify-center mt-4" color="error" type="submit">Continue</UButton>
+            </UForm>
+          </template>
+        </UModal>
+      </div>
+    </template>
 
     <!-- Reusable Backup Codes Display Modal -->
     <UModal

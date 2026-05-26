@@ -1,4 +1,4 @@
-import { db } from "~~/server/utils/auth";
+import { getIdentityDb } from "~~/server/utils/db";
 import { organization_invitation, organization, user } from "~~/server/schema";
 import { eq, and, or, ilike, count } from "drizzle-orm";
 
@@ -16,6 +16,8 @@ export default defineEventHandler(async (event) => {
     ? (statusParam as 'pending' | 'accepted' | 'declined' | 'revoked')
     : undefined;
 
+  const identityDb = getIdentityDb();
+
   const getWhere = () => {
     if (status) {
       return and(
@@ -26,7 +28,7 @@ export default defineEventHandler(async (event) => {
     return eq(organization_invitation.email, session.user.email);
   }
 
-  let invitationsQuery = db
+  let invitationsQuery = identityDb
     .select({
       id: organization_invitation.id,
       email: organization_invitation.email,
@@ -65,7 +67,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const invitations = await invitationsQuery.limit(limit).offset(offset);
-  let countQuery = db
+  let countQuery = identityDb
     .select({ count: count() })
     .from(organization_invitation)
     .where(eq(organization_invitation.email, session.user.email))

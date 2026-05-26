@@ -7,8 +7,9 @@ import * as schema from "../schema";
 import { and, eq } from "drizzle-orm";
 import { sendEmail } from "./email";
 import { createResetPasswordEmailTemplate, createVerifyEmailTemplate } from "./email-templates";
+import { getIdentityDb } from "./db";
 
-const { NUXT_REDIS_URL, NUXT_DATABASE_URL } = process.env;
+const { NUXT_REDIS_URL, NUXT_DATABASE_URL, NUXT_AUTH_BASE_URL } = process.env;
 if (!NUXT_DATABASE_URL) {
   throw new Error("Database connection string is not defined")
 }
@@ -29,12 +30,14 @@ await redis.connect()
 
 console.log("Connecting to database...")
 
-export const db = drizzle(NUXT_DATABASE_URL, { schema })
+const db = drizzle(NUXT_DATABASE_URL, { schema })
+export const getAuthDb = () => db
 export const auth = betterAuth({
   appName: "C-Plane",
-  baseURL: "http://localhost:3000",
+  baseURL: NUXT_AUTH_BASE_URL || "http://localhost:3000",
   trustedOrigins: [
     "http://localhost:3000",
+    "http://ui:3000",
     "https://cplane.240284308.xyz"
   ],
   database: drizzleAdapter(db, {
@@ -62,7 +65,8 @@ export const auth = betterAuth({
     deleteUser: {
       enabled: true,
       beforeDelete: async (user) => {
-        const ownedOrganizations = await db
+        const identityDb = getIdentityDb();
+        const ownedOrganizations = await identityDb
           .select({
             name: schema.organization.name,
           })

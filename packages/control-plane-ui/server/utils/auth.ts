@@ -7,7 +7,7 @@ import * as schema from "../schema";
 import { sendEmail } from "./email";
 import { createResetPasswordEmailTemplate, createVerifyEmailTemplate } from "./email-templates";
 
-const { NUXT_REDIS_URL, NUXT_DATABASE_URL } = process.env;
+const { NUXT_REDIS_URL, NUXT_DATABASE_URL, NUXT_AUTH_BASE_URL } = process.env;
 const db_table_prefix = "cplane_";
 if (!NUXT_DATABASE_URL) {
   throw new Error("Database connection string is not defined")
@@ -30,9 +30,10 @@ await redis.connect()
 export const db = drizzle(NUXT_DATABASE_URL, { schema })
 export const auth = betterAuth({
   appName: "C-Plane Studio",
-  baseURL: "http://localhost:3001",
+  baseURL: NUXT_AUTH_BASE_URL || "http://localhost:3001",
   trustedOrigins: [
     "http://localhost:3001",
+    "http://control-plane-ui:3001",
     "https://cplane-studio.240284308.xyz"
   ],
   database: drizzleAdapter(db, {

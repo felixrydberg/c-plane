@@ -1,5 +1,5 @@
 import { active_organization, organization_member } from "~~/server/schema";
-import { db } from "~~/server/utils/auth";
+import { withTenantDb } from "~~/server/utils/db";
 import { and, desc, eq, ne } from "drizzle-orm";
 
 export default defineEventHandler(async (event) => {
@@ -13,12 +13,14 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const membership = await db.select().from(organization_member)
-    .where(and(
-      eq(organization_member.user_id, session.user.id),
-      eq(organization_member.organization_id, organization_id),
-    ))
-    .limit(1);
+  const membership = await withTenantDb([organization_id], async (tx) =>
+    tx.select().from(organization_member)
+      .where(and(
+        eq(organization_member.user_id, session.user.id),
+        eq(organization_member.organization_id, organization_id),
+      ))
+      .limit(1),
+  );
 
   if (!membership[0]) {
     throw createError({
@@ -34,7 +36,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  await db.transaction(async (tx) => {
+  await withTenantDb([organization_id], async (tx) => {
     await tx.delete(organization_member)
       .where(eq(organization_member.id, membership[0].id));
 

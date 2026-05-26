@@ -1,5 +1,6 @@
-import { boolean, pgTable, text, uuid, index, pgPolicy, AnyPgColumn } from "drizzle-orm/pg-core"
+import { boolean, pgTable, text, uuid, index, pgPolicy, type AnyPgColumn } from "drizzle-orm/pg-core"
 import { project, project_branch } from "."
+import { organization } from "../tenants/organization";
 import { app_tenant, orgAllowed } from "../rls";
 
 export const serverless_postgres_database = pgTable('serverless_postgres_database', {
@@ -7,6 +8,9 @@ export const serverless_postgres_database = pgTable('serverless_postgres_databas
   project_id: uuid("project_id")
     .notNull()
     .references(() => project.id, { onDelete: "cascade" }),
+  organization_id: uuid("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
   default_branch_id: uuid("default_branch_id")
     .references((): AnyPgColumn => serverless_postgres_database_branch.id, { onDelete: "cascade" }),
   
@@ -16,12 +20,13 @@ export const serverless_postgres_database = pgTable('serverless_postgres_databas
   autoscaling_max_cpu: text("autoscaling_max_cpu"),
 }, (table) => [
   index("serverless_postgres_database_project_id_idx").on(table.project_id),
+  index("serverless_postgres_database_organization_id_idx").on(table.organization_id),
   pgPolicy("serverless_postgres_database_tenant_rls", {
     as: "permissive",
     for: "all",
     to: app_tenant,
-    using: orgAllowed(table.project_id),
-    withCheck: orgAllowed(table.project_id),
+    using: orgAllowed(table.organization_id),
+    withCheck: orgAllowed(table.organization_id),
   }),
 ]).enableRLS();
 
@@ -33,15 +38,19 @@ export const serverless_postgres_database_branch = pgTable('serverless_postgres_
   branch_id: uuid("branch_id")
     .notNull()
     .references(() => project_branch.id, { onDelete: "cascade" }),
+  organization_id: uuid("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
 
 }, (table) => [
   index("serverless_postgres_database_branch_database_id_idx").on(table.database_id),
   index("serverless_postgres_database_branch_branch_id_idx").on(table.branch_id),
+  index("serverless_postgres_database_branch_organization_id_idx").on(table.organization_id),
   pgPolicy("serverless_postgres_database_branch_tenant_rls", {
     as: "permissive",
     for: "all",
     to: app_tenant,
-    using: orgAllowed(table.branch_id),
-    withCheck: orgAllowed(table.branch_id),
+    using: orgAllowed(table.organization_id),
+    withCheck: orgAllowed(table.organization_id),
   }),
 ]).enableRLS();

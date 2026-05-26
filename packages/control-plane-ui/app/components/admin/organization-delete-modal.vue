@@ -63,7 +63,7 @@ const onDelete = async () => {
     <template #body>
       <div class="space-y-4">
         <div v-if="isLoading" class="py-8 text-center">
-          <p class="text-sm text-muted">Loading organization...</p>
+          <UIcon name="i-lucide-loader-circle" class="size-5 text-muted animate-spin" />
         </div>
 
         <div v-else class="space-y-4">

@@ -6,7 +6,7 @@ import {
   organization_invitation,
   organization_member,
 } from "~~/server/schema";
-import { db } from "~~/server/utils/auth";
+import { getIdentityDb, withTenantDb } from "~~/server/utils/db";
 import { logEvent } from "~~/server/utils/events";
 
 export const acceptInvitationAndActivateOrganization = async (
@@ -15,7 +15,7 @@ export const acceptInvitationAndActivateOrganization = async (
 ) => {
   const session = await requireSession(event);
 
-  const [invitation] = await db
+  const [invitation] = await getIdentityDb()
     .select()
     .from(organization_invitation)
     .where(
@@ -47,7 +47,7 @@ export const acceptInvitationAndActivateOrganization = async (
     });
   }
 
-  const [organizationRecord] = await db
+  const [organizationRecord] = await getIdentityDb()
     .select({
       id: organization.id,
       name: organization.name,
@@ -65,18 +65,20 @@ export const acceptInvitationAndActivateOrganization = async (
   }
 
   if (invitation.status === "accepted") {
-    await db
-      .insert(active_organization)
-      .values({
-        user_id: session.user.id,
-        organization_id: invitation.organization_id,
-      })
-      .onConflictDoUpdate({
-        target: active_organization.user_id,
-        set: {
+    await withTenantDb([invitation.organization_id], async (tx) => {
+      await tx
+        .insert(active_organization)
+        .values({
+          user_id: session.user.id,
           organization_id: invitation.organization_id,
-        },
-      });
+        })
+        .onConflictDoUpdate({
+          target: active_organization.user_id,
+          set: {
+            organization_id: invitation.organization_id,
+          },
+        });
+    });
 
     return {
       invitation,
@@ -84,7 +86,7 @@ export const acceptInvitationAndActivateOrganization = async (
     };
   }
 
-  const [updatedInvitation] = await db.transaction(async (tx) => {
+  const [updatedInvitation] = await withTenantDb([invitation.organization_id], async (tx) => {
     const [updated] = await tx
       .update(organization_invitation)
       .set({ status: "accepted" })

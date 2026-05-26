@@ -113,7 +113,7 @@ watch(() => open.value, (isOpen) => {
     <template #body>
       <div class="space-y-4">
         <div v-if="isLoading" class="py-8 text-center">
-          <p class="text-sm text-muted">Loading assets...</p>
+          <UIcon name="i-lucide-loader-circle" class="size-5 text-muted animate-spin" />
         </div>
 
         <div v-else-if="assets.length === 0" class="py-8 text-center">

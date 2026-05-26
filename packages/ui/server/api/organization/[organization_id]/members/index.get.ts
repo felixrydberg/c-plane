@@ -1,5 +1,5 @@
 import { organization_member, user } from "~~/server/schema";
-import { db } from "~~/server/utils/auth";
+import { withTenantDb } from "~~/server/utils/db";
 import { eq, and, or, ilike, count, ne } from "drizzle-orm";
 
 export default defineEventHandler(async (event) => {
@@ -23,62 +23,64 @@ export default defineEventHandler(async (event) => {
       )
     : undefined;
 
-  const membersQuery = db
-    .select({
-      id: organization_member.id,
-      role: organization_member.role,
-      created_at: organization_member.created_at,
-      organization_id: organization_member.organization_id,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        image: user.image,
-        emailVerified: user.emailVerified,
-      },
-    })
-    .from(organization_member)
-    .innerJoin(user, eq(organization_member.user_id, user.id))
-    .$dynamic()
-  
-  const countQuery = db
-    .select({ count: count() })
-    .from(organization_member)
-    .innerJoin(user, eq(organization_member.user_id, user.id))
-    .$dynamic();
+  return withTenantDb([membership.organization_id], async (tx) => {
+    const membersQuery = tx
+      .select({
+        id: organization_member.id,
+        role: organization_member.role,
+        created_at: organization_member.created_at,
+        organization_id: organization_member.organization_id,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          image: user.image,
+          emailVerified: user.emailVerified,
+        },
+      })
+      .from(organization_member)
+      .innerJoin(user, eq(organization_member.user_id, user.id))
+      .$dynamic()
+    
+    const countQuery = tx
+      .select({ count: count() })
+      .from(organization_member)
+      .innerJoin(user, eq(organization_member.user_id, user.id))
+      .$dynamic();
 
-  const conditions = [eq(organization_member.organization_id, membership.organization_id)];
+    const conditions = [eq(organization_member.organization_id, membership.organization_id)];
 
-  if (excludeRequester) {
-    conditions.push(ne(organization_member.id, requesterId));
-  }
-
-  if (search && searchCondition) {
-    conditions.push(searchCondition);
-  }
-
-  if (excludeIds.length > 0) {
-    conditions.push(ne(organization_member.id, excludeIds[0]));
-    for (let i = 1; i < excludeIds.length; i++) {
-      conditions.push(ne(organization_member.id, excludeIds[i]));
+    if (excludeRequester) {
+      conditions.push(ne(organization_member.id, requesterId));
     }
-  }
 
-  const finalCondition = and(...conditions);
-  membersQuery.where(finalCondition);
-  countQuery.where(finalCondition);
+    if (search && searchCondition) {
+      conditions.push(searchCondition);
+    }
 
-  const members = await membersQuery.limit(limit).offset(offset);
+    if (excludeIds.length > 0) {
+      conditions.push(ne(organization_member.id, excludeIds[0]));
+      for (let i = 1; i < excludeIds.length; i++) {
+        conditions.push(ne(organization_member.id, excludeIds[i]));
+      }
+    }
 
-  const totalResult = await countQuery;
-  const total = totalResult[0]?.count || 0;
+    const finalCondition = and(...conditions);
+    membersQuery.where(finalCondition);
+    countQuery.where(finalCondition);
 
-  return {
-    data: members,
-    pagination: {
-      total,
-      limit,
-      offset,
-    },
-  };
+    const members = await membersQuery.limit(limit).offset(offset);
+
+    const totalResult = await countQuery;
+    const total = totalResult[0]?.count || 0;
+
+    return {
+      data: members,
+      pagination: {
+        total,
+        limit,
+        offset,
+      },
+    };
+  });
 });

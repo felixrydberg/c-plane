@@ -1,5 +1,6 @@
 import { organization } from "~~/server/schema";
 import { eq } from "drizzle-orm";
+import { getIdentityDb } from "~~/server/utils/db";
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ email: string }>(event);
@@ -13,7 +14,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const existingOrganization = await db
+  const existingOrganization = await getIdentityDb()
     .select()
     .from(organization)
     .where(eq(organization.email, body.email))

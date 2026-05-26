@@ -280,7 +280,7 @@ function refreshDeployments() {
         <DeploymentsContainersCreateModal
           v-model:open="createModalOpen"
           :organization-id="store.organization!.id"
-          :refresh="refreshDeployments"
+          @created="refreshDeployments"
         />
       </UiPageContainer>
     </template>

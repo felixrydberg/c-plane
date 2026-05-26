@@ -1,5 +1,5 @@
 import { organization_invitation, organization_member } from "~~/server/schema";
-import { db } from "~~/server/utils/auth";
+import { withTenantDb } from "~~/server/utils/db";
 import { eq, and } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
@@ -26,17 +26,19 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const invitations = await db
-    .select()
-    .from(organization_invitation)
-    .where(
-      and(
-        eq(organization_invitation.id, invitationId),
-        eq(organization_invitation.organization_id, organizationId),
-        eq(organization_invitation.email, session.user.email || ""),
-      ),
-    )
-    .limit(1);
+  const invitations = await withTenantDb([organizationId], async (tx) =>
+    tx
+      .select()
+      .from(organization_invitation)
+      .where(
+        and(
+          eq(organization_invitation.id, invitationId),
+          eq(organization_invitation.organization_id, organizationId),
+          eq(organization_invitation.email, session.user.email || ""),
+        ),
+      )
+      .limit(1),
+  );
 
   if (!invitations || !invitations[0]) {
     throw createError({
@@ -62,11 +64,13 @@ export default defineEventHandler(async (event) => {
   }
 
   if (action === "decline") {
-    const [updated] = await db
-      .update(organization_invitation)
-      .set({ status: "declined" })
-      .where(eq(organization_invitation.id, invitationId))
-      .returning();
+    const [updated] = await withTenantDb([organizationId], async (tx) =>
+      tx
+        .update(organization_invitation)
+        .set({ status: "declined" })
+        .where(eq(organization_invitation.id, invitationId))
+        .returning(),
+    );
 
     if (!updated) {
       throw createError({
@@ -88,7 +92,7 @@ export default defineEventHandler(async (event) => {
 
     return updated;
   } else {
-    const [updatedInvitation] = await db.transaction(async (tx) => {
+    const [updatedInvitation] = await withTenantDb([organizationId], async (tx) => {
       const updated = await tx
         .update(organization_invitation)
         .set({ status: "accepted" })

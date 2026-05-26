@@ -35,7 +35,9 @@ services:
       NUXT_TENANT_DATABASE_URL: postgresql://cplane_tenant:${POSTGRES_TENANT_PASSWORD}@postgresd:5432/cplane
       NUXT_REDIS_URL: redis://valkey:6379
       NUXT_RESEND_API_KEY: ${RESEND_API_KEY}
+      NUXT_AUTH_BASE_URL: http://ui:3000
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BACKEND_URL: http://cplane:8080
     ports:
       - 3000:3000
       - 24678:24678
@@ -75,6 +77,7 @@ services:
       NUXT_TENANT_DATABASE_URL: postgresql://cplane_tenant:${POSTGRES_TENANT_PASSWORD}@postgresd:5432/cplane
       NUXT_ADMIN_DATABASE_URL: postgresql://cplane_admin:${POSTGRES_ADMIN_PASSWORD}@postgresd:5432/cplane
       NUXT_REDIS_URL: redis://valkey:6379
+      NUXT_AUTH_BASE_URL: http://control-plane-ui:3001
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
     ports:
       - 3001:3001

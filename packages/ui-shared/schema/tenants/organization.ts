@@ -8,6 +8,7 @@ import {
   pgEnum,
   uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { user } from "./studio";
 import { relations } from "drizzle-orm";
 import { app_tenant, orgAllowed } from "../rls";
@@ -27,12 +28,30 @@ export const organization = pgTable(
     uniqueIndex("organization_slug_uidx").on(table.slug),
     index("organization_polar_customer_id_idx").on(table.polar_customer_id),
     index("organization_id_idx").on(table.id),
-    pgPolicy("organization_tenant_rls", {
+    pgPolicy("organization_tenant_rls_select", {
       as: "permissive",
-      for: "all",
+      for: "select",
+      to: app_tenant,
+      using: orgAllowed(table.id),
+    }),
+    pgPolicy("organization_tenant_rls_update", {
+      as: "permissive",
+      for: "update",
       to: app_tenant,
       using: orgAllowed(table.id),
       withCheck: orgAllowed(table.id),
+    }),
+    pgPolicy("organization_tenant_rls_delete", {
+      as: "permissive",
+      for: "delete",
+      to: app_tenant,
+      using: orgAllowed(table.id),
+    }),
+    pgPolicy("organization_tenant_rls_insert", {
+      as: "permissive",
+      for: "insert",
+      to: app_tenant,
+      withCheck: sql`true`,
     }),
   ],
 ).enableRLS();
@@ -112,6 +131,13 @@ export const active_organization = pgTable("active_organization", {
     .references(() => organization.id, { onDelete: "cascade" }),
 }, (table) => [
   index("active_organization_user_id_idx").on(table.user_id),
+  pgPolicy("active_organization_tenant_rls", {
+    as: "permissive",
+    for: "all",
+    to: app_tenant,
+    using: orgAllowed(table.organization_id),
+    withCheck: orgAllowed(table.organization_id),
+  }),
 ]).enableRLS();
 
 export const organizationRelations = relations(organization, ({ many }) => ({

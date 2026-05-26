@@ -177,191 +177,151 @@ const onDeleteAccountSubmit = async () => {
     :state="profile"
     @submit.prevent="onProfileSubmit"
   >
-    <UPageCard
-      title="Profile"
-      description="These informations will be displayed publicly."
-      variant="naked"
-      orientation="horizontal"
-      class="mb-4"
-    >
-      <UButton
-        form="settings"
-        label="Save changes"
-        variant="soft"
-        type="submit"
-        :loading="isProfileLoading"
-        :disabled="isProfileLoading"
-        class="w-fit lg:ms-auto"
-      />
-    </UPageCard>
+    <div class="w-full border border-default rounded-lg p-6 space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="font-semibold">Profile</p>
+          <p class="text-sm text-muted">These informations will be displayed publicly.</p>
+        </div>
+        <UButton
+          form="settings"
+          label="Save changes"
+          type="submit"
+          :loading="isProfileLoading"
+          :disabled="isProfileLoading"
+          size="sm"
+        />
+      </div>
 
-    <UPageCard class="flex flex-row gap-3">
-      <UFormField
-        name="name"
-        label="Name"
-        required
-      >
-        <UInput
-          v-model="profile.name"
-          autocomplete="off"
-          class="w-full"
-        />
-      </UFormField>
-      <USeparator />
-      <UFormField
-        name="email"
-        label="Email"
-        required
-      >
-        <UInput
-          v-model="profile.email"
-          type="email"
-          autocomplete="off"
-          class="w-full"
-        />
-      </UFormField>
-    </UPageCard>
+      <div class="flex flex-row gap-6">
+        <div class="flex-1">
+          <UFormField name="name" label="Name" required>
+            <UInput v-model="profile.name" autocomplete="off" class="w-full" />
+          </UFormField>
+        </div>
+        <USeparator orientation="vertical" class="h-auto" />
+        <div class="flex-1">
+          <UFormField name="email" label="Email" required>
+            <UInput v-model="profile.email" type="email" autocomplete="off" class="w-full" />
+          </UFormField>
+        </div>
+      </div>
+    </div>
   </UForm>
 
   <UForm :schema="passwordSchema" :state="passwordState" @submit.prevent="onChangePassword">
-    <UPageCard
-      title="Password"
-      description="Change your account password"
-      variant="naked"
-      orientation="horizontal"
-      class="mb-4"
-    >
-      <UButton
-        label="Change Password"
-        color="neutral"
-        type="submit"
-        :loading="isPasswordLoading"
-        :disabled="isPasswordLoading"
-        class="w-fit lg:ms-auto"
-      />
-    </UPageCard>
+    <div class="w-full border border-default rounded-lg p-6 space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="font-semibold">Password</p>
+          <p class="text-sm text-muted">Change your account password</p>
+        </div>
+        <UButton
+          label="Change Password"
+          type="submit"
+          :loading="isPasswordLoading"
+          :disabled="isPasswordLoading"
+          size="sm"
+        />
+      </div>
 
-    <UPageCard class="flex flex-col gap-4">
-      <UFormField
-        name="currentPassword"
-        label="Current Password"
-        :error="passwordError"
-        required
-      >
-        <UInput
-          v-model="passwordState.currentPassword"
-          type="password"
-          autocomplete="current-password"
-          placeholder="Enter your current password"
-          class="w-full"
-        />
-      </UFormField>
-      <USeparator />
-      <UFormField
-        name="newPassword"
-        label="New Password"
-        required
-      >
-        <UInput
-          v-model="passwordState.newPassword"
-          type="password"
-          autocomplete="new-password"
-          placeholder="Enter your new password"
-          class="w-full"
-        />
-      </UFormField>
-      <USeparator />
-      <UFormField
-        name="confirmPassword"
-        label="Confirm Password"
-        required
-      >
-        <UInput
-          v-model="passwordState.confirmPassword"
-          type="password"
-          autocomplete="new-password"
-          placeholder="Confirm your new password"
-          class="w-full"
-        />
-      </UFormField>
-    </UPageCard>
+      <div class="flex flex-col gap-4">
+        <UFormField
+          name="currentPassword"
+          label="Current Password"
+          :error="passwordError"
+          required
+        >
+          <UInput
+            v-model="passwordState.currentPassword"
+            type="password"
+            autocomplete="current-password"
+            placeholder="Enter your current password"
+            class="w-full"
+          />
+        </UFormField>
+        <USeparator />
+        <UFormField name="newPassword" label="New Password" required>
+          <UInput
+            v-model="passwordState.newPassword"
+            type="password"
+            autocomplete="new-password"
+            placeholder="Enter your new password"
+            class="w-full"
+          />
+        </UFormField>
+        <USeparator />
+        <UFormField name="confirmPassword" label="Confirm Password" required>
+          <UInput
+            v-model="passwordState.confirmPassword"
+            type="password"
+            autocomplete="new-password"
+            placeholder="Confirm your new password"
+            class="w-full"
+          />
+        </UFormField>
+      </div>
+    </div>
   </UForm>
 
   <dashboard-settings-profile-2FA />
 
-  <div>
-    <UPageCard
-      title="Danger Zone"
-      description="Irreversible and destructive actions"
-      variant="naked"
-      orientation="horizontal"
-      class="mb-4"
-    />
-    <UPageCard class="flex flex-row gap-3">
-      <div class="flex items-center justify-between p-4 rounded-lg ring ring-error/30 w-full">
-        <div class="flex items-center gap-3">
-          <UIcon name="i-heroicons:trash" class="w-5 h-5 text-error" />
-          <div>
-            <p class="text-sm font-medium">Delete Account</p>
-            <p class="text-sm text-muted">Permanently delete your account and all associated data</p>
-          </div>
-        </div>
-        <UButton
-          color="error"
-          variant="soft"
-          size="sm"
-          @click="deleteAccountModal = true"
-        >
-          Delete
-        </UButton>
-        <UModal v-model:open="deleteAccountModal" title="Delete Account" description="This action cannot be undone. Please enter your password to confirm.">
-          <template #body>
-            <UForm :schema="deleteAccountSchema" :state="deleteAccountState" @submit.prevent="onDeleteAccountSubmit">
-              <div class="space-y-4">
-                <UFormField
-                  label="Password"
-                  description="Please enter your account password to proceed."
-                  :error="deleteAccountError"
-                  name="password"
-                >
-                  <UInput
-                    v-model="deleteAccountState.password"
-                    type="password"
-                    class="w-full"
-                    placeholder="Enter your password"
-                    autocomplete="password"
-                  />
-                </UFormField>
-                <UFormField
-                  label="Confirmation"
-                  name="confirmation"
-                >
-                  <UCheckbox
-                    v-model="deleteAccountState.confirmation"
-                    label="I understand that this action is permanent and irreversible"
-                  />
-                </UFormField>
-                <div class="flex gap-2 justify-end">
-                  <UButton
-                    variant="soft"
-                    type="button"
-                    @click="deleteAccountModal = false"
-                  >
-                    Cancel
-                  </UButton>
-                  <UButton
-                    color="error"
-                    type="submit"
-                    :disabled="!deleteAccountState.confirmation"
-                  >
-                    Delete My Account
-                  </UButton>
-                </div>
-              </div>
-            </UForm>
-          </template>
-        </UModal>
+  <div class="w-full border border-default rounded-lg p-6 space-y-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <p class="font-semibold">Danger Zone</p>
+        <p class="text-sm text-muted">Irreversible and destructive actions</p>
       </div>
-    </UPageCard>
+    </div>
+
+    <div class="flex items-center justify-between p-4 rounded-lg border border-dashed border-error/30">
+      <div class="flex items-center gap-3">
+        <UIcon name="i-heroicons:trash" class="w-5 h-5 text-error" />
+        <div>
+          <p class="text-sm font-medium">Delete Account</p>
+          <p class="text-sm text-muted">Permanently delete your account and all associated data</p>
+        </div>
+      </div>
+      <UButton
+        color="error"
+        variant="soft"
+        size="sm"
+        @click="deleteAccountModal = true"
+      >
+        Delete
+      </UButton>
+      <UModal v-model:open="deleteAccountModal" title="Delete Account" description="This action cannot be undone. Please enter your password to confirm.">
+        <template #body>
+          <UForm :schema="deleteAccountSchema" :state="deleteAccountState" @submit.prevent="onDeleteAccountSubmit">
+            <div class="space-y-4">
+              <UFormField
+                label="Password"
+                description="Please enter your account password to proceed."
+                :error="deleteAccountError"
+                name="password"
+              >
+                <UInput
+                  v-model="deleteAccountState.password"
+                  type="password"
+                  class="w-full"
+                  placeholder="Enter your password"
+                  autocomplete="password"
+                />
+              </UFormField>
+              <UFormField label="Confirmation" name="confirmation">
+                <UCheckbox
+                  v-model="deleteAccountState.confirmation"
+                  label="I understand that this action is permanent and irreversible"
+                />
+              </UFormField>
+              <div class="flex gap-2 justify-end">
+                <UButton variant="ghost" color="neutral" type="button" @click="deleteAccountModal = false">Cancel</UButton>
+                <UButton color="error" type="submit" :disabled="!deleteAccountState.confirmation">Delete My Account</UButton>
+              </div>
+            </div>
+          </UForm>
+        </template>
+      </UModal>
+    </div>
   </div>
 </template>

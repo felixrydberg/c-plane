@@ -1,3 +1,9 @@
+use crate::errors::AppError;
+use crate::state::create_app_state;
+use tower_http::trace::TraceLayer;
+use tracing_subscriber::filter::EnvFilter;
+use tracing::Level;
+
 mod config;
 mod errors;
 mod routes;
@@ -5,18 +11,32 @@ mod models;
 mod middleware;
 mod state;
 mod handlers;
+mod services;
 mod utils;
-
-use crate::errors::AppError;
-use crate::state::create_app_state;
+mod openapi;
 
 #[tokio::main]
 async fn main() -> Result<(), AppError> {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::builder()
+                .with_default_directive(Level::WARN.into())
+                .from_env_lossy()
+                .add_directive("c_plane=info".parse().unwrap()),
+        )
+        .with_target(false)
+        .init();
+
     create_app_state().await?;
     let config = config::load_config()?;
 
-    let app = routes::create_routes();
-    let listener = tokio::net::TcpListener::bind(format!("{}:{}", config.server_host, config.server_port))
+    let app = routes::create_routes()
+        .layer(TraceLayer::new_for_http());
+
+    let addr = format!("{}:{}", config.server_host, config.server_port);
+    tracing::info!("Starting server on {}", addr);
+
+    let listener = tokio::net::TcpListener::bind(&addr)
         .await
         .map_err(|err| AppError::Internal(err.to_string()))?;
     axum::serve(listener, app)

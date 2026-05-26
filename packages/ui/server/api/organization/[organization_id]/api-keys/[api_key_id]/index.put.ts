@@ -1,4 +1,4 @@
-import { db } from "~~/server/utils/auth";
+import { withTenantDb } from "~~/server/utils/db";
 import type { api_key_scopes_type } from "~~/server/schema";
 import { api_keys, api_key_scopes } from "~~/server/schema";
 import { eq, and, notInArray } from "drizzle-orm";
@@ -36,25 +36,25 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const keyRecord = await db
-    .select()
-    .from(api_keys)
-    .where(
-      and(
-        eq(api_keys.id, api_key_id),
-        eq(api_keys.organization_id, organization_id)
+  const updatedKey = await withTenantDb([organization_id], async (tx) => {
+    const keyRecord = await tx
+      .select()
+      .from(api_keys)
+      .where(
+        and(
+          eq(api_keys.id, api_key_id),
+          eq(api_keys.organization_id, organization_id)
+        )
       )
-    )
-    .limit(1);
+      .limit(1);
 
-  if (!keyRecord || keyRecord.length === 0) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: "API key not found",
-    });
-  }
+    if (!keyRecord || keyRecord.length === 0) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: "API key not found",
+      });
+    }
 
-  const updatedKey = await db.transaction(async (tx) => {
     if (name && typeof name === "string") {
       await tx
         .update(api_keys)

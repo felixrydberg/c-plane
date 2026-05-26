@@ -1,22 +1,39 @@
 use axum::{
-    extract::Request,
-    middleware::Next,
-    response::{IntoResponse, Response},
+    extract::FromRequestParts,
 };
+use axum::http::request::Parts;
 use reqwest::Client;
-use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement};
+use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
+use std::sync::OnceLock;
+use std::time::Duration;
 use uuid::Uuid;
 
 use crate::errors::{AppError, DatabaseError};
 use crate::state::{AppDatabase, OrganizationContext, TenantDatabase, get_app_state};
+
+fn reqwest_client() -> &'static Client {
+    static CLIENT: OnceLock<Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        Client::builder()
+            .timeout(Duration::from_secs(10))
+            .pool_idle_timeout(Duration::from_secs(30))
+            .build()
+            .expect("failed to build reqwest client")
+    })
+}
 
 #[derive(Clone, Debug)]
 pub struct RequestAuthContext {
     pub actor_id: Uuid,
     pub api_key_id: Option<Uuid>,
     pub scopes: Vec<String>,
+}
+
+pub struct AuthContext {
+    pub tenant_db: TenantDatabase,
+    pub auth: RequestAuthContext,
 }
 
 #[derive(Deserialize)]
@@ -36,113 +53,126 @@ struct ApiKeyLookup {
     scopes: Vec<String>,
 }
 
-pub async fn tenant_auth_middleware(
-    request: Request,
-    next: Next,
-) -> Response {
-    let state = get_app_state();
-    match tenant_auth_middleware_inner(
-        state.identity_db,
-        state.tenant_db,
-        request,
-        next,
-    )
-    .await
-    {
-        Ok(response) => response,
-        Err(err) => err.into_response(),
+impl<S> FromRequestParts<S> for AuthContext
+where
+    S: Send + Sync,
+{
+    type Rejection = AppError;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let state = get_app_state();
+        let identity_db = state.identity_db;
+        let tenant_db_conn = state.tenant_db;
+
+        let (organization_context, request_auth) = if let Some(raw_api_key) = extract_api_key_from_parts(parts).map(str::to_owned) {
+            let api_key: ApiKeyLookup = resolve_api_key(&identity_db, &raw_api_key).await?.ok_or_else(|| {
+                AppError::Unauthorized("Invalid API key".to_string())
+            })?;
+
+            (
+                OrganizationContext {
+                    allowed_organizations: vec![api_key.organization_id],
+                    actor_id: api_key.id,
+                },
+                RequestAuthContext {
+                    actor_id: api_key.id,
+                    api_key_id: Some(api_key.id),
+                    scopes: api_key.scopes,
+                },
+            )
+        } else {
+            let cookie_header = parts
+                .headers
+                .get("cookie")
+                .and_then(|h| h.to_str().ok())
+                .ok_or_else(|| AppError::Unauthorized("Missing session cookie".to_string()))?;
+            let actor_id = resolve_user_from_cookie(cookie_header).await?;
+            let allowed_organizations = resolve_user_organizations(&identity_db, actor_id).await?;
+
+            if allowed_organizations.is_empty() {
+                return Err(AppError::Forbidden(
+                    "User has no organization access".to_string(),
+                ));
+            }
+
+            (
+                OrganizationContext {
+                    allowed_organizations,
+                    actor_id,
+                },
+                RequestAuthContext {
+                    actor_id,
+                    api_key_id: None,
+                    scopes: vec![],
+                },
+            )
+        };
+
+        let tenant_db = TenantDatabase::new(tenant_db_conn, organization_context);
+
+        Ok(AuthContext {
+            tenant_db,
+            auth: request_auth,
+        })
     }
 }
 
-async fn tenant_auth_middleware_inner(
-    identity_db: AppDatabase,
-    tenant_db: DatabaseConnection,
-    mut request: Request,
-    next: Next,
-) -> Result<Response, AppError> {
-    let (organization_context, request_auth) = if let Some(raw_api_key) = extract_api_key(&request).map(str::to_owned) {
-        let api_key: ApiKeyLookup = resolve_api_key(&identity_db, &raw_api_key).await?.ok_or_else(|| {
-            AppError::Unauthorized("Invalid API key".to_string())
-        })?;
-
-        (
-            OrganizationContext {
-                allowed_organizations: vec![api_key.organization_id],
-                actor_id: api_key.id,
-            },
-            RequestAuthContext {
-                actor_id: api_key.id,
-                api_key_id: Some(api_key.id),
-                scopes: api_key.scopes,
-            },
-        )
-    } else {
-        let actor_id = resolve_user_from_request(&request).await?;
-        let allowed_organizations = resolve_user_organizations(&identity_db, actor_id).await?;
-
-        if allowed_organizations.is_empty() {
-            return Err(AppError::Forbidden(
-                "User has no organization access".to_string(),
-            ));
-        }
-
-        (
-            OrganizationContext {
-                allowed_organizations,
-                actor_id,
-            },
-            RequestAuthContext {
-                actor_id,
-                api_key_id: None,
-                scopes: vec![],
-            },
-        )
-    };
-
-    let tenant_db = TenantDatabase::new(tenant_db, organization_context);
-    request.extensions_mut().insert(request_auth);
-    request.extensions_mut().insert(tenant_db);
-
-    Ok(next.run(request).await)
-}
-
-async fn resolve_user_from_request(request: &Request) -> Result<Uuid, AppError> {
-    let cookie_header = request
-        .headers()
-        .get("cookie")
-        .and_then(|h| h.to_str().ok())
-        .ok_or_else(|| AppError::Unauthorized("Missing session cookie".to_string()))?
-        .to_owned();
-
-    // Better Auth verification lives behind this endpoint; response must include user.id.
+async fn resolve_user_from_cookie(cookie_header: &str) -> Result<Uuid, AppError> {
     let session_url = std::env::var("BETTER_AUTH_SESSION_URL")
         .unwrap_or_else(|_| "http://ui:3000/api/auth/get-session".to_string());
 
-    let response = Client::new()
-        .get(session_url)
+    let response = reqwest_client()
+        .get(&session_url)
         .header("cookie", cookie_header)
+        .header("Origin", "http://ui:3000")
         .send()
         .await
-        .map_err(|err| AppError::Unauthorized(format!("Failed to resolve Better Auth session: {err}")))?;
+        .map_err(|err| {
+            tracing::warn!(
+                "Failed to reach Better Auth session endpoint at {}: {err}",
+                session_url
+            );
+            AppError::Unauthorized(format!("Failed to resolve Better Auth session: {err}"))
+        })?;
 
-    if !response.status().is_success() {
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        tracing::warn!(
+            "Better Auth session endpoint returned {} for session lookup: {}",
+            status,
+            body.chars().take(500).collect::<String>()
+        );
         return Err(AppError::Unauthorized(
             "Session is invalid or expired".to_string(),
         ));
     }
 
-    let session = response
-        .json::<BetterAuthSession>()
-        .await
-        .map_err(|_| AppError::Unauthorized("Invalid Better Auth session response".to_string()))?;
+    let body_text = response.text().await.map_err(|err| {
+        tracing::warn!("Failed to read Better Auth session response body: {err}");
+        AppError::Unauthorized("Invalid Better Auth session response".to_string())
+    })?;
 
-    Uuid::parse_str(&session.user.id)
-        .map_err(|_| AppError::Unauthorized("Invalid Better Auth user id".to_string()))
+    let session: BetterAuthSession = serde_json::from_str(&body_text).map_err(|err| {
+        tracing::warn!(
+            "Failed to parse Better Auth session response: {err} (body: {})",
+            &body_text[..body_text.len().min(300)]
+        );
+        AppError::Unauthorized("Invalid Better Auth session response".to_string())
+    })?;
+
+    Uuid::parse_str(&session.user.id).map_err(|_| {
+        tracing::warn!(
+            "Invalid Better Auth user id format: {}",
+            session.user.id
+        );
+        AppError::Unauthorized("Invalid Better Auth user id".to_string())
+    })
 }
 
-fn extract_api_key(request: &Request) -> Option<&str> {
-    if let Some(value) = request
-        .headers()
+fn extract_api_key_from_parts(parts: &Parts) -> Option<&str> {
+    if let Some(value) = parts
+        .headers
         .get("x-api-key")
         .and_then(|h| h.to_str().ok())
     {
@@ -151,8 +181,8 @@ fn extract_api_key(request: &Request) -> Option<&str> {
         }
     }
 
-    let auth_header = request
-        .headers()
+    let auth_header = parts
+        .headers
         .get("authorization")
         .and_then(|h| h.to_str().ok())?;
 

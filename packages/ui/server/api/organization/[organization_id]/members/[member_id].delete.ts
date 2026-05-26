@@ -1,5 +1,5 @@
 import { organization_member } from "~~/server/schema";
-import { db } from "~~/server/utils/auth";
+import { withTenantDb } from "~~/server/utils/db";
 import { eq, and } from "drizzle-orm";
 
 export default defineEventHandler(async (event) => {
@@ -13,32 +13,36 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const existingMember = await db
-    .select()
-    .from(organization_member)
-    .where(
-      and(
-        eq(organization_member.id, member_id),
-        eq(organization_member.organization_id, membership.organization_id)
-      )
-    );
+  const result = await withTenantDb([membership.organization_id], async (tx) => {
+    const existingMember = await tx
+      .select()
+      .from(organization_member)
+      .where(
+        and(
+          eq(organization_member.id, member_id),
+          eq(organization_member.organization_id, membership.organization_id)
+        )
+      );
 
-  if (existingMember.length === 0) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: 'Member not found',
-    });
-  }
+    if (existingMember.length === 0) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Member not found',
+      });
+    }
 
-  await db
-    .delete(organization_member)
-    .where(eq(organization_member.id, member_id));
+    await tx
+      .delete(organization_member)
+      .where(eq(organization_member.id, member_id));
+
+    return existingMember[0];
+  });
 
   await logEvent(membership.organization_id, "organization:member_removed", {
-    id: existingMember[0].id,
-    organization_id: existingMember[0].organization_id,
-    user_id: existingMember[0].user_id,
-    role: existingMember[0].role,
-    created_at: existingMember[0].created_at,
+    id: result.id,
+    organization_id: result.organization_id,
+    user_id: result.user_id,
+    role: result.role,
+    created_at: result.created_at,
   }, false);
 });

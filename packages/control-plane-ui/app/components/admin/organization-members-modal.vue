@@ -66,7 +66,7 @@ const onKickMember = async (memberUserId: string, memberName: string | null) => 
     <template #body>
       <div class="space-y-4">
         <div v-if="isLoading" class="py-8 text-center">
-          <p class="text-sm text-muted">Loading members...</p>
+          <UIcon name="i-lucide-loader-circle" class="size-5 text-muted animate-spin" />
         </div>
 
         <div v-else-if="organization" class="space-y-4">

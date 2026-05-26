@@ -61,11 +61,12 @@ export const project_timeline = pgTable('project_timeline', {
   project_id: uuid("project_id")
     .notNull()
     .references(() => project.id, { onDelete: "cascade" }),
-  branch_id: uuid("branch_id").notNull(),
+  branch_id: uuid("branch_id"),
   organization_id: uuid("organization_id")
     .notNull()
     .references(() => organization.id, { onDelete: "cascade" }),
   timeline: integer("timeline").notNull(),
+  name: text("name"),
   parent_timeline_id: uuid("parent_timeline_id")
     .references((): AnyPgColumn => project_timeline.id, { onDelete: "set null" }),
   pins: jsonb("pins").notNull().default({}),

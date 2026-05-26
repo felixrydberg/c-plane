@@ -120,9 +120,10 @@ export const setOrganization = async (id: string, redirect: string = '/') => {
     : null;
 
   try {
+    type OrgResponse = typeof store.organization & { projects?: Array<{ id: string; organization_id: string; name: string; default_branch_id: string | null }> };
     const data = import.meta.server
-      ? await requestFetch!<typeof store.organization>(`/api/organization/${id as ':organization_id'}`)
-      : await $fetch<typeof store.organization>(`/api/organization/${id as ':organization_id'}`, {
+      ? await requestFetch!<OrgResponse>(`/api/organization/${id as ':organization_id'}`)
+      : await $fetch<OrgResponse>(`/api/organization/${id as ':organization_id'}`, {
         credentials: "include"
       });
 
@@ -147,9 +148,35 @@ export const setOrganization = async (id: string, redirect: string = '/') => {
     }
     
     store.organization = (data as typeof store.organization) || null;
+    store.project = null;
+    store.projects = (data as any)?.projects ?? [];
     await router.push(redirect);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   } catch (error) {
     throw new Error("Organization not found");
+  }
+}
+
+export const setProject = async (orgId: string, projectId: string, redirect: string = '/') => {
+  const store = useStore();
+
+  try {
+    const data = await $fetch<any>(`/api/backend/organization/${orgId}/projects/${projectId}`);
+
+    if (!data) {
+      throw new Error("Project not found");
+    }
+
+    store.project = {
+      id: data.id,
+      organization_id: data.organization_id,
+      name: data.name,
+      default_branch_id: data.default_branch_id,
+    };
+
+    const router = useRouter();
+    await router.push(redirect);
+  } catch (error) {
+    throw new Error("Project not found");
   }
 }

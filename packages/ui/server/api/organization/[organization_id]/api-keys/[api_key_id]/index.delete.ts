@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { api_keys } from "~~/server/schema";
+import { withTenantDb } from "~~/server/utils/db";
 
 export default defineEventHandler(async (event) => {
   const params = getRouterParams(event);
@@ -7,15 +8,19 @@ export default defineEventHandler(async (event) => {
   const api_key_id = params.api_key_id as string;
 
   await getOrganizationMembership(event, organization_id);
-  const [deleted] = await db
-    .delete(api_keys)
-    .where(
-      and(
-        eq(api_keys.id, api_key_id),
-        eq(api_keys.organization_id, organization_id)
+  const deleted = await withTenantDb([organization_id], async (tx) => {
+    const [deleted] = await tx
+      .delete(api_keys)
+      .where(
+        and(
+          eq(api_keys.id, api_key_id),
+          eq(api_keys.organization_id, organization_id)
+        )
       )
-    )
-    .returning();
+      .returning();
+
+    return deleted;
+  });
 
   if (!deleted) {
     throw createError({

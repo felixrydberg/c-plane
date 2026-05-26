@@ -1,0 +1,26 @@
+export const ICONS = {
+  overview: 'i-heroicons:rectangle-group',
+  containers: 'i-heroicons:cube-transparent',
+  databases: 'i-heroicons:circle-stack',
+  secrets: 'i-heroicons:lock-closed',
+  storage: 'i-heroicons:folder',
+  registry: 'i-heroicons:archive-box',
+  logs: 'i-heroicons:numbered-list',
+  analytics: 'i-heroicons:chart-bar',
+  general: 'i-heroicons:adjustments-horizontal',
+  members: 'i-heroicons:user-group',
+  authentication: 'i-heroicons:key',
+  folder: 'i-heroicons:folder',
+  plus: 'i-heroicons:plus',
+  bars: 'i-heroicons:bars-3',
+  chevronUpDown: 'i-heroicons:chevron-up-down',
+  folderPlus: 'i-heroicons:folder-plus',
+  globeAlt: 'i-heroicons:globe-alt',
+  cube: 'i-heroicons:cube',
+  documentText: 'i-heroicons:document-text',
+  key: 'i-heroicons:key',
+  serverStack: 'i-heroicons:server-stack',
+  archiveBox: 'i-heroicons:archive-box',
+} as const
+
+export type IconName = keyof typeof ICONS

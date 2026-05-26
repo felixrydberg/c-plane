@@ -20,13 +20,13 @@ const tabs = ref([
 </script>
 
 <template>
-  <div class="w-full">
-    <UPageCard
-      title="Manage Organizations"
-      description="Manage which organization you are currently active in."
-      variant="naked"
-      class="mb-4"
-    />
+  <div class="flex flex-col gap-6 w-full mx-auto max-w-6xl">
+    <div class="w-full border border-default rounded-lg p-6 space-y-6">
+      <div>
+        <p class="font-semibold">Manage Organizations</p>
+        <p class="text-sm text-muted">Manage which organization you are currently active in.</p>
+      </div>
+    </div>
     <UTabs v-model="tab" :items="tabs" class="min-h-32">
       <template #organizations>
         <dashboard-organizations />

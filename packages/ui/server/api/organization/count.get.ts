@@ -1,11 +1,11 @@
 import { count, eq } from "drizzle-orm";
 import { organization_member } from "~~/server/schema";
+import { getIdentityDb } from "~~/server/utils/db";
 
 export default defineEventHandler(async (event) => {
   const session = await requireSession(event);
   
-
-  const organization_count = await db
+  const organization_count = await getIdentityDb()
     .select({
       count: count(),
     })

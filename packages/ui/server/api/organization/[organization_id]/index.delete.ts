@@ -1,5 +1,6 @@
 import { organization } from "~~/server/schema";
 import { eq } from "drizzle-orm";
+import { withTenantDb } from "~~/server/utils/db";
 
 export default defineEventHandler(async (event) => {
   const membership = await getOrganizationMembership(event);
@@ -12,30 +13,32 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const existingOrganization = await db
-    .select()
-    .from(organization)
-    .where(eq(organization.id, organizationId))
-    .limit(1);
+  const existingOrganization = await withTenantDb([organizationId], async (tx) => {
+    const rows = await tx
+      .select()
+      .from(organization)
+      .where(eq(organization.id, organizationId))
+      .limit(1);
 
-  if (!existingOrganization || existingOrganization.length === 0) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: "Organization not found",
-    });
-  }
+    if (!rows || rows.length === 0) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: "Organization not found",
+      });
+    }
 
-  const org = existingOrganization[0]!;
+    const org = rows[0]!;
 
-  await db.transaction(async (tx) => {
     await tx.delete(organization).where(eq(organization.id, organizationId));
+
+    return org;
   });
 
-  if (org.polar_customer_id) {
+  if (existingOrganization.polar_customer_id) {
     try {
-      await polar.customers.delete({ id: org.polar_customer_id });
+      await polar.customers.delete({ id: existingOrganization.polar_customer_id });
     } catch (error) {
-      console.error(`Failed to delete Polar customer ${org.polar_customer_id}:`, error);
+      console.error(`Failed to delete Polar customer ${existingOrganization.polar_customer_id}:`, error);
     }
   }
 

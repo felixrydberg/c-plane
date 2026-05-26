@@ -8,7 +8,7 @@ import {
   index,
 } from "drizzle-orm/pg-core";
 
-export const studio_user = pgTable("studio_user", {
+export const cplane_user = pgTable("cplane_user", {
   id: uuid("id")
     .default(sql`pg_catalog.gen_random_uuid()`)
     .primaryKey(),
@@ -28,8 +28,8 @@ export const studio_user = pgTable("studio_user", {
   twoFactorEnabled: boolean("two_factor_enabled").default(false),
 });
 
-export const studio_account = pgTable(
-  "studio_account",
+export const cplane_account = pgTable(
+  "cplane_account",
   {
     id: uuid("id")
       .default(sql`pg_catalog.gen_random_uuid()`)
@@ -38,7 +38,7 @@ export const studio_account = pgTable(
     providerId: text("provider_id").notNull(),
     userId: uuid("user_id")
       .notNull()
-      .references(() => studio_user.id, { onDelete: "cascade" }),
+      .references(() => cplane_user.id, { onDelete: "cascade" }),
     accessToken: text("access_token"),
     refreshToken: text("refresh_token"),
     idToken: text("id_token"),
@@ -51,11 +51,11 @@ export const studio_account = pgTable(
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [index("studio_account_userId_idx").on(table.userId)],
+  (table) => [index("cplane_account_userId_idx").on(table.userId)],
 );
 
-export const studio_verification = pgTable(
-  "studio_verification",
+export const cplane_auth_verification = pgTable(
+  "cplane_auth_verification",
   {
     id: uuid("id")
       .default(sql`pg_catalog.gen_random_uuid()`)
@@ -70,12 +70,12 @@ export const studio_verification = pgTable(
       .notNull(),
   },
   (table) => [
-    index("studio_verification_identifier_idx").on(table.identifier),
+    index("cplane_auth_verification_identifier_idx").on(table.identifier),
   ],
 );
 
-export const studio_two_factor = pgTable(
-  "studio_two_factor",
+export const cplane_two_factor = pgTable(
+  "cplane_two_factor",
   {
     id: uuid("id")
       .default(sql`pg_catalog.gen_random_uuid()`)
@@ -84,32 +84,32 @@ export const studio_two_factor = pgTable(
     backupCodes: text("backup_codes").notNull(),
     userId: uuid("user_id")
       .notNull()
-      .references(() => studio_user.id, { onDelete: "cascade" }),
+      .references(() => cplane_user.id, { onDelete: "cascade" }),
   },
   (table) => [
-    index("studio_two_factor_secret_idx").on(table.secret),
-    index("studio_two_factor_userId_idx").on(table.userId),
+    index("cplane_two_factor_secret_idx").on(table.secret),
+    index("cplane_two_factor_userId_idx").on(table.userId),
   ],
 );
 
-export const studio_userRelations = relations(studio_user, ({ many }) => ({
-  studio_accounts: many(studio_account),
-  studio_two_factors: many(studio_two_factor),
+export const cplane_userRelations = relations(cplane_user, ({ many }) => ({
+  cplane_accounts: many(cplane_account),
+  cplane_two_factors: many(cplane_two_factor),
 }));
 
-export const studio_accountRelations = relations(studio_account, ({ one }) => ({
-  studio_user: one(studio_user, {
-    fields: [studio_account.userId],
-    references: [studio_user.id],
+export const cplane_accountRelations = relations(cplane_account, ({ one }) => ({
+  cplane_user: one(cplane_user, {
+    fields: [cplane_account.userId],
+    references: [cplane_user.id],
   }),
 }));
 
-export const studio_two_factorRelations = relations(
-  studio_two_factor,
+export const cplane_two_factorRelations = relations(
+  cplane_two_factor,
   ({ one }) => ({
-    studio_user: one(studio_user, {
-      fields: [studio_two_factor.userId],
-      references: [studio_user.id],
+    cplane_user: one(cplane_user, {
+      fields: [cplane_two_factor.userId],
+      references: [cplane_user.id],
     }),
   }),
 );

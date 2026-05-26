@@ -18,7 +18,7 @@ const isLoading = computed(() => status.value === 'pending');
     <template #body>
       <div class="space-y-4">
         <div v-if="isLoading" class="text-center py-8">
-          <p class="text-sm text-muted">Loading user details...</p>
+          <UIcon name="i-lucide-loader-circle" class="size-5 text-muted animate-spin" />
         </div>
         <div v-else-if="userDetails">
           <div class="grid grid-cols-2 gap-4">

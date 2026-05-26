@@ -9,6 +9,10 @@ if (!store.organization?.id) {
   throw createError('Organization not found in store');
 }
 
+useHead({
+  title: 'Authentication - C-Plane',
+});
+
 const toast = useToast();
 const NuxtTime = resolveComponent("NuxtTime");
 const UIcon = resolveComponent("UIcon");
@@ -50,7 +54,7 @@ const columns: TableColumn<ApiKey>[] = [
       if (isExpired && (item.row.original.expires_at || 0) > 0) {
         return h('div', { class: 'flex items-center gap-2' }, [
           h('span', item.row.original.name),
-          h(UIcon, { name: 'i-heroicons:exclamation-triangle-solid', class: 'text-error' }),
+          h(UIcon, { name: 'i-heroicons:exclamation-triangle', class: 'text-error' }),
         ]);
       }
       return item.row.original.name;
@@ -100,10 +104,7 @@ const getContextMenuItems = (row: TableRow<ApiKey>) => [
     onSelect: () => {
       selectedApiKeyId.value = row.original.id;
       detailsModalOpen.value = true;
-    },
-  },
-  {
-    type: 'separator' as const,
+    }
   },
   {
     label: 'Delete',
@@ -111,221 +112,126 @@ const getContextMenuItems = (row: TableRow<ApiKey>) => [
     onSelect: () => {
       selectedKeyToDelete.value = row.original;
       deleteModalOpen.value = true;
-    },
-  },
+    }
+  }
 ];
 
-const onDeleteApiKey = async () => {
-  try {
-    if (!selectedKeyToDelete.value) return;
+const onDeleteKey = async () => {
+  if (!selectedKeyToDelete.value) return;
 
-    await $fetch(
-      `/api/organization/${store.organization?.id as ':organization_id'}/api-keys/${selectedKeyToDelete.value.id as ':api_key_id'}`,
-      {
-        method: 'DELETE',
-      }
-    );
+  try {
+    await $fetch(`/api/organization/${store.organization?.id as ':organization_id'}/api-keys/${selectedKeyToDelete.value.id as ':api_key_id'}`, {
+      method: 'DELETE'
+    });
 
     toast.add({
       title: 'Success',
-      description: 'API key deleted successfully',
+      description: 'API key deleted successfully.',
       color: 'success',
     });
-
     deleteModalOpen.value = false;
     selectedKeyToDelete.value = null;
     refresh();
-  } catch (error) {
+  } catch (e) {
     toast.add({
-      title: 'An Error occurred',
-      description:
-        error instanceof Error ? error.message : 'Failed to delete API key',
-      color: 'error' as const,
+      title: 'Error',
+      description: 'Failed to delete API key.',
+      color: 'error',
     });
   }
 };
 
-const createApiKeySchema = z.object({
-  name: z.string().min(1, 'Key name is required').max(255, 'Key name must be less than 255 characters'),
-  allowed_ips: z.string().optional(),
-  scopes: z.record(z.string(), z.boolean()).refine((scopes) => {
-    return Object.values(scopes).some((enabled) => enabled);
-  }, 'At least one scope must be selected'),
+const createSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  expires_at: z.number().min(0).default(0),
 });
 
-type CreateApiKeySchema = z.output<typeof createApiKeySchema>;
-
-const createApiKeyState = reactive<Partial<CreateApiKeySchema>>({
+type CreateSchema = z.output<typeof createSchema>;
+const createState = reactive<CreateSchema>({
   name: '',
-  allowed_ips: '',
-  scopes: {},
+  expires_at: 0,
 });
 
-const expiryOptions = [
-  { label: 'Never', value: 0 },
-  { label: '1 Month', value: 1 },
-  { label: '3 Months', value: 3 },
-  { label: '6 Months', value: 6 },
-  { label: '1 Year', value: 12 },
-  { label: '2 Years', value: 24 },
-];
-
-const createSelectedExpiry = ref(3);
-
-watch(detailsModalOpen, (isOpen) => {
-  if (!isOpen) {
-    createdKeyValue.value = undefined;
-  }
-});
-
-const onCreateApiKeySubmit = async () => {
+const onCreateKey = async () => {
   try {
-    const createdKey = await $fetch(`/api/organization/${store.organization?.id as ':organization_id'}/api-keys`, {
+    const key = await $fetch<{ id: string; key: string }>(`/api/organization/${store.organization?.id as ':organization_id'}/api-keys`, {
       method: 'POST',
-      body: {
-        name: createApiKeyState.name,
-        scopes: createApiKeyState.scopes,
-        expires_at: createSelectedExpiry.value,
-        allowed_ips: createApiKeyState.allowed_ips || null,
-      },
+      body: { name: createState.name, expires_at: createState.expires_at }
     });
-
-    if (!createdKey || !createdKey.id) {
-      throw new Error('Invalid response from server');
-    }
-
+    createdKeyValue.value = key.key;
     createModalOpen.value = false;
-    createApiKeyState.name = '';
-    createApiKeyState.allowed_ips = '';
-    createApiKeyState.scopes = {};
-    createSelectedExpiry.value = 3;
-    
-    selectedApiKeyId.value = createdKey.id;
-    createdKeyValue.value = createdKey.key;
-    detailsModalOpen.value = true;
-    
+    createState.name = '';
+    createState.expires_at = 0;
     refresh();
-  } catch (error) {
+  } catch (e) {
     toast.add({
-      title: 'An Error occurred',
-      description:
-        error instanceof Error ? error.message : 'Failed to create API key',
-      color: 'error' as const,
+      title: 'Error',
+      description: 'Failed to create API key.',
+      color: 'error',
     });
   }
 };
 </script>
 
 <template>
-  <UDashboardPanel id="keys">
-    <template #body>
-      <UiPageContainer title="Authentication" size="max-w-xl">
-        <div class="space-y-4">
-          <UiTable
-            v-model:offset="offset"
-            :status="status"
-            :items="apiKeys"
-            :columns="columns"
-            :pagination="true"
-            :total="total"
-            :limit="limit"
-            :get-context-menu-items="getContextMenuItems"
-          >
-            <template #filters>
-              <UButton leading-icon="i-heroicons:plus" variant="soft" @click="createModalOpen = true">
-                Add Key
-              </UButton>
-            </template>
-          </UiTable>
-        </div>
+  <div class="flex flex-col gap-6 w-full mx-auto max-w-6xl">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-semibold">Authentication</h1>
+        <p class="text-muted text-sm mt-1">Manage API keys for your organization.</p>
+      </div>
+      <UButton leading-icon="i-heroicons:plus" @click="createModalOpen = true">
+        Create API Key
+      </UButton>
+    </div>
 
-        <UModal
-          v-model:open="createModalOpen"
-          title="Create API Key"
-          description="Create a new API key for your organization"
-        >
-          <template #body>
-            <UForm
-              :schema="createApiKeySchema"
-              :state="createApiKeyState"
-              class="space-y-4"
-              @submit.prevent="onCreateApiKeySubmit"
-            >
-              <UFormField label="Name" name="name">
-                <UInput
-                  v-model="createApiKeyState.name"
-                  placeholder="Enter a name for the API key"
-                  class="w-full"
-                />
-              </UFormField>
-              <UFormField label="Expiration">
-                <USelect
-                  v-model="createSelectedExpiry"
-                  :items="expiryOptions"
-                  class="w-full"
-                />
-              </UFormField>
-              <UFormField label="Allowed IPs" name="allowed_ips" description="Comma-separated list of allowed IPs. Leave empty to allow all.">
-                <UInput
-                  v-model="createApiKeyState.allowed_ips"
-                  placeholder="e.g. 192.168.1.1, 10.0.0.1"
-                  class="w-full"
-                />
-              </UFormField>
-              <OrganizationApiKeyScopes v-model="createApiKeyState.scopes" />
-              <div class="flex gap-2 justify-end">
-                <UButton
-                  type="button"
-                  variant="soft"
-                  @click="createModalOpen = false"
-                >
-                  Cancel
-                </UButton>
-                <UButton type="submit" color="primary">
-                  Create
-                </UButton>
-              </div>
-            </UForm>
-          </template>
-        </UModal>
+    <UiTable
+      v-model:offset="offset"
+      :status="status"
+      :items="apiKeys"
+      :columns="columns"
+      :pagination="true"
+      :total="total"
+      :limit="limit"
+      :get-context-menu-items="getContextMenuItems"
+    />
 
+    <UModal v-model:open="createModalOpen" title="Create API Key" description="Create a new API key for programmatic access">
+      <template #body>
+        <UForm :schema="createSchema" :state="createState" class="space-y-4" @submit.prevent="onCreateKey">
+          <UFormField label="Name" name="name" required>
+            <UInput v-model="createState.name" placeholder="My API Key" class="w-full" />
+          </UFormField>
+          <UFormField label="Expiration" name="expires_at" description="Expiration in months (0 = never)">
+            <UInput v-model="createState.expires_at" type="number" min="0" class="w-full" />
+          </UFormField>
+          <div class="flex gap-2 justify-end">
+            <UButton variant="ghost" color="neutral" type="button" @click="createModalOpen = false">Cancel</UButton>
+            <UButton type="submit">Create</UButton>
+          </div>
+        </UForm>
+      </template>
+    </UModal>
+
+    <UModal v-model:open="detailsModalOpen" title="API Key Details" description="View API key configuration">
+      <template #body>
         <OrganizationApiKeyDetailsModal
-          v-if="store.organization && apiKeys.length > 0"
-          v-model:open="detailsModalOpen"
-          :api-key="createdKeyValue"
-          :refresh="refresh"
           :api-key-id="selectedApiKeyId"
-          :organization-id="store.organization?.id"
+          @close="detailsModalOpen = false"
         />
+      </template>
+    </UModal>
 
-        <UModal
-          v-model:open="deleteModalOpen"
-          title="Delete API Key"
-          description="This action cannot be undone"
-        >
-          <template #body>
-            <div class="space-y-4">
-              <p class="text-sm">
-                Are you sure you want to delete <strong>{{ selectedKeyToDelete?.name }}</strong>? This action cannot be undone.
-              </p>
-              <div class="flex gap-2 justify-end">
-                <UButton
-                  variant="soft"
-                  @click="deleteModalOpen = false"
-                >
-                  Cancel
-                </UButton>
-                <UButton
-                  color="error"
-                  @click="onDeleteApiKey"
-                >
-                  Delete
-                </UButton>
-              </div>
-            </div>
-          </template>
-        </UModal>
-      </UiPageContainer>
-    </template>
-  </UDashboardPanel>
+    <UModal v-model:open="deleteModalOpen" title="Delete API Key" description="This action cannot be undone">
+      <template #body>
+        <div class="space-y-4">
+          <p class="text-sm">Are you sure you want to delete <strong>{{ selectedKeyToDelete?.name }}</strong>?</p>
+          <div class="flex gap-2 justify-end">
+            <UButton variant="ghost" color="neutral" @click="deleteModalOpen = false">Cancel</UButton>
+            <UButton color="error" @click="onDeleteKey">Delete</UButton>
+          </div>
+        </div>
+      </template>
+    </UModal>
+  </div>
 </template>

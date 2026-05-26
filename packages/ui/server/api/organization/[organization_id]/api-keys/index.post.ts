@@ -1,6 +1,7 @@
 import type { api_key_scopes_type } from "~~/server/schema";
 import { api_keys, api_key_scopes } from "~~/server/schema";
 import { uuidv7 } from "uuidv7";
+import { withTenantDb } from "~~/server/utils/db";
 
 export default defineEventHandler(async (event) => {
   const membership = await getOrganizationMembership(event);
@@ -30,7 +31,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const organization_id = membership.organization_id;
-  const api_key = await db.transaction(async (tx) => {
+  const api_key = await withTenantDb([organization_id], async (tx) => {
     const key = generateSecret();
     const keyHash = hashApiKey(key);
     const keyId = uuidv7();

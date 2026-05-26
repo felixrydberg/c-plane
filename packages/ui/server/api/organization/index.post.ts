@@ -2,6 +2,7 @@ import { active_organization, organization, organization_member } from "~~/serve
 import { eq } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import z from "zod";
+import { getIdentityDb, withTenantDb } from "~~/server/utils/db";
 
 const createOrganizationSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
@@ -28,7 +29,7 @@ export default defineEventHandler(async (event) => {
 
   const { name, email, slug } = parsed.data;
 
-  const existingSlug = await db.query.organization.findFirst({
+  const existingSlug = await getIdentityDb().query.organization.findFirst({
     where: eq(organization.slug, slug),
   });
   if (existingSlug) {
@@ -38,7 +39,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const existingEmail = await db.query.organization.findFirst({
+  const existingEmail = await getIdentityDb().query.organization.findFirst({
     where: eq(organization.email, email),
   });
   if (existingEmail) {
@@ -51,7 +52,7 @@ export default defineEventHandler(async (event) => {
   const organizationId = uuidv7();
   const organizationMemberId = uuidv7();
 
-  const createdOrganization = await db.transaction(async (tx) => {
+  const createdOrganization = await withTenantDb([organizationId], async (tx) => {
     const [created] = await tx.insert(organization).values({
       id: organizationId,
       name,

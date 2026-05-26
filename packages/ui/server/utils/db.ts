@@ -5,20 +5,20 @@ import { createError } from "h3";
 import * as schema from "../schema";
 
 const {
-  NUXT_DATABASE_URL,
   NUXT_IDENTITY_DATABASE_URL,
   NUXT_TENANT_DATABASE_URL,
 } = process.env;
 
-if (!NUXT_DATABASE_URL) {
-  throw new Error("Database connection string is not defined");
+if (!NUXT_IDENTITY_DATABASE_URL) {
+  throw new Error("Identity database connection string is not defined");
 }
 
-const identityDbUrl = NUXT_IDENTITY_DATABASE_URL ?? NUXT_DATABASE_URL;
-const tenantDbUrl = NUXT_TENANT_DATABASE_URL ?? NUXT_DATABASE_URL;
+if (!NUXT_TENANT_DATABASE_URL) {
+  throw new Error("Tenant database connection string is not defined");
+}
 
-const identityDb = drizzle(identityDbUrl, { schema });
-const tenantDb = drizzle(tenantDbUrl, { schema });
+const identityDb = drizzle(NUXT_IDENTITY_DATABASE_URL, { schema });
+const tenantDb = drizzle(NUXT_TENANT_DATABASE_URL, { schema });
 
 type TenantTransaction = Parameters<
   Parameters<typeof tenantDb.transaction>[0]

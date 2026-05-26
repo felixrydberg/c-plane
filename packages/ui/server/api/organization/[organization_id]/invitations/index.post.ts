@@ -1,5 +1,5 @@
 import { organization_invitation, organization_member, user, organization } from "~~/server/schema";
-import { db } from "~~/server/utils/auth";
+import { withTenantDb } from "~~/server/utils/db";
 import { and, eq } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import { createOrganizationInvitationEmailTemplate } from "~~/server/utils/email-templates";
@@ -38,106 +38,116 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const existingInvitation = await db
-    .select()
-    .from(organization_invitation)
-    .where(and(
-      eq(organization_invitation.email, inviteEmail),
-      eq(organization_invitation.status, "pending"),
-    ))
-    .limit(1);
-
-  if (existingInvitation.length > 0) {
-    throw createError({
-      statusCode: 409,
-      statusMessage: "Invitation already exists for this email",
-    });
-  }
-
-  const existingMember = await db
-    .select()
-    .from(organization_member)
-    .innerJoin(user, eq(organization_member.user_id, user.id))
-    .where(and(
-      eq(organization_member.organization_id, organization_id),
-      eq(user.email, inviteEmail),
-    ))
-    .limit(1);
-
-  if (existingMember.length > 0) {
-    throw createError({
-      statusCode: 409,
-      statusMessage: "User is already a member of the organization",
-    });
-  }
-
   const invitationId = uuidv7();
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
-  const [organizationRecord] = await db
-    .select({
-      id: organization.id,
-      name: organization.name,
-    })
-    .from(organization)
-    .where(eq(organization.id, organization_id))
-    .limit(1);
+  const { invitation, orgName, inviterName, inviteAction, inviteUrl } = await withTenantDb([organization_id], async (tx) => {
+    const existingInvitation = await tx
+      .select()
+      .from(organization_invitation)
+      .where(and(
+        eq(organization_invitation.email, inviteEmail),
+        eq(organization_invitation.status, "pending"),
+      ))
+      .limit(1);
 
-  if (!organizationRecord) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: "Organization not found",
-    });
-  }
+    if (existingInvitation.length > 0) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: "Invitation already exists for this email",
+      });
+    }
 
-  const [inviterRecord] = await db
-    .select({
-      id: user.id,
-      name: user.name,
-    })
-    .from(user)
-    .where(eq(user.id, membership.user_id))
-    .limit(1);
+    const existingMember = await tx
+      .select()
+      .from(organization_member)
+      .innerJoin(user, eq(organization_member.user_id, user.id))
+      .where(and(
+        eq(organization_member.organization_id, organization_id),
+        eq(user.email, inviteEmail),
+      ))
+      .limit(1);
 
-  const [invitedUser] = await db
-    .select({ id: user.id })
-    .from(user)
-    .where(eq(user.email, inviteEmail))
-    .limit(1);
+    if (existingMember.length > 0) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: "User is already a member of the organization",
+      });
+    }
 
-  const inviteAction: "signin" | "signup" = invitedUser ? "signin" : "signup";
-  const authPath = inviteAction === "signin" ? "/auth/signin" : "/auth/signup";
-  const requestUrl = getRequestURL(event);
-  const inviteUrl = new URL(authPath, requestUrl.origin);
-  inviteUrl.searchParams.set("email", inviteEmail);
-  inviteUrl.searchParams.set("redirectTo", `/api/user/invitations/${invitationId}/accept`);
-  
-  const [invitation] = await db
-    .insert(organization_invitation)
-    .values({
-      id: invitationId,
-      organization_id: organization_id,
-      email: inviteEmail,
-      role,
-      status: "pending",
-      expires_at: expiresAt,
-      inviter_id: membership.user_id,
-    })
-    .returning();
+    const [organizationRecord] = await tx
+      .select({
+        id: organization.id,
+        name: organization.name,
+      })
+      .from(organization)
+      .where(eq(organization.id, organization_id))
+      .limit(1);
 
-  if (!invitation) {
-    throw createError({
-      statusCode: 500,
-      statusMessage: "Failed to create invitation",
-    });
-  }
+    if (!organizationRecord) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: "Organization not found",
+      });
+    }
+
+    const [inviterRecord] = await tx
+      .select({
+        id: user.id,
+        name: user.name,
+      })
+      .from(user)
+      .where(eq(user.id, membership.user_id))
+      .limit(1);
+
+    const [invitedUser] = await tx
+      .select({ id: user.id })
+      .from(user)
+      .where(eq(user.email, inviteEmail))
+      .limit(1);
+
+    const inviteAction: "signin" | "signup" = invitedUser ? "signin" : "signup";
+    const authPath = inviteAction === "signin" ? "/auth/signin" : "/auth/signup";
+    const requestUrl = getRequestURL(event);
+    const inviteUrl = new URL(authPath, requestUrl.origin);
+    inviteUrl.searchParams.set("email", inviteEmail);
+    inviteUrl.searchParams.set("redirectTo", `/api/user/invitations/${invitationId}/accept`);
+    
+    const [invitation] = await tx
+      .insert(organization_invitation)
+      .values({
+        id: invitationId,
+        organization_id: organization_id,
+        email: inviteEmail,
+        role,
+        status: "pending",
+        expires_at: expiresAt,
+        inviter_id: membership.user_id,
+      })
+      .returning();
+
+    if (!invitation) {
+      throw createError({
+        statusCode: 500,
+        statusMessage: "Failed to create invitation",
+      });
+    }
+
+    return {
+      invitation,
+      orgName: organizationRecord.name,
+      inviterName: inviterRecord?.name,
+      inviteAction,
+      inviteUrl: inviteUrl.toString(),
+    };
+  });
 
   try {
     const template = createOrganizationInvitationEmailTemplate({
-      organizationName: organizationRecord.name,
-      inviterName: inviterRecord?.name,
+      organizationName: orgName,
+      inviterName,
       action: inviteAction,
-      url: inviteUrl.toString(),
+      url: inviteUrl,
     });
 
     await sendEmail({
@@ -146,10 +156,12 @@ export default defineEventHandler(async (event) => {
       html: template.html,
     });
   } catch (error) {
-    await db
-      .update(organization_invitation)
-      .set({ status: "revoked" })
-      .where(eq(organization_invitation.id, invitation.id));
+    await withTenantDb([organization_id], async (tx) => {
+      await tx
+        .update(organization_invitation)
+        .set({ status: "revoked" })
+        .where(eq(organization_invitation.id, invitation.id));
+    });
 
     console.error("Failed to send invitation email:", error);
     throw createError({

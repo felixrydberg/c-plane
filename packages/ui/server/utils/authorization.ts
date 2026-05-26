@@ -1,4 +1,5 @@
-import { auth, db } from "./auth";
+import { auth } from "./auth";
+import { getIdentityDb } from "./db";
 import { organization_member, user  } from "~~/server/schema";
 import { eq, and } from "drizzle-orm";
 import type { H3Event } from "h3";
@@ -41,7 +42,7 @@ export async function getOrganizationMembership(event: H3Event, organization_id?
     });
   }
 
-  const userMembership = await db
+  const userMembership = await getIdentityDb()
     .select({
       id: organization_member.id,
       organization_id: organization_member.organization_id,

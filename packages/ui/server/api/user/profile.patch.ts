@@ -1,5 +1,5 @@
 import { user } from "~~/server/schema";
-import { db } from "~~/server/utils/auth";
+import { getAuthDb } from "~~/server/utils/auth";
 import { eq } from "drizzle-orm";
 
 export default defineEventHandler(async (event) => {
@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event);
 
   if (body.name !== undefined) {
-    const updated = await db.update(user)
+    const updated = await getAuthDb().update(user)
       .set({ name: body.name })
       .where(eq(user.id, session.user.id))
       .returning();

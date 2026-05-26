@@ -1,5 +1,5 @@
 import { active_organization, organization, organization_member } from "~~/server/schema";
-import { db } from "~~/server/utils/auth";
+import { getIdentityDb, withTenantDb } from "~~/server/utils/db";
 import { eq, and } from "drizzle-orm";
 
 export default defineEventHandler(async (event) => {
@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const membership = await db.select().from(organization_member)
+  const membership = await getIdentityDb().select().from(organization_member)
     .where(
       and(
         eq(organization_member.user_id, session.user.id),
@@ -30,26 +30,30 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const updated = await db
-    .insert(active_organization)
-    .values({
-      user_id: session.user.id,
-      organization_id: organizationId,
-    })
-    .onConflictDoUpdate({
-      target: active_organization.user_id,
-      set: {
+  const [updated, org] = await withTenantDb([organizationId], async (tx) => {
+    const upserted = await tx
+      .insert(active_organization)
+      .values({
+        user_id: session.user.id,
         organization_id: organizationId,
-      },
-    })
-    .returning();
+      })
+      .onConflictDoUpdate({
+        target: active_organization.user_id,
+        set: {
+          organization_id: organizationId,
+        },
+      })
+      .returning();
 
-  const org = await db.select({
-    id: organization.id,
-    slug: organization.slug,
-  }).from(organization)
-    .where(eq(organization.id, organizationId))
-    .limit(1);
+    const orgResult = await tx.select({
+      id: organization.id,
+      slug: organization.slug,
+    }).from(organization)
+      .where(eq(organization.id, organizationId))
+      .limit(1);
+
+    return [upserted, orgResult];
+  });
 
   if (!org || org.length === 0) {
     throw createError({

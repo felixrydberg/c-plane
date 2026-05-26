@@ -49,6 +49,9 @@ const items = computed<DropdownMenuItem[][]>(() => {
     },
     value: org.id,
     async onSelect() {
+      if (store.organization?.id === org.id) {
+        return;
+      }
       await setOrganization(org.id, `/${org.slug}`);
     }
   }));

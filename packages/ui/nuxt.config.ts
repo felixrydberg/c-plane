@@ -7,7 +7,6 @@ export default defineNuxtConfig({
   modules: [
     '@nuxt/ui',
     '@nuxt/eslint',
-    '@nuxt/test-utils',
     '@nuxt/image',
     "@pinia/nuxt",
     "@polar-sh/nuxt",
@@ -16,6 +15,7 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-07-16',
   vite: {
     optimizeDeps: {
+      include: ['qrcode'],
       exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util']
     },
     worker: {
@@ -69,12 +69,16 @@ export default defineNuxtConfig({
     ]
   },
   icon: {
-    provider: 'none',
+    provider: 'server',
     collections: ['heroicons', 'heroicons-solid', 'lucide'],
     clientBundle: {
-      icons: ['lucide:x', 'lucide:chevron-down', 'lucide:check', 'lucide:loader-circle'],
       scan: {
-        globInclude: ['app/**/*.{vue,ts,tsx,md,mdc,mdx}'],
+        globInclude: [
+          'app/**/*.{vue,ts,tsx,md,mdc,mdx,js,jsx}',
+          'packages/**/app/**/*.{vue,ts,tsx,md,mdx,js,jsx}',
+          'node_modules/@nuxt/ui/**/*.{vue,ts,tsx,js,jsx}',
+          'node_modules/@id-proval/ui-shared/**/*.{vue,ts,tsx,js,jsx}',
+        ],
       },
       sizeLimitKb: 512,
     },

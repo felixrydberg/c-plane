@@ -15,6 +15,7 @@ pub use user::UserError;
 use axum::{Json, http::StatusCode, response::IntoResponse};
 use serde::Serialize;
 use std::fmt;
+use tracing;
 
 #[derive(Debug)]
 pub enum AppError {
@@ -88,6 +89,9 @@ impl std::error::Error for AppError {}
 
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
+        let error_msg = self.to_string();
+        tracing::error!("Request error: {}", error_msg);
+
         let (status, body) = match self {
             AppError::Project(_) | AppError::User(_) | AppError::Organisation(_) => (
                 StatusCode::BAD_REQUEST,

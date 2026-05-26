@@ -115,9 +115,8 @@ const getExpiredDate = (created_at: string, expires_in: number) => {
     description="View API key information and scopes"
   >
     <template #body>
-      <div v-if="isLoading" class="space-y-4">
-        <USkeleton class="h-4 w-full" />
-        <USkeleton class="h-4 w-full" />
+      <div v-if="isLoading" class="py-8 text-center">
+        <UIcon name="i-lucide-loader-circle" class="size-5 text-muted animate-spin" />
       </div>
 
       <UForm

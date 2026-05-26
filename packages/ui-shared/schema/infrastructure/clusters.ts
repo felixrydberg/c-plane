@@ -1,6 +1,6 @@
 import { boolean, index, integer, pgEnum, pgPolicy, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { region, region_capability } from "./regions";
-import { studio_user } from "../tenants/control-plane-ui";
+import { cplane_user } from "../tenants/control-plane-ui";
 import { app_tenant } from "../rls";
 import { sql } from "drizzle-orm";
 
@@ -83,7 +83,7 @@ export const cluster_join_credential = pgTable("cluster_join_credentials", {
   revoked_at: timestamp("revoked_at", { withTimezone: true, mode: "string" }),
   revoked_reason: text("revoked_reason"),
   issued_by_user_id: uuid("issued_by_user_id")
-    .references(() => studio_user.id, { onDelete: "set null" }),
+    .references(() => cplane_user.id, { onDelete: "set null" }),
   created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
   updated_at: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 }, (table) => [

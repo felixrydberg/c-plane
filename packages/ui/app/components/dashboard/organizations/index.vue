@@ -104,8 +104,8 @@
 
     <div class="mt-4 flex flex-col gap-2">
       <template v-if="pending">
-        <div class="rounded-xl border border-default/70 p-4 text-sm text-muted">
-          Loading organizations...
+        <div class="rounded-xl border border-default/70 p-4 text-center">
+          <UIcon name="i-lucide-loader-circle" class="size-5 text-muted animate-spin" />
         </div>
       </template>
 

@@ -45,4 +45,6 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
 
     ALTER ROLE app_admin BYPASSRLS;
     ALTER ROLE app_identity BYPASSRLS;
+    ALTER ROLE cplane_admin BYPASSRLS;
+    ALTER ROLE cplane_identity BYPASSRLS;
 EOSQL

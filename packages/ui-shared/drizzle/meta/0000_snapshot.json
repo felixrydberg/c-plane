@@ -1,5 +1,5 @@
 {
-  "id": "ba0a0da8-8ef1-4f4c-bce5-06e38a45354f",
+  "id": "5b6f0139-7070-48b3-94c8-70bf15453a75",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -105,6 +105,7 @@
           "to": [
             "app_tenant"
           ],
+          "using": "\"event\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
           "withCheck": "\"event\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
         }
       },
@@ -720,10 +721,10 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "cluster_join_credentials_issued_by_user_id_studio_user_id_fk": {
-          "name": "cluster_join_credentials_issued_by_user_id_studio_user_id_fk",
+        "cluster_join_credentials_issued_by_user_id_cplane_user_id_fk": {
+          "name": "cluster_join_credentials_issued_by_user_id_cplane_user_id_fk",
           "tableFrom": "cluster_join_credentials",
-          "tableTo": "studio_user",
+          "tableTo": "cplane_user",
           "columnsFrom": [
             "issued_by_user_id"
           ],
@@ -1606,7 +1607,7 @@
           "name": "branch_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "organization_id": {
           "name": "organization_id",
@@ -1619,6 +1620,12 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "parent_timeline_id": {
           "name": "parent_timeline_id",
@@ -1819,6 +1826,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
         "default_branch_id": {
           "name": "default_branch_id",
           "type": "uuid",
@@ -1866,6 +1879,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "stateful_postgres_database_organization_id_idx": {
+          "name": "stateful_postgres_database_organization_id_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -1875,6 +1903,19 @@
           "tableTo": "project",
           "columnsFrom": [
             "project_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "stateful_postgres_database_organization_id_organization_id_fk": {
+          "name": "stateful_postgres_database_organization_id_organization_id_fk",
+          "tableFrom": "stateful_postgres_database",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
           ],
           "columnsTo": [
             "id"
@@ -1906,8 +1947,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"stateful_postgres_database\".\"project_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"stateful_postgres_database\".\"project_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"stateful_postgres_database\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"stateful_postgres_database\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
@@ -1934,6 +1975,12 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
         }
       },
       "indexes": {
@@ -1957,6 +2004,21 @@
           "columns": [
             {
               "expression": "branch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "stateful_postgres_database_branch_organization_id_idx": {
+          "name": "stateful_postgres_database_branch_organization_id_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1994,6 +2056,19 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "stateful_postgres_database_branch_organization_id_organization_id_fk": {
+          "name": "stateful_postgres_database_branch_organization_id_organization_id_fk",
+          "tableFrom": "stateful_postgres_database_branch",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2006,8 +2081,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"stateful_postgres_database_branch\".\"branch_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"stateful_postgres_database_branch\".\"branch_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"stateful_postgres_database_branch\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"stateful_postgres_database_branch\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
@@ -2025,6 +2100,12 @@
         },
         "project_id": {
           "name": "project_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -2076,6 +2157,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "serverless_postgres_database_organization_id_idx": {
+          "name": "serverless_postgres_database_organization_id_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2085,6 +2181,19 @@
           "tableTo": "project",
           "columnsFrom": [
             "project_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "serverless_postgres_database_organization_id_organization_id_fk": {
+          "name": "serverless_postgres_database_organization_id_organization_id_fk",
+          "tableFrom": "serverless_postgres_database",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
           ],
           "columnsTo": [
             "id"
@@ -2116,8 +2225,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"serverless_postgres_database\".\"project_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"serverless_postgres_database\".\"project_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"serverless_postgres_database\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"serverless_postgres_database\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
@@ -2144,6 +2253,12 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
         }
       },
       "indexes": {
@@ -2167,6 +2282,21 @@
           "columns": [
             {
               "expression": "branch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "serverless_postgres_database_branch_organization_id_idx": {
+          "name": "serverless_postgres_database_branch_organization_id_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2204,6 +2334,19 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "serverless_postgres_database_branch_organization_id_organization_id_fk": {
+          "name": "serverless_postgres_database_branch_organization_id_organization_id_fk",
+          "tableFrom": "serverless_postgres_database_branch",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2216,8 +2359,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"serverless_postgres_database_branch\".\"branch_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"serverless_postgres_database_branch\".\"branch_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"serverless_postgres_database_branch\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"serverless_postgres_database_branch\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
@@ -2233,8 +2376,8 @@
           "primaryKey": true,
           "notNull": true
         },
-        "branch_id": {
-          "name": "branch_id",
+        "project_id": {
+          "name": "project_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -2248,6 +2391,12 @@
         "name": {
           "name": "name",
           "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "region_id": {
+          "name": "region_id",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
@@ -2267,42 +2416,6 @@
         }
       },
       "indexes": {
-        "project_container_branch_id_name_uidx": {
-          "name": "project_container_branch_id_name_uidx",
-          "columns": [
-            {
-              "expression": "branch_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "name",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "project_container_branch_id_idx": {
-          "name": "project_container_branch_id_idx",
-          "columns": [
-            {
-              "expression": "branch_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "project_container_organization_id_idx": {
           "name": "project_container_organization_id_idx",
           "columns": [
@@ -2317,15 +2430,30 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "project_container_project_id_idx": {
+          "name": "project_container_project_id_idx",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
-        "project_container_branch_id_project_branch_id_fk": {
-          "name": "project_container_branch_id_project_branch_id_fk",
+        "project_container_project_id_project_id_fk": {
+          "name": "project_container_project_id_project_id_fk",
           "tableFrom": "project_container",
-          "tableTo": "project_branch",
+          "tableTo": "project",
           "columnsFrom": [
-            "branch_id"
+            "project_id"
           ],
           "columnsTo": [
             "id"
@@ -2345,11 +2473,35 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "project_container_region_id_regions_id_fk": {
+          "name": "project_container_region_id_regions_id_fk",
+          "tableFrom": "project_container",
+          "tableTo": "regions",
+          "columnsFrom": [
+            "region_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
+      "policies": {
+        "project_container_tenant_rls": {
+          "name": "project_container_tenant_rls",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "app_tenant"
+          ],
+          "using": "\"project_container\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"project_container\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+        }
+      },
       "checkConstraints": {},
       "isRLSEnabled": false
     },
@@ -2365,6 +2517,12 @@
         },
         "container_id": {
           "name": "container_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -2469,6 +2627,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "project_container_version_organization_id_idx": {
+          "name": "project_container_version_organization_id_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2484,11 +2657,35 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "project_container_version_organization_id_organization_id_fk": {
+          "name": "project_container_version_organization_id_organization_id_fk",
+          "tableFrom": "project_container_version",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
+      "policies": {
+        "project_container_version_tenant_rls": {
+          "name": "project_container_version_tenant_rls",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "app_tenant"
+          ],
+          "using": "\"project_container_version\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"project_container_version\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+        }
+      },
       "checkConstraints": {},
       "isRLSEnabled": false
     },
@@ -2618,7 +2815,18 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
+      "policies": {
+        "project_secret_tenant_rls": {
+          "name": "project_secret_tenant_rls",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "app_tenant"
+          ],
+          "using": "\"project_secret\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"project_secret\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+        }
+      },
       "checkConstraints": {},
       "isRLSEnabled": false
     },
@@ -2634,6 +2842,12 @@
         },
         "secret_id": {
           "name": "secret_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -2694,6 +2908,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "project_secret_version_organization_id_idx": {
+          "name": "project_secret_version_organization_id_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2709,11 +2938,35 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "project_secret_version_organization_id_organization_id_fk": {
+          "name": "project_secret_version_organization_id_organization_id_fk",
+          "tableFrom": "project_secret_version",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
+      "policies": {
+        "project_secret_version_tenant_rls": {
+          "name": "project_secret_version_tenant_rls",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "app_tenant"
+          ],
+          "using": "\"project_secret_version\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"project_secret_version\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+        }
+      },
       "checkConstraints": {},
       "isRLSEnabled": false
     },
@@ -3030,7 +3283,18 @@
           ]
         }
       },
-      "policies": {},
+      "policies": {
+        "active_organization_tenant_rls": {
+          "name": "active_organization_tenant_rls",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "app_tenant"
+          ],
+          "using": "\"active_organization\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"active_organization\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+        }
+      },
       "checkConstraints": {},
       "isRLSEnabled": true
     },
@@ -3155,15 +3419,42 @@
         }
       },
       "policies": {
-        "organization_tenant_rls": {
-          "name": "organization_tenant_rls",
+        "organization_tenant_rls_select": {
+          "name": "organization_tenant_rls_select",
           "as": "PERMISSIVE",
-          "for": "ALL",
+          "for": "SELECT",
+          "to": [
+            "app_tenant"
+          ],
+          "using": "\"organization\".\"id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+        },
+        "organization_tenant_rls_update": {
+          "name": "organization_tenant_rls_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
           "to": [
             "app_tenant"
           ],
           "using": "\"organization\".\"id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
           "withCheck": "\"organization\".\"id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+        },
+        "organization_tenant_rls_delete": {
+          "name": "organization_tenant_rls_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "app_tenant"
+          ],
+          "using": "\"organization\".\"id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+        },
+        "organization_tenant_rls_insert": {
+          "name": "organization_tenant_rls_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "app_tenant"
+          ],
+          "withCheck": "true"
         }
       },
       "checkConstraints": {},
@@ -3811,8 +4102,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.studio_account": {
-      "name": "studio_account",
+    "public.cplane_account": {
+      "name": "cplane_account",
       "schema": "",
       "columns": {
         "id": {
@@ -3897,8 +4188,8 @@
         }
       },
       "indexes": {
-        "studio_account_userId_idx": {
-          "name": "studio_account_userId_idx",
+        "cplane_account_userId_idx": {
+          "name": "cplane_account_userId_idx",
           "columns": [
             {
               "expression": "user_id",
@@ -3914,10 +4205,10 @@
         }
       },
       "foreignKeys": {
-        "studio_account_user_id_studio_user_id_fk": {
-          "name": "studio_account_user_id_studio_user_id_fk",
-          "tableFrom": "studio_account",
-          "tableTo": "studio_user",
+        "cplane_account_user_id_cplane_user_id_fk": {
+          "name": "cplane_account_user_id_cplane_user_id_fk",
+          "tableFrom": "cplane_account",
+          "tableTo": "cplane_user",
           "columnsFrom": [
             "user_id"
           ],
@@ -3934,8 +4225,76 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.studio_two_factor": {
-      "name": "studio_two_factor",
+    "public.cplane_auth_verification": {
+      "name": "cplane_auth_verification",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "pg_catalog.gen_random_uuid()"
+        },
+        "identifier": {
+          "name": "identifier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "cplane_auth_verification_identifier_idx": {
+          "name": "cplane_auth_verification_identifier_idx",
+          "columns": [
+            {
+              "expression": "identifier",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.cplane_two_factor": {
+      "name": "cplane_two_factor",
       "schema": "",
       "columns": {
         "id": {
@@ -3965,8 +4324,8 @@
         }
       },
       "indexes": {
-        "studio_two_factor_secret_idx": {
-          "name": "studio_two_factor_secret_idx",
+        "cplane_two_factor_secret_idx": {
+          "name": "cplane_two_factor_secret_idx",
           "columns": [
             {
               "expression": "secret",
@@ -3980,8 +4339,8 @@
           "method": "btree",
           "with": {}
         },
-        "studio_two_factor_userId_idx": {
-          "name": "studio_two_factor_userId_idx",
+        "cplane_two_factor_userId_idx": {
+          "name": "cplane_two_factor_userId_idx",
           "columns": [
             {
               "expression": "user_id",
@@ -3997,10 +4356,10 @@
         }
       },
       "foreignKeys": {
-        "studio_two_factor_user_id_studio_user_id_fk": {
-          "name": "studio_two_factor_user_id_studio_user_id_fk",
-          "tableFrom": "studio_two_factor",
-          "tableTo": "studio_user",
+        "cplane_two_factor_user_id_cplane_user_id_fk": {
+          "name": "cplane_two_factor_user_id_cplane_user_id_fk",
+          "tableFrom": "cplane_two_factor",
+          "tableTo": "cplane_user",
           "columnsFrom": [
             "user_id"
           ],
@@ -4017,8 +4376,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.studio_user": {
-      "name": "studio_user",
+    "public.cplane_user": {
+      "name": "cplane_user",
       "schema": "",
       "columns": {
         "id": {
@@ -4104,82 +4463,14 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "studio_user_email_unique": {
-          "name": "studio_user_email_unique",
+        "cplane_user_email_unique": {
+          "name": "cplane_user_email_unique",
           "nullsNotDistinct": false,
           "columns": [
             "email"
           ]
         }
       },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.studio_verification": {
-      "name": "studio_verification",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "pg_catalog.gen_random_uuid()"
-        },
-        "identifier": {
-          "name": "identifier",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "value": {
-          "name": "value",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "studio_verification_identifier_idx": {
-          "name": "studio_verification_identifier_idx",
-          "columns": [
-            {
-              "expression": "identifier",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

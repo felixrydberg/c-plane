@@ -38,6 +38,24 @@ impl TenantDatabase {
         Self { tenant_db, context }
     }
 
+    pub fn connection(&self) -> &DatabaseConnection {
+        &self.tenant_db
+    }
+
+    fn allowed_orgs_literal(&self) -> String {
+        if self.context.allowed_organizations.is_empty() {
+            return "{}".into();
+        }
+        let joined = self
+            .context
+            .allowed_organizations
+            .iter()
+            .map(Uuid::to_string)
+            .collect::<Vec<_>>()
+            .join(",");
+        format!("{{{}}}", joined)
+    }
+
     pub async fn begin_scoped_transaction(&self) -> Result<ScopedTenantTransaction, AppError> {
         let tx = self
             .tenant_db
@@ -45,21 +63,13 @@ impl TenantDatabase {
             .await
             .map_err(|err| AppError::Database(DatabaseError::TransactionFailed(err.to_string())))?;
 
-        let allowed_org_array = format!(
-            "{{{}}}",
-            self.context
-                .allowed_organizations
-                .iter()
-                .map(Uuid::to_string)
-                .collect::<Vec<_>>()
-                .join(",")
-        );
+        let literal = self.allowed_orgs_literal();
 
         let statement = Statement::from_string(
             DatabaseBackend::Postgres,
             format!(
                 "SET LOCAL app.allowed_organizations = '{}';",
-                allowed_org_array
+                literal
             ),
         );
 
@@ -68,6 +78,21 @@ impl TenantDatabase {
             .map_err(|err| AppError::Database(DatabaseError::QueryFailed(err.to_string())))?;
 
         Ok(ScopedTenantTransaction { tx })
+    }
+
+    pub async fn prepare_connection(&self) -> Result<(), AppError> {
+        let literal = self.allowed_orgs_literal();
+        self.tenant_db
+            .execute(Statement::from_string(
+                DatabaseBackend::Postgres,
+                format!(
+                    "SELECT set_config('app.allowed_organizations', '{}', false)",
+                    literal
+                ),
+            ))
+            .await
+            .map_err(|err| AppError::Database(DatabaseError::QueryFailed(err.to_string())))?;
+        Ok(())
     }
 }
 
@@ -125,7 +150,7 @@ pub async fn create_app_state() -> Result<State, AppError> {
 
 async fn connect_database(database_url: &str, role_name: &str) -> Result<DatabaseConnection, AppError> {
     let mut options = ConnectOptions::new(database_url);
-    options.sqlx_logging(true);
+    options.sqlx_logging(false);
 
     Database::connect(options).await.map_err(|err| {
         AppError::Database(DatabaseError::ConnectionFailed(format!(

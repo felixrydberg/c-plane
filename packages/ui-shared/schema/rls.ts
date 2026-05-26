@@ -1,5 +1,5 @@
 import { pgRole } from "drizzle-orm/pg-core";
-import { AnyColumn, sql } from "drizzle-orm";
+import { type AnyColumn, sql } from "drizzle-orm";
 
 export const app_identity = pgRole("app_identity").existing();
 export const app_tenant = pgRole("app_tenant").existing();

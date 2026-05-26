@@ -1,5 +1,5 @@
 import { organization, organization_member } from "~~/server/schema";
-import { db } from "~~/server/utils/auth";
+import { getIdentityDb } from "~~/server/utils/db";
 import { ilike, count, eq, and } from "drizzle-orm";
 
 export default defineEventHandler(async (event) => {
@@ -9,8 +9,9 @@ export default defineEventHandler(async (event) => {
   const offset = parseInt(query.offset as string) || 0;
 
   const session = await requireSession(event);
+  const identityDb = getIdentityDb();
 
-  const organizationsQuery = db
+  const organizationsQuery = identityDb
     .select({
       id: organization.id,
       name: organization.name,
@@ -31,7 +32,7 @@ export default defineEventHandler(async (event) => {
     .offset(offset)
     .$dynamic();
 
-  const countQuery = db
+  const countQuery = identityDb
     .select({ count: count() })
     .from(organization)
     .innerJoin(organization_member, and(

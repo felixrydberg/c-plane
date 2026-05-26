@@ -15,7 +15,6 @@
     "@iconify-json/lucide": "1.2.97",
     "@cplane/ui-shared": "workspace:*",
     "@nuxt/image": "2.0.0",
-    "@nuxt/test-utils": "^4.0.0",
     "@nuxt/ui": "^4.5.1",
     "@pinia/nuxt": "^0.11.2",
     "@polar-sh/nuxt": "^0.5.5",
@@ -30,6 +29,7 @@
     "resend": "6.9.3",
     "shaders": "^2.4.77",
     "tailwind-merge": "^3.5.0",
+    "tailwindcss": "^4.1.7",
     "uuidv7": "^1.1.0",
     "zod": "^4.3.6"
   },

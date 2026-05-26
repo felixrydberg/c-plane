@@ -1,5 +1,5 @@
 import { organization_invitation } from "~~/server/schema";
-import { db } from "~~/server/utils/auth";
+import { withTenantDb } from "~~/server/utils/db";
 import { eq, and } from "drizzle-orm";
 
 export default defineEventHandler(async (event) => {
@@ -22,26 +22,30 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const invitations = await db
-    .select()
-    .from(organization_invitation)
-    .where(
-      and(
-        eq(organization_invitation.id, invitationId),
-        eq(organization_invitation.organization_id, organizationId),
-      ),
-    );
+  const invitations = await withTenantDb([organizationId], async (tx) => {
+    const invitations = await tx
+      .select()
+      .from(organization_invitation)
+      .where(
+        and(
+          eq(organization_invitation.id, invitationId),
+          eq(organization_invitation.organization_id, organizationId),
+        ),
+      );
 
-  await db
-    .update(organization_invitation)
-    .set({ status: "revoked" })
-    .where(
-      and(
-        eq(organization_invitation.id, invitationId),
-        eq(organization_invitation.organization_id, organizationId),
-      ),
-    )
-    .returning();
+    await tx
+      .update(organization_invitation)
+      .set({ status: "revoked" })
+      .where(
+        and(
+          eq(organization_invitation.id, invitationId),
+          eq(organization_invitation.organization_id, organizationId),
+        ),
+      )
+      .returning();
+
+    return invitations;
+  });
 
   if (invitations.length > 0) {
     await logEvent(organizationId, "organization:invitation_revoked", {

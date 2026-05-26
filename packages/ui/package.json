@@ -12,25 +12,29 @@
     "lint:fix": "eslint --fix ."
   },
   "dependencies": {
-    "@iconify-json/lucide": "1.2.97",
     "@cplane/ui-shared": "workspace:*",
+    "@iconify-json/lucide": "1.2.97",
     "@nuxt/image": "2.0.0",
-    "@nuxt/test-utils": "^4.0.0",
-    "@nuxt/ui": "^4.5.1",
+    "@nuxt/ui": "^4.8.0",
     "@pinia/nuxt": "^0.11.2",
-    "@polar-sh/nuxt": "^0.5.5",
-    "@polar-sh/sdk": "^0.46.3",
-    "better-auth": "^1.5.5",
+    "@polar-sh/nuxt": "^0.5.7",
+    "@polar-sh/sdk": "^0.46.7",
+    "@vue-flow/background": "^1.3.2",
+    "@vue-flow/controls": "^1.1.3",
+    "@vue-flow/core": "^1.48.2",
+    "@vue-flow/node-toolbar": "^1.1.1",
+    "better-auth": "^1.6.11",
     "drizzle-orm": "^0.45.1",
     "nuxt": "4.4.2",
     "pinia": "^3.0.3",
-    "postgres": "^3.4.8",
+    "postgres": "^3.4.9",
     "qrcode": "^1.5.4",
     "redis": "5.11.0",
     "resend": "6.9.3",
-    "shaders": "^2.4.77",
-    "tailwind-merge": "^3.5.0",
-    "uuidv7": "^1.1.0",
+    "shaders": "^2.5.127",
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss": "^4.3.0",
+    "uuidv7": "^1.2.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -39,7 +43,7 @@
     "@nuxt/eslint": "1.15.2",
     "drizzle-kit": "0.31.9",
     "eslint": "^10.0.3",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.3"
   },
   "overrides": {
     "vue": "latest"

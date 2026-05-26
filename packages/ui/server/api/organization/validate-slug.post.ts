@@ -1,5 +1,6 @@
 import { organization } from "~~/server/schema";
 import { eq } from "drizzle-orm";
+import { getIdentityDb } from "~~/server/utils/db";
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ slug: string }>(event);
@@ -13,7 +14,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const org = await db.query.organization.findFirst({
+  const org = await getIdentityDb().query.organization.findFirst({
     where: eq(organization.slug, body.slug),
   });
 

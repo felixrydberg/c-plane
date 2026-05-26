@@ -1,11 +1,12 @@
 
 import { active_organization, organization, organization_member } from "~~/server/schema";
 import { eq } from "drizzle-orm";
+import { getIdentityDb } from "~~/server/utils/db";
 
 export default defineEventHandler(async (event) => {
   const session = await requireSession(event);
 
-  const activeOrganization = await db.select({
+  const activeOrganization = await getIdentityDb().select({
     id: organization.id,
     name: organization.name,
     slug: organization.slug,
@@ -20,9 +21,6 @@ export default defineEventHandler(async (event) => {
     .innerJoin(organization, eq(organization.id, active_organization.organization_id))
     .where(eq(organization_member.user_id, session.user.id))
     .limit(1);
-
-  console.log("Session user ID:", session.user.id);
-  console.log("Active organization for user:", activeOrganization[0], session.user.id);
 
   if (!activeOrganization || activeOrganization.length === 0) {
     throw createError({
