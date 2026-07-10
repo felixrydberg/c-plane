@@ -27,8 +27,6 @@ fn reqwest_client() -> &'static Client {
 #[derive(Clone, Debug)]
 pub struct RequestAuthContext {
     pub actor_id: Uuid,
-    pub api_key_id: Option<Uuid>,
-    pub scopes: Vec<String>,
 }
 
 pub struct AuthContext {
@@ -76,8 +74,6 @@ where
                 },
                 RequestAuthContext {
                     actor_id: api_key.id,
-                    api_key_id: Some(api_key.id),
-                    scopes: api_key.scopes,
                 },
             )
         } else {
@@ -102,8 +98,6 @@ where
                 },
                 RequestAuthContext {
                     actor_id,
-                    api_key_id: None,
-                    scopes: vec![],
                 },
             )
         };

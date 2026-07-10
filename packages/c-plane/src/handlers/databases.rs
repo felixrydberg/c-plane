@@ -30,6 +30,24 @@ pub struct ListDatabasesQuery {
 #[derive(Deserialize, ToSchema)]
 pub struct UpdateDatabaseRequest {
     pub name: Option<String>,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct CreateDatabaseBranchRequest {
+    pub branch_id: Uuid,
+    pub cpu: Option<String>,
+    pub ram: Option<String>,
+    #[serde(default)]
+    pub high_availability: Option<bool>,
+    pub read_replicas: Option<i32>,
+    #[serde(default)]
+    pub autoscaling_enabled: Option<bool>,
+    pub autoscaling_min_cpu: Option<String>,
+    pub autoscaling_max_cpu: Option<String>,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct UpdateDatabaseBranchRequest {
     pub cpu: Option<String>,
     pub ram: Option<String>,
     pub high_availability: Option<bool>,
@@ -39,24 +57,12 @@ pub struct UpdateDatabaseRequest {
     pub autoscaling_max_cpu: Option<String>,
 }
 
-#[derive(Deserialize, ToSchema)]
-pub struct CreateDatabaseBranchRequest {
-    pub branch_id: Uuid,
-}
-
 #[derive(Serialize, ToSchema)]
 pub struct DatabaseBranchResponse {
     pub id: Uuid,
     pub database_id: Uuid,
     pub branch_id: Uuid,
     pub organization_id: Uuid,
-}
-
-#[derive(Serialize, ToSchema)]
-pub struct DatabaseResponse {
-    pub id: Uuid,
-    pub project_id: Uuid,
-    pub name: String,
     pub cpu: Option<String>,
     pub ram: Option<String>,
     pub high_availability: bool,
@@ -64,6 +70,13 @@ pub struct DatabaseResponse {
     pub autoscaling_enabled: bool,
     pub autoscaling_min_cpu: Option<String>,
     pub autoscaling_max_cpu: Option<String>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct DatabaseResponse {
+    pub id: Uuid,
+    pub project_id: Uuid,
+    pub name: String,
     pub default_branch_id: Option<Uuid>,
 }
 

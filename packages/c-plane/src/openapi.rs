@@ -1,5 +1,4 @@
 use utoipa::OpenApi;
-use utoipa::openapi::Info;
 
 #[derive(OpenApi)]
 #[openapi(

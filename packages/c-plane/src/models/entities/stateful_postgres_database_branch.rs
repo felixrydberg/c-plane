@@ -9,6 +9,13 @@ pub struct Model {
     pub database_id: Uuid,
     pub branch_id: Uuid,
     pub organization_id: Uuid,
+    pub cpu: Option<String>,
+    pub ram: Option<String>,
+    pub high_availability: bool,
+    pub read_replicas: Option<i32>,
+    pub autoscaling_enabled: bool,
+    pub autoscaling_min_cpu: Option<String>,
+    pub autoscaling_max_cpu: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

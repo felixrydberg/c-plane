@@ -13,7 +13,8 @@ use crate::models::entities::{
 use crate::services::revisions;
 use crate::models::pins::TimelinePins;
 use crate::middleware::auth::AuthContext;
-use crate::state::TenantDatabase;
+use super::databases::verify_org_access;
+use super::projects::default_true;
 
 #[derive(Deserialize, ToSchema)]
 pub struct CreateContainerRequest {
@@ -34,7 +35,6 @@ pub struct CreateContainerRequest {
 }
 
 fn default_replica_count() -> i32 { 1 }
-fn default_true() -> bool { true }
 
 #[derive(Deserialize, ToSchema)]
 pub struct UpdateContainerRequest {
@@ -89,12 +89,8 @@ pub struct ContainerVersionResponse {
     pub created_at: String,
 }
 
-fn verify_org_access(tenant_db: &TenantDatabase, org_id: Uuid) -> Result<(), AppError> {
-    if !tenant_db.context.allowed_organizations.contains(&org_id) {
-        return Err(AppError::Forbidden("You do not have access to this organization".into()));
-    }
-    Ok(())
-}
+
+
 
 fn resolve_latest_version(version: &container_version::Model) -> ContainerVersionResponse {
     ContainerVersionResponse {

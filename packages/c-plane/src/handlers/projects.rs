@@ -13,7 +13,7 @@ use crate::models::entities::{
 };
 use crate::models::pins::TimelinePins;
 use crate::middleware::auth::AuthContext;
-use crate::state::TenantDatabase;
+use super::databases::verify_org_access;
 use crate::services::agent;
 use crate::utils::pagination::{PaginatedResponse, PaginationQuery};
 
@@ -30,7 +30,7 @@ pub struct CreateBranchRequest {
     pub auto_branch_databases: bool,
 }
 
-fn default_true() -> bool {
+pub fn default_true() -> bool {
     true
 }
 
@@ -86,12 +86,8 @@ pub struct ListTimelinesQuery {
     pub branch_id: Option<Uuid>,
 }
 
-fn verify_org_access(tenant_db: &TenantDatabase, org_id: Uuid) -> Result<(), AppError> {
-    if !tenant_db.context.allowed_organizations.contains(&org_id) {
-        return Err(AppError::Forbidden("You do not have access to this organization".into()));
-    }
-    Ok(())
-}
+
+
 
 async fn branch_databases_for_project(
     tx: &impl sea_orm::ConnectionTrait,

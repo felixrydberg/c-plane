@@ -1,16 +1,10 @@
 pub mod config;
 pub mod database;
-pub mod external;
-pub mod organisation;
 pub mod project;
-pub mod user;
 
 pub use config::ConfigError;
 pub use database::DatabaseError;
-pub use external::ExternalError;
-pub use organisation::OrganisationError;
 pub use project::ProjectError;
-pub use user::UserError;
 
 use axum::{Json, http::StatusCode, response::IntoResponse};
 use serde::Serialize;
@@ -20,11 +14,8 @@ use tracing;
 #[derive(Debug)]
 pub enum AppError {
     Project(ProjectError),
-    User(UserError),
-    Organisation(OrganisationError),
 
     Database(DatabaseError),
-    External(ExternalError),
 
     Config(ConfigError),
 
@@ -71,10 +62,7 @@ impl fmt::Display for AppError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AppError::Project(err) => write!(f, "Project error: {}", err),
-            AppError::User(err) => write!(f, "User error: {}", err),
-            AppError::Organisation(err) => write!(f, "Organisation error: {}", err),
             AppError::Database(err) => write!(f, "Database error: {}", err),
-            AppError::External(err) => write!(f, "External error: {}", err),
             AppError::Config(err) => write!(f, "Config error: {}", err),
             AppError::Unauthorized(msg) => write!(f, "Unauthorized: {}", msg),
             AppError::Forbidden(msg) => write!(f, "Forbidden: {}", msg),
@@ -93,7 +81,7 @@ impl IntoResponse for AppError {
         tracing::error!("Request error: {}", error_msg);
 
         let (status, body) = match self {
-            AppError::Project(_) | AppError::User(_) | AppError::Organisation(_) => (
+            AppError::Project(_) => (
                 StatusCode::BAD_REQUEST,
                 ErrorResponse {
                     error: "validation_error".to_string(),
@@ -101,7 +89,7 @@ impl IntoResponse for AppError {
                     details: None,
                 },
             ),
-            AppError::Database(_) | AppError::External(_) | AppError::Internal(_) => (
+            AppError::Database(_) | AppError::Internal(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 ErrorResponse {
                     error: "internal_error".to_string(),
