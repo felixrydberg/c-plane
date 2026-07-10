@@ -12,10 +12,6 @@ if (!store.organization?.id) {
   throw createError('Organization not found in store')
 }
 
-useHead({
-  title: 'Settings - C-Plane',
-});
-
 const settingsSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
 })
@@ -171,7 +167,7 @@ const onDeleteOrgSubmit = async () => {
                 label="I understand that this action is permanent and irreversible"
               />
             </UFormField>
-            <div class="flex gap-2 justify-end">
+            <div class="flex justify-end gap-3 pt-2">
               <UButton variant="ghost" color="neutral" type="button" @click="deleteOrgModal = false">Cancel</UButton>
               <UButton color="error" type="submit" :disabled="!deleteOrgState.confirmation">Delete Organization</UButton>
             </div>

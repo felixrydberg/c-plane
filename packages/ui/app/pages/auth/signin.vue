@@ -4,6 +4,7 @@ import type { FormSubmitEvent } from '@nuxt/ui'
 import useStore from '~/stores/store'
 import { createAuthError, createClient } from '~/utils/auth'
 import { passwordSchema } from '~/utils/validation'
+import { getQueryValue, useAuthSwitchQuery } from '~/utils/query'
 
 const store = useStore();
 const router = useRouter();
@@ -26,40 +27,12 @@ const state = reactive({
   password: ''
 });
 
-const getQueryValue = (value: unknown): string | undefined => {
-  if (Array.isArray(value)) {
-    return typeof value[0] === 'string' ? value[0] : undefined;
-  }
-
-  return typeof value === 'string' ? value : undefined;
-};
-
 const emailFromQuery = getQueryValue(route.query.email);
 if (emailFromQuery) {
   state.email = emailFromQuery;
 }
 
-const authSwitchQuery = computed(() => {
-  const params = new URLSearchParams();
-  const email = getQueryValue(route.query.email);
-  const redirect = getQueryValue(route.query.redirect);
-  const redirectTo = getQueryValue(route.query.redirectTo);
-
-  if (email) {
-    params.set('email', email);
-  }
-
-  if (redirect) {
-    params.set('redirect', redirect);
-  }
-
-  if (redirectTo) {
-    params.set('redirectTo', redirectTo);
-  }
-
-  const query = params.toString();
-  return query.length > 0 ? `?${query}` : '';
-});
+const authSwitchQuery = useAuthSwitchQuery();
 const passwordError = ref<string>();
 
 const resetPasswordSchema = z.object({
@@ -422,8 +395,8 @@ const TOTPForm = useTemplateRef("TOTPForm");
               />
             </UFormField>
   
-            <div class="flex justify-end gap-2">
-              <UButton type="button" variant="soft" :disabled="resetLoading" @click="resetModalOpen = false">
+            <div class="flex justify-end gap-3 pt-2">
+              <UButton type="button" variant="ghost" color="neutral" :disabled="resetLoading" @click="resetModalOpen = false">
                 Cancel
               </UButton>
               <UButton type="submit" :loading="resetLoading">

@@ -3,10 +3,6 @@ import { ICONS } from '~/utils/icons'
 
 const store = useStore();
 
-useHead({
-  title: `${store.organization?.name || 'Organization'} - C-Plane`,
-});
-
 const selectedProject = computed(() => store.project);
 const showOnboarding = computed(() => store.projects.length === 0);
 </script>
@@ -14,13 +10,7 @@ const showOnboarding = computed(() => store.projects.length === 0);
 <template>
   <DashboardProjectsOnboarding v-if="showOnboarding" />
 
-  <template v-else-if="!selectedProject">
-    <div class="flex flex-col items-center justify-center py-24 gap-4 text-center w-full mx-auto max-w-6xl">
-      <UIcon :name="ICONS.folder" class="size-12 text-muted" />
-      <h2 class="text-lg font-medium">Select a project</h2>
-      <p class="text-muted text-sm">Choose a project from the selector above to view its overview.</p>
-    </div>
-  </template>
+  <DashboardProjectsSelectPrompt v-else-if="!selectedProject" />
 
   <div v-else class="flex flex-col gap-6 w-full mx-auto max-w-6xl">
     <div>

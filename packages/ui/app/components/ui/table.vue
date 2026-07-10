@@ -1,8 +1,9 @@
 <script setup lang="ts" generic="T extends Record<string, any>">
 import type { ContextMenuItem, TableColumn, TableRow } from '@nuxt/ui';
-import { upperFirst } from 'scule'
 import type { PropType } from 'vue';
 import { useSlots } from 'vue';
+
+const _upperFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 const props = defineProps({
   columns: {
@@ -110,7 +111,7 @@ defineExpose({
       </div>
       <UDropdownMenu
         :items="table?.tableApi?.getAllColumns().filter(column => column.getCanHide()).map(column => ({
-          label: upperFirst(column.id),
+          label: _upperFirst(column.id),
           type: 'checkbox' as const,
           checked: column.getIsVisible(),
           onUpdateChecked(checked: boolean) {

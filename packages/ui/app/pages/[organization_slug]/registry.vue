@@ -5,10 +5,6 @@ const store = useStore();
 const route = useRoute();
 
 const projectId = computed(() => route.query.project?.toString() || null);
-
-useHead({
-  title: `Registry - ${projectId.value ? store.projects.find(p => p.id === projectId.value)?.name : 'All Projects'} - C-Plane`,
-});
 </script>
 
 <template>

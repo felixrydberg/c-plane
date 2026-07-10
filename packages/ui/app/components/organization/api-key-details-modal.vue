@@ -20,9 +20,7 @@ const apiKeyStateSchema = z.object({
 
 type ApiKeyState = z.infer<typeof apiKeyStateSchema>;
 
-const { data, status, refresh } = await useFetch(
-  () => `/api/organization/${props.organizationId as ':organization_id'}/api-keys/${props.apiKeyId as ':api_key_id'}`,
-);
+const { data, status, refresh } = await useFetch(`/api/organization/${props.organizationId as ':organization_id'}/api-keys/${props.apiKeyId as ':api_key_id'}`);
 type ApiKeyDetails = NonNullable<typeof data.value>;
 
 const apiKeyDetails = computed(() => data.value as ApiKeyDetails | undefined);
@@ -180,9 +178,10 @@ const getExpiredDate = (created_at: string, expires_in: number) => {
           v-model="state.scopes"
         />
 
-        <div class="flex gap-2">
+        <div class="flex justify-end gap-3 pt-2">
           <UButton
-            variant="soft"
+            variant="ghost"
+            color="neutral"
             type="button"
             @click="open = false"
           >

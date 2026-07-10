@@ -314,7 +314,7 @@ const onDeleteAccountSubmit = async () => {
                   label="I understand that this action is permanent and irreversible"
                 />
               </UFormField>
-              <div class="flex gap-2 justify-end">
+              <div class="flex justify-end gap-3 pt-2">
                 <UButton variant="ghost" color="neutral" type="button" @click="deleteAccountModal = false">Cancel</UButton>
                 <UButton color="error" type="submit" :disabled="!deleteAccountState.confirmation">Delete My Account</UButton>
               </div>

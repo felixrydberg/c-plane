@@ -9,10 +9,6 @@ if (!store.organization?.id) {
   throw createError('Organization not found in store');
 }
 
-useHead({
-  title: 'Authentication - C-Plane',
-});
-
 const toast = useToast();
 const NuxtTime = resolveComponent("NuxtTime");
 const UIcon = resolveComponent("UIcon");
@@ -20,7 +16,7 @@ const limit = 10;
 const offset = ref(0);
 
 const { data, status, refresh } = await useFetch(
-  () => `/api/organization/${store.organization?.id as ':organization_id'}/api-keys`,
+  `/api/organization/${store.organization.id as ':organization_id'}/api-keys`,
   {
     query: {
       limit,
@@ -205,7 +201,7 @@ const onCreateKey = async () => {
           <UFormField label="Expiration" name="expires_at" description="Expiration in months (0 = never)">
             <UInput v-model="createState.expires_at" type="number" min="0" class="w-full" />
           </UFormField>
-          <div class="flex gap-2 justify-end">
+          <div class="flex justify-end gap-3 pt-2">
             <UButton variant="ghost" color="neutral" type="button" @click="createModalOpen = false">Cancel</UButton>
             <UButton type="submit">Create</UButton>
           </div>
@@ -226,7 +222,7 @@ const onCreateKey = async () => {
       <template #body>
         <div class="space-y-4">
           <p class="text-sm">Are you sure you want to delete <strong>{{ selectedKeyToDelete?.name }}</strong>?</p>
-          <div class="flex gap-2 justify-end">
+          <div class="flex justify-end gap-3 pt-2">
             <UButton variant="ghost" color="neutral" @click="deleteModalOpen = false">Cancel</UButton>
             <UButton color="error" @click="onDeleteKey">Delete</UButton>
           </div>

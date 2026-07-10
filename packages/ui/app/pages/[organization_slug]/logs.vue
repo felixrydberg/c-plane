@@ -1,9 +1,5 @@
 <script setup lang="ts">
 import { ICONS } from '~/utils/icons'
-
-useHead({
-  title: 'Logs - C-Plane',
-});
 </script>
 
 <template>

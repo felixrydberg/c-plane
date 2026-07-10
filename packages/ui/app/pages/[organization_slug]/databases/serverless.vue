@@ -2,10 +2,6 @@
 import { ICONS } from '~/utils/icons'
 
 const store = useStore();
-
-useHead({
-  title: `Serverless Databases - ${store.organization?.name || 'Organization'} - C-Plane`,
-});
 </script>
 
 <template>

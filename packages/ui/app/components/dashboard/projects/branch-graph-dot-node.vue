@@ -1,84 +1,58 @@
 <script setup lang="ts">
 import { Handle, Position } from '@vue-flow/core'
-import { NodeToolbar } from '@vue-flow/node-toolbar'
 
-const props = defineProps<{
+defineProps<{
   id: string
   data: {
     label: string
+    branchName: string
     timeline: number
     date: string
     color: string
     isHead: boolean
-    isDefault: boolean
-    branchName: string
-    branchId: string
+    branches: { id: string; name: string; isDefault: boolean; exists: boolean }[]
     branchLabels: string[]
-    onCreateBranch?: (id: string) => void
-    onRepointBranch?: (id: string) => void
-    onRemoveBranch?: (branchId: string) => void
+    isSelected?: boolean
   }
 }>()
 </script>
 
 <template>
-  <div class="relative size-5 group">
-    <NodeToolbar :position="Position.Top" :offset="12">
-      <div
-        class="flex gap-0.5 bg-elevated border border-default rounded-lg shadow-lg p-0.5"
-        @click.stop
-      >
-        <UButton
-          size="xs"
-          icon="i-heroicons:folder-plus"
-          @click.stop="data.onCreateBranch?.(id)"
-        >
-          Branch
-        </UButton>
-        <UButton
-          size="xs"
-          icon="i-heroicons:arrow-uturn-left"
-          @click.stop="data.onRepointBranch?.(id)"
-        >
-          Repoint
-        </UButton>
-        <UButton
-          v-if="data.isHead && !data.isDefault"
-          size="xs"
-          icon="i-heroicons:trash"
-          color="error"
-          @click.stop="data.onRemoveBranch?.(data.branchId)"
-        >
-          Remove
-        </UButton>
-      </div>
-    </NodeToolbar>
-    <Handle type="target" :position="Position.Bottom" class="bg-transparent! border-0!" />
-
-    <div class="absolute inset-0 flex items-center justify-center">
-      <div
-        v-if="data.isHead"
-        class="absolute size-4 rounded-full opacity-15"
-        :style="{ backgroundColor: data.color }"
-      />
-      <div
-        class="rounded-full cursor-pointer transition-all duration-200 hover:scale-125"
-        :class="[
-          data.isHead ? 'size-3' : 'size-2 opacity-35 hover:opacity-60'
-        ]"
-        :style="{ backgroundColor: data.color }"
-      />
-    </div>
-
-    <Handle type="source" :position="Position.Top" class="bg-transparent! border-0!" />
-
+  <div
+    class="relative cursor-pointer"
+    :class="{ 'z-10': data.isSelected }"
+  >
     <div
-      v-if="data.branchLabels.length > 0"
-      class="absolute left-full top-1/2 -translate-y-1/2 flex items-center gap-1.5 ml-2"
+      class="relative border border-dashed rounded-full flex flex-row items-center whitespace-nowrap transition-all hover:shadow-md overflow-visible"
+      :class="[
+        data.branchLabels.length > 0 ? '' : 'border-default',
+        data.isSelected ? 'ring-2 ring-primary ring-offset-2 ring-offset-default z-10' : '',
+      ]"
+      :style="data.branchLabels.length > 0 ? { borderColor: data.color } : {}"
     >
-      <span class="text-[11px] leading-none text-muted whitespace-nowrap capitalize">
-        {{ data.branchLabels.join(', ') }}
+      <Handle type="target" :position="Position.Left" class="bg-transparent! border-0!" />
+
+      <!-- Dot + revision label -->
+      <span class="pl-2.5 pr-2 py-1 text-xs text-muted flex items-center gap-1.5">
+        <div
+          class="rounded-full flex-shrink-0"
+          :class="[data.branchLabels.length > 0 ? 'size-2.5' : 'size-2', data.branchLabels.length === 0 ? 'bg-muted' : '']"
+          :style="data.branchLabels.length > 0 ? { backgroundColor: data.color } : {}"
+        />
+        {{ data.label }}
       </span>
+
+      <!-- Branch tag (optional) -->
+      <span
+        v-if="data.branchLabels.length > 0"
+        class="border-l border-dashed pl-2 pr-2.5 py-1 text-xs font-medium"
+        :style="{ borderColor: data.color, color: data.color, backgroundColor: data.color + '15' }"
+      >
+        {{ data.branchLabels[0] }}
+        <span v-if="data.branchLabels.length > 1" class="opacity-50 ml-0.5">+{{ data.branchLabels.length - 1 }}</span>
+      </span>
+
+      <Handle type="source" :position="Position.Right" class="bg-transparent! border-0!" />
     </div>
   </div>
 </template>

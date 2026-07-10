@@ -8,7 +8,7 @@ const open = defineModel<boolean>('open', { required: true });
 const props = defineProps<{
   parentTimelineId?: string;
 }>();
-const emit = defineEmits<{ created: [] }>();
+const emit = defineEmits<{ created: [{ id: string; name: string; timeline: string; is_default: boolean }] }>();
 
 interface TimelineRevision {
   id: string
@@ -26,7 +26,6 @@ const timelines = ref<TimelineRevision[]>([]);
 const timelinesLoading = ref(false);
 const selectedTimelineId = ref<string>('');
 const isDropdownOpen = ref(false);
-const viewerModalOpen = ref(false);
 const autoBranchDatabases = ref(true);
 
 const selectedTimelineLabel = computed(() => {
@@ -95,7 +94,7 @@ async function handleCreate() {
       body.parent_timeline_id = selectedTimelineId.value;
     }
 
-    await $fetch(
+    const created = await $fetch<{ id: string; name: string; timeline: string; is_default: boolean }>(
       `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/branches`,
       { method: 'POST', body }
     );
@@ -104,7 +103,7 @@ async function handleCreate() {
     name.value = '';
     selectedTimelineId.value = '';
     open.value = false;
-    emit('created');
+    emit('created', created);
   } catch (e: unknown) {
     error.value = (e as { data?: { message?: string } })?.data?.message || (e as { message?: string })?.message || 'Failed to create branch';
   } finally {
@@ -127,35 +126,25 @@ async function handleCreate() {
             />
           </UFormField>
 
-          <UFormField label="Based on">
-            <div class="flex gap-2">
-              <UDropdownMenu
-                :items="timelineMenuItems"
-                :content="{ align: 'center', collisionPadding: 12 }"
-                :ui="{ content: 'w-(--reka-dropdown-menu-trigger-width)' }"
-                @open="isDropdownOpen = true"
-                @close="isDropdownOpen = false"
-              >
-                <UButton
-                  :label="selectedTimelineLabel"
-                  trailing-icon="i-lucide-chevrons-up-down"
-                  color="neutral"
-                  variant="soft"
-                  block
-                  :disabled="loading || timelinesLoading"
-                  class="data-[state=open]:bg-elevated flex-1"
-                  :ui="{ trailingIcon: 'text-dimmed' }"
-                />
-              </UDropdownMenu>
+          <UFormField v-if="!parentTimelineId" label="Based on">
+            <UDropdownMenu
+              :items="timelineMenuItems"
+              :content="{ align: 'center', collisionPadding: 12 }"
+              :ui="{ content: 'w-(--reka-dropdown-menu-trigger-width)' }"
+              @open="isDropdownOpen = true"
+              @close="isDropdownOpen = false"
+            >
               <UButton
-                v-if="selectedTimelineId"
-                icon="i-heroicons:eye"
-                variant="ghost"
+                :label="selectedTimelineLabel"
+                trailing-icon="i-lucide-chevrons-up-down"
                 color="neutral"
-                :disabled="loading"
-                @click="viewerModalOpen = true"
+                variant="soft"
+                block
+                :disabled="loading || timelinesLoading"
+                class="data-[state=open]:bg-elevated flex-1"
+                :ui="{ trailingIcon: 'text-dimmed' }"
               />
-            </div>
+            </UDropdownMenu>
           </UFormField>
 
           <UCheckbox
@@ -178,12 +167,4 @@ async function handleCreate() {
         </form>
       </template>
     </UModal>
-
-  <DashboardProjectsTimelineViewerModal
-    v-if="store.organization && store.project"
-    v-model:open="viewerModalOpen"
-    :organization-id="store.organization.id"
-    :project-id="store.project.id"
-    :timeline-id="selectedTimelineId"
-  />
 </template>

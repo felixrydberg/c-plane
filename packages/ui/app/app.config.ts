@@ -23,20 +23,10 @@ export default defineAppConfig({
         variant: 'soft',
       }
     },
-    buttton: {
-      defaultVariants: {
-        variant: 'soft',
-      }
-    },
     theme: {
       colors: [
         "sepia"
       ]
-    },
-    dashboardPanel: {
-      slots: {
-        body: 'flex flex-col gap-4 sm:gap-6 flex-1 overflow-y-visible p-3 sm:p-3',
-      }
     },
   },
 })

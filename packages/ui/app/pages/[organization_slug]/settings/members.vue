@@ -9,10 +9,6 @@ if (!store.organization?.id) {
   throw createError('Organization not found in store');
 }
 
-useHead({
-  title: 'Members - C-Plane',
-});
-
 const toast = useToast();
 const NuxtTime = resolveComponent("NuxtTime");
 const limit = 10;
@@ -188,7 +184,7 @@ const onAddMember = async () => {
           <UFormField label="Email" name="email">
             <UInput v-model="addMemberState.email" type="email" placeholder="Enter member email" class="w-full" />
           </UFormField>
-          <div class="flex gap-2 justify-end">
+          <div class="flex justify-end gap-3 pt-2">
             <UButton type="button" variant="ghost" color="neutral" @click="addModalOpen = false">Cancel</UButton>
             <UButton type="submit">Add Member</UButton>
           </div>
@@ -202,7 +198,7 @@ const onAddMember = async () => {
           <p class="text-sm">
             Are you sure you want to remove <strong>{{ selectedMemberToDelete?.user.name }}</strong> ({{ selectedMemberToDelete?.user.email }}) from the organization?
           </p>
-          <div class="flex gap-2 justify-end">
+          <div class="flex justify-end gap-3 pt-2">
             <UButton variant="ghost" color="neutral" @click="deleteModalOpen = false">Cancel</UButton>
             <UButton color="error" @click="onDeleteMember">Remove</UButton>
           </div>

@@ -21,6 +21,10 @@ type State = {
   projects: Project[]
   branch: Branch | null
   branches: Branch[]
+  // ponytail: change counter watched by resource pages.
+  // Bump when a repoint/delete invalidates cached lists.
+  // Incremented instead of keyed to avoid coupling to specific fetch shapes.
+  refreshKey: number
 }
 
 export const useStore = defineStore("auth", {
@@ -33,6 +37,7 @@ export const useStore = defineStore("auth", {
     projects: [],
     branch: null,
     branches: [],
+    refreshKey: 0,
   }),
 
   actions: {}

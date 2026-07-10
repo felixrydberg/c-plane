@@ -11,7 +11,7 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   if (isPublicPage) {
     if (to.path.startsWith("/auth")) {
       if (store.session || store.user) {
-        const redirectPath = store.organization?.slug ? `/${store.organization.slug}` : '/onboarding';
+        const redirectPath = store.organization?.slug ? `/${store.organization.slug}` : '/organization/create';
 
         if (to.path === from.path) {
           return navigateTo(redirectPath);

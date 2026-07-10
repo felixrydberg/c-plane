@@ -1,0 +1,86 @@
+<script setup lang="ts">
+import { ICONS } from '~/utils/icons'
+
+interface DatabaseRow {
+  id: string
+  project_id: string
+  name: string
+  default_branch_id: string | null
+}
+
+const store = useStore()
+const route = useRoute()
+const toast = useToast()
+const orgId = computed(() => store.organization?.id ?? '')
+const projectId = computed(() => route.params.project_id?.toString() || null)
+const projectName = computed(() => store.projects.find(p => p.id === projectId.value)?.name ?? projectId.value ?? '')
+
+const databases = ref<DatabaseRow[]>([])
+const status = ref<'pending' | 'success' | 'error' | 'idle'>('pending')
+
+async function fetchAll() {
+  if (!orgId.value || !projectId.value) return
+  status.value = 'pending'
+  try {
+    databases.value = await $fetch<DatabaseRow[]>(
+      `/api/backend/organization/${orgId.value}/databases/stateful`,
+      { query: { project_id: projectId.value } }
+    )
+    status.value = databases.value.length > 0 ? 'success' : 'idle'
+  } catch {
+    status.value = 'error'
+    toast.add({ title: 'Failed to load databases', color: 'error' })
+  }
+}
+
+onMounted(() => { fetchAll() })
+
+function onDatabaseDeleted() {
+  fetchAll()
+}
+
+watch(() => store.refreshKey, () => { fetchAll() })
+</script>
+
+<template>
+  <div class="flex flex-col gap-6 w-full mx-auto max-w-6xl">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div class="min-w-0">
+        <p class="mb-2 truncate text-sm text-muted">{{ projectName }}</p>
+        <h1 class="text-2xl font-semibold">Stateful Databases</h1>
+        <p class="mt-1 text-sm text-muted">Postgres databases available in this project.</p>
+      </div>
+      <UButton class="shrink-0" :icon="ICONS.plus" :to="`/${route.params.organization_slug}/databases/stateful/${projectId}/new`">New Database</UButton>
+    </div>
+
+    <div v-if="status === 'pending'" class="text-center py-8">
+      <UIcon name="i-lucide-loader-circle" class="size-5 text-muted animate-spin" />
+    </div>
+
+    <div
+      v-else-if="status === 'idle'"
+      class="flex flex-col items-center justify-center gap-2 px-6 py-16 text-center rounded-lg border border-dashed border-default"
+    >
+      <p class="text-sm font-medium">No databases in this project</p>
+      <p class="text-sm text-muted">Create a database to get started.</p>
+    </div>
+
+    <p v-else-if="status === 'error'" class="text-sm text-red-500 py-8 text-center">
+      Failed to load databases.
+    </p>
+
+    <DeploymentsDatabasesDatabaseSection
+      v-for="db in databases"
+      v-else
+      :key="db.id"
+      :organization-id="orgId"
+      :database-id="db.id"
+      :database-name="db.name"
+      :project-id="db.project_id"
+      :project-name="projectName"
+      :default-branch-id="db.default_branch_id"
+      @deleted="onDatabaseDeleted"
+    />
+
+  </div>
+</template>

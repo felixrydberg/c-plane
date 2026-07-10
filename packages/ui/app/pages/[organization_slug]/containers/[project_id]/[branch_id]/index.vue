@@ -16,19 +16,24 @@ const store = useStore()
 const route = useRoute()
 const projectId = computed(() => route.params.project_id?.toString() || null)
 const branchId = computed(() => route.params.branch_id?.toString() || null)
-const createModalOpen = ref(false)
 
-const projectName = computed(() => {
-  return store.projects.find(p => p.id === projectId.value)?.name ?? projectId.value ?? ''
-})
+type BranchItem = { id: string; name: string; timeline: string; is_default: boolean }
+
+const orgId = computed(() => store.organization?.id)
+
+const projectName = computed(() =>
+  store.projects.find(p => p.id === projectId.value)?.name ?? projectId.value ?? ''
+)
+
+const { data: branchList } = await useFetch<BranchItem[]>(
+  () => orgId.value && projectId.value ? `/api/backend/organization/${orgId.value}/projects/${projectId.value}/branches` : '',
+  { immediate: computed(() => !!(orgId.value && projectId.value)) },
+)
 
 const branchName = computed(() => {
   if (!branchId.value) return 'default'
-  return store.branches.find(b => b.id === branchId.value)?.name ?? branchId.value
-})
-
-useHead({
-  title: `Containers - ${projectName.value}/${branchName.value} - C-Plane`,
+  const list = branchList.value ?? store.branches
+  return list.find(b => b.id === branchId.value)?.name ?? branchId.value
 })
 
 const fetchUrl = computed(() => {
@@ -40,10 +45,11 @@ const fetchUrl = computed(() => {
 const { data, status, refresh: refreshData } = await useLazyFetch<Container[]>(
   fetchUrl,
   {
-    query: computed(() => ({
-      project_id: projectId.value,
-      branch_id: branchId.value,
-    })),
+    key: 'project-resources',
+    query: {
+      project_id: projectId,
+      branch_id: branchId,
+    },
     immediate: computed(() => !!(store.organization?.id && projectId.value && branchId.value)),
   },
 )
@@ -57,18 +63,19 @@ const containers = computed<ContainerWithProject[]>(() => {
 })
 
 function refresh() { refreshData() }
+
+watch(() => store.refreshKey, () => { refreshData() })
 </script>
 
 <template>
   <div class="flex flex-col gap-6 w-full mx-auto max-w-6xl">
-    <div class="flex items-center justify-between">
-      <div>
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div class="min-w-0">
+        <p class="mb-2 truncate text-sm text-muted">{{ projectName }} <span class="mx-1 text-default/30">/</span> {{ branchName }}</p>
         <h1 class="text-2xl font-semibold">Containers</h1>
-        <p class="text-muted text-sm mt-1">
-          Manage container deployments for {{ projectName }} / {{ branchName }}.
-        </p>
+        <p class="mt-1 text-sm text-muted">Services deployed to this branch.</p>
       </div>
-      <UButton :icon="ICONS.plus" @click="createModalOpen = true">New Container</UButton>
+      <UButton class="shrink-0" :icon="ICONS.plus" :to="`/${route.params.organization_slug}/containers/${projectId}/${branchId}/new`">New Container</UButton>
     </div>
 
     <DeploymentsContainersListing
@@ -81,10 +88,5 @@ function refresh() { refreshData() }
       @refresh="refresh"
     />
 
-    <DeploymentsContainersCreateModal
-      v-model:open="createModalOpen"
-      :organization-id="store.organization?.id ?? ''"
-      @created="refresh"
-    />
   </div>
 </template>
