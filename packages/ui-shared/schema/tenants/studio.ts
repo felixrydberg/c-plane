@@ -1,4 +1,4 @@
-import { relations, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   text,
@@ -90,21 +90,3 @@ export const twoFactor = pgTable(
   ],
 );
 
-export const userRelations = relations(user, ({ many }) => ({
-  accounts: many(account),
-  twoFactors: many(twoFactor),
-}));
-
-export const accountRelations = relations(account, ({ one }) => ({
-  user: one(user, {
-    fields: [account.userId],
-    references: [user.id],
-  }),
-}));
-
-export const twoFactorRelations = relations(twoFactor, ({ one }) => ({
-  user: one(user, {
-    fields: [twoFactor.userId],
-    references: [user.id],
-  }),
-}));

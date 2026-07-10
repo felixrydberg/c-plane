@@ -27,22 +27,3 @@ export const region = pgTable("regions", {
     using: sql`true`,
   }),
 ]).enableRLS();
-
-export const region_capability = pgEnum("region_capability", ["nvme", "gpu", "arm", "x86"]);
-export const region_capabilities = pgTable("region_capabilities", {
-  id: uuid("id").primaryKey(),
-  region_id: uuid("region_id")
-    .notNull()
-    .references(() => region.id, { onDelete: "cascade" }),
-  capability: region_capability("capability").notNull(),
-  created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
-}, (table) => [
-  uniqueIndex("region_capabilities_region_id_capability_uidx").on(table.region_id, table.capability),
-  index("region_capabilities_capability_idx").on(table.capability),
-  pgPolicy("region_capabilities_tenant_select_rls", {
-    as: "permissive",
-    for: "select",
-    to: app_tenant,
-    using: sql`true`,
-  }),
-]).enableRLS();

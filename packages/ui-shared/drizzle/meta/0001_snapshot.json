@@ -1,6 +1,6 @@
 {
-  "id": "deed9465-8885-4fd3-9f17-d2d1a5718cda",
-  "prevId": "5b6f0139-7070-48b3-94c8-70bf15453a75",
+  "id": "5a81c2d0-b41f-414b-bf73-2be143472c13",
+  "prevId": "a26d4d07-aa5f-4045-a9df-b10e4814660a",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1843,25 +1843,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
-        },
-        "autoscaling_enabled": {
-          "name": "autoscaling_enabled",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "autoscaling_min_cpu": {
-          "name": "autoscaling_min_cpu",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "autoscaling_max_cpu": {
-          "name": "autoscaling_max_cpu",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -1981,6 +1962,50 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "cpu": {
+          "name": "cpu",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ram": {
+          "name": "ram",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "high_availability": {
+          "name": "high_availability",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "read_replicas": {
+          "name": "read_replicas",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "autoscaling_enabled": {
+          "name": "autoscaling_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "autoscaling_min_cpu": {
+          "name": "autoscaling_min_cpu",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "autoscaling_max_cpu": {
+          "name": "autoscaling_max_cpu",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -2121,25 +2146,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
-        },
-        "autoscaling_enabled": {
-          "name": "autoscaling_enabled",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "autoscaling_min_cpu": {
-          "name": "autoscaling_min_cpu",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "autoscaling_max_cpu": {
-          "name": "autoscaling_max_cpu",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -2259,6 +2265,50 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "cpu": {
+          "name": "cpu",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ram": {
+          "name": "ram",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "high_availability": {
+          "name": "high_availability",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "read_replicas": {
+          "name": "read_replicas",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "autoscaling_enabled": {
+          "name": "autoscaling_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "autoscaling_min_cpu": {
+          "name": "autoscaling_min_cpu",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "autoscaling_max_cpu": {
+          "name": "autoscaling_max_cpu",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -2565,6 +2615,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "env_secret_refs": {
+          "name": "env_secret_refs",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "resources": {
           "name": "resources",
           "type": "jsonb",
@@ -2699,8 +2755,8 @@
           "primaryKey": true,
           "notNull": true
         },
-        "branch_id": {
-          "name": "branch_id",
+        "project_id": {
+          "name": "project_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -2716,6 +2772,12 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -2733,11 +2795,11 @@
         }
       },
       "indexes": {
-        "project_secret_branch_id_name_uidx": {
-          "name": "project_secret_branch_id_name_uidx",
+        "project_secret_project_id_name_uidx": {
+          "name": "project_secret_project_id_name_uidx",
           "columns": [
             {
-              "expression": "branch_id",
+              "expression": "project_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2754,11 +2816,11 @@
           "method": "btree",
           "concurrently": false
         },
-        "project_secret_branch_id_idx": {
-          "name": "project_secret_branch_id_idx",
+        "project_secret_project_id_idx": {
+          "name": "project_secret_project_id_idx",
           "columns": [
             {
-              "expression": "branch_id",
+              "expression": "project_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2786,13 +2848,13 @@
         }
       },
       "foreignKeys": {
-        "project_secret_branch_id_project_branch_id_fk": {
-          "name": "project_secret_branch_id_project_branch_id_fk",
+        "project_secret_project_id_project_id_fk": {
+          "name": "project_secret_project_id_project_id_fk",
           "tableFrom": "project_secret",
           "columnsFrom": [
-            "branch_id"
+            "project_id"
           ],
-          "tableTo": "project_branch",
+          "tableTo": "project",
           "columnsTo": [
             "id"
           ],

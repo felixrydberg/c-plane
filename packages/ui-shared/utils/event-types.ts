@@ -12,5 +12,3 @@ export const EVENT_TYPE_VALUES = [
   "verification:created",
   "verification:completed",
 ] as const;
-
-export type EventType = (typeof EVENT_TYPE_VALUES)[number];

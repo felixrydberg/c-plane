@@ -44,6 +44,7 @@ export const container_version = pgTable('project_container_version', {
   replica_count: integer("replica_count").notNull().default(1),
   port: integer("port"),
   env: jsonb("env"),
+  env_secret_refs: jsonb("env_secret_refs"),
   resources: jsonb("resources"),
   pull_secret_id: uuid("pull_secret_id"),
   health_check: jsonb("health_check"),

@@ -1,4 +1,4 @@
-import { relations, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   text,
@@ -92,24 +92,3 @@ export const cplane_two_factor = pgTable(
   ],
 );
 
-export const cplane_userRelations = relations(cplane_user, ({ many }) => ({
-  cplane_accounts: many(cplane_account),
-  cplane_two_factors: many(cplane_two_factor),
-}));
-
-export const cplane_accountRelations = relations(cplane_account, ({ one }) => ({
-  cplane_user: one(cplane_user, {
-    fields: [cplane_account.userId],
-    references: [cplane_user.id],
-  }),
-}));
-
-export const cplane_two_factorRelations = relations(
-  cplane_two_factor,
-  ({ one }) => ({
-    cplane_user: one(cplane_user, {
-      fields: [cplane_two_factor.userId],
-      references: [cplane_user.id],
-    }),
-  }),
-);

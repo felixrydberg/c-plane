@@ -10,7 +10,6 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { user } from "./studio";
-import { relations } from "drizzle-orm";
 import { app_tenant, orgAllowed } from "../rls";
 
 export const organization = pgTable(
@@ -139,36 +138,3 @@ export const active_organization = pgTable("active_organization", {
     withCheck: orgAllowed(table.organization_id),
   }),
 ]).enableRLS();
-
-export const organizationRelations = relations(organization, ({ many }) => ({
-  organization_members: many(organization_member),
-  organization_invitations: many(organization_invitation),
-}));
-
-export const organization_memberRelations = relations(
-  organization_member,
-  ({ one }) => ({
-    organization: one(organization, {
-      fields: [organization_member.organization_id],
-      references: [organization.id],
-    }),
-    user: one(user, {
-      fields: [organization_member.user_id],
-      references: [user.id],
-    }),
-  }),
-);
-
-export const organization_invitationRelations = relations(
-  organization_invitation,
-  ({ one }) => ({
-    organization: one(organization, {
-      fields: [organization_invitation.organization_id],
-      references: [organization.id],
-    }),
-    user: one(user, {
-      fields: [organization_invitation.inviter_id],
-      references: [user.id],
-    }),
-  }),
-);

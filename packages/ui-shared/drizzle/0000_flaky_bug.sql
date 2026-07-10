@@ -164,10 +164,7 @@ CREATE TABLE "stateful_postgres_database" (
 	"project_id" uuid NOT NULL,
 	"organization_id" uuid NOT NULL,
 	"default_branch_id" uuid,
-	"name" text NOT NULL,
-	"autoscaling_enabled" boolean DEFAULT false NOT NULL,
-	"autoscaling_min_cpu" text,
-	"autoscaling_max_cpu" text
+	"name" text NOT NULL
 );
 --> statement-breakpoint
 ALTER TABLE "stateful_postgres_database" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
@@ -175,7 +172,14 @@ CREATE TABLE "stateful_postgres_database_branch" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"database_id" uuid NOT NULL,
 	"branch_id" uuid NOT NULL,
-	"organization_id" uuid NOT NULL
+	"organization_id" uuid NOT NULL,
+	"cpu" text,
+	"ram" text,
+	"high_availability" boolean DEFAULT false NOT NULL,
+	"read_replicas" integer,
+	"autoscaling_enabled" boolean DEFAULT false NOT NULL,
+	"autoscaling_min_cpu" text,
+	"autoscaling_max_cpu" text
 );
 --> statement-breakpoint
 ALTER TABLE "stateful_postgres_database_branch" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
@@ -184,10 +188,7 @@ CREATE TABLE "serverless_postgres_database" (
 	"project_id" uuid NOT NULL,
 	"organization_id" uuid NOT NULL,
 	"default_branch_id" uuid,
-	"name" text NOT NULL,
-	"autoscaling_enabled" boolean DEFAULT false NOT NULL,
-	"autoscaling_min_cpu" text,
-	"autoscaling_max_cpu" text
+	"name" text NOT NULL
 );
 --> statement-breakpoint
 ALTER TABLE "serverless_postgres_database" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
@@ -195,7 +196,14 @@ CREATE TABLE "serverless_postgres_database_branch" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"database_id" uuid NOT NULL,
 	"branch_id" uuid NOT NULL,
-	"organization_id" uuid NOT NULL
+	"organization_id" uuid NOT NULL,
+	"cpu" text,
+	"ram" text,
+	"high_availability" boolean DEFAULT false NOT NULL,
+	"read_replicas" integer,
+	"autoscaling_enabled" boolean DEFAULT false NOT NULL,
+	"autoscaling_min_cpu" text,
+	"autoscaling_max_cpu" text
 );
 --> statement-breakpoint
 ALTER TABLE "serverless_postgres_database_branch" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
@@ -220,6 +228,7 @@ CREATE TABLE "project_container_version" (
 	"replica_count" integer DEFAULT 1 NOT NULL,
 	"port" integer,
 	"env" jsonb,
+	"env_secret_refs" jsonb,
 	"resources" jsonb,
 	"pull_secret_id" uuid,
 	"health_check" jsonb,
@@ -229,9 +238,10 @@ CREATE TABLE "project_container_version" (
 ALTER TABLE "project_container_version" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "project_secret" (
 	"id" uuid PRIMARY KEY NOT NULL,
-	"branch_id" uuid NOT NULL,
+	"project_id" uuid NOT NULL,
 	"organization_id" uuid NOT NULL,
 	"name" text NOT NULL,
+	"deleted_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -440,7 +450,7 @@ ALTER TABLE "project_container" ADD CONSTRAINT "project_container_organization_i
 ALTER TABLE "project_container" ADD CONSTRAINT "project_container_region_id_regions_id_fk" FOREIGN KEY ("region_id") REFERENCES "public"."regions"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "project_container_version" ADD CONSTRAINT "project_container_version_container_id_project_container_id_fk" FOREIGN KEY ("container_id") REFERENCES "public"."project_container"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "project_container_version" ADD CONSTRAINT "project_container_version_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "project_secret" ADD CONSTRAINT "project_secret_branch_id_project_branch_id_fk" FOREIGN KEY ("branch_id") REFERENCES "public"."project_branch"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "project_secret" ADD CONSTRAINT "project_secret_project_id_project_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."project"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "project_secret" ADD CONSTRAINT "project_secret_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "project_secret_version" ADD CONSTRAINT "project_secret_version_secret_id_project_secret_id_fk" FOREIGN KEY ("secret_id") REFERENCES "public"."project_secret"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "project_secret_version" ADD CONSTRAINT "project_secret_version_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -512,8 +522,8 @@ CREATE INDEX "project_container_project_id_idx" ON "project_container" USING btr
 CREATE UNIQUE INDEX "project_container_version_container_id_version_uidx" ON "project_container_version" USING btree ("container_id","version");--> statement-breakpoint
 CREATE INDEX "project_container_version_container_id_idx" ON "project_container_version" USING btree ("container_id");--> statement-breakpoint
 CREATE INDEX "project_container_version_organization_id_idx" ON "project_container_version" USING btree ("organization_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "project_secret_branch_id_name_uidx" ON "project_secret" USING btree ("branch_id","name");--> statement-breakpoint
-CREATE INDEX "project_secret_branch_id_idx" ON "project_secret" USING btree ("branch_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "project_secret_project_id_name_uidx" ON "project_secret" USING btree ("project_id","name");--> statement-breakpoint
+CREATE INDEX "project_secret_project_id_idx" ON "project_secret" USING btree ("project_id");--> statement-breakpoint
 CREATE INDEX "project_secret_organization_id_idx" ON "project_secret" USING btree ("organization_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "project_secret_version_secret_id_version_uidx" ON "project_secret_version" USING btree ("secret_id","version");--> statement-breakpoint
 CREATE INDEX "project_secret_version_secret_id_idx" ON "project_secret_version" USING btree ("secret_id");--> statement-breakpoint

@@ -1,10 +1,7 @@
 import { pgTable, text, uuid, timestamp, integer, jsonb, index, uniqueIndex, unique, pgPolicy, AnyPgColumn, foreignKey } from 'drizzle-orm/pg-core';
 import { organization } from '../tenants/organization';
 import { app_tenant, orgAllowed } from '../rls';
-export * from './stateful_postgres';
-export * from './serverless_postgres';
 export * from './containers';
-export * from './secrets';
 
 export const project = pgTable('project', {
   id: uuid("id").primaryKey(),

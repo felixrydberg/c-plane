@@ -1,7 +1,6 @@
 import { boolean, index, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 export const S3_PROVIDER_TYPES = ["aws_s3", "cloudflare_r2"] as const;
-export const ORGANIZATION_S3_BUCKET_STATUSES = ["active", "deleting", "error"] as const;
 export const s3_provider_type = pgEnum("s3_provider_type", S3_PROVIDER_TYPES);
 
 export const s3_provider = pgTable("s3_providers", {
