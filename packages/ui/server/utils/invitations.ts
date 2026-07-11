@@ -93,6 +93,13 @@ export const acceptInvitationAndActivateOrganization = async (
       .where(eq(organization_invitation.id, invitation.id))
       .returning();
 
+    if (!updated) {
+      throw createError({
+        statusCode: 500,
+        statusMessage: "Failed to accept invitation"
+      })
+    }
+
     await tx
       .insert(organization_member)
       .values({
@@ -118,6 +125,17 @@ export const acceptInvitationAndActivateOrganization = async (
         },
       });
 
+    await logEvent(invitation.organization_id, "organization:invitation_accepted", {
+      id: updated.id,
+      organization_id: updated.organization_id,
+      email: updated.email,
+      role: updated.role,
+      status: updated.status,
+      expires_at: updated.expires_at,
+      inviter_id: updated.inviter_id,
+      created_at: updated.created_at,
+    }, false, {}, tx);
+
     return [updated];
   });
 
@@ -127,17 +145,6 @@ export const acceptInvitationAndActivateOrganization = async (
       statusMessage: "Failed to accept invitation",
     });
   }
-
-  await logEvent(invitation.organization_id, "organization:invitation_accepted", {
-    id: updatedInvitation.id,
-    organization_id: updatedInvitation.organization_id,
-    email: updatedInvitation.email,
-    role: updatedInvitation.role,
-    status: updatedInvitation.status,
-    expires_at: updatedInvitation.expires_at,
-    inviter_id: updatedInvitation.inviter_id,
-    created_at: updatedInvitation.created_at,
-  }, false);
 
   return {
     invitation: updatedInvitation,

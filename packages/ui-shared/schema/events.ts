@@ -1,22 +1,24 @@
-import { boolean, index, json, pgEnum, pgPolicy, pgTable, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, json, pgPolicy, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { organization } from "./tenants/organization";
-import { EVENT_TYPE_VALUES } from "../utils/event-types";
+import type { EventType } from "../utils/event-types";
+export type { EventType } from "../utils/event-types";
 import { app_tenant, orgAllowed } from "./rls";
-
-export const event_types = pgEnum("event_types", EVENT_TYPE_VALUES);
 
 export const event = pgTable("event", {
   id: uuid("id").primaryKey(),
   organization_id: uuid("organization_id")
   .notNull()
   .references(() => organization.id, { onDelete: "cascade" }),
-  type: event_types("type").notNull(),
+  type: text("type").$type<EventType>().notNull(),
   payload: json("payload").notNull(),
   system: boolean("system").notNull().default(false),
+  project_id: uuid("project_id"),
+  actor_id: uuid("actor_id"),
   created_at: timestamp("created_at").notNull().defaultNow(),
 }, (table) => [
   index("event_organization_id_idx").on(table.organization_id),
   index("event_type_idx").on(table.type),
+  index("event_project_idx").on(table.project_id, table.created_at),
   pgPolicy("event_org_rls", {
     as: "permissive",
     for: "all",

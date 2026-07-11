@@ -15,6 +15,13 @@
       "when": 1779997604132,
       "tag": "0001_seed-base-data",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783782894269,
+      "tag": "0002_unify_events",
+      "breakpoints": true
     }
   ]
 }

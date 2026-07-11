@@ -1,6 +1,6 @@
 use axum::{
     Router,
-    routing::{get, patch, delete, post},
+    routing::{get, patch, post},
 };
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -8,6 +8,7 @@ use utoipa_swagger_ui::SwaggerUi;
 use crate::handlers::health::health_check;
 use crate::handlers::projects;
 use crate::handlers::containers;
+use crate::handlers::events;
 use crate::handlers::stateful_databases;
 use crate::handlers::serverless_databases;
 use crate::openapi::ApiDoc;
@@ -38,6 +39,10 @@ pub fn create_routes() -> Router {
         .route(
             "/api/organization/{organization_id}/projects/{project_id}/timelines",
             get(projects::list_project_timelines),
+        )
+        .route(
+            "/api/organization/{organization_id}/events",
+            get(events::list_events),
         )
         .route(
             "/api/organization/{organization_id}/projects/{project_id}/timelines/{timeline_id}",
@@ -79,7 +84,8 @@ pub fn create_routes() -> Router {
         )
         .route(
             "/api/organization/{organization_id}/databases/stateful/{database_id}/branches/{branch_id}",
-            delete(stateful_databases::delete_database_branch),
+            patch(stateful_databases::update_database_branch)
+            .delete(stateful_databases::delete_database_branch),
         )
         .route(
             "/api/organization/{organization_id}/databases/serverless/{database_id}/branches",
@@ -87,7 +93,8 @@ pub fn create_routes() -> Router {
         )
         .route(
             "/api/organization/{organization_id}/databases/serverless/{database_id}/branches/{branch_id}",
-            delete(serverless_databases::delete_database_branch),
+            patch(serverless_databases::update_database_branch)
+            .delete(serverless_databases::delete_database_branch),
         )
         .merge(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()))
 }

@@ -13,36 +13,34 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const result = await withTenantDb([membership.organization_id], async (tx) => {
-    const existingMember = await tx
-      .select()
-      .from(organization_member)
+  const deletedMember = await withTenantDb([membership.organization_id], async (tx) => {
+    const [deletedMember] = await tx
+      .delete(organization_member)
       .where(
         and(
           eq(organization_member.id, member_id),
           eq(organization_member.organization_id, membership.organization_id)
         )
-      );
+      )
+      .returning();
 
-    if (existingMember.length === 0) {
-      throw createError({
-        statusCode: 404,
-        statusMessage: 'Member not found',
-      });
+    if (deletedMember) {
+      await logEvent(membership.organization_id, "organization:member_removed", {
+        id: deletedMember.id,
+        organization_id: deletedMember.organization_id,
+        user_id: deletedMember.user_id,
+        role: deletedMember.role,
+        created_at: deletedMember.created_at,
+      }, false, {}, tx);
     }
 
-    await tx
-      .delete(organization_member)
-      .where(eq(organization_member.id, member_id));
-
-    return existingMember[0];
+    return deletedMember;
   });
 
-  await logEvent(membership.organization_id, "organization:member_removed", {
-    id: result.id,
-    organization_id: result.organization_id,
-    user_id: result.user_id,
-    role: result.role,
-    created_at: result.created_at,
-  }, false);
+  if (!deletedMember) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: "Member not found",
+    });
+  }
 });

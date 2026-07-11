@@ -1,4 +1,5 @@
-import { pgTable, text, uuid, timestamp, integer, jsonb, index, uniqueIndex, unique, pgPolicy, AnyPgColumn, foreignKey } from 'drizzle-orm/pg-core';
+import { pgTable, text, uuid, timestamp, integer, jsonb, index, uniqueIndex, unique, pgPolicy, foreignKey } from 'drizzle-orm/pg-core';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { organization } from '../tenants/organization';
 import { app_tenant, orgAllowed } from '../rls';
 export * from './containers';

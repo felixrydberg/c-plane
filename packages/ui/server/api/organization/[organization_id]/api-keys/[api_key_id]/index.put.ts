@@ -120,21 +120,18 @@ export default defineEventHandler(async (event) => {
       });
     }
 
-    return { scopesToDelete, scopesToInsert, updatedKeyData: updated[0] };
-  });
-
-  const scopesChanged = updatedKey.scopesToDelete.length > 0 || updatedKey.scopesToInsert.length > 0;
-  if ((name && typeof name === "string") || scopesChanged) {
     await logEvent(organization_id, "api-key:updated", {
-      id: updatedKey.updatedKeyData.id,
+      id: updated[0].id,
       organization_id,
-      name: updatedKey.updatedKeyData.name,
-      created_at: updatedKey.updatedKeyData.created_at,
+      name: updated[0].name,
+      created_at: updated[0].created_at,
       scopes: Object.entries(scopes)
         .filter(([, enabled]) => enabled)
         .map(([scope]) => scope),
-    }, false);
-  }
+    }, false, {}, tx);
+
+    return { scopesToDelete, scopesToInsert, updatedKeyData: updated[0] };
+  });
 
   return {
     ...updatedKey.updatedKeyData,

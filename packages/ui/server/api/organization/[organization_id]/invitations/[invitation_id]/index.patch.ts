@@ -64,13 +64,28 @@ export default defineEventHandler(async (event) => {
   }
 
   if (action === "decline") {
-    const [updated] = await withTenantDb([organizationId], async (tx) =>
-      tx
+    const [updated] = await withTenantDb([organizationId], async (tx) => {
+      const [result] = await tx
         .update(organization_invitation)
         .set({ status: "declined" })
         .where(eq(organization_invitation.id, invitationId))
-        .returning(),
-    );
+        .returning();
+
+      if (result) {
+        await logEvent(organizationId, "organization:invitation_declined", {
+          id: result.id,
+          organization_id: result.organization_id,
+          email: result.email,
+          role: result.role,
+          status: result.status,
+          expires_at: result.expires_at,
+          inviter_id: result.inviter_id,
+          created_at: result.created_at,
+        }, false, {}, tx);
+      }
+
+      return [result];
+    });
 
     if (!updated) {
       throw createError({
@@ -78,17 +93,6 @@ export default defineEventHandler(async (event) => {
         statusMessage: "Failed to decline invitation",
       });
     }
-
-    await logEvent(organizationId, "organization:invitation_declined", {
-      id: updated.id,
-      organization_id: updated.organization_id,
-      email: updated.email,
-      role: updated.role,
-      status: updated.status,
-      expires_at: updated.expires_at,
-      inviter_id: updated.inviter_id,
-      created_at: updated.created_at,
-    }, false);
 
     return updated;
   } else {
@@ -98,7 +102,7 @@ export default defineEventHandler(async (event) => {
         .set({ status: "accepted" })
         .where(eq(organization_invitation.id, invitationId))
         .returning();
-      
+
       const organization_member_id = uuidv7();
       await tx.insert(organization_member).values({
         id: organization_member_id,
@@ -106,6 +110,19 @@ export default defineEventHandler(async (event) => {
         user_id: session.user.id,
         role: invitation.role,
       });
+
+      if (updated[0]) {
+        await logEvent(organizationId, "organization:invitation_accepted", {
+          id: updated[0].id,
+          organization_id: updated[0].organization_id,
+          email: updated[0].email,
+          role: updated[0].role,
+          status: updated[0].status,
+          expires_at: updated[0].expires_at,
+          inviter_id: updated[0].inviter_id,
+          created_at: updated[0].created_at,
+        }, false, {}, tx);
+      }
 
       return updated;
     });
@@ -116,17 +133,6 @@ export default defineEventHandler(async (event) => {
         statusMessage: "Failed to accept invitation",
       });
     }
-
-    await logEvent(organizationId, "organization:invitation_accepted", {
-      id: updatedInvitation.id,
-      organization_id: updatedInvitation.organization_id,
-      email: updatedInvitation.email,
-      role: updatedInvitation.role,
-      status: updatedInvitation.status,
-      expires_at: updatedInvitation.expires_at,
-      inviter_id: updatedInvitation.inviter_id,
-      created_at: updatedInvitation.created_at,
-    }, false);
 
     return updatedInvitation;
   }

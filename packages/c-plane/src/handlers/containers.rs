@@ -10,7 +10,7 @@ use crate::errors::AppError;
 use crate::models::entities::{
     container, container_version, project_branch, project_timeline,
 };
-use crate::services::revisions;
+use crate::services::{events, revisions};
 use crate::models::pins::TimelinePins;
 use crate::middleware::auth::AuthContext;
 use super::databases::verify_org_access;
@@ -170,7 +170,7 @@ fn build_response(container: &container::Model, version: &container_version::Mod
     tag = "containers",
 )]
 pub async fn create_container(
-    AuthContext { tenant_db, .. }: AuthContext,
+    AuthContext { tenant_db, auth }: AuthContext,
     Path(organization_id): Path<Uuid>,
     Json(body): Json<CreateContainerRequest>,
 ) -> Result<(axum::http::StatusCode, Json<ContainerResponse>), AppError> {
@@ -225,6 +225,7 @@ pub async fn create_container(
     let mut pins = get_branch_timeline_pins(tx, &branch).await?;
     pins.set_container(container_id, version_id);
     revisions::create_revision(tx, &branch, &pins, Some(format!("Created container '{}'", name)), true).await?;
+    events::record(tx, organization_id, body.project_id, "container:created", serde_json::json!({"summary": format!("Created container '{}'", name), "target_id": container_id.to_string(), "branch_id": branch.id.to_string()}), auth.actor_id).await?;
 
     scoped.commit().await?;
 
@@ -410,7 +411,7 @@ pub async fn get_container(
     tag = "containers",
 )]
 pub async fn update_container(
-    AuthContext { tenant_db, .. }: AuthContext,
+    AuthContext { tenant_db, auth }: AuthContext,
     Path((organization_id, container_id)): Path<(Uuid, Uuid)>,
     axum::extract::Query(action): axum::extract::Query<ContainerActionQuery>,
     Json(body): Json<UpdateContainerRequest>,
@@ -475,6 +476,8 @@ pub async fn update_container(
         revisions::create_revision(tx, &branch, &pins, Some("Updated container configuration".into()), body.auto_deploy).await?;
     }
 
+    events::record(tx, organization_id, c.project_id, "container:updated", serde_json::json!({"summary": format!("Updated container '{}'", c.name), "target_id": container_id.to_string(), "branch_id": branch.id.to_string()}), auth.actor_id).await?;
+
     scoped.commit().await?;
 
     let scoped2 = tenant_db.begin_scoped_transaction().await?;
@@ -524,7 +527,7 @@ pub async fn update_container(
     tag = "containers",
 )]
 pub async fn delete_container(
-    AuthContext { tenant_db, .. }: AuthContext,
+    AuthContext { tenant_db, auth }: AuthContext,
     Path((organization_id, container_id)): Path<(Uuid, Uuid)>,
     axum::extract::Query(action): axum::extract::Query<ContainerActionQuery>,
 ) -> Result<Json<serde_json::Value>, AppError> {
@@ -545,6 +548,7 @@ pub async fn delete_container(
     let mut pins = get_branch_timeline_pins(tx, &branch).await?;
     pins.remove_container(&container_id);
     revisions::create_revision(tx, &branch, &pins, Some(format!("Removed container '{}'", c.name)), true).await?;
+    events::record(tx, organization_id, c.project_id, "container:removed", serde_json::json!({"summary": format!("Removed container '{}'", c.name), "target_id": container_id.to_string(), "branch_id": branch.id.to_string()}), auth.actor_id).await?;
 
     scoped.commit().await?;
 

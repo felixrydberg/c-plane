@@ -12,6 +12,8 @@ use crate::models::entities::{
     stateful_postgres_database, stateful_postgres_database_branch, project_branch,
 };
 use crate::middleware::auth::AuthContext;
+use crate::services::events;
+use serde_json;
 
 fn db_to_response(db: &stateful_postgres_database::Model) -> DatabaseResponse {
     DatabaseResponse {
@@ -52,7 +54,7 @@ fn branch_to_response(b: &stateful_postgres_database_branch::Model) -> DatabaseB
     tag = "databases/stateful",
 )]
 pub async fn create_database(
-    AuthContext { tenant_db, .. }: AuthContext,
+    AuthContext { tenant_db, auth }: AuthContext,
     Path(organization_id): Path<Uuid>,
     Json(body): Json<CreateDatabaseRequest>,
 ) -> Result<(axum::http::StatusCode, Json<DatabaseResponse>), AppError> {
@@ -83,7 +85,7 @@ pub async fn create_database(
         project_id: Set(body.project_id),
         organization_id: Set(organization_id),
         default_branch_id: Set(None),
-        name: Set(name),
+        name: Set(name.clone()),
     }.insert(tx).await?;
 
     let _db_branch: stateful_postgres_database_branch::Model = stateful_postgres_database_branch::ActiveModel {
@@ -103,6 +105,7 @@ pub async fn create_database(
     let mut db_active: stateful_postgres_database::ActiveModel = created.clone().into();
     db_active.default_branch_id = Set(Some(db_branch_id));
     let updated = db_active.update(tx).await?;
+    events::record(tx, organization_id, body.project_id, "database:created", serde_json::json!({"summary": format!("Created database '{}'", name), "target_id": db_branch_id.to_string(), "branch_id": main_branch.id.to_string()}), auth.actor_id).await?;
 
     scoped.commit().await?;
 
@@ -156,7 +159,7 @@ pub async fn get_database(
 }
 
 pub async fn update_database(
-    AuthContext { tenant_db, .. }: AuthContext,
+    AuthContext { tenant_db, auth }: AuthContext,
     Path((organization_id, database_id)): Path<(Uuid, Uuid)>,
     Json(body): Json<UpdateDatabaseRequest>,
 ) -> Result<Json<DatabaseResponse>, AppError> {
@@ -173,12 +176,15 @@ pub async fn update_database(
 
     verify_project_in_org(tx, db.project_id, organization_id).await?;
 
-    let mut active: stateful_postgres_database::ActiveModel = db.into();
+    let mut active: stateful_postgres_database::ActiveModel = db.clone().into();
     if let Some(ref name) = body.name {
         active.name = Set(name.trim().to_string());
     }
 
     let updated = active.update(tx).await?;
+    if let Some(target_id) = updated.default_branch_id {
+        events::record(tx, organization_id, updated.project_id, "database:updated", serde_json::json!({"summary": format!("Updated database '{}'", updated.name), "target_id": target_id.to_string()}), auth.actor_id).await?;
+    }
     scoped.commit().await?;
 
     Ok(Json(db_to_response(&updated)))
@@ -198,7 +204,7 @@ pub async fn update_database(
     tag = "databases/stateful",
 )]
 pub async fn delete_database(
-    AuthContext { tenant_db, .. }: AuthContext,
+    AuthContext { tenant_db, auth }: AuthContext,
     Path((organization_id, database_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
@@ -214,6 +220,9 @@ pub async fn delete_database(
 
     verify_project_in_org(tx, db.project_id, organization_id).await?;
 
+    if let Some(target_id) = db.default_branch_id {
+        events::record(tx, organization_id, db.project_id, "database:deleted", serde_json::json!({"summary": format!("Deleted database '{}'", db.name), "target_id": target_id.to_string()}), auth.actor_id).await?;
+    }
     Entity::delete_by_id(database_id).exec(tx).await?;
     scoped.commit().await?;
 
@@ -247,7 +256,7 @@ pub async fn list_database_branches(
 }
 
 pub async fn update_database_branch(
-    AuthContext { tenant_db, .. }: AuthContext,
+    AuthContext { tenant_db, auth }: AuthContext,
     Path((organization_id, database_id, branch_id)): Path<(Uuid, Uuid, Uuid)>,
     Json(body): Json<UpdateDatabaseBranchRequest>,
 ) -> Result<Json<DatabaseBranchResponse>, AppError> {
@@ -270,7 +279,7 @@ pub async fn update_database_branch(
         .await?
         .ok_or_else(|| AppError::NotFound("Database branch link not found".into()))?;
 
-    let mut active: stateful_postgres_database_branch::ActiveModel = db_branch.into();
+    let mut active: stateful_postgres_database_branch::ActiveModel = db_branch.clone().into();
     if body.cpu.is_some() {
         active.cpu = Set(body.cpu);
     }
@@ -294,6 +303,7 @@ pub async fn update_database_branch(
     }
 
     let updated = active.update(tx).await?;
+    events::record(tx, organization_id, db.project_id, "database:updated", serde_json::json!({"summary": format!("Updated '{}' branch configuration", db.name), "target_id": db_branch.id.to_string(), "branch_id": branch_id.to_string()}), auth.actor_id).await?;
     scoped.commit().await?;
 
     Ok(Json(branch_to_response(&updated)))
@@ -315,7 +325,7 @@ pub async fn update_database_branch(
     tag = "databases/stateful",
 )]
 pub async fn create_database_branch(
-    AuthContext { tenant_db, .. }: AuthContext,
+    AuthContext { tenant_db, auth }: AuthContext,
     Path((organization_id, database_id)): Path<(Uuid, Uuid)>,
     Json(body): Json<CreateDatabaseBranchRequest>,
 ) -> Result<(axum::http::StatusCode, Json<DatabaseBranchResponse>), AppError> {
@@ -386,6 +396,7 @@ pub async fn create_database_branch(
         autoscaling_min_cpu: Set(autoscaling_min_cpu),
         autoscaling_max_cpu: Set(autoscaling_max_cpu),
     }.insert(tx).await?;
+    events::record(tx, organization_id, db.project_id, "database:linked", serde_json::json!({"summary": format!("Linked '{}' to branch '{}'", db.name, branch.name), "target_id": row.id.to_string(), "branch_id": branch.id.to_string()}), auth.actor_id).await?;
 
     scoped.commit().await?;
 
@@ -407,7 +418,7 @@ pub async fn create_database_branch(
     tag = "databases/stateful",
 )]
 pub async fn delete_database_branch(
-    AuthContext { tenant_db, .. }: AuthContext,
+    AuthContext { tenant_db, auth }: AuthContext,
     Path((organization_id, database_id, branch_id)): Path<(Uuid, Uuid, Uuid)>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
@@ -434,6 +445,7 @@ pub async fn delete_database_branch(
     }
 
     stateful_postgres_database_branch::Entity::delete_by_id(db_branch.id).exec(tx).await?;
+    events::record(tx, organization_id, db.project_id, "database:unlinked", serde_json::json!({"summary": format!("Unlinked '{}' from this branch", db.name), "target_id": db_branch.id.to_string(), "branch_id": branch_id.to_string()}), auth.actor_id).await?;
 
     scoped.commit().await?;
 

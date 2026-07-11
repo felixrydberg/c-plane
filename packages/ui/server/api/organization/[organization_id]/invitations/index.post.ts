@@ -112,7 +112,7 @@ export default defineEventHandler(async (event) => {
     const inviteUrl = new URL(authPath, requestUrl.origin);
     inviteUrl.searchParams.set("email", inviteEmail);
     inviteUrl.searchParams.set("redirectTo", `/api/user/invitations/${invitationId}/accept`);
-    
+
     const [invitation] = await tx
       .insert(organization_invitation)
       .values({
@@ -132,6 +132,17 @@ export default defineEventHandler(async (event) => {
         statusMessage: "Failed to create invitation",
       });
     }
+
+    await logEvent(organization_id, "organization:invitation_created", {
+      id: invitation.id,
+      organization_id: invitation.organization_id,
+      email: invitation.email,
+      role: invitation.role,
+      status: invitation.status,
+      expires_at: invitation.expires_at,
+      inviter_id: invitation.inviter_id,
+      created_at: invitation.created_at,
+    }, false, {}, tx);
 
     return {
       invitation,
@@ -169,17 +180,6 @@ export default defineEventHandler(async (event) => {
       statusMessage: "Failed to deliver invitation email",
     });
   }
-
-  await logEvent(organization_id, "organization:invitation_created", {
-    id: invitation.id,
-    organization_id: invitation.organization_id,
-    email: invitation.email,
-    role: invitation.role,
-    status: invitation.status,
-    expires_at: invitation.expires_at,
-    inviter_id: invitation.inviter_id,
-    created_at: invitation.created_at,
-  }, false);
 
   return invitation;
 });

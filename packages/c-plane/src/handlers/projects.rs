@@ -114,6 +114,13 @@ async fn branch_databases_for_project(
                 database_id: Set(db.id),
                 branch_id: Set(branch_id),
                 organization_id: Set(organization_id),
+                cpu: Set(None),
+                ram: Set(None),
+                high_availability: Set(false),
+                read_replicas: Set(None),
+                autoscaling_enabled: Set(false),
+                autoscaling_min_cpu: Set(None),
+                autoscaling_max_cpu: Set(None),
             }.insert(tx).await?;
         }
     }

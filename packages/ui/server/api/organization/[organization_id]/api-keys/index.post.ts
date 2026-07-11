@@ -37,7 +37,7 @@ export default defineEventHandler(async (event) => {
     const keyId = uuidv7();
     const now = new Date().toISOString();
 
-    const insertedKey = await tx
+    const [insertedKey] = await tx
       .insert(api_keys)
       .values({
         id: keyId,
@@ -50,7 +50,7 @@ export default defineEventHandler(async (event) => {
       })
       .returning();
 
-    if (!insertedKey || insertedKey.length === 0) {
+    if (!insertedKey) {
       throw createError({
         statusCode: 500,
         statusMessage: "Failed to create API key",
@@ -70,22 +70,22 @@ export default defineEventHandler(async (event) => {
       await tx.insert(api_key_scopes).values(enabledScopes);
     }
 
+    await logEvent(organization_id, "api-key:created", {
+      id: insertedKey.id,
+      organization_id,
+      name: insertedKey.name,
+      created_at: insertedKey.created_at,
+      expires_at: insertedKey.expires_at ?? null,
+      scopes: Object.entries(scopes)
+        .filter(([, enabled]) => enabled)
+        .map(([scope]) => scope),
+    }, false, {}, tx);
+
     return {
-      ...insertedKey[0],
+      ...insertedKey,
       key, // Return the raw key only on creation
     };
   });
-
-  await logEvent(organization_id, "api-key:created", {
-    id: api_key.id,
-    organization_id,
-    name: api_key.name,
-    created_at: api_key.created_at,
-    expires_at: api_key.expires_at ?? null,
-    scopes: Object.entries(scopes)
-      .filter(([, enabled]) => enabled)
-      .map(([scope]) => scope),
-  }, false);
 
   return {
     ...api_key,

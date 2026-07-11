@@ -3,6 +3,7 @@ pub mod organisation_member;
 pub mod project;
 pub mod project_branch;
 pub mod project_timeline;
+pub mod event;
 pub mod container;
 pub mod container_version;
 pub mod stateful_postgres_database;

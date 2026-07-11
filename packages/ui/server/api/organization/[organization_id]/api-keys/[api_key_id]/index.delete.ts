@@ -19,6 +19,15 @@ export default defineEventHandler(async (event) => {
       )
       .returning();
 
+    if (deleted) {
+      await logEvent(organization_id, "api-key:revoked", {
+        id: deleted.id,
+        organization_id,
+        name: deleted.name,
+        created_at: deleted.created_at,
+      }, false, {}, tx);
+    }
+
     return deleted;
   });
 
@@ -28,11 +37,4 @@ export default defineEventHandler(async (event) => {
       statusMessage: "API key not found",
     });
   }
-
-  await logEvent(organization_id, "api-key:revoked", {
-    id: deleted.id,
-    organization_id,
-    name: deleted.name,
-    created_at: deleted.created_at,
-  }, false);
 });

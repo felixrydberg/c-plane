@@ -15,26 +15,24 @@ export default defineEventHandler(async (event) => {
   }
 
   const result = await withTenantDb([membership.organization_id], async (tx) => {
-    const existingUser = await tx
+    const [existingUser] = await tx
       .select()
       .from(user)
       .where(eq(user.email, email.toLowerCase()));
 
-    if (existingUser.length === 0) {
+    if (!existingUser) {
       throw createError({
         statusCode: 404,
         statusMessage: 'User with this email does not exist',
       });
     }
 
-    const targetUser = existingUser[0];
-
     const existingMember = await tx
       .select()
       .from(organization_member)
       .where(
         eq(organization_member.organization_id, membership.organization_id) &&
-        eq(organization_member.user_id, targetUser.id)
+        eq(organization_member.user_id, existingUser.id)
       );
 
     if (existingMember.length > 0) {
@@ -49,21 +47,23 @@ export default defineEventHandler(async (event) => {
       .values({
         id: uuidv7(),
         organization_id: membership.organization_id,
-        user_id: targetUser.id,
+        user_id: existingUser.id,
         role: 'member',
       })
       .returning();
 
+    if (newMember[0]) {
+      await logEvent(membership.organization_id, "organization:member_added", {
+        id: newMember[0].id,
+        organization_id: newMember[0].organization_id,
+        user_id: newMember[0].user_id,
+        role: newMember[0].role,
+        created_at: newMember[0].created_at,
+      }, false, {}, tx);
+    }
+
     return newMember[0];
   });
-
-  await logEvent(membership.organization_id, "organization:member_added", {
-    id: result.id,
-    organization_id: result.organization_id,
-    user_id: result.user_id,
-    role: result.role,
-    created_at: result.created_at,
-  }, false);
 
   return result;
 });

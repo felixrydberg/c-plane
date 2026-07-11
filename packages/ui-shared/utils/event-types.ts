@@ -11,4 +11,14 @@ export const EVENT_TYPE_VALUES = [
   "api-key:rolled",
   "verification:created",
   "verification:completed",
+  "container:created",
+  "container:updated",
+  "container:removed",
+  "database:created",
+  "database:updated",
+  "database:deleted",
+  "database:linked",
+  "database:unlinked",
 ] as const;
+
+export type EventType = typeof EVENT_TYPE_VALUES[number];

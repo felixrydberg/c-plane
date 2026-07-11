@@ -42,7 +42,7 @@ export async function getOrganizationMembership(event: H3Event, organization_id?
     });
   }
 
-  const userMembership = await getIdentityDb()
+  const [userMembership] = await getIdentityDb()
     .select({
       id: organization_member.id,
       organization_id: organization_member.organization_id,
@@ -65,12 +65,12 @@ export async function getOrganizationMembership(event: H3Event, organization_id?
     )
     .limit(1);
 
-  if (!userMembership || userMembership.length === 0) {
+  if (!userMembership) {
     throw createError({
       statusCode: 403,
       statusMessage: "Not a member of this organization",
     });
   }
 
-  return userMembership[0]
+  return userMembership
 }
