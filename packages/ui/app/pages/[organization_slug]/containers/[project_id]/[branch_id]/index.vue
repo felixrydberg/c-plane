@@ -68,14 +68,20 @@ watch(() => store.refreshKey, () => { refreshData() })
 </script>
 
 <template>
-  <div class="flex flex-col gap-6 w-full mx-auto max-w-6xl">
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+  <div class="flex w-full max-w-[1500px] flex-col gap-5 mx-auto">
+    <div class="flex flex-col gap-4 border-b border-default/60 pb-5 sm:flex-row sm:items-end sm:justify-between">
       <div class="min-w-0">
         <p class="mb-2 truncate text-sm text-muted">{{ projectName }} <span class="mx-1 text-default/30">/</span> {{ branchName }}</p>
         <h1 class="text-2xl font-semibold">Containers</h1>
-        <p class="mt-1 text-sm text-muted">Services deployed to this branch.</p>
+        <p class="mt-1 text-sm text-muted">Runtime services deployed to this branch.</p>
       </div>
       <UButton class="shrink-0" :icon="ICONS.plus" :to="`/${route.params.organization_slug}/containers/${projectId}/${branchId}/new`">New Container</UButton>
+    </div>
+
+    <div class="grid gap-px overflow-hidden rounded-lg border border-default/60 bg-default/60 sm:grid-cols-3">
+      <div class="bg-default px-4 py-3"><p class="text-xs text-muted">Branch</p><p class="mt-1 text-sm font-medium">{{ branchName }}</p></div>
+      <div class="bg-default px-4 py-3"><p class="text-xs text-muted">Containers</p><p class="mt-1 font-mono text-sm">{{ containers.length }}</p></div>
+      <div class="bg-default px-4 py-3"><p class="text-xs text-muted">Desired replicas</p><p class="mt-1 font-mono text-sm">{{ containers.reduce((total, container) => total + (container.current_version?.replica_count ?? 0), 0) }}</p></div>
     </div>
 
     <DeploymentsContainersListing

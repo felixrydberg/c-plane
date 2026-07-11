@@ -8,8 +8,9 @@ const open = ref(true);
 
 const routeProjectId = computed(() => route.params.project_id as string | undefined)
 const routeBranchId = computed(() => route.params.branch_id as string | undefined)
+const navProjectId = computed(() => routeProjectId.value ?? store.project?.id)
 
-const items: NavigationMenuItem[] = computed(() => [
+const items = computed<NavigationMenuItem[]>(() => [
   {
     label: 'Overview',
     icon: ICONS.overview,
@@ -23,7 +24,7 @@ const items: NavigationMenuItem[] = computed(() => [
   {
     label: 'Containers',
     icon: ICONS.containers,
-    to: `/${store.organization?.slug}/containers${routeProjectId.value ? `/${routeProjectId.value}${routeBranchId.value ? `/${routeBranchId.value}` : ''}` : ''}`,
+    to: `/${store.organization?.slug}/containers${navProjectId.value ? `/${navProjectId.value}${routeBranchId.value ? `/${routeBranchId.value}` : ''}` : ''}`,
   },
   {
     label: 'Databases',
@@ -33,7 +34,7 @@ const items: NavigationMenuItem[] = computed(() => [
     children: [
       {
         label: 'Stateful',
-        to: `/${store.organization?.slug}/databases/stateful${routeProjectId.value ? `/${routeProjectId.value}` : ''}`,
+        to: `/${store.organization?.slug}/databases/stateful${navProjectId.value ? `/${navProjectId.value}` : ''}`,
       },
       {
         label: 'Serverless',
@@ -45,7 +46,7 @@ const items: NavigationMenuItem[] = computed(() => [
   {
     label: 'Secrets',
     icon: ICONS.secrets,
-    to: `/${store.organization?.slug}/secrets${routeProjectId.value ? `/${routeProjectId.value}` : ''}`,
+    to: `/${store.organization?.slug}/secrets${navProjectId.value ? `/${navProjectId.value}` : ''}`,
   },
   {
     type: "label",

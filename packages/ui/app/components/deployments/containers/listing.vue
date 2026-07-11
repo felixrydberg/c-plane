@@ -63,7 +63,7 @@ function secretCount(c: ContainerWithProject): number {
 </script>
 
 <template>
-  <div class="bg-default rounded-lg border border-default/60 overflow-hidden">
+  <div class="overflow-hidden rounded-lg border border-default/60 bg-default">
     <!-- Loading -->
     <div v-if="status === 'pending'" class="flex items-center gap-3 py-12 justify-center text-muted text-sm">
       <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
@@ -80,44 +80,29 @@ function secretCount(c: ContainerWithProject): number {
 
     <!-- Container rows -->
     <template v-else>
+      <div class="hidden grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_90px_90px_100px_110px_auto] gap-4 border-b border-default/60 px-5 py-3 text-[11px] font-medium uppercase tracking-wide text-muted lg:grid">
+        <span>Service</span><span>Image</span><span>Replicas</span><span>Port</span><span>Access</span><span>Updated</span><span />
+      </div>
       <NuxtLink
         v-for="c in containers"
         :key="c.id"
         :to="`/${$route.params.organization_slug}/containers/${projectId}/${branchId}/${c.id}`"
-        class="group flex w-full items-center gap-4 border-b border-default/10 px-5 py-4 transition-colors hover:bg-elevated/50 last:border-b-0"
+        class="group grid w-full gap-3 border-b border-default/30 px-5 py-4 transition-colors hover:bg-elevated/50 last:border-b-0 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_90px_90px_100px_110px_auto] lg:items-center lg:gap-4"
       >
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2">
             <span class="text-sm font-medium truncate">{{ c.name }}</span>
             <span v-if="c.current_version?.public" class="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">Public</span>
           </div>
-          <div v-if="c.current_version?.image" class="mt-1 truncate text-xs text-muted">
-            <code class="rounded bg-elevated px-1.5 py-0.5">{{ c.current_version.image }}</code>
-          </div>
-          <div class="mt-2 flex items-center gap-2 text-[11px] font-mono text-muted">
-            <template v-if="c.current_version">
-              <span>{{ c.current_version.port ? `:${c.current_version.port}` : 'no port' }}</span>
-              <span class="text-default/20">&bull;</span>
-              <span>{{ c.current_version.replica_count ?? 0 }} replica{{ c.current_version.replica_count === 1 ? '' : 's' }}</span>
-              <template v-if="!c.current_version.public">
-                <span class="text-default/20">&bull;</span>
-                <span>private</span>
-              </template>
-              <template v-if="secretCount(c) > 0">
-                <span class="text-default/20">&bull;</span>
-                <span>{{ secretCount(c) }} secret{{ secretCount(c) !== 1 ? 's' : '' }}</span>
-              </template>
-            </template>
-            <span v-else class="italic">no version</span>
-          </div>
+          <p v-if="secretCount(c)" class="mt-1 text-[11px] text-muted">{{ secretCount(c) }} secret{{ secretCount(c) === 1 ? '' : 's' }}</p>
         </div>
-
-        <span class="hidden shrink-0 text-[11px] tabular-nums text-muted lg:inline">
+        <code class="truncate font-mono text-xs text-muted">{{ c.current_version?.image ?? 'No version' }}</code>
+        <span class="font-mono text-xs text-muted">{{ c.current_version?.replica_count ?? 0 }}</span>
+        <span class="font-mono text-xs text-muted">{{ c.current_version?.port ?? '—' }}</span>
+        <span class="text-xs text-muted">{{ c.current_version?.public ? 'Public' : 'Private' }}</span>
+        <span class="shrink-0 text-xs tabular-nums text-muted">
           <NuxtTime :datetime="c.created_at" relative />
         </span>
-
-        <UIcon name="i-heroicons:chevron-right" class="size-4 text-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-
         <UButton
           variant="solid"
           size="xs"

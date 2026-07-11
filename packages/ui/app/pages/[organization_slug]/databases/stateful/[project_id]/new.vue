@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { COMPUTE_UNIT_ITEMS, computeUnitByLabel } from '~/utils/compute-units'
+import { ICONS } from '~/utils/icons'
 
 const store = useStore()
 const route = useRoute()
@@ -13,7 +14,7 @@ const loading = ref(false)
 const error = ref('')
 
 const name = ref('')
-const computeUnit = ref('XS')
+const computeUnit = ref('0.5')
 const highAvailability = ref(false)
 const readReplicas = ref(2)
 
@@ -43,42 +44,24 @@ function backUrl() { return `/${route.params.organization_slug}/databases/statef
 </script>
 
 <template>
-  <div class="flex flex-col gap-6 w-full mx-auto max-w-6xl">
-    <div>
+  <div class="w-full max-w-[1200px] mx-auto">
+    <header class="border-b border-default/60 pb-5">
       <UiBackLink :label="projectName" :to="backUrl()" />
-      <h1 class="text-2xl font-semibold">New Database</h1>
-      <p class="text-muted text-sm mt-1">Create a new stateful Postgres database.</p>
-    </div>
+      <h1 class="mt-2 text-2xl font-semibold">New Database</h1>
+      <p class="mt-1 text-sm text-muted">Create a stateful Postgres database.</p>
+    </header>
 
-    <div class="w-full border border-default rounded-lg">
-      <div class="px-4 py-3 border-b border-default"><p class="text-sm font-semibold">Database</p></div>
-      <div class="p-4">
-        <div class="flex items-center gap-4 px-1"><span class="w-28 text-sm">Name</span><UInput v-model="name" placeholder="e.g. my-database" class="w-64" size="sm" :disabled="loading" /></div>
-      </div>
-    </div>
+    <div class="grid lg:grid-cols-[minmax(0,1fr)_280px]">
+      <main class="divide-y divide-default/60 lg:pr-8">
+        <section class="grid gap-4 py-8 lg:grid-cols-[190px_minmax(0,1fr)]"><div><h2 class="text-sm font-semibold">Database</h2><p class="mt-1 text-xs text-muted">Choose a stable resource name.</p></div><UFormField label="Name"><UInput v-model="name" placeholder="orders-db" class="w-full" :disabled="loading" /></UFormField></section>
+        <section class="grid gap-4 py-8 lg:grid-cols-[190px_minmax(0,1fr)]"><div><h2 class="text-sm font-semibold">Compute</h2><p class="mt-1 text-xs text-muted">CPU and RAM scale together.</p></div><UFormField label="Compute Unit" description="1 CU = 1 vCPU + 2 GB RAM. Scale from 0.25 to 32 CU."><USelect v-model="computeUnit" :items="COMPUTE_UNIT_ITEMS" class="w-full" /></UFormField></section>
+        <section class="grid gap-4 py-8 lg:grid-cols-[190px_minmax(0,1fr)]"><div><h2 class="text-sm font-semibold">High Availability</h2><p class="mt-1 text-xs text-muted">Add replicas for resilience.</p></div><div class="space-y-4"><UFormField label="Availability mode" description="Standard: single node. HA: multi-node with automatic failover."><div class="mt-1 grid grid-cols-2 gap-2"><button type="button" class="flex flex-col items-start gap-0.5 rounded-lg border-2 p-3 text-left transition-colors" :class="!highAvailability ? 'border-primary bg-primary/10' : 'border-default/40 hover:border-default/60'" @click="highAvailability = false"><span class="text-sm font-semibold">Standard</span><span class="text-xs text-muted">Single database node</span></button><button type="button" class="flex flex-col items-start gap-0.5 rounded-lg border-2 p-3 text-left transition-colors" :class="highAvailability ? 'border-primary bg-primary/10' : 'border-default/40 hover:border-default/60'" @click="highAvailability = true"><span class="text-sm font-semibold">High Availability</span><span class="text-xs text-muted">Multi-node failover</span></button></div></UFormField><UFormField v-if="highAvailability" label="Read replicas" description="Number of read-only replicas for query distribution."><UInputNumber v-model="readReplicas" :min="1" :step="1" class="w-32" /></UFormField></div></section>
+        <p v-if="error" class="py-4 text-sm text-error">{{ error }}</p>
+      </main>
 
-    <div class="w-full border border-default rounded-lg">
-      <div class="px-4 py-3 border-b border-default"><p class="text-sm font-semibold">Compute</p><p class="mt-0.5 text-xs text-muted">CPU and RAM scale together as a compute unit.</p></div>
-      <div class="p-4 space-y-3">
-        <div class="flex items-center gap-4 px-1"><span class="w-28 text-sm">Compute Unit</span><div class="w-28"><USelect v-model="computeUnit" :items="COMPUTE_UNIT_ITEMS" size="sm" class="w-full" /></div></div>
-      </div>
-    </div>
-
-    <div class="w-full border border-default rounded-lg">
-      <div class="px-4 py-3 border-b border-default"><p class="text-sm font-semibold">High Availability</p></div>
-      <div class="p-4 space-y-3">
-        <UCheckbox v-model="highAvailability" label="Enable high availability" />
-        <template v-if="highAvailability">
-          <div class="flex items-center gap-4 px-1"><span class="w-28 text-sm">Replicas</span><UInput v-model.number="readReplicas" type="number" :min="2" size="sm" class="w-28" /><span class="text-xs text-muted">read replicas (min 2)</span></div>
-        </template>
-      </div>
-    </div>
-
-    <p v-if="error" class="text-sm text-error">{{ error }}</p>
-
-    <div class="flex justify-end gap-3">
-      <UButton variant="ghost" color="neutral" :to="backUrl()">Cancel</UButton>
-      <UButton :loading="loading" :disabled="!name.trim()" @click="handleCreate">Continue</UButton>
+      <aside class="border-t border-default/60 py-8 lg:border-l lg:border-t-0 lg:pl-6">
+        <div class="sticky top-6"><h2 class="text-sm font-semibold">Database Summary</h2><dl class="mt-5 space-y-4 text-sm"><div><dt class="text-xs text-muted">Project</dt><dd class="mt-1">{{ projectName }}</dd></div><div><dt class="text-xs text-muted">Name</dt><dd class="mt-1 font-mono text-xs">{{ name || 'Not set' }}</dd></div><div><dt class="text-xs text-muted">Compute</dt><dd class="mt-1">{{ computeUnit }}</dd></div><div><dt class="text-xs text-muted">Availability</dt><dd class="mt-1">{{ highAvailability ? `${readReplicas} read replicas` : 'Standard' }}</dd></div></dl><div class="mt-8 flex gap-3"><UButton variant="ghost" color="neutral" :to="backUrl()">Cancel</UButton><UButton :icon="ICONS.check" :loading="loading" :disabled="!name.trim()" @click="handleCreate">Create Database</UButton></div></div>
+      </aside>
     </div>
   </div>
 </template>

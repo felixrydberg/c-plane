@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ICONS } from '~/utils/icons'
 
+definePageMeta({ key: route => `container-workbench-${route.params.project_id}` })
+
 interface ContainerVersionRow {
   id: string
   version: number
@@ -26,6 +28,26 @@ const containerId = computed(() => route.params.container_id?.toString() || null
 
 const projectName = computed(() => store.projects.find(p => p.id === projectId.value)?.name ?? projectId.value ?? '')
 
+const activeTab = ref('overview')
+const tabs = [
+  { label: 'Overview', value: 'overview', slot: 'overview' },
+  { label: 'Configuration', value: 'configuration', slot: 'configuration' },
+]
+
+interface ContainerListItem {
+  id: string
+  name: string
+  current_version: ContainerVersionRow | null
+}
+
+const listUrl = computed(() => orgId.value && projectId.value && branchId.value
+  ? `/api/backend/organization/${orgId.value}/containers`
+  : '')
+const { data: containerList } = await useFetch<ContainerListItem[]>(listUrl, {
+  query: { project_id: projectId, branch_id: branchId },
+  immediate: !!listUrl.value,
+})
+
 const name = ref('')
 const image = ref('')
 const port = ref<number | null>(null)
@@ -36,6 +58,7 @@ const envRows = ref<{ key: string; value: string; secretId: string | null }[]>([
 const hasChanges = ref(false)
 const saving = ref(false)
 const loading = ref(true)
+const recentActivity = ref<{ refresh: () => Promise<void> } | null>(null)
 
 interface ProjectSecret {
   id: string
@@ -74,7 +97,7 @@ async function fetchContainer() {
   }
 }
 
-onMounted(() => { fetchContainer() })
+watch(containerId, fetchContainer, { immediate: true })
 
 function buildEnvRows(env: Record<string, string> | null, refs: Record<string, string> | null): { key: string; value: string; secretId: string | null }[] {
   const rows: { key: string; value: string; secretId: string | null }[] = []
@@ -131,6 +154,7 @@ async function save() {
     )
     toast.add({ title: 'Container updated', color: 'success' })
     hasChanges.value = false
+    await recentActivity.value?.refresh()
   } catch {
     toast.add({ title: 'Failed to save', color: 'error' })
   } finally {
@@ -143,114 +167,143 @@ function backUrl() {
   return `/${orgSlug}/containers/${projectId.value}/${branchId.value}`
 }
 
+const yamlPreview = computed(() => [
+  `name: ${name.value}`,
+  `image: ${image.value}`,
+  `port: ${port.value ?? 'null'}`,
+  `replicas: ${replicaCount.value}`,
+  `public: ${isPublic.value}`,
+  'healthCheck:',
+  `  path: ${healthCheckPath.value || 'null'}`,
+].join('\n'))
+
 watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged())
 </script>
 
 <template>
-  <div class="flex flex-col gap-6 w-full mx-auto max-w-6xl">
-    <div>
-      <UiBackLink :label="projectName" :to="backUrl()" />
-      <div class="mt-2">
-        <h1 class="text-2xl font-semibold">{{ name }}</h1>
-        <p class="mt-0.5 text-sm text-muted">Container configuration</p>
-      </div>
+  <div class="w-full max-w-[1500px] mx-auto">
+    <div v-if="loading && !name" class="flex justify-center py-20">
+      <UIcon name="i-lucide-loader-circle" class="size-5 animate-spin text-muted" />
     </div>
 
-    <div v-if="loading" class="text-center py-8">
-      <UIcon name="i-lucide-loader-circle" class="size-5 text-muted animate-spin" />
+    <div v-else class="overflow-hidden rounded-lg border border-default/60 bg-default">
+      <header class="flex flex-col gap-4 border-b border-default/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div class="min-w-0">
+          <UiBackLink :label="projectName" :to="backUrl()" />
+          <div class="mt-2 flex flex-wrap items-center gap-2">
+            <h1 class="truncate text-xl font-semibold">{{ name }}</h1>
+            <span class="font-mono text-xs text-muted">{{ image }}</span>
+            <span class="text-xs text-muted">&middot; Port {{ port ?? 'none' }}</span>
+            <span class="text-xs text-muted">&middot; {{ replicaCount }} replica{{ replicaCount === 1 ? '' : 's' }}</span>
+          </div>
+        </div>
+        <UButton :icon="ICONS.plus" :to="`/${route.params.organization_slug}/containers/${projectId}/${branchId}/new`">New Container</UButton>
+      </header>
+
+      <div class="grid min-h-[720px] xl:grid-cols-[300px_minmax(0,1fr)_280px]">
+        <aside class="border-b border-default/60 p-4 xl:border-b-0 xl:border-r">
+          <p class="text-sm font-semibold">Containers</p>
+          <p class="mt-1 text-xs text-muted">{{ containerList?.length ?? 0 }} in this branch</p>
+          <nav class="mt-4 space-y-1" aria-label="Branch containers">
+            <NuxtLink
+              v-for="container in containerList"
+              :key="container.id"
+              :to="`/${route.params.organization_slug}/containers/${projectId}/${branchId}/${container.id}`"
+              class="block rounded-md px-3 py-3 transition-colors"
+              :class="{'bg-elevated text-highlighted': container.id === containerId}"
+            >
+              <p class="truncate text-sm font-medium">{{ container.name }}</p>
+              <p class="mt-1 truncate font-mono text-[11px] text-muted">{{ container.current_version?.image ?? 'No version' }}</p>
+            </NuxtLink>
+          </nav>
+        </aside>
+
+        <main class="min-w-0 px-5 py-4">
+          <Transition mode="out-in" enter-active-class="transition-opacity duration-150 ease-out" enter-from-class="opacity-0" leave-active-class="transition-opacity duration-100 ease-in" leave-to-class="opacity-0">
+            <div v-if="loading" key="loading" class="flex min-h-64 items-center justify-center"><UIcon name="i-lucide-loader-circle" class="size-5 animate-spin text-muted" /></div>
+            <UTabs v-else key="content" v-model="activeTab" :items="tabs">
+            <template #overview>
+              <div class="space-y-6 pt-4">
+                <div>
+                  <h2 class="text-base font-semibold">Overview</h2>
+                  <p class="mt-1 text-sm text-muted">Runtime usage for this container.</p>
+                </div>
+
+                <section v-for="metric in ['CPU Usage', 'RAM Usage']" :key="metric" class="border-b border-default/60 pb-6">
+                  <div class="flex items-center justify-between gap-4">
+                    <h3 class="text-sm font-semibold">{{ metric }}</h3>
+                    <span class="font-mono text-xs text-muted">Usage &middot; Request &middot; Limit</span>
+                  </div>
+                  <div class="mt-4 flex min-h-48 flex-col items-center justify-center rounded-md bg-elevated/30 px-6 text-center">
+                    <UIcon name="i-heroicons:chart-bar" class="size-6 text-muted" />
+                    <p class="mt-3 text-sm font-medium">Telemetry connection pending</p>
+                    <p class="mt-1 text-sm text-muted">Metrics will appear here once telemetry is available.</p>
+                  </div>
+                </section>
+
+                <dl class="grid gap-px overflow-hidden rounded-md bg-default/60 sm:grid-cols-2 lg:grid-cols-4">
+                  <div v-for="stat in [
+                    ['Replicas', replicaCount, `Desired: ${replicaCount}`],
+                    ['Restart Count', '—', 'Metrics unavailable'],
+                    ['CPU (Current)', '—', 'Metrics unavailable'],
+                    ['RAM (Current)', '—', 'Metrics unavailable'],
+                  ]" :key="String(stat[0])" class="bg-default px-4 py-3">
+                    <dt class="text-xs text-muted">{{ stat[0] }}</dt>
+                    <dd class="mt-1 text-lg font-semibold">{{ stat[1] }}</dd>
+                    <p class="mt-1 text-[11px] text-muted">{{ stat[2] }}</p>
+                  </div>
+                </dl>
+              </div>
+            </template>
+
+            <template #configuration>
+              <div class="divide-y divide-default/60 pt-4">
+                <section class="grid gap-4 py-6 first:pt-2 lg:grid-cols-[180px_minmax(0,1fr)]">
+                  <div><h3 class="text-sm font-semibold">Image</h3><p class="mt-1 text-xs text-muted">Container identity and image.</p></div>
+                  <div class="space-y-3"><UInput v-model="name" disabled /><UInput v-model="image" placeholder="nginx:latest" @input="markChanged" /></div>
+                </section>
+                <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
+                  <div><h3 class="text-sm font-semibold">Compute</h3><p class="mt-1 text-xs text-muted">Network port and scale.</p></div>
+                  <div class="grid gap-3 sm:grid-cols-2"><UFormField label="Port"><UInput v-model.number="port" type="number" class="w-full" @input="markChanged" /></UFormField><UFormField label="Replicas"><UInput v-model.number="replicaCount" type="number" :min="0" class="w-full" @input="markChanged" /></UFormField></div>
+                </section>
+                <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
+                  <div><h3 class="text-sm font-semibold">Visibility</h3><p class="mt-1 text-xs text-muted">Control service access.</p></div>
+                  <UCheckbox v-model="isPublic" label="Publicly accessible" @change="markChanged" />
+                </section>
+                <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
+                  <div><h3 class="text-sm font-semibold">Health Check</h3><p class="mt-1 text-xs text-muted">Availability endpoint.</p></div>
+                  <UInput v-model="healthCheckPath" placeholder="/health" @input="markChanged" />
+                </section>
+                <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
+                  <div><h3 class="text-sm font-semibold">Environment</h3><p class="mt-1 text-xs text-muted">Values and project secrets.</p></div>
+                  <div class="space-y-3">
+                    <div v-for="(row, i) in envRows" :key="i" class="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)_170px_auto]">
+                      <UInput v-model="row.key" placeholder="KEY" @input="markChanged" />
+                      <UInput v-if="!row.secretId" v-model="row.value" placeholder="value" type="password" @input="markChanged" />
+                      <div v-else class="rounded-md bg-elevated px-3 py-2 text-sm text-muted">Project secret</div>
+                      <USelect v-model="row.secretId" :items="[{ label: 'Custom value', value: '' }, ...projectSecrets.map(s => ({ label: s.name, value: s.id }))]" @update:model-value="(v: string) => setRowSecret(i, v)" />
+                      <UButton size="xs" color="error" :icon="ICONS.trash" @click="removeEnvRow(i)">Remove</UButton>
+                    </div>
+                    <p v-if="envRows.length === 0" class="text-sm text-muted">No environment variables configured.</p>
+                    <UButton size="sm" variant="solid" color="neutral" :icon="ICONS.plus" @click="addEnvRow">Add Variable</UButton>
+                  </div>
+                </section>
+                <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
+                  <div><h3 class="text-sm font-semibold">YAML</h3><p class="mt-1 text-xs text-muted">Generated deployment specification.</p></div>
+                  <pre class="overflow-x-auto rounded-md bg-elevated/40 p-4 font-mono text-xs text-muted">{{ yamlPreview }}</pre>
+                </section>
+                <div class="flex justify-end gap-3 py-5">
+                  <UButton variant="ghost" color="neutral" :to="backUrl()">Cancel</UButton>
+                  <UButton :icon="ICONS.check" :loading="saving" :disabled="!hasChanges" @click="save">Save Changes</UButton>
+                </div>
+              </div>
+            </template>
+            </UTabs>
+          </Transition>
+        </main>
+
+        <DeploymentsRecentActivity ref="recentActivity" v-if="orgId && projectId && containerId" :organization-id="orgId" :project-id="projectId" :branch-id="branchId" event-type-prefix="container" :target-id="containerId" />
+      </div>
     </div>
-
-    <template v-else>
-      <div class="w-full overflow-hidden rounded-lg border border-default bg-default">
-        <div class="px-4 py-3 border-b border-default">
-          <p class="text-sm font-semibold">Image</p>
-          <p class="mt-0.5 text-xs text-muted">The image to run for this service.</p>
-        </div>
-        <div class="p-4 space-y-3">
-          <div class="flex items-center gap-4 px-1">
-            <span class="w-24 text-sm">Name</span>
-            <UInput v-model="name" class="flex-1" size="sm" disabled />
-          </div>
-          <div class="flex items-center gap-4 px-1">
-            <span class="w-24 text-sm">Image</span>
-            <UInput v-model="image" placeholder="e.g. nginx:latest" class="flex-1" size="sm" @input="markChanged" />
-          </div>
-        </div>
-      </div>
-
-      <div class="grid gap-6 lg:grid-cols-2">
-      <div class="w-full overflow-hidden rounded-lg border border-default bg-default">
-        <div class="px-4 py-3 border-b border-default">
-          <p class="text-sm font-semibold">Compute</p>
-          <p class="mt-0.5 text-xs text-muted">Network port and desired scale.</p>
-        </div>
-        <div class="p-4 space-y-3">
-          <div class="flex items-center gap-4 px-1">
-            <span class="w-24 text-sm">Port</span>
-            <UInput v-model.number="port" type="number" placeholder="80" class="w-32" size="sm" @input="markChanged" />
-          </div>
-          <div class="flex items-center gap-4 px-1">
-            <span class="w-24 text-sm">Replicas</span>
-            <UInput v-model.number="replicaCount" type="number" :min="0" class="w-32" size="sm" @input="markChanged" />
-          </div>
-        </div>
-      </div>
-
-      <div class="w-full overflow-hidden rounded-lg border border-default bg-default">
-        <div class="px-4 py-3 border-b border-default">
-          <p class="text-sm font-semibold">Visibility</p>
-          <p class="mt-0.5 text-xs text-muted">Control how this service is reachable.</p>
-        </div>
-        <div class="p-4">
-          <UCheckbox v-model="isPublic" label="Publicly accessible" @change="markChanged" />
-        </div>
-      </div>
-
-      </div>
-
-      <div class="w-full overflow-hidden rounded-lg border border-default bg-default">
-        <div class="px-4 py-3 border-b border-default">
-          <p class="text-sm font-semibold">Health Check</p>
-          <p class="mt-0.5 text-xs text-muted">Optional endpoint used to check availability.</p>
-        </div>
-        <div class="p-4">
-          <div class="flex items-center gap-4 px-1">
-            <span class="w-24 text-sm">Path</span>
-            <UInput v-model="healthCheckPath" placeholder="/health" class="w-48" size="sm" @input="markChanged" />
-          </div>
-        </div>
-      </div>
-
-      <div class="w-full overflow-hidden rounded-lg border border-default bg-default">
-        <div class="px-4 py-3 border-b border-default flex items-center justify-between">
-          <p class="text-sm font-semibold">Environment</p>
-          <UButton variant="solid" size="xs" color="neutral" :icon="ICONS.plus" @click="addEnvRow">Add</UButton>
-        </div>
-        <div class="p-4 space-y-2">
-          <div v-if="envRows.length === 0" class="text-sm text-muted py-2 text-center">
-            No environment variables configured.
-          </div>
-          <div v-for="(row, i) in envRows" :key="i" class="flex items-center gap-2">
-            <UInput v-model="row.key" placeholder="KEY" class="w-40" size="sm" @input="markChanged" />
-            <span class="text-muted text-xs">=</span>
-            <UInput v-if="!row.secretId" v-model="row.value" placeholder="value" class="flex-1" size="sm" type="password" @input="markChanged" />
-            <USelect
-              v-model="row.secretId"
-              :items="[{ label: 'Use secret...', value: '' }, ...projectSecrets.map(s => ({ label: s.name, value: s.id }))]"
-              placeholder="Use secret..."
-              size="sm"
-              class="w-44"
-              @update:model-value="(v: string) => setRowSecret(i, v)"
-            />
-            <UButton variant="solid" size="xs" color="error" :icon="ICONS.trash" @click="removeEnvRow(i)" />
-          </div>
-        </div>
-      </div>
-
-      <div class="flex justify-end gap-3">
-        <UButton variant="ghost" color="neutral" :to="backUrl()">Cancel</UButton>
-        <UButton :loading="saving" :disabled="!hasChanges" @click="save">Save</UButton>
-      </div>
-    </template>
   </div>
 </template>

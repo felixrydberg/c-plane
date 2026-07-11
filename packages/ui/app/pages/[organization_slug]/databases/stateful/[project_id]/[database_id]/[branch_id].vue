@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { COMPUTE_UNIT_ITEMS, computeUnitByLabel, resolveComputeUnitLabel } from '~/utils/compute-units'
+import { ICONS } from '~/utils/icons'
+
+definePageMeta({ key: route => `database-workbench-${route.params.project_id}` })
 
 interface DatabaseBranchRow {
   id: string
@@ -33,8 +36,16 @@ const databaseId = computed(() => route.params.database_id?.toString() || null)
 const branchId = computed(() => route.params.branch_id?.toString() || null)
 
 const saving = ref(false)
+const activeTab = ref('overview')
+const tabs = [
+  { label: 'Overview', value: 'overview', slot: 'overview' },
+  { label: 'Configuration', value: 'configuration', slot: 'configuration' },
+  { label: 'Connections', value: 'connections', slot: 'connections' },
+  { label: 'Backups', value: 'backups', slot: 'backups' },
+]
+const cpuPresets = [0.25, 0.5, 1, 2, 4, 8].map(value => ({ label: `${value} cores`, value }))
 
-const computeUnit = ref('XS')
+const computeUnit = ref('0.5')
 const state = ref({
   highAvailability: false,
   readReplicas: 1,
@@ -46,8 +57,21 @@ const state = ref({
 const dbName = ref('')
 const branchName = ref('')
 const isDefault = ref(false)
+const defaultDatabaseBranchId = ref<string | null>(null)
+const databaseBranches = ref<(DatabaseBranchRow & { _name: string })[]>([])
 
 const loading = ref(true)
+const recentActivity = ref<{ refresh: () => Promise<void> } | null>(null)
+const currentDatabaseBranch = computed(() => databaseBranches.value.find(branch => branch.branch_id === branchId.value))
+const currentDatabaseBranchId = computed(() => currentDatabaseBranch.value?.id ?? '')
+const replicas = computed(() => [
+  { id: 'primary', name: 'Primary', role: 'Read / Write' },
+  ...Array.from({ length: state.value.highAvailability ? Math.max(0, state.value.readReplicas) : 0 }, (_, index) => ({
+    id: `replica-${index + 1}`,
+    name: `Replica ${index + 1}`,
+    role: 'Read only',
+  })),
+])
 
 async function fetchData() {
   if (!orgId.value || !databaseId.value || !branchId.value || !projectId.value) return
@@ -60,6 +84,11 @@ async function fetchData() {
     ])
 
     dbName.value = db.name
+    defaultDatabaseBranchId.value = db.default_branch_id
+    databaseBranches.value = branches.map(branch => ({
+      ...branch,
+      _name: projBranches.find(projectBranch => projectBranch.id === branch.branch_id)?.name ?? branch.branch_id,
+    }))
     const branch = branches.find(b => b.branch_id === branchId.value)
     isDefault.value = db.default_branch_id === branch?.id
     if (branch) {
@@ -80,7 +109,7 @@ async function fetchData() {
   }
 }
 
-onMounted(() => { fetchData() })
+watch([databaseId, branchId], fetchData, { immediate: true })
 
 async function save() {
   if (!orgId.value || !databaseId.value || !branchId.value) return
@@ -103,6 +132,7 @@ async function save() {
       }
     )
     toast.add({ title: 'Branch config saved', color: 'success' })
+    await recentActivity.value?.refresh()
   } catch {
     toast.add({ title: 'Failed to save', color: 'error' })
   } finally {
@@ -114,106 +144,70 @@ function backUrl() {
   const orgSlug = route.params.organization_slug?.toString() ?? ''
   return `/${orgSlug}/databases/stateful/${projectId.value}`
 }
+
+const connectionString = computed(() => `postgresql://username:password@${dbName.value || 'database'}-${branchName.value || 'branch'}:5432/postgres`)
 </script>
 
 <template>
-  <div class="flex flex-col gap-6 w-full mx-auto max-w-6xl">
-    <div>
-      <UiBackLink :label="dbName" :to="backUrl()" />
-      <div class="mt-2 min-w-0">
-        <div class="flex items-center gap-2">
-          <h1 class="truncate text-2xl font-semibold">{{ branchName }}</h1>
-          <UBadge v-if="isDefault" size="sm" variant="soft" color="info">default</UBadge>
-        </div>
-        <p class="mt-0.5 text-sm text-muted">{{ dbName }} database branch</p>
+  <div class="w-full max-w-[1500px] mx-auto">
+    <div v-if="loading && !dbName" class="flex justify-center py-20"><UIcon name="i-lucide-loader-circle" class="size-5 animate-spin text-muted" /></div>
+    <div v-else class="overflow-hidden rounded-lg border border-default/60 bg-default">
+      <header class="flex flex-col gap-4 border-b border-default/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div><UiBackLink :label="dbName" :to="backUrl()" /><div class="mt-2 flex items-center gap-2"><h1 class="text-xl font-semibold">{{ dbName }} / {{ branchName }}</h1><UBadge v-if="isDefault" size="sm" variant="soft" color="primary">Default</UBadge></div><p class="mt-1 text-xs text-muted">Stateful Postgres database branch</p></div>
+        <UButton :icon="ICONS.plus" :to="`/${route.params.organization_slug}/databases/stateful/${projectId}/new`">New Database</UButton>
+      </header>
+
+      <div class="grid min-h-[720px] xl:grid-cols-[270px_minmax(0,1fr)_280px]">
+        <aside class="border-b border-default/60 p-4 xl:border-b-0 xl:border-r">
+          <p class="text-sm font-semibold">{{ dbName }}</p><p class="mt-1 text-xs text-muted">Database branches</p>
+          <nav class="mt-4 space-y-1" aria-label="Database branches">
+            <NuxtLink v-for="branch in databaseBranches" :key="branch.id" :to="`/${route.params.organization_slug}/databases/stateful/${projectId}/${databaseId}/${branch.branch_id}`" class="block rounded-md px-3 py-3 transition-colors" :class="{'border-primary bg-elevated': branch.branch_id === branchId}">
+              <div class="flex items-center gap-2"><span class="truncate text-sm font-medium">{{ branch._name }}</span><span v-if="branch.id === defaultDatabaseBranchId" class="text-[10px] text-primary">Default</span></div>
+              <p class="mt-1 font-mono text-[11px] text-muted">{{ branch.cpu ?? '0.5' }}c &middot; {{ branch.ram ?? '1024Mi' }}</p>
+            </NuxtLink>
+          </nav>
+        </aside>
+
+        <main class="min-w-0 px-5 py-4">
+          <Transition mode="out-in" enter-active-class="transition-opacity duration-150 ease-out" enter-from-class="opacity-0" leave-active-class="transition-opacity duration-100 ease-in" leave-to-class="opacity-0">
+            <div v-if="loading" key="loading" class="flex min-h-64 items-center justify-center"><UIcon name="i-lucide-loader-circle" class="size-5 animate-spin text-muted" /></div>
+            <UTabs v-else key="content" v-model="activeTab" :items="tabs">
+            <template #overview>
+              <div class="space-y-6 pt-4">
+                <div><h2 class="text-base font-semibold">Overview</h2><p class="mt-1 text-sm text-muted">Resource usage for each database replica.</p></div>
+                <section v-for="metric in ['CPU Usage', 'RAM Usage']" :key="metric" class="border-b border-default/60 pb-6">
+                  <div class="flex items-center justify-between gap-4"><h3 class="text-sm font-semibold">{{ metric }}</h3><span class="font-mono text-xs text-muted">All replicas</span></div>
+                  <div class="mt-4 flex min-h-40 flex-col items-center justify-center rounded-md bg-elevated/30 px-6 text-center"><UIcon name="i-heroicons:chart-bar" class="size-6 text-muted" /><p class="mt-3 text-sm font-medium">Telemetry connection pending</p><p class="mt-1 text-sm text-muted">Metrics will appear here once telemetry is available.</p></div>
+                </section>
+                <section>
+                  <div class="flex items-end justify-between gap-4"><div><h3 class="text-sm font-semibold">Replicas</h3><p class="mt-1 text-xs text-muted">CPU and RAM are tracked independently for every instance.</p></div><span class="font-mono text-xs text-muted">{{ replicas.length }} total</span></div>
+                  <div class="mt-4 divide-y divide-default/60 rounded-md border border-default/60">
+                    <div v-for="replica in replicas" :key="replica.id" class="grid gap-4 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_110px_110px] sm:items-center">
+                      <div><p class="text-sm font-medium">{{ replica.name }}</p><p class="mt-1 text-xs text-muted">{{ replica.role }}</p></div>
+                      <div><p class="text-[11px] uppercase tracking-wide text-muted">CPU</p><p class="mt-1 font-mono text-sm">&mdash;</p></div>
+                      <div><p class="text-[11px] uppercase tracking-wide text-muted">RAM</p><p class="mt-1 font-mono text-sm">&mdash;</p></div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </template>
+            <template #configuration>
+              <div class="divide-y divide-default/60 pt-4">
+                <section class="grid gap-4 py-6 first:pt-2 lg:grid-cols-[180px_minmax(0,1fr)]"><div><h2 class="text-sm font-semibold">Connection String</h2><p class="mt-1 text-xs text-muted">Connect applications to this branch.</p></div><UInput :model-value="connectionString" readonly class="font-mono" /></section>
+                <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]"><div><h2 class="text-sm font-semibold">Compute</h2><p class="mt-1 text-xs text-muted">CPU and RAM scale together.</p></div><UFormField label="Compute Unit" description="1 CU includes 1 vCPU and 2 GB RAM."><USelect v-model="computeUnit" :items="COMPUTE_UNIT_ITEMS" class="w-full" /></UFormField></section>
+                <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]"><div><h2 class="text-sm font-semibold">High Availability</h2><p class="mt-1 text-xs text-muted">Automatic failover and read replicas.</p></div><div class="space-y-4"><UCheckbox v-model="state.highAvailability" label="Enable high availability" /><UFormField v-if="state.highAvailability" label="Read replicas"><UInput v-model.number="state.readReplicas" type="number" :min="1" class="w-full" /></UFormField></div></section>
+                <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]"><div><h2 class="text-sm font-semibold">Autoscaling</h2><p class="mt-1 text-xs text-muted">Grow compute with demand.</p></div><div class="space-y-4"><UCheckbox v-model="state.autoscalingEnabled" label="Enable autoscaling" /><div v-if="state.autoscalingEnabled" class="grid gap-3 sm:grid-cols-2"><UFormField label="Minimum CPU"><USelect v-model="state.autoscalingMinCpu" :items="cpuPresets" class="w-full" /></UFormField><UFormField label="Maximum CPU"><USelect v-model="state.autoscalingMaxCpu" :items="cpuPresets" class="w-full" /></UFormField></div></div></section>
+                <div class="flex justify-end gap-3 py-5"><UButton variant="ghost" color="neutral" :to="backUrl()">Cancel</UButton><UButton :icon="ICONS.check" :loading="saving" @click="save">Save Changes</UButton></div>
+              </div>
+            </template>
+            <template #connections><div class="py-10"><h2 class="text-sm font-semibold">Connections</h2><p class="mt-2 text-sm text-muted">Connection pooling and credentials will appear here.</p></div></template>
+            <template #backups><div class="py-10"><h2 class="text-sm font-semibold">Backups</h2><p class="mt-2 text-sm text-muted">Backup schedules and restore points will appear here.</p></div></template>
+            </UTabs>
+          </Transition>
+        </main>
+
+        <DeploymentsRecentActivity ref="recentActivity" v-if="orgId && projectId && currentDatabaseBranchId" :organization-id="orgId" :project-id="projectId" :branch-id="branchId" event-type-prefix="database" :target-id="currentDatabaseBranchId" />
       </div>
     </div>
-
-    <div v-if="loading" class="text-center py-8">
-      <UIcon name="i-lucide-loader-circle" class="size-5 text-muted animate-spin" />
-    </div>
-
-    <template v-else>
-      <div class="w-full overflow-hidden rounded-lg border border-default bg-default">
-        <div class="px-4 py-3 border-b border-default">
-          <p class="text-sm font-semibold">Connection string</p>
-          <p class="mt-0.5 text-xs text-muted">Use this to connect applications to this database branch.</p>
-        </div>
-        <div class="p-4">
-          <UInput placeholder="postgresql://username:password@host:5432/database" readonly class="w-full font-mono" size="sm" />
-        </div>
-      </div>
-
-      <div class="grid gap-6 lg:grid-cols-2">
-        <div class="w-full overflow-hidden rounded-lg border border-default bg-default">
-        <div class="px-4 py-3 border-b border-default">
-          <p class="text-sm font-semibold">Compute</p>
-          <p class="mt-0.5 text-xs text-muted">CPU and RAM scale together as a compute unit.</p>
-        </div>
-        <div class="p-4">
-          <div class="flex items-center gap-4 px-1">
-            <span class="w-28 text-sm">Compute Unit</span>
-            <div class="w-28">
-              <USelect v-model="computeUnit" :items="COMPUTE_UNIT_ITEMS" size="sm" class="w-full" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-        <div class="w-full overflow-hidden rounded-lg border border-default bg-default">
-        <div class="px-4 py-3 border-b border-default">
-          <p class="text-sm font-semibold">High Availability</p>
-          <p class="mt-0.5 text-xs text-muted">Add replicas for increased resilience.</p>
-        </div>
-        <div class="p-4 space-y-3">
-          <UCheckbox v-model="state.highAvailability" label="Enable high availability" />
-          <template v-if="state.highAvailability">
-            <div class="flex items-center gap-4 px-1">
-              <span class="w-24 text-sm">Replicas</span>
-              <div class="w-28">
-                <UInput v-model.number="state.readReplicas" type="number" :min="1" size="sm" class="w-full" />
-              </div>
-              <span class="text-xs text-muted">read replicas</span>
-            </div>
-          </template>
-        </div>
-        </div>
-
-      </div>
-
-      <div class="w-full overflow-hidden rounded-lg border border-default bg-default">
-        <div class="px-4 py-3 border-b border-default">
-          <p class="text-sm font-semibold">Autoscaling</p>
-          <p class="mt-0.5 text-xs text-muted">Let CPU capacity grow with demand.</p>
-        </div>
-        <div class="p-4 space-y-3">
-          <UCheckbox v-model="state.autoscalingEnabled" label="Enable autoscaling" />
-          <template v-if="state.autoscalingEnabled">
-            <div class="flex items-center gap-4 px-1">
-              <span class="w-24 text-sm">Min CPU</span>
-              <div class="w-28">
-                <USelect v-model="state.autoscalingMinCpu" :items="cpuPresets" size="sm" class="w-full" />
-              </div>
-              <span class="text-xs text-muted">cores</span>
-            </div>
-            <div class="flex items-center gap-4 px-1">
-              <span class="w-24 text-sm">Max CPU</span>
-              <div class="w-28">
-                <USelect v-model="state.autoscalingMaxCpu" :items="cpuPresets" size="sm" class="w-full" />
-              </div>
-              <span class="text-xs text-muted">cores</span>
-            </div>
-          </template>
-        </div>
-      </div>
-
-      <div class="flex items-center justify-between rounded-lg border border-default bg-elevated/30 px-4 py-3">
-        <p class="hidden text-sm text-muted sm:block">Changes apply only to this database branch.</p>
-        <div class="ml-auto flex gap-3">
-          <UButton variant="ghost" color="neutral" :to="backUrl()">Cancel</UButton>
-          <UButton :loading="saving" @click="save">Save</UButton>
-        </div>
-      </div>
-    </template>
   </div>
 </template>

@@ -1,7 +1,8 @@
 export default defineAppConfig({
   ui: {
     colors: {
-      neutral: 'neutral',
+      primary: 'clay',
+      neutral: 'sepia',
     },
     select: {
       defaultVariants: {
@@ -25,6 +26,7 @@ export default defineAppConfig({
     },
     theme: {
       colors: [
+        "clay",
         "sepia"
       ]
     },

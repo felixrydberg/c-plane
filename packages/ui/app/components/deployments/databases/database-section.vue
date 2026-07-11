@@ -146,9 +146,9 @@ function isDefaultBranch(b: BranchInfo): boolean {
 </script>
 
 <template>
-  <div class="bg-default rounded-lg border border-default/60 overflow-hidden">
+  <section class="border-b border-default/60 bg-default last:border-b-0">
     <!-- Header -->
-    <div class="flex items-center justify-between px-5 py-4 border-b border-default/30">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-default/50">
       <div class="flex items-center gap-3 min-w-0">
         <div class="min-w-0">
           <span class="block text-sm font-semibold truncate">{{ databaseName }}</span>
@@ -196,33 +196,18 @@ function isDefaultBranch(b: BranchInfo): boolean {
         v-for="b in branches"
         :key="b.id"
         :to="`/${route.params.organization_slug}/databases/stateful/${projectId}/${databaseId}/${b.branch_id}`"
-        class="group flex items-center gap-4 px-5 py-4 hover:bg-elevated/50 transition-colors border-b border-default/10 last:border-b-0"
+        class="group grid gap-3 border-b border-default/30 px-5 py-4 transition-colors hover:bg-elevated/50 last:border-b-0 lg:grid-cols-[minmax(0,1.7fr)_90px_90px_100px_100px_auto] lg:items-center"
       >
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2">
             <span class="text-sm font-medium truncate">{{ b._name }}</span>
             <span v-if="isDefaultBranch(b)" class="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary shrink-0">Default</span>
           </div>
-          <div class="flex items-center gap-2 mt-2 text-[11px] text-muted font-mono">
-            <span>{{ b.cpu ? `${parseCpu(b.cpu)}c` : '0.5c' }}</span>
-            <span class="text-default/20">&bull;</span>
-            <span>{{ b.ram ? `${parseRamGib(b.ram)}G` : '1G' }}</span>
-            <template v-if="b.high_availability">
-              <span class="text-default/20">&bull;</span>
-              <span class="text-emerald-600 dark:text-emerald-400">HA</span>
-            </template>
-            <template v-if="b.read_replicas">
-              <span class="text-default/20">&bull;</span>
-              <span>{{ b.read_replicas }} repl</span>
-            </template>
-            <template v-if="b.autoscaling_enabled">
-              <span class="text-default/20">&bull;</span>
-              <span class="text-violet-600 dark:text-violet-400">auto</span>
-            </template>
-          </div>
         </div>
-
-        <UIcon name="i-heroicons:chevron-right" class="size-4 text-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+        <span class="font-mono text-xs text-muted">{{ b.cpu ? `${parseCpu(b.cpu)}c` : '0.5c' }}</span>
+        <span class="font-mono text-xs text-muted">{{ b.ram ? `${parseRamGib(b.ram)}G` : '1G' }}</span>
+        <span class="text-xs text-muted">{{ b.high_availability ? 'HA' : 'Standard' }}</span>
+        <span class="text-xs text-muted">{{ b.autoscaling_enabled ? 'Autoscaling' : `${b.read_replicas ?? 0} replicas` }}</span>
 
         <UButton
           v-if="!isDefaultBranch(b)"
@@ -241,14 +226,12 @@ function isDefaultBranch(b: BranchInfo): boolean {
       <p class="text-sm font-medium">No branches linked</p>
       <p class="mt-1 text-sm text-muted">Link a project branch to configure this database for it.</p>
     </div>
-  </div>
+  </section>
 
   <UModal v-model:open="unlinkModalOpen" title="Delete Branch">
     <template #body>
       <p class="text-sm">Delete <strong>{{ unlinkTarget?._name }}</strong> from {{ databaseName }}? The branch will still exist in the project.</p>
-    </template>
-    <template #footer>
-      <div class="flex justify-end gap-3">
+      <div class="flex justify-end gap-3 pt-4">
         <UButton variant="ghost" color="neutral" @click="unlinkTarget = null">Cancel</UButton>
         <UButton color="error" :icon="ICONS.trash" :loading="busy" @click="confirmUnlink">Delete</UButton>
       </div>
@@ -260,20 +243,19 @@ function isDefaultBranch(b: BranchInfo): boolean {
     <template #body>
       <p class="text-sm text-muted mb-4">Choose a project branch to link {{ databaseName }} to.</p>
       <div class="border border-default/40 rounded-lg overflow-hidden">
-        <button
+        <UButton
           v-for="pb in unlinkedBranches"
           :key="pb.id"
-          class="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-elevated/60 transition-colors border-b border-default/10 last:border-b-0"
+          variant="solid"
+          color="neutral"
+          :icon="ICONS.folder"
+          class="w-full justify-start rounded-none border-b border-default/10 last:border-b-0"
           @click="linkBranch(pb)"
         >
-          <UIcon name="i-heroicons:folder" class="size-4 text-muted shrink-0" />
           <span class="text-sm">{{ pb.name }}</span>
-          <UIcon name="i-heroicons:chevron-right" class="size-4 text-muted ml-auto" />
-        </button>
+        </UButton>
       </div>
-    </template>
-    <template #footer>
-      <div class="flex justify-end">
+      <div class="flex justify-end pt-4">
         <UButton variant="ghost" color="neutral" @click="linkBranchModalOpen = false">Cancel</UButton>
       </div>
     </template>
@@ -292,9 +274,7 @@ function isDefaultBranch(b: BranchInfo): boolean {
           </ul>
         </div>
       </div>
-    </template>
-    <template #footer>
-      <div class="flex justify-end gap-3">
+      <div class="flex justify-end gap-3 pt-4">
         <UButton variant="ghost" color="neutral" :disabled="deleting" @click="deleteModalOpen = false">Cancel</UButton>
         <UButton color="error" :icon="ICONS.trash" :loading="deleting" @click="handleDelete">Delete</UButton>
       </div>
