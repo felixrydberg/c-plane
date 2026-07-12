@@ -1,0 +1,33 @@
+[package]
+name = "control-plane"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+dioxus = { version = "=0.7.9", features = ["fullstack", "router"] }
+dioxus-fullstack = "=0.7.9"
+serde = { version = "1", features = ["derive"] }
+sea-orm = { version = "1.1.15", features = ["sqlx-postgres", "runtime-tokio-rustls", "with-uuid"], optional = true }
+tokio = { version = "1", features = ["sync"], optional = true }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
+serde_json = { version = "1", optional = true }
+uuid = { version = "1", features = ["v4"], optional = true }
+sha2 = { version = "0.10", optional = true }
+hex = { version = "0.4", optional = true }
+chrono = { version = "0.4", optional = true }
+
+[features]
+default = []
+server = [
+    "dioxus/server",
+    "dep:sea-orm",
+    "dep:tokio",
+    "dep:reqwest",
+    "dep:serde_json",
+    "dep:uuid",
+    "dep:sha2",
+    "dep:hex",
+    "dep:chrono",
+]
+web = ["dioxus/web"]

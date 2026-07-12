@@ -1,0 +1,11 @@
+[application]
+name = "control-plane"
+default_platform = "fullstack"
+out_dir = "dist"
+asset_dir = "assets"
+
+[web.app]
+title = "C-Plane Control Plane"
+
+[web.watcher]
+watch_path = ["src", "assets"]
