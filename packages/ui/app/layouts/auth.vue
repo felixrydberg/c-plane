@@ -55,7 +55,6 @@ const items = computed<NavigationMenuItem[]>(() => [
   {
     label: "Storage",
     icon: ICONS.storage,
-    disabled: true,
     to: `/${store.organization?.slug}/storage`,
   },
   {

@@ -25,9 +25,5 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: "Provider config not found" });
   }
 
-  return serializeProvider({
-    ...provider,
-    has_session_token: Boolean(provider.session_token_encrypted),
-    has_secret_access_key: Boolean(provider.secret_access_key_encrypted),
-  });
+  return serializeProvider(provider);
 });

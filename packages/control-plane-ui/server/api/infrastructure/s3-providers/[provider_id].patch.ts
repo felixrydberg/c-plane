@@ -5,7 +5,7 @@ import { s3_provider, S3_PROVIDER_TYPES } from "~~/server/schema";
 import { withAdminDb } from "~~/server/utils/db";
 import { requireAdmin } from "~~/server/utils/authorization";
 import { serializeProvider } from "~~/server/utils/s3-providers";
-import { encryptCredential } from "~~/server/utils/storage-credentials";
+import { writeS3ProviderCredentials } from "~~/server/utils/openbao";
 
 const updateProviderSchema = z.object({
   provider_type: z.enum(S3_PROVIDER_TYPES).optional(),
@@ -17,7 +17,13 @@ const updateProviderSchema = z.object({
   is_active: z.boolean().optional(),
 }).refine((value) => Object.keys(value).length > 0, {
   message: "At least one field is required",
-});
+}).refine(
+  (value) => (value.access_key_id === undefined) === (value.secret_access_key === undefined),
+  { message: "access_key_id and secret_access_key must be updated together" },
+).refine(
+  (value) => value.session_token === undefined || value.access_key_id !== undefined,
+  { message: "session_token can only be updated with provider credentials" },
+);
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -33,6 +39,21 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = parsed.data;
+  const [existing] = await withAdminDb((db) => {
+    return db.select({ id: s3_provider.id }).from(s3_provider).where(eq(s3_provider.id, providerId)).limit(1);
+  });
+
+  if (!existing) {
+    throw createError({ statusCode: 404, statusMessage: "Provider config not found" });
+  }
+
+  if (body.access_key_id && body.secret_access_key) {
+    await writeS3ProviderCredentials(providerId, {
+      access_key_id: body.access_key_id,
+      secret_access_key: body.secret_access_key,
+      ...(body.session_token ? { session_token: body.session_token } : {}),
+    });
+  }
 
   const [updated] = await withAdminDb((db) => {
     return db
@@ -41,15 +62,6 @@ export default defineEventHandler(async (event) => {
         provider_type: body.provider_type,
         endpoint_url: body.endpoint_url,
         provider_region: body.provider_region,
-        access_key_id: body.access_key_id,
-        secret_access_key_encrypted: body.secret_access_key
-          ? encryptCredential(body.secret_access_key)
-          : undefined,
-        session_token_encrypted: body.session_token === undefined
-          ? undefined
-          : body.session_token === null
-            ? null
-            : encryptCredential(body.session_token),
         is_active: body.is_active,
         updated_at: new Date().toISOString(),
       })
@@ -61,9 +73,5 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: "Provider config not found" });
   }
 
-  return serializeProvider({
-    ...updated,
-    has_session_token: Boolean(updated.session_token_encrypted),
-    has_secret_access_key: Boolean(updated.secret_access_key_encrypted),
-  });
+  return serializeProvider(updated);
 });

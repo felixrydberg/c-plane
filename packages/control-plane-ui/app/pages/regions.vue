@@ -16,7 +16,6 @@ interface S3Provider {
   id: string;
   provider_type: "aws_s3" | "cloudflare_r2";
   endpoint_url: string;
-  access_key_id: string;
   is_active: boolean;
 }
 
@@ -30,15 +29,10 @@ const regions = computed(() => data.value ?? []);
 const providers = computed(() => providersData.value ?? []);
 const providerOptions = computed(() => [
   { label: "None", value: null as string | null },
-  ...providers.value.map((provider) => {
-    const maskedKey = provider.access_key_id.length > 6
-      ? `${provider.access_key_id.slice(0, 4)}...${provider.access_key_id.slice(-2)}`
-      : provider.access_key_id;
-    return {
-      label: `${provider.provider_type} - ${provider.endpoint_url} (${maskedKey})`,
-      value: provider.id,
-    };
-  }),
+  ...providers.value.map((provider) => ({
+    label: `${provider.provider_type} - ${provider.endpoint_url}`,
+    value: provider.id,
+  })),
 ]);
 const providerNameById = computed(() => new Map(providers.value.map((provider) => [
   provider.id,

@@ -4,7 +4,7 @@ import { uuidv7 } from "uuidv7";
 import { s3_provider, S3_PROVIDER_TYPES } from "~~/server/schema";
 import { withAdminDb } from "~~/server/utils/db";
 import { requireAdmin } from "~~/server/utils/authorization";
-import { encryptCredential } from "~~/server/utils/storage-credentials";
+import { deleteS3ProviderCredentials, writeS3ProviderCredentials } from "~~/server/utils/openbao";
 import { serializeProvider } from "~~/server/utils/s3-providers";
 
 const createProviderSchema = z.object({
@@ -26,28 +26,34 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = parsed.data;
+  const providerId = uuidv7();
 
-  const [created] = await withAdminDb((db) => {
-    return db.insert(s3_provider).values({
-      id: uuidv7(),
-      provider_type: body.provider_type,
-      endpoint_url: body.endpoint_url,
-      provider_region: body.provider_region,
-      access_key_id: body.access_key_id,
-      secret_access_key_encrypted: encryptCredential(body.secret_access_key),
-      session_token_encrypted: body.session_token ? encryptCredential(body.session_token) : null,
-      is_active: body.is_active ?? true,
-    }).returning();
+  await writeS3ProviderCredentials(providerId, {
+    access_key_id: body.access_key_id,
+    secret_access_key: body.secret_access_key,
+    ...(body.session_token ? { session_token: body.session_token } : {}),
   });
+
+  let created: typeof s3_provider.$inferSelect | undefined;
+  try {
+    [created] = await withAdminDb((db) => {
+      return db.insert(s3_provider).values({
+        id: providerId,
+        provider_type: body.provider_type,
+        endpoint_url: body.endpoint_url,
+        provider_region: body.provider_region,
+        is_active: body.is_active ?? true,
+      }).returning();
+    });
+  } catch (error) {
+    await deleteS3ProviderCredentials(providerId).catch(() => undefined);
+    throw error;
+  }
 
   if (!created) {
     throw createError({ statusCode: 500, statusMessage: "Failed to create provider configuration" });
   }
 
   event.res.status = 201;
-  return serializeProvider({
-    ...created,
-    has_session_token: Boolean(created.session_token_encrypted),
-    has_secret_access_key: Boolean(created.secret_access_key_encrypted),
-  });
+  return serializeProvider(created);
 });

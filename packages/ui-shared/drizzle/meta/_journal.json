@@ -22,6 +22,13 @@
       "when": 1783782894269,
       "tag": "0002_unify_events",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1783842673406,
+      "tag": "0003_certain_rogue",
+      "breakpoints": true
     }
   ]
 }

@@ -6,6 +6,7 @@ pub mod project_timeline;
 pub mod event;
 pub mod container;
 pub mod container_version;
+pub mod bucket;
 pub mod stateful_postgres_database;
 pub mod stateful_postgres_database_branch;
 pub mod serverless_postgres_database;

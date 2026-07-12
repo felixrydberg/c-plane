@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { s3_provider } from "~~/server/schema";
 import { withAdminDb } from "~~/server/utils/db";
 import { requireAdmin } from "~~/server/utils/authorization";
+import { deleteS3ProviderCredentials } from "~~/server/utils/openbao";
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -22,6 +23,8 @@ export default defineEventHandler(async (event) => {
   if (!deleted) {
     throw createError({ statusCode: 404, statusMessage: "Provider config not found" });
   }
+
+  await deleteS3ProviderCredentials(providerId);
 
   event.res.status = 204;
   return null;

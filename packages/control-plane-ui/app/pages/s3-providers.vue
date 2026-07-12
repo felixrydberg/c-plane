@@ -2,18 +2,12 @@
 import type { ContextMenuItem, TableColumn, TableRow } from "@nuxt/ui";
 import { h } from "vue";
 
-interface Region {
-  id: string;
-  display_name: string;
-}
 interface Provider {
   id: string;
   provider_type: "aws_s3" | "cloudflare_r2";
   endpoint_url: string;
   provider_region: string | null;
-  access_key_id: string;
   is_active: boolean;
-  has_session_token: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -73,7 +67,6 @@ const editForm = reactive({
   access_key_id: "",
   secret_access_key: "",
   session_token: "",
-  clear_session_token: false,
   is_active: true,
 });
 
@@ -92,10 +85,9 @@ const openEdit = (row: TableRow<Provider>) => {
   editForm.provider_type = row.original.provider_type;
   editForm.endpoint_url = row.original.endpoint_url;
   editForm.provider_region = row.original.provider_region ?? "";
-  editForm.access_key_id = row.original.access_key_id;
+  editForm.access_key_id = "";
   editForm.secret_access_key = "";
   editForm.session_token = "";
-  editForm.clear_session_token = false;
   editForm.is_active = row.original.is_active;
   editOpen.value = true;
 };
@@ -149,11 +141,9 @@ const updateProvider = async () => {
         provider_type: editForm.provider_type,
         endpoint_url: editForm.endpoint_url,
         provider_region: editForm.provider_region || null,
-        access_key_id: editForm.access_key_id,
+        access_key_id: editForm.access_key_id || undefined,
         secret_access_key: editForm.secret_access_key || undefined,
-        session_token: editForm.clear_session_token
-          ? null
-          : editForm.session_token || undefined,
+        session_token: editForm.access_key_id ? editForm.session_token || null : undefined,
         is_active: editForm.is_active,
       },
     });
@@ -191,7 +181,7 @@ const deleteProvider = async () => {
     <template #body>
       <UiPageContainer title="S3 Providers">
         <div class="flex justify-end">
-          <UButton label="New Provider" icon="i-heroicons-plus" @click="createOpen = true" />
+          <UButton icon="i-heroicons-plus" @click="createOpen = true">New Provider</UButton>
         </div>
 
         <UiTable
@@ -233,8 +223,8 @@ const deleteProvider = async () => {
               <UCheckbox v-model="createForm.is_active" label="Enabled" />
             </UFormField>
             <div class="flex justify-end gap-2">
-              <UButton variant="soft" @click="createOpen = false">Cancel</UButton>
-              <UButton :loading="isSaving" @click="createProvider">Create</UButton>
+              <UButton icon="i-heroicons-x-mark" color="neutral" variant="ghost" @click="createOpen = false">Cancel</UButton>
+              <UButton icon="i-heroicons-plus" :loading="isSaving" @click="createProvider">Create</UButton>
             </div>
           </div>
         </template>
@@ -258,29 +248,21 @@ const deleteProvider = async () => {
             <UFormField label="Provider Region">
               <UInput v-model="editForm.provider_region" class="w-full" />
             </UFormField>
-            <UFormField label="Access Key ID" required>
+            <UFormField label="Access Key ID (replace credentials)">
               <UInput v-model="editForm.access_key_id" class="w-full" />
             </UFormField>
-            <UFormField label="Secret Access Key (leave empty to keep current)">
+            <UFormField label="Secret Access Key (required when replacing credentials)">
               <UInput v-model="editForm.secret_access_key" type="password" class="w-full" />
             </UFormField>
-            <UFormField label="Session Token (leave empty to keep current)">
-              <UInput
-                v-model="editForm.session_token"
-                type="password"
-                class="w-full"
-                :disabled="editForm.clear_session_token"
-              />
-            </UFormField>
-            <UFormField>
-              <UCheckbox v-model="editForm.clear_session_token" label="Clear stored session token" />
+            <UFormField label="Session Token (optional when replacing credentials)">
+              <UInput v-model="editForm.session_token" type="password" class="w-full" />
             </UFormField>
             <UFormField label="Active">
               <UCheckbox v-model="editForm.is_active" label="Enabled" />
             </UFormField>
             <div class="flex justify-end gap-2">
-              <UButton variant="soft" @click="editOpen = false">Cancel</UButton>
-              <UButton :loading="isSaving" @click="updateProvider">Save</UButton>
+              <UButton icon="i-heroicons-x-mark" color="neutral" variant="ghost" @click="editOpen = false">Cancel</UButton>
+              <UButton icon="i-heroicons-check" :loading="isSaving" @click="updateProvider">Save</UButton>
             </div>
           </div>
         </template>
@@ -291,8 +273,8 @@ const deleteProvider = async () => {
           <div class="space-y-4">
             <p class="text-sm">Delete S3 provider <strong>{{ selected?.endpoint_url }}</strong>?</p>
             <div class="flex justify-end gap-2">
-              <UButton variant="soft" @click="deleteOpen = false">Cancel</UButton>
-              <UButton color="error" :loading="isDeleting" @click="deleteProvider">Delete</UButton>
+              <UButton icon="i-heroicons-x-mark" color="neutral" variant="ghost" @click="deleteOpen = false">Cancel</UButton>
+              <UButton icon="i-heroicons-trash" color="error" :loading="isDeleting" @click="deleteProvider">Delete</UButton>
             </div>
           </div>
         </template>
