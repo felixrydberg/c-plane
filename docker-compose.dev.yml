@@ -12,9 +12,12 @@ services:
       BETTER_AUTH_SESSION_URL: http://ui:3000/api/auth/get-session
       IDENTITY_DATABASE_URL: postgresql://cplane_identity:${POSTGRES_IDENTITY_PASSWORD}@postgresd:5432/cplane
       TENANT_DATABASE_URL: postgresql://cplane_tenant:${POSTGRES_TENANT_PASSWORD}@postgresd:5432/cplane
+      CONTROL_PLANE_URL: http://control-plane:3001
+      CPLANE_SERVICE_TOKEN: ${CPLANE_SERVICE_TOKEN}
     depends_on:
       - postgresd
       - ui
+      - control-plane
     ports:
       - 8080:8080
 
@@ -37,7 +40,7 @@ services:
       NUXT_RESEND_API_KEY: ${RESEND_API_KEY}
       NUXT_AUTH_BASE_URL: http://ui:3000
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
-      BACKEND_URL: http://cplane:8080
+      BACKEND_URL: http://api:8080
     ports:
       - 3000:3000
       - 24678:24678
@@ -60,51 +63,21 @@ services:
         - action: rebuild
           path: ./packages/ui-shared/package.json
 
-  control-plane-ui:
+  control-plane:
     build:
       context: .
-      dockerfile: Dockerfile.bun
-      args:
-        PACKAGE: control-plane-ui
-      target: "development"
+      dockerfile: Dockerfile.dioxus
+      target: "production"
     environment:
-      NODE_ENV: development
-      CHOKIDAR_USEPOLLING: "true"
-      CHOKIDAR_INTERVAL: "250"
-      WATCHPACK_POLLING: "true"
-      NUXT_DATABASE_URL: postgresql://ui:${POSTGRES_UI_PASSWORD}@postgresd:5432/cplane
-      NUXT_IDENTITY_DATABASE_URL: postgresql://cplane_identity:${POSTGRES_IDENTITY_PASSWORD}@postgresd:5432/cplane
-      NUXT_TENANT_DATABASE_URL: postgresql://cplane_tenant:${POSTGRES_TENANT_PASSWORD}@postgresd:5432/cplane
-      NUXT_ADMIN_DATABASE_URL: postgresql://cplane_admin:${POSTGRES_ADMIN_PASSWORD}@postgresd:5432/cplane
-      NUXT_REDIS_URL: redis://valkey:6379
-      NUXT_AUTH_BASE_URL: http://control-plane-ui:3001
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
-      NUXT_OPENBAO_ADDR: http://openbao:8200
-      NUXT_OPENBAO_TOKEN: ${OPENBAO_DEV_ROOT_TOKEN}
+      ADMIN_DATABASE_URL: postgresql://cplane_admin:${POSTGRES_ADMIN_PASSWORD}@postgresd:5432/cplane
+      OPENBAO_ADDR: http://openbao:8200
+      OPENBAO_TOKEN: ${OPENBAO_DEV_ROOT_TOKEN}
+      CPLANE_SERVICE_TOKEN: ${CPLANE_SERVICE_TOKEN}
     depends_on:
       openbao-init:
         condition: service_completed_successfully
     ports:
-      - "127.0.0.1:3001:3001"
-      - "127.0.0.1:24679:24679"
-    develop:
-      watch:
-        - action: sync
-          path: ./packages/control-plane-ui
-          target: /usr/src/app/packages/control-plane-ui
-          ignore:
-            - node_modules/
-            - .nuxt/
-            - .output/
-        - action: sync
-          path: ./packages/ui-shared
-          target: /usr/src/app/packages/ui-shared
-          ignore:
-            - node_modules/
-        - action: rebuild
-          path: ./packages/control-plane-ui/package.json
-        - action: rebuild
-          path: ./packages/ui-shared/package.json
+      - "3001:3001"
 
   postgresd:
     image: postgres:18
@@ -145,7 +118,7 @@ services:
     ports:
       - "8200:8200"
     healthcheck:
-      test: ["CMD-SHELL", "BAO_ADDR=http://127.0.0.1:8200 bao status"]
+      test: ["CMD-SHELL", "BAO_ADDR=http://localhost:8200 bao status"]
       interval: 5s
       timeout: 3s
       retries: 10

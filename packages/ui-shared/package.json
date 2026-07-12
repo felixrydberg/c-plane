@@ -22,8 +22,7 @@
     "migrate": "bunx drizzle-kit migrate --config=drizzle.config.ts",
     "migrate:push": "bunx drizzle-kit push --config=drizzle.config.ts",
     "better-auth:generate:ui": "bun --env-file=../ui/.env x better-auth generate --config ../ui/server/utils/auth.ts --y --output ./schema/tenants/studio.ts",
-    "better-auth:generate:control-plane-ui": "bun --env-file=../control-plane-ui/.env x better-auth generate --config ../control-plane-ui/server/utils/auth.ts --y --output ./schema/tenants/control-plane-ui.ts",
-    "better-auth:generate": "bun run better-auth:generate:ui && bun run better-auth:generate:control-plane-ui"
+    "better-auth:generate": "bun run better-auth:generate:ui"
   },
   "peerDependencies": {
     "better-auth": "^1.5.5",

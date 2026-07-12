@@ -6,6 +6,7 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     CREATE ROLE app_identity NOLOGIN;
     CREATE ROLE app_tenant NOLOGIN;
     CREATE ROLE app_admin NOLOGIN;
+    CREATE ROLE app_audit_reader NOLOGIN;
     CREATE USER cplane_identity WITH PASSWORD '${POSTGRES_IDENTITY_PASSWORD}';
     CREATE USER cplane_tenant WITH PASSWORD '${POSTGRES_TENANT_PASSWORD}';
     CREATE USER cplane_admin WITH PASSWORD '${POSTGRES_ADMIN_PASSWORD}';
@@ -14,6 +15,7 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     GRANT app_identity TO cplane_identity;
     GRANT app_tenant TO cplane_tenant;
     GRANT app_admin TO cplane_admin;
+    GRANT app_audit_reader TO cplane_admin WITH INHERIT FALSE;
 
     GRANT CONNECT ON DATABASE ${POSTGRES_DB} TO ui, cplane_identity, cplane_tenant, cplane_admin;
 

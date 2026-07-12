@@ -9,6 +9,7 @@ WORKDIR /usr/src/app
 
 COPY Cargo.toml Cargo.lock ./
 COPY packages/c-plane ./packages/c-plane
+COPY packages/control-plane ./packages/control-plane
 
 RUN cd packages/${PACKAGE} && \
     cargo build --release --target x86_64-unknown-linux-gnu

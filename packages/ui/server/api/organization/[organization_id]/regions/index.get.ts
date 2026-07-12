@@ -1,7 +1,3 @@
-import { region } from "~~/server/schema";
-import { withTenantDb } from "~~/server/utils/db";
-import { and, asc, eq, ne } from "drizzle-orm";
-
 export default defineEventHandler(async (event) => {
   const membership = await getOrganizationMembership(event);
   const organizationId = membership?.organization_id;
@@ -13,22 +9,8 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  return withTenantDb([organizationId], (db) => {
-    return db
-      .select({
-        id: region.id,
-        slug: region.slug,
-        display_name: region.display_name,
-        status: region.status,
-        routing_mode: region.routing_mode,
-      })
-      .from(region)
-      .where(
-        and(
-          eq(region.status, "active"),
-          ne(region.routing_mode, "disabled"),
-        ),
-      )
-      .orderBy(asc(region.display_name));
+  const config = useRuntimeConfig(event);
+  return $fetch(`${config.controlPlaneUrl}/internal/regions`, {
+    headers: { "x-cplane-token": config.cplaneServiceToken },
   });
 });

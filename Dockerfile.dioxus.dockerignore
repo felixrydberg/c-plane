@@ -1,0 +1,12 @@
+# This image builds only the private Rust control plane. Keep the build context
+# independent from the Nuxt apps, local dependencies, and other service code.
+**
+!Cargo.toml
+!Cargo.lock
+!packages
+!packages/c-plane
+!packages/c-plane/Cargo.toml
+!packages/c-plane/src
+!packages/c-plane/src/main.rs
+!packages/control-plane
+!packages/control-plane/**

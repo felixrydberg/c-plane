@@ -7,6 +7,12 @@ defineProps<{
 }>();
 const store = useStore();
 const router = useRouter();
+const colorMode = useColorMode();
+const isDark = computed(() => colorMode.value === 'dark');
+
+function toggleColorMode() {
+  colorMode.preference = isDark.value ? 'light' : 'dark';
+}
 const user = computed(() => {
   return {
     name: store.user?.name,
@@ -24,6 +30,10 @@ const items = computed<DropdownMenuItem[][]>(() => ([[{
   label: 'Settings',
   icon: 'i-heroicons:cog-6-tooth',
   to: '/settings'
+}, {
+  label: isDark.value ? 'Switch to light mode' : 'Switch to dark mode',
+  icon: isDark.value ? 'i-heroicons:sun' : 'i-heroicons:moon',
+  onSelect: toggleColorMode,
 }, {
   label: 'Log out',
   icon: 'i-heroicons:arrow-right-start-on-rectangle',

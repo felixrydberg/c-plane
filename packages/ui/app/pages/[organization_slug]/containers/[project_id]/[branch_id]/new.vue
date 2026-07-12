@@ -114,7 +114,7 @@ function backUrl() { return `/${route.params.organization_slug}/containers/${pro
         </section>
         <section class="grid gap-4 py-7 lg:grid-cols-[190px_minmax(0,1fr)]">
           <div><h2 class="text-sm font-semibold">Compute</h2><p class="mt-1 text-xs text-muted">CPU, memory, network, and scale.</p></div>
-          <div class="grid gap-3 sm:grid-cols-3"><UFormField label="Compute Unit" description="1 CU = 1 vCPU + 2 GB RAM. Scale from 0.25 to 32 CU."><USelect v-model="computeUnit" :items="COMPUTE_UNIT_ITEMS" class="w-full" /></UFormField><UFormField label="Port" description="The container port your app listens on (1–65535)."><UInput v-model.number="state.port" type="number" :min="1" :max="65535" class="w-full" /></UFormField><UFormField label="Replicas" description="Number of container instances to run."><UInputNumber v-model="state.replicas" :min="1" :step="1" class="w-32" /></UFormField></div>
+          <div class="grid gap-3 sm:grid-cols-3"><UFormField label="Compute Unit" description="1 CU = 1 vCPU + 2 GB RAM. Scale from 0.25 to 32 CU."><USelect v-model="computeUnit" :items="COMPUTE_UNIT_ITEMS" class="w-full" /></UFormField><UFormField label="Port" description="The container port your app listens on (1–65535)."><UInput v-model.number="state.port" type="number" :min="1" :max="65535" class="w-full" /></UFormField><UFormField label="Replicas" description="Number of container instances to run."><UInputNumber v-model="state.replicas" :min="1" :step="1" class="w-full" /></UFormField></div>
         </section>
         <section class="grid gap-4 py-7 lg:grid-cols-[190px_minmax(0,1fr)]">
           <div><h2 class="text-sm font-semibold">Deployment</h2><p class="mt-1 text-xs text-muted">Placement, health, and visibility.</p></div>

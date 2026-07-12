@@ -1,5 +1,5 @@
 {
-  "id": "a26d4d07-aa5f-4045-a9df-b10e4814660a",
+  "id": "fcdee653-4e15-4edc-a2b5-3b8010fa85fb",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -22,8 +22,7 @@
         },
         "type": {
           "name": "type",
-          "type": "event_types",
-          "typeSchema": "public",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -39,6 +38,18 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -69,6 +80,27 @@
           "columns": [
             {
               "expression": "type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "event_project_idx": {
+          "name": "event_project_idx",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -339,106 +371,6 @@
       "checkConstraints": {},
       "isRLSEnabled": true
     },
-    "public.cluster_capabilities": {
-      "name": "cluster_capabilities",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "cluster_id": {
-          "name": "cluster_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "capability": {
-          "name": "capability",
-          "type": "region_capability",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "cluster_capabilities_cluster_id_capability_uidx": {
-          "name": "cluster_capabilities_cluster_id_capability_uidx",
-          "columns": [
-            {
-              "expression": "cluster_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "capability",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "cluster_capabilities_capability_idx": {
-          "name": "cluster_capabilities_capability_idx",
-          "columns": [
-            {
-              "expression": "capability",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "cluster_capabilities_cluster_id_clusters_id_fk": {
-          "name": "cluster_capabilities_cluster_id_clusters_id_fk",
-          "tableFrom": "cluster_capabilities",
-          "tableTo": "clusters",
-          "columnsFrom": [
-            "cluster_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {
-        "cluster_capabilities_tenant_select_rls": {
-          "name": "cluster_capabilities_tenant_select_rls",
-          "as": "PERMISSIVE",
-          "for": "SELECT",
-          "to": [
-            "app_tenant"
-          ],
-          "using": "true"
-        }
-      },
-      "checkConstraints": {},
-      "isRLSEnabled": true
-    },
     "public.cluster_ingress_endpoints": {
       "name": "cluster_ingress_endpoints",
       "schema": "",
@@ -639,12 +571,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "issued_by_user_id": {
-          "name": "issued_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -720,19 +646,6 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
-        },
-        "cluster_join_credentials_issued_by_user_id_cplane_user_id_fk": {
-          "name": "cluster_join_credentials_issued_by_user_id_cplane_user_id_fk",
-          "tableFrom": "cluster_join_credentials",
-          "tableTo": "cplane_user",
-          "columnsFrom": [
-            "issued_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -741,8 +654,8 @@
       "checkConstraints": {},
       "isRLSEnabled": true
     },
-    "public.cluster_runtime_identities": {
-      "name": "cluster_runtime_identities",
+    "public.infrastructure_audit_log": {
+      "name": "infrastructure_audit_log",
       "schema": "",
       "columns": {
         "id": {
@@ -751,56 +664,41 @@
           "primaryKey": true,
           "notNull": true
         },
-        "cluster_id": {
-          "name": "cluster_id",
+        "actor_identifier": {
+          "name": "actor_identifier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_ip": {
+          "name": "source_ip",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "resource_type": {
+          "name": "resource_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "resource_id": {
+          "name": "resource_id",
           "type": "uuid",
           "primaryKey": false,
+          "notNull": false
+        },
+        "changes": {
+          "name": "changes",
+          "type": "jsonb",
+          "primaryKey": false,
           "notNull": true
-        },
-        "public_key_pem": {
-          "name": "public_key_pem",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "key_algorithm": {
-          "name": "key_algorithm",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'ed25519'"
-        },
-        "key_version": {
-          "name": "key_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "lease_epoch": {
-          "name": "lease_epoch",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "last_rotated_at": {
-          "name": "last_rotated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_seen_at": {
-          "name": "last_seen_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "revoked_at": {
-          "name": "revoked_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -808,36 +706,35 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
         }
       },
       "indexes": {
-        "cluster_runtime_identities_cluster_id_uidx": {
-          "name": "cluster_runtime_identities_cluster_id_uidx",
+        "infrastructure_audit_log_created_at_idx": {
+          "name": "infrastructure_audit_log_created_at_idx",
           "columns": [
             {
-              "expression": "cluster_id",
+              "expression": "created_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
             }
           ],
-          "isUnique": true,
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
         },
-        "cluster_runtime_identities_revoked_at_idx": {
-          "name": "cluster_runtime_identities_revoked_at_idx",
+        "infrastructure_audit_log_resource_idx": {
+          "name": "infrastructure_audit_log_resource_idx",
           "columns": [
             {
-              "expression": "revoked_at",
+              "expression": "resource_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "resource_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -849,26 +746,12 @@
           "with": {}
         }
       },
-      "foreignKeys": {
-        "cluster_runtime_identities_cluster_id_clusters_id_fk": {
-          "name": "cluster_runtime_identities_cluster_id_clusters_id_fk",
-          "tableFrom": "cluster_runtime_identities",
-          "tableTo": "clusters",
-          "columnsFrom": [
-            "cluster_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": true
+      "isRLSEnabled": false
     },
     "public.s3_providers": {
       "name": "s3_providers",
@@ -895,24 +778,6 @@
         },
         "provider_region": {
           "name": "provider_region",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "access_key_id": {
-          "name": "access_key_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "secret_access_key_encrypted": {
-          "name": "secret_access_key_encrypted",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "session_token_encrypted": {
-          "name": "session_token_encrypted",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -1127,106 +992,6 @@
       "policies": {
         "regions_tenant_select_rls": {
           "name": "regions_tenant_select_rls",
-          "as": "PERMISSIVE",
-          "for": "SELECT",
-          "to": [
-            "app_tenant"
-          ],
-          "using": "true"
-        }
-      },
-      "checkConstraints": {},
-      "isRLSEnabled": true
-    },
-    "public.region_capabilities": {
-      "name": "region_capabilities",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "region_id": {
-          "name": "region_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "capability": {
-          "name": "capability",
-          "type": "region_capability",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "region_capabilities_region_id_capability_uidx": {
-          "name": "region_capabilities_region_id_capability_uidx",
-          "columns": [
-            {
-              "expression": "region_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "capability",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "region_capabilities_capability_idx": {
-          "name": "region_capabilities_capability_idx",
-          "columns": [
-            {
-              "expression": "capability",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "region_capabilities_region_id_regions_id_fk": {
-          "name": "region_capabilities_region_id_regions_id_fk",
-          "tableFrom": "region_capabilities",
-          "tableTo": "regions",
-          "columnsFrom": [
-            "region_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {
-        "region_capabilities_tenant_select_rls": {
-          "name": "region_capabilities_tenant_select_rls",
           "as": "PERMISSIVE",
           "for": "SELECT",
           "to": [
@@ -1810,612 +1575,6 @@
       "checkConstraints": {},
       "isRLSEnabled": true
     },
-    "public.stateful_postgres_database": {
-      "name": "stateful_postgres_database",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "project_id": {
-          "name": "project_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "default_branch_id": {
-          "name": "default_branch_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "stateful_postgres_database_project_id_idx": {
-          "name": "stateful_postgres_database_project_id_idx",
-          "columns": [
-            {
-              "expression": "project_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "stateful_postgres_database_organization_id_idx": {
-          "name": "stateful_postgres_database_organization_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "stateful_postgres_database_project_id_project_id_fk": {
-          "name": "stateful_postgres_database_project_id_project_id_fk",
-          "tableFrom": "stateful_postgres_database",
-          "tableTo": "project",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "stateful_postgres_database_organization_id_organization_id_fk": {
-          "name": "stateful_postgres_database_organization_id_organization_id_fk",
-          "tableFrom": "stateful_postgres_database",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "stateful_postgres_database_default_branch_id_stateful_postgres_database_branch_id_fk": {
-          "name": "stateful_postgres_database_default_branch_id_stateful_postgres_database_branch_id_fk",
-          "tableFrom": "stateful_postgres_database",
-          "tableTo": "stateful_postgres_database_branch",
-          "columnsFrom": [
-            "default_branch_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {
-        "stateful_postgres_database_tenant_rls": {
-          "name": "stateful_postgres_database_tenant_rls",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "app_tenant"
-          ],
-          "using": "\"stateful_postgres_database\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"stateful_postgres_database\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
-        }
-      },
-      "checkConstraints": {},
-      "isRLSEnabled": true
-    },
-    "public.stateful_postgres_database_branch": {
-      "name": "stateful_postgres_database_branch",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "database_id": {
-          "name": "database_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "branch_id": {
-          "name": "branch_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "cpu": {
-          "name": "cpu",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ram": {
-          "name": "ram",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "high_availability": {
-          "name": "high_availability",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "read_replicas": {
-          "name": "read_replicas",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "autoscaling_enabled": {
-          "name": "autoscaling_enabled",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "autoscaling_min_cpu": {
-          "name": "autoscaling_min_cpu",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "autoscaling_max_cpu": {
-          "name": "autoscaling_max_cpu",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "stateful_postgres_database_branch_database_id_idx": {
-          "name": "stateful_postgres_database_branch_database_id_idx",
-          "columns": [
-            {
-              "expression": "database_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "stateful_postgres_database_branch_branch_id_idx": {
-          "name": "stateful_postgres_database_branch_branch_id_idx",
-          "columns": [
-            {
-              "expression": "branch_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "stateful_postgres_database_branch_organization_id_idx": {
-          "name": "stateful_postgres_database_branch_organization_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "stateful_postgres_database_branch_database_id_stateful_postgres_database_id_fk": {
-          "name": "stateful_postgres_database_branch_database_id_stateful_postgres_database_id_fk",
-          "tableFrom": "stateful_postgres_database_branch",
-          "tableTo": "stateful_postgres_database",
-          "columnsFrom": [
-            "database_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "stateful_postgres_database_branch_branch_id_project_branch_id_fk": {
-          "name": "stateful_postgres_database_branch_branch_id_project_branch_id_fk",
-          "tableFrom": "stateful_postgres_database_branch",
-          "tableTo": "project_branch",
-          "columnsFrom": [
-            "branch_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "stateful_postgres_database_branch_organization_id_organization_id_fk": {
-          "name": "stateful_postgres_database_branch_organization_id_organization_id_fk",
-          "tableFrom": "stateful_postgres_database_branch",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {
-        "stateful_postgres_database_branch_tenant_rls": {
-          "name": "stateful_postgres_database_branch_tenant_rls",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "app_tenant"
-          ],
-          "using": "\"stateful_postgres_database_branch\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"stateful_postgres_database_branch\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
-        }
-      },
-      "checkConstraints": {},
-      "isRLSEnabled": true
-    },
-    "public.serverless_postgres_database": {
-      "name": "serverless_postgres_database",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "project_id": {
-          "name": "project_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "default_branch_id": {
-          "name": "default_branch_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "serverless_postgres_database_project_id_idx": {
-          "name": "serverless_postgres_database_project_id_idx",
-          "columns": [
-            {
-              "expression": "project_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "serverless_postgres_database_organization_id_idx": {
-          "name": "serverless_postgres_database_organization_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "serverless_postgres_database_project_id_project_id_fk": {
-          "name": "serverless_postgres_database_project_id_project_id_fk",
-          "tableFrom": "serverless_postgres_database",
-          "tableTo": "project",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "serverless_postgres_database_organization_id_organization_id_fk": {
-          "name": "serverless_postgres_database_organization_id_organization_id_fk",
-          "tableFrom": "serverless_postgres_database",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "serverless_postgres_database_default_branch_id_serverless_postgres_database_branch_id_fk": {
-          "name": "serverless_postgres_database_default_branch_id_serverless_postgres_database_branch_id_fk",
-          "tableFrom": "serverless_postgres_database",
-          "tableTo": "serverless_postgres_database_branch",
-          "columnsFrom": [
-            "default_branch_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {
-        "serverless_postgres_database_tenant_rls": {
-          "name": "serverless_postgres_database_tenant_rls",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "app_tenant"
-          ],
-          "using": "\"serverless_postgres_database\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"serverless_postgres_database\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
-        }
-      },
-      "checkConstraints": {},
-      "isRLSEnabled": true
-    },
-    "public.serverless_postgres_database_branch": {
-      "name": "serverless_postgres_database_branch",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "database_id": {
-          "name": "database_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "branch_id": {
-          "name": "branch_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "cpu": {
-          "name": "cpu",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ram": {
-          "name": "ram",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "high_availability": {
-          "name": "high_availability",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "read_replicas": {
-          "name": "read_replicas",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "autoscaling_enabled": {
-          "name": "autoscaling_enabled",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "autoscaling_min_cpu": {
-          "name": "autoscaling_min_cpu",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "autoscaling_max_cpu": {
-          "name": "autoscaling_max_cpu",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "serverless_postgres_database_branch_database_id_idx": {
-          "name": "serverless_postgres_database_branch_database_id_idx",
-          "columns": [
-            {
-              "expression": "database_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "serverless_postgres_database_branch_branch_id_idx": {
-          "name": "serverless_postgres_database_branch_branch_id_idx",
-          "columns": [
-            {
-              "expression": "branch_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "serverless_postgres_database_branch_organization_id_idx": {
-          "name": "serverless_postgres_database_branch_organization_id_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "serverless_postgres_database_branch_database_id_serverless_postgres_database_id_fk": {
-          "name": "serverless_postgres_database_branch_database_id_serverless_postgres_database_id_fk",
-          "tableFrom": "serverless_postgres_database_branch",
-          "tableTo": "serverless_postgres_database",
-          "columnsFrom": [
-            "database_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "serverless_postgres_database_branch_branch_id_project_branch_id_fk": {
-          "name": "serverless_postgres_database_branch_branch_id_project_branch_id_fk",
-          "tableFrom": "serverless_postgres_database_branch",
-          "tableTo": "project_branch",
-          "columnsFrom": [
-            "branch_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "serverless_postgres_database_branch_organization_id_organization_id_fk": {
-          "name": "serverless_postgres_database_branch_organization_id_organization_id_fk",
-          "tableFrom": "serverless_postgres_database_branch",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {
-        "serverless_postgres_database_branch_tenant_rls": {
-          "name": "serverless_postgres_database_branch_tenant_rls",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "app_tenant"
-          ],
-          "using": "\"serverless_postgres_database_branch\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"serverless_postgres_database_branch\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
-        }
-      },
-      "checkConstraints": {},
-      "isRLSEnabled": true
-    },
     "public.project_container": {
       "name": "project_container",
       "schema": "",
@@ -2745,8 +1904,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.project_secret": {
-      "name": "project_secret",
+    "public.serverless_postgres_database": {
+      "name": "serverless_postgres_database",
       "schema": "",
       "columns": {
         "id": {
@@ -2767,57 +1926,41 @@
           "primaryKey": false,
           "notNull": true
         },
+        "default_branch_id": {
+          "name": "default_branch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "name": {
           "name": "name",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
+        "autoscaling_enabled": {
+          "name": "autoscaling_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "autoscaling_min_cpu": {
+          "name": "autoscaling_min_cpu",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
+        "autoscaling_max_cpu": {
+          "name": "autoscaling_max_cpu",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
+          "notNull": false
         }
       },
       "indexes": {
-        "project_secret_project_id_name_uidx": {
-          "name": "project_secret_project_id_name_uidx",
-          "columns": [
-            {
-              "expression": "project_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "name",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "project_secret_project_id_idx": {
-          "name": "project_secret_project_id_idx",
+        "serverless_postgres_database_project_id_idx": {
+          "name": "serverless_postgres_database_project_id_idx",
           "columns": [
             {
               "expression": "project_id",
@@ -2831,8 +1974,8 @@
           "method": "btree",
           "with": {}
         },
-        "project_secret_organization_id_idx": {
-          "name": "project_secret_organization_id_idx",
+        "serverless_postgres_database_organization_id_idx": {
+          "name": "serverless_postgres_database_organization_id_idx",
           "columns": [
             {
               "expression": "organization_id",
@@ -2848,9 +1991,9 @@
         }
       },
       "foreignKeys": {
-        "project_secret_project_id_project_id_fk": {
-          "name": "project_secret_project_id_project_id_fk",
-          "tableFrom": "project_secret",
+        "serverless_postgres_database_project_id_project_id_fk": {
+          "name": "serverless_postgres_database_project_id_project_id_fk",
+          "tableFrom": "serverless_postgres_database",
           "tableTo": "project",
           "columnsFrom": [
             "project_id"
@@ -2861,12 +2004,25 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "project_secret_organization_id_organization_id_fk": {
-          "name": "project_secret_organization_id_organization_id_fk",
-          "tableFrom": "project_secret",
+        "serverless_postgres_database_organization_id_organization_id_fk": {
+          "name": "serverless_postgres_database_organization_id_organization_id_fk",
+          "tableFrom": "serverless_postgres_database",
           "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "serverless_postgres_database_default_branch_id_serverless_postgres_database_branch_id_fk": {
+          "name": "serverless_postgres_database_default_branch_id_serverless_postgres_database_branch_id_fk",
+          "tableFrom": "serverless_postgres_database",
+          "tableTo": "serverless_postgres_database_branch",
+          "columnsFrom": [
+            "default_branch_id"
           ],
           "columnsTo": [
             "id"
@@ -2878,22 +2034,22 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {
-        "project_secret_tenant_rls": {
-          "name": "project_secret_tenant_rls",
+        "serverless_postgres_database_tenant_rls": {
+          "name": "serverless_postgres_database_tenant_rls",
           "as": "PERMISSIVE",
           "for": "ALL",
           "to": [
             "app_tenant"
           ],
-          "using": "\"project_secret\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"project_secret\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"serverless_postgres_database\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"serverless_postgres_database\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
-    "public.project_secret_version": {
-      "name": "project_secret_version",
+    "public.serverless_postgres_database_branch": {
+      "name": "serverless_postgres_database_branch",
       "schema": "",
       "columns": {
         "id": {
@@ -2902,8 +2058,14 @@
           "primaryKey": true,
           "notNull": true
         },
-        "secret_id": {
-          "name": "secret_id",
+        "database_id": {
+          "name": "database_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "branch_id": {
+          "name": "branch_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -2913,54 +2075,14 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "value_encrypted": {
-          "name": "value_encrypted",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
         }
       },
       "indexes": {
-        "project_secret_version_secret_id_version_uidx": {
-          "name": "project_secret_version_secret_id_version_uidx",
+        "serverless_postgres_database_branch_database_id_idx": {
+          "name": "serverless_postgres_database_branch_database_id_idx",
           "columns": [
             {
-              "expression": "secret_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "version",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "project_secret_version_secret_id_idx": {
-          "name": "project_secret_version_secret_id_idx",
-          "columns": [
-            {
-              "expression": "secret_id",
+              "expression": "database_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2971,8 +2093,23 @@
           "method": "btree",
           "with": {}
         },
-        "project_secret_version_organization_id_idx": {
-          "name": "project_secret_version_organization_id_idx",
+        "serverless_postgres_database_branch_branch_id_idx": {
+          "name": "serverless_postgres_database_branch_branch_id_idx",
+          "columns": [
+            {
+              "expression": "branch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "serverless_postgres_database_branch_organization_id_idx": {
+          "name": "serverless_postgres_database_branch_organization_id_idx",
           "columns": [
             {
               "expression": "organization_id",
@@ -2988,12 +2125,12 @@
         }
       },
       "foreignKeys": {
-        "project_secret_version_secret_id_project_secret_id_fk": {
-          "name": "project_secret_version_secret_id_project_secret_id_fk",
-          "tableFrom": "project_secret_version",
-          "tableTo": "project_secret",
+        "serverless_postgres_database_branch_database_id_serverless_postgres_database_id_fk": {
+          "name": "serverless_postgres_database_branch_database_id_serverless_postgres_database_id_fk",
+          "tableFrom": "serverless_postgres_database_branch",
+          "tableTo": "serverless_postgres_database",
           "columnsFrom": [
-            "secret_id"
+            "database_id"
           ],
           "columnsTo": [
             "id"
@@ -3001,9 +2138,22 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "project_secret_version_organization_id_organization_id_fk": {
-          "name": "project_secret_version_organization_id_organization_id_fk",
-          "tableFrom": "project_secret_version",
+        "serverless_postgres_database_branch_branch_id_project_branch_id_fk": {
+          "name": "serverless_postgres_database_branch_branch_id_project_branch_id_fk",
+          "tableFrom": "serverless_postgres_database_branch",
+          "tableTo": "project_branch",
+          "columnsFrom": [
+            "branch_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "serverless_postgres_database_branch_organization_id_organization_id_fk": {
+          "name": "serverless_postgres_database_branch_organization_id_organization_id_fk",
+          "tableFrom": "serverless_postgres_database_branch",
           "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
@@ -3018,19 +2168,469 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {
-        "project_secret_version_tenant_rls": {
-          "name": "project_secret_version_tenant_rls",
+        "serverless_postgres_database_branch_tenant_rls": {
+          "name": "serverless_postgres_database_branch_tenant_rls",
           "as": "PERMISSIVE",
           "for": "ALL",
           "to": [
             "app_tenant"
           ],
-          "using": "\"project_secret_version\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"project_secret_version\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"serverless_postgres_database_branch\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"serverless_postgres_database_branch\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
-      "isRLSEnabled": false
+      "isRLSEnabled": true
+    },
+    "public.stateful_postgres_database": {
+      "name": "stateful_postgres_database",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "default_branch_id": {
+          "name": "default_branch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cpu": {
+          "name": "cpu",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ram": {
+          "name": "ram",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "high_availability": {
+          "name": "high_availability",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "read_replicas": {
+          "name": "read_replicas",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "autoscaling_enabled": {
+          "name": "autoscaling_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "autoscaling_min_cpu": {
+          "name": "autoscaling_min_cpu",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "autoscaling_max_cpu": {
+          "name": "autoscaling_max_cpu",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "stateful_postgres_database_project_id_idx": {
+          "name": "stateful_postgres_database_project_id_idx",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "stateful_postgres_database_organization_id_idx": {
+          "name": "stateful_postgres_database_organization_id_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "stateful_postgres_database_project_id_project_id_fk": {
+          "name": "stateful_postgres_database_project_id_project_id_fk",
+          "tableFrom": "stateful_postgres_database",
+          "tableTo": "project",
+          "columnsFrom": [
+            "project_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "stateful_postgres_database_organization_id_organization_id_fk": {
+          "name": "stateful_postgres_database_organization_id_organization_id_fk",
+          "tableFrom": "stateful_postgres_database",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "stateful_postgres_database_default_branch_id_stateful_postgres_database_branch_id_fk": {
+          "name": "stateful_postgres_database_default_branch_id_stateful_postgres_database_branch_id_fk",
+          "tableFrom": "stateful_postgres_database",
+          "tableTo": "stateful_postgres_database_branch",
+          "columnsFrom": [
+            "default_branch_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "stateful_postgres_database_tenant_rls": {
+          "name": "stateful_postgres_database_tenant_rls",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "app_tenant"
+          ],
+          "using": "\"stateful_postgres_database\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"stateful_postgres_database\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.stateful_postgres_database_branch": {
+      "name": "stateful_postgres_database_branch",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "database_id": {
+          "name": "database_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "branch_id": {
+          "name": "branch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "stateful_postgres_database_branch_database_id_idx": {
+          "name": "stateful_postgres_database_branch_database_id_idx",
+          "columns": [
+            {
+              "expression": "database_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "stateful_postgres_database_branch_branch_id_idx": {
+          "name": "stateful_postgres_database_branch_branch_id_idx",
+          "columns": [
+            {
+              "expression": "branch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "stateful_postgres_database_branch_organization_id_idx": {
+          "name": "stateful_postgres_database_branch_organization_id_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "stateful_postgres_database_branch_database_id_stateful_postgres_database_id_fk": {
+          "name": "stateful_postgres_database_branch_database_id_stateful_postgres_database_id_fk",
+          "tableFrom": "stateful_postgres_database_branch",
+          "tableTo": "stateful_postgres_database",
+          "columnsFrom": [
+            "database_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "stateful_postgres_database_branch_branch_id_project_branch_id_fk": {
+          "name": "stateful_postgres_database_branch_branch_id_project_branch_id_fk",
+          "tableFrom": "stateful_postgres_database_branch",
+          "tableTo": "project_branch",
+          "columnsFrom": [
+            "branch_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "stateful_postgres_database_branch_organization_id_organization_id_fk": {
+          "name": "stateful_postgres_database_branch_organization_id_organization_id_fk",
+          "tableFrom": "stateful_postgres_database_branch",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "stateful_postgres_database_branch_tenant_rls": {
+          "name": "stateful_postgres_database_branch_tenant_rls",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "app_tenant"
+          ],
+          "using": "\"stateful_postgres_database_branch\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"stateful_postgres_database_branch\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.bucket": {
+      "name": "bucket",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "region": {
+          "name": "region",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_public": {
+          "name": "is_public",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        }
+      },
+      "indexes": {
+        "bucket_project_id_idx": {
+          "name": "bucket_project_id_idx",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "bucket_organization_id_idx": {
+          "name": "bucket_organization_id_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "bucket_region_idx": {
+          "name": "bucket_region_idx",
+          "columns": [
+            {
+              "expression": "region",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "bucket_project_id_project_id_fk": {
+          "name": "bucket_project_id_project_id_fk",
+          "tableFrom": "bucket",
+          "tableTo": "project",
+          "columnsFrom": [
+            "project_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "bucket_organization_id_organization_id_fk": {
+          "name": "bucket_organization_id_organization_id_fk",
+          "tableFrom": "bucket",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "bucket_region_regions_id_fk": {
+          "name": "bucket_region_regions_id_fk",
+          "tableFrom": "bucket",
+          "tableTo": "regions",
+          "columnsFrom": [
+            "region"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "bucket_tenant_rls": {
+          "name": "bucket_tenant_rls",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "app_tenant"
+          ],
+          "using": "\"bucket\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"bucket\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": true
     },
     "public.api_key_scopes": {
       "name": "api_key_scopes",
@@ -4163,400 +3763,9 @@
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
-    },
-    "public.cplane_account": {
-      "name": "cplane_account",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "pg_catalog.gen_random_uuid()"
-        },
-        "account_id": {
-          "name": "account_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "provider_id": {
-          "name": "provider_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "access_token": {
-          "name": "access_token",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "refresh_token": {
-          "name": "refresh_token",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "id_token": {
-          "name": "id_token",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "access_token_expires_at": {
-          "name": "access_token_expires_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "refresh_token_expires_at": {
-          "name": "refresh_token_expires_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "scope": {
-          "name": "scope",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "password": {
-          "name": "password",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "cplane_account_userId_idx": {
-          "name": "cplane_account_userId_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "cplane_account_user_id_cplane_user_id_fk": {
-          "name": "cplane_account_user_id_cplane_user_id_fk",
-          "tableFrom": "cplane_account",
-          "tableTo": "cplane_user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.cplane_auth_verification": {
-      "name": "cplane_auth_verification",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "pg_catalog.gen_random_uuid()"
-        },
-        "identifier": {
-          "name": "identifier",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "value": {
-          "name": "value",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "cplane_auth_verification_identifier_idx": {
-          "name": "cplane_auth_verification_identifier_idx",
-          "columns": [
-            {
-              "expression": "identifier",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.cplane_two_factor": {
-      "name": "cplane_two_factor",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "pg_catalog.gen_random_uuid()"
-        },
-        "secret": {
-          "name": "secret",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "backup_codes": {
-          "name": "backup_codes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "cplane_two_factor_secret_idx": {
-          "name": "cplane_two_factor_secret_idx",
-          "columns": [
-            {
-              "expression": "secret",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "cplane_two_factor_userId_idx": {
-          "name": "cplane_two_factor_userId_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "cplane_two_factor_user_id_cplane_user_id_fk": {
-          "name": "cplane_two_factor_user_id_cplane_user_id_fk",
-          "tableFrom": "cplane_two_factor",
-          "tableTo": "cplane_user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.cplane_user": {
-      "name": "cplane_user",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "pg_catalog.gen_random_uuid()"
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "email": {
-          "name": "email",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "email_verified": {
-          "name": "email_verified",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "image": {
-          "name": "image",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "role": {
-          "name": "role",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "banned": {
-          "name": "banned",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false,
-          "default": false
-        },
-        "ban_reason": {
-          "name": "ban_reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ban_expires": {
-          "name": "ban_expires",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "two_factor_enabled": {
-          "name": "two_factor_enabled",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false,
-          "default": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "cplane_user_email_unique": {
-          "name": "cplane_user_email_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
     }
   },
   "enums": {
-    "public.event_types": {
-      "name": "event_types",
-      "schema": "public",
-      "values": [
-        "organization:member_added",
-        "organization:member_removed",
-        "organization:invitation_created",
-        "organization:invitation_accepted",
-        "organization:invitation_revoked",
-        "organization:invitation_declined",
-        "api-key:created",
-        "api-key:revoked",
-        "api-key:updated",
-        "api-key:rolled",
-        "verification:created",
-        "verification:completed"
-      ]
-    },
     "public.cluster_health_status": {
       "name": "cluster_health_status",
       "schema": "public",
@@ -4603,16 +3812,6 @@
       "values": [
         "aws_s3",
         "cloudflare_r2"
-      ]
-    },
-    "public.region_capability": {
-      "name": "region_capability",
-      "schema": "public",
-      "values": [
-        "nvme",
-        "gpu",
-        "arm",
-        "x86"
       ]
     },
     "public.region_routing_mode": {
