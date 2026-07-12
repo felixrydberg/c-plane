@@ -1,7 +1,7 @@
 {
   "name": "cplane",
   "private": true,
-  "packageManager": "bun@1.3.13",
+  "packageManager": "bun@1.2.9",
   "workspaces": [
     "packages/ui-shared",
     "packages/ui",
@@ -22,6 +22,7 @@
   },
   "scripts": {
     "build": "bun run --filter './packages/ui' build && bun run --filter './packages/control-plane-ui' build",
+    "build:prod": "docker compose -f docker-compose.prod.yml build ui && docker compose -f docker-compose.prod.yml build control-plane-ui",
     "lint": "bun run --filter './packages/ui' lint && bun run --filter './packages/control-plane-ui' lint",
     "typecheck": "bun run --filter './packages/ui' typecheck && bun run --filter './packages/control-plane-ui' typecheck",
     "dev:ui": "bun run --filter './packages/ui' dev",

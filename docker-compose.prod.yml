@@ -1,4 +1,4 @@
-name: cplane
+name: cplane-prod
 services:
   api:
     build:
@@ -24,12 +24,9 @@ services:
       dockerfile: Dockerfile.bun
       args:
         PACKAGE: ui
-      target: "development"
+      target: "production"
     environment:
-      NODE_ENV: development
-      CHOKIDAR_USEPOLLING: "true"
-      CHOKIDAR_INTERVAL: "250"
-      WATCHPACK_POLLING: "true"
+      NODE_ENV: production
       NUXT_DATABASE_URL: postgresql://ui:${POSTGRES_UI_PASSWORD}@postgresd:5432/cplane
       NUXT_IDENTITY_DATABASE_URL: postgresql://cplane_identity:${POSTGRES_IDENTITY_PASSWORD}@postgresd:5432/cplane
       NUXT_TENANT_DATABASE_URL: postgresql://cplane_tenant:${POSTGRES_TENANT_PASSWORD}@postgresd:5432/cplane
@@ -66,12 +63,9 @@ services:
       dockerfile: Dockerfile.bun
       args:
         PACKAGE: control-plane-ui
-      target: "development"
+      target: "production"
     environment:
-      NODE_ENV: development
-      CHOKIDAR_USEPOLLING: "true"
-      CHOKIDAR_INTERVAL: "250"
-      WATCHPACK_POLLING: "true"
+      NODE_ENV: production
       NUXT_DATABASE_URL: postgresql://ui:${POSTGRES_UI_PASSWORD}@postgresd:5432/cplane
       NUXT_IDENTITY_DATABASE_URL: postgresql://cplane_identity:${POSTGRES_IDENTITY_PASSWORD}@postgresd:5432/cplane
       NUXT_TENANT_DATABASE_URL: postgresql://cplane_tenant:${POSTGRES_TENANT_PASSWORD}@postgresd:5432/cplane

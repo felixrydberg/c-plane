@@ -40,6 +40,8 @@ export default defineNuxtConfig({
   },
   nitro: {
     preset: 'bun',
+    minify: true,
+    sourceMap: false,
     routeRules: {
       '/api/**': {
         cors: true,
