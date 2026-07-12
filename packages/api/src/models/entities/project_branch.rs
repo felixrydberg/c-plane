@@ -2,18 +2,16 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
-#[sea_orm(table_name = "project_timeline")]
+#[sea_orm(table_name = "project_branch")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
     pub project_id: Uuid,
-    pub branch_id: Option<Uuid>,
     pub organization_id: Uuid,
-    pub timeline: i32,
-    pub name: Option<String>,
-    pub parent_timeline_id: Option<Uuid>,
-    pub pins: serde_json::Value,
+    pub name: String,
+    pub timeline: Uuid,
     pub created_at: DateTimeWithTimeZone,
+    pub updated_at: DateTimeWithTimeZone,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -27,11 +25,11 @@ pub enum Relation {
     )]
     Project,
     #[sea_orm(
-        belongs_to = "Entity",
-        from = "Column::ParentTimelineId",
-        to = "Column::Id",
+        belongs_to = "super::project_timeline::Entity",
+        from = "Column::Timeline",
+        to = "super::project_timeline::Column::Id"
     )]
-    Parent,
+    HeadTimeline,
 }
 
 impl Related<super::project::Entity> for Entity {

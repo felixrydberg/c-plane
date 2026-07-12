@@ -1,19 +1,21 @@
 use axum::{Json, extract::Path};
-use sea_orm::{Set, EntityTrait, ActiveModelTrait, QueryFilter, ColumnTrait, PaginatorTrait, QueryOrder};
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use chrono::Utc;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, Set,
+};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
+use super::databases::verify_org_access;
 use crate::errors::AppError;
+use crate::middleware::auth::AuthContext;
 use crate::models::entities::{
-    project, project_branch, project_timeline,
-    stateful_postgres_database, stateful_postgres_database_branch,
+    project, project_branch, project_timeline, stateful_postgres_database,
+    stateful_postgres_database_branch,
 };
 use crate::models::pins::TimelinePins;
-use crate::middleware::auth::AuthContext;
-use super::databases::verify_org_access;
 use crate::services::agent;
 use crate::utils::pagination::{PaginatedResponse, PaginationQuery};
 
@@ -86,9 +88,6 @@ pub struct ListTimelinesQuery {
     pub branch_id: Option<Uuid>,
 }
 
-
-
-
 async fn branch_databases_for_project(
     tx: &impl sea_orm::ConnectionTrait,
     project_id: Uuid,
@@ -121,7 +120,9 @@ async fn branch_databases_for_project(
                 autoscaling_enabled: Set(false),
                 autoscaling_min_cpu: Set(None),
                 autoscaling_max_cpu: Set(None),
-            }.insert(tx).await?;
+            }
+            .insert(tx)
+            .await?;
         }
     }
 
@@ -150,7 +151,9 @@ pub async fn create_project(
 
     let name = body.name.trim().to_string();
     if name.is_empty() {
-        return Err(AppError::Project(crate::errors::project::ProjectError::InvalidSlug("Name is required".into())));
+        return Err(AppError::Project(
+            crate::errors::project::ProjectError::InvalidSlug("Name is required".into()),
+        ));
     }
 
     let project_id = Uuid::new_v4();
@@ -167,7 +170,9 @@ pub async fn create_project(
         default_branch_id: Set(None),
         created_at: Set(Utc::now().fixed_offset()),
         updated_at: Set(Utc::now().fixed_offset()),
-    }.insert(tx).await?;
+    }
+    .insert(tx)
+    .await?;
 
     let _timeline: project_timeline::Model = project_timeline::ActiveModel {
         id: Set(timeline_id),
@@ -179,7 +184,9 @@ pub async fn create_project(
         parent_timeline_id: Set(None),
         pins: Set(TimelinePins::default().to_json_value()),
         created_at: Set(Utc::now().fixed_offset()),
-    }.insert(tx).await?;
+    }
+    .insert(tx)
+    .await?;
 
     let main_branch: project_branch::Model = project_branch::ActiveModel {
         id: Set(branch_id),
@@ -189,7 +196,9 @@ pub async fn create_project(
         timeline: Set(timeline_id),
         created_at: Set(Utc::now().fixed_offset()),
         updated_at: Set(Utc::now().fixed_offset()),
-    }.insert(tx).await?;
+    }
+    .insert(tx)
+    .await?;
 
     let mut project_active: project::ActiveModel = created.clone().into();
     project_active.default_branch_id = Set(Some(branch_id));
@@ -234,9 +243,8 @@ pub async fn list_projects(
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
 
-    use project::{Entity, Column};
-    let mut select = Entity::find()
-        .filter(Column::OrganizationId.eq(organization_id));
+    use project::{Column, Entity};
+    let mut select = Entity::find().filter(Column::OrganizationId.eq(organization_id));
 
     if let Some(ref search) = query.search {
         if !search.trim().is_empty() {
@@ -255,8 +263,9 @@ pub async fn list_projects(
 
     scoped.commit().await?;
 
-    let data = projects_with_branches.into_iter().map(|(p, branch)| {
-        ProjectResponse {
+    let data = projects_with_branches
+        .into_iter()
+        .map(|(p, branch)| ProjectResponse {
             id: p.id,
             organization_id: p.organization_id,
             name: p.name,
@@ -269,8 +278,8 @@ pub async fn list_projects(
             }),
             created_at: p.created_at.to_string(),
             updated_at: p.updated_at.to_string(),
-        }
-    }).collect();
+        })
+        .collect();
 
     Ok(Json(PaginatedResponse::new(data, total, page, per_page)))
 }
@@ -297,7 +306,7 @@ pub async fn get_project(
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
 
-    use project::{Entity, Column};
+    use project::{Column, Entity};
     let p = Entity::find()
         .filter(Column::Id.eq(project_id))
         .filter(Column::OrganizationId.eq(organization_id))
@@ -354,7 +363,7 @@ pub async fn delete_project(
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
 
-    use project::{Entity, Column};
+    use project::{Column, Entity};
     let exists = Entity::find()
         .filter(Column::Id.eq(project_id))
         .filter(Column::OrganizationId.eq(organization_id))
@@ -418,7 +427,10 @@ pub async fn list_organization_branches(
                 timeline: b.timeline.to_string(),
                 is_default,
                 project_id: b.project_id,
-                project_name: project_names.get(&b.project_id).cloned().unwrap_or_else(|| "Unknown".into()),
+                project_name: project_names
+                    .get(&b.project_id)
+                    .cloned()
+                    .unwrap_or_else(|| "Unknown".into()),
             }
         })
         .collect();
@@ -442,7 +454,7 @@ pub async fn list_branches(
         .await?
         .ok_or_else(|| AppError::NotFound("Project not found".into()))?;
 
-    use project_branch::{Entity, Column};
+    use project_branch::{Column, Entity};
     let branches = Entity::find()
         .filter(Column::ProjectId.eq(project_id))
         .order_by_asc(Column::Name)
@@ -488,7 +500,9 @@ pub async fn create_branch(
 
     let name = body.name.trim().to_string();
     if name.is_empty() {
-        return Err(AppError::Project(crate::errors::project::ProjectError::InvalidSlug("Name is required".into())));
+        return Err(AppError::Project(
+            crate::errors::project::ProjectError::InvalidSlug("Name is required".into()),
+        ));
     }
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
@@ -508,7 +522,9 @@ pub async fn create_branch(
         .await?;
 
     if existing.is_some() {
-        return Err(AppError::Conflict("A branch with this name already exists".into()));
+        return Err(AppError::Conflict(
+            "A branch with this name already exists".into(),
+        ));
     }
 
     let pins = if let Some(parent_timeline_id) = body.parent_timeline_id {
@@ -538,7 +554,9 @@ pub async fn create_branch(
         parent_timeline_id: Set(parent_timeline_id),
         pins: Set(pins),
         created_at: Set(Utc::now().fixed_offset()),
-    }.insert(tx).await?;
+    }
+    .insert(tx)
+    .await?;
 
     let branch: project_branch::Model = project_branch::ActiveModel {
         id: Set(branch_id),
@@ -548,7 +566,9 @@ pub async fn create_branch(
         timeline: Set(timeline_id),
         created_at: Set(Utc::now().fixed_offset()),
         updated_at: Set(Utc::now().fixed_offset()),
-    }.insert(tx).await?;
+    }
+    .insert(tx)
+    .await?;
 
     if body.auto_branch_databases {
         branch_databases_for_project(tx, project_id, branch_id, organization_id).await?;
@@ -588,9 +608,8 @@ pub async fn list_project_timelines(
         return Err(AppError::NotFound("Project not found".into()));
     }
 
-    use project_timeline::{Entity, Column};
-    let mut select = Entity::find()
-        .filter(Column::ProjectId.eq(project_id));
+    use project_timeline::{Column, Entity};
+    let mut select = Entity::find().filter(Column::ProjectId.eq(project_id));
 
     if let Some(branch_id) = query.branch_id {
         select = select.filter(Column::BranchId.eq(branch_id));
@@ -725,7 +744,9 @@ pub async fn delete_branch(
         .ok_or_else(|| AppError::NotFound("Project not found".into()))?;
 
     if project.default_branch_id == Some(branch_id) {
-        return Err(AppError::Conflict("Cannot delete the default branch".into()));
+        return Err(AppError::Conflict(
+            "Cannot delete the default branch".into(),
+        ));
     }
 
     let branch = project_branch::Entity::find_by_id(branch_id)
@@ -764,7 +785,9 @@ pub async fn delete_branch(
         }
     }
 
-    project_branch::Entity::delete_by_id(branch.id).exec(tx).await?;
+    project_branch::Entity::delete_by_id(branch.id)
+        .exec(tx)
+        .await?;
 
     scoped.commit().await?;
 
@@ -830,16 +853,17 @@ pub async fn get_timeline(
             .all(tx)
             .await?;
 
-        let version_map: HashMap<Uuid, &crate::models::entities::container_version::Model> = version_models
-            .iter()
-            .map(|v| (v.id, v))
-            .collect();
+        let version_map: HashMap<Uuid, &crate::models::entities::container_version::Model> =
+            version_models.iter().map(|v| (v.id, v)).collect();
 
         for (container_id, version_id) in &pins.container {
             if let Some(version) = version_map.get(version_id) {
                 containers.push(ResolvedContainerPin {
                     container_id: *container_id,
-                    container_name: container_names.get(container_id).cloned().unwrap_or_else(|| "Unknown".into()),
+                    container_name: container_names
+                        .get(container_id)
+                        .cloned()
+                        .unwrap_or_else(|| "Unknown".into()),
                     version_id: *version_id,
                     version: version.version,
                     image: version.image.clone(),

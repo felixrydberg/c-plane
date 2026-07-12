@@ -5,12 +5,12 @@ use axum::{
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::handlers::health::health_check;
-use crate::handlers::projects;
 use crate::handlers::containers;
 use crate::handlers::events;
-use crate::handlers::stateful_databases;
+use crate::handlers::health::health_check;
+use crate::handlers::projects;
 use crate::handlers::serverless_databases;
+use crate::handlers::stateful_databases;
 use crate::openapi::ApiDoc;
 
 pub fn create_routes() -> Router {

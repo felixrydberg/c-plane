@@ -1,19 +1,19 @@
 use crate::errors::AppError;
 use crate::state::create_app_state;
 use tower_http::trace::TraceLayer;
-use tracing_subscriber::filter::EnvFilter;
 use tracing::Level;
+use tracing_subscriber::filter::EnvFilter;
 
 mod config;
 mod errors;
-mod routes;
-mod models;
-mod middleware;
-mod state;
 mod handlers;
-mod services;
-mod utils;
+mod middleware;
+mod models;
 mod openapi;
+mod routes;
+mod services;
+mod state;
+mod utils;
 
 #[tokio::main]
 async fn main() -> Result<(), AppError> {
@@ -30,8 +30,7 @@ async fn main() -> Result<(), AppError> {
     create_app_state().await?;
     let config = config::load_config()?;
 
-    let app = routes::create_routes()
-        .layer(TraceLayer::new_for_http());
+    let app = routes::create_routes().layer(TraceLayer::new_for_http());
 
     let addr = format!("{}:{}", config.server_host, config.server_port);
     tracing::info!("Starting server on {}", addr);

@@ -1,7 +1,7 @@
-use sea_orm::{EntityTrait, QueryFilter, ColumnTrait};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 use crate::errors::AppError;
 use crate::models::entities::project;
@@ -82,7 +82,9 @@ pub struct DatabaseResponse {
 
 pub fn verify_org_access(tenant_db: &TenantDatabase, org_id: Uuid) -> Result<(), AppError> {
     if !tenant_db.context.allowed_organizations.contains(&org_id) {
-        return Err(AppError::Forbidden("You do not have access to this organization".into()));
+        return Err(AppError::Forbidden(
+            "You do not have access to this organization".into(),
+        ));
     }
     Ok(())
 }
@@ -100,7 +102,9 @@ pub async fn verify_project_in_org(
         .is_some();
 
     if !exists {
-        return Err(AppError::NotFound("Project not found in this organization".into()));
+        return Err(AppError::NotFound(
+            "Project not found in this organization".into(),
+        ));
     }
     Ok(())
 }

@@ -1,5 +1,6 @@
 use crate::config::{Config, load_config};
 use crate::errors::{AppError, DatabaseError};
+use crate::services::s3_providers::S3ProviderClient;
 use sea_orm::{
     ConnectOptions, ConnectionTrait, Database, DatabaseBackend, DatabaseConnection,
     DatabaseTransaction, Statement, TransactionTrait,
@@ -57,20 +58,16 @@ impl TenantDatabase {
     }
 
     pub async fn begin_scoped_transaction(&self) -> Result<ScopedTenantTransaction, AppError> {
-        let tx = self
-            .tenant_db
-            .begin()
-            .await
-            .map_err(|err| AppError::Database(DatabaseError::TransactionFailed(err.to_string())))?;
+        let tx =
+            self.tenant_db.begin().await.map_err(|err| {
+                AppError::Database(DatabaseError::TransactionFailed(err.to_string()))
+            })?;
 
         let literal = self.allowed_orgs_literal();
 
         let statement = Statement::from_string(
             DatabaseBackend::Postgres,
-            format!(
-                "SET LOCAL app.allowed_organizations = '{}';",
-                literal
-            ),
+            format!("SET LOCAL app.allowed_organizations = '{}';", literal),
         );
 
         tx.execute(statement)
@@ -121,34 +118,39 @@ pub struct State {
     pub identity_db: AppDatabase,
     pub tenant_db: DatabaseConnection,
     pub config: Config,
+    pub s3_providers: Option<S3ProviderClient>,
 }
 
 static STATE: OnceLock<State> = OnceLock::new();
 
 pub async fn create_app_state() -> Result<State, AppError> {
     let config = load_config()?;
-    let identity_db = connect_database(
-        &config.identity_database_url,
-        "app_identity",
-    )
-    .await?;
-    let tenant_db = connect_database(
-        &config.tenant_database_url,
-        "app_tenant",
-    )
-    .await?;
+    let identity_db = connect_database(&config.identity_database_url, "app_identity").await?;
+    let tenant_db = connect_database(&config.tenant_database_url, "app_tenant").await?;
 
+    let s3_providers = match (
+        config.control_plane_url.clone(),
+        config.control_plane_service_token.clone(),
+    ) {
+        (Some(url), Some(token)) => Some(S3ProviderClient::new(url, token)),
+        _ => None,
+    };
     let state = State {
         identity_db: AppDatabase(identity_db),
         tenant_db,
         config,
+        s3_providers,
     };
-    STATE.set(state)
+    STATE
+        .set(state)
         .map_err(|_| AppError::Internal(format!("Couldnt set STATE")))?;
     Ok(get_app_state())
 }
 
-async fn connect_database(database_url: &str, role_name: &str) -> Result<DatabaseConnection, AppError> {
+async fn connect_database(
+    database_url: &str,
+    role_name: &str,
+) -> Result<DatabaseConnection, AppError> {
     let mut options = ConnectOptions::new(database_url);
     options.sqlx_logging(false);
 

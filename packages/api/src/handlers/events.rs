@@ -34,7 +34,10 @@ fn event_limit(limit: Option<u64>) -> u64 {
 
 fn event_action(event_type: &str) -> &str {
     // "container:created" → "created", "database:linked" → "linked"
-    event_type.split_once(':').map(|(_, action)| action).unwrap_or(event_type)
+    event_type
+        .split_once(':')
+        .map(|(_, action)| action)
+        .unwrap_or(event_type)
 }
 
 #[utoipa::path(

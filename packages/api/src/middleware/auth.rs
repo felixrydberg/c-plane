@@ -1,6 +1,4 @@
-use axum::{
-    extract::FromRequestParts,
-};
+use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use reqwest::Client;
 use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
@@ -62,10 +60,12 @@ where
         let identity_db = state.identity_db;
         let tenant_db_conn = state.tenant_db;
 
-        let (organization_context, request_auth) = if let Some(raw_api_key) = extract_api_key_from_parts(parts).map(str::to_owned) {
-            let api_key: ApiKeyLookup = resolve_api_key(&identity_db, &raw_api_key).await?.ok_or_else(|| {
-                AppError::Unauthorized("Invalid API key".to_string())
-            })?;
+        let (organization_context, request_auth) = if let Some(raw_api_key) =
+            extract_api_key_from_parts(parts).map(str::to_owned)
+        {
+            let api_key: ApiKeyLookup = resolve_api_key(&identity_db, &raw_api_key)
+                .await?
+                .ok_or_else(|| AppError::Unauthorized("Invalid API key".to_string()))?;
 
             (
                 OrganizationContext {
@@ -96,9 +96,7 @@ where
                     allowed_organizations,
                     actor_id,
                 },
-                RequestAuthContext {
-                    actor_id,
-                },
+                RequestAuthContext { actor_id },
             )
         };
 
@@ -156,20 +154,13 @@ async fn resolve_user_from_cookie(cookie_header: &str) -> Result<Uuid, AppError>
     })?;
 
     Uuid::parse_str(&session.user.id).map_err(|_| {
-        tracing::warn!(
-            "Invalid Better Auth user id format: {}",
-            session.user.id
-        );
+        tracing::warn!("Invalid Better Auth user id format: {}", session.user.id);
         AppError::Unauthorized("Invalid Better Auth user id".to_string())
     })
 }
 
 fn extract_api_key_from_parts(parts: &Parts) -> Option<&str> {
-    if let Some(value) = parts
-        .headers
-        .get("x-api-key")
-        .and_then(|h| h.to_str().ok())
-    {
+    if let Some(value) = parts.headers.get("x-api-key").and_then(|h| h.to_str().ok()) {
         if !value.trim().is_empty() {
             return Some(value.trim());
         }
@@ -192,7 +183,10 @@ fn hash_api_key(raw_api_key: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
-async fn resolve_user_organizations(app_db: &AppDatabase, actor_id: Uuid) -> Result<Vec<Uuid>, AppError> {
+async fn resolve_user_organizations(
+    app_db: &AppDatabase,
+    actor_id: Uuid,
+) -> Result<Vec<Uuid>, AppError> {
     let rows = app_db
         .0
         .query_all(Statement::from_sql_and_values(

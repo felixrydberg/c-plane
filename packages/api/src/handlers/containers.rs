@@ -1,20 +1,18 @@
 use axum::{Json, extract::Path};
-use sea_orm::{Set, EntityTrait, ActiveModelTrait, QueryFilter, ColumnTrait, QueryOrder};
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use chrono::Utc;
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
-use crate::errors::AppError;
-use crate::models::entities::{
-    container, container_version, project_branch, project_timeline,
-};
-use crate::services::{events, revisions};
-use crate::models::pins::TimelinePins;
-use crate::middleware::auth::AuthContext;
 use super::databases::verify_org_access;
 use super::projects::default_true;
+use crate::errors::AppError;
+use crate::middleware::auth::AuthContext;
+use crate::models::entities::{container, container_version, project_branch, project_timeline};
+use crate::models::pins::TimelinePins;
+use crate::services::{events, revisions};
 
 #[derive(Deserialize, ToSchema)]
 pub struct CreateContainerRequest {
@@ -34,7 +32,9 @@ pub struct CreateContainerRequest {
     pub region_id: Uuid,
 }
 
-fn default_replica_count() -> i32 { 1 }
+fn default_replica_count() -> i32 {
+    1
+}
 
 #[derive(Deserialize, ToSchema)]
 pub struct UpdateContainerRequest {
@@ -89,9 +89,6 @@ pub struct ContainerVersionResponse {
     pub created_at: String,
 }
 
-
-
-
 fn resolve_latest_version(version: &container_version::Model) -> ContainerVersionResponse {
     ContainerVersionResponse {
         id: version.id,
@@ -143,7 +140,10 @@ async fn get_branch_timeline_pins(
     Ok(TimelinePins::from_json_value(&head.pins))
 }
 
-fn build_response(container: &container::Model, version: &container_version::Model) -> ContainerResponse {
+fn build_response(
+    container: &container::Model,
+    version: &container_version::Model,
+) -> ContainerResponse {
     ContainerResponse {
         id: container.id,
         organization_id: container.organization_id,
@@ -178,14 +178,20 @@ pub async fn create_container(
 
     let name = body.name.trim().to_string();
     if name.is_empty() {
-        return Err(AppError::Project(crate::errors::project::ProjectError::InvalidSlug("Name is required".into())));
+        return Err(AppError::Project(
+            crate::errors::project::ProjectError::InvalidSlug("Name is required".into()),
+        ));
     }
     let image = body.image.trim().to_string();
     if image.is_empty() {
-        return Err(AppError::Project(crate::errors::project::ProjectError::InvalidSlug("Image is required".into())));
+        return Err(AppError::Project(
+            crate::errors::project::ProjectError::InvalidSlug("Image is required".into()),
+        ));
     }
     if body.region_id.is_nil() {
-        return Err(AppError::Project(crate::errors::project::ProjectError::InvalidSlug("Region is required".into())));
+        return Err(AppError::Project(
+            crate::errors::project::ProjectError::InvalidSlug("Region is required".into()),
+        ));
     }
 
     let container_id = Uuid::new_v4();
@@ -204,7 +210,9 @@ pub async fn create_container(
         region_id: Set(body.region_id),
         created_at: Set(Utc::now().fixed_offset()),
         updated_at: Set(Utc::now().fixed_offset()),
-    }.insert(tx).await?;
+    }
+    .insert(tx)
+    .await?;
 
     let created_version: container_version::Model = container_version::ActiveModel {
         id: Set(version_id),
@@ -220,11 +228,20 @@ pub async fn create_container(
         pull_secret_id: Set(body.pull_secret_id),
         health_check: Set(body.health_check.clone()),
         created_at: Set(Utc::now().fixed_offset()),
-    }.insert(tx).await?;
+    }
+    .insert(tx)
+    .await?;
 
     let mut pins = get_branch_timeline_pins(tx, &branch).await?;
     pins.set_container(container_id, version_id);
-    revisions::create_revision(tx, &branch, &pins, Some(format!("Created container '{}'", name)), true).await?;
+    revisions::create_revision(
+        tx,
+        &branch,
+        &pins,
+        Some(format!("Created container '{}'", name)),
+        true,
+    )
+    .await?;
     events::record(tx, organization_id, body.project_id, "container:created", serde_json::json!({"summary": format!("Created container '{}'", name), "target_id": container_id.to_string(), "branch_id": branch.id.to_string()}), auth.actor_id).await?;
 
     scoped.commit().await?;
@@ -287,47 +304,54 @@ pub async fn list_containers(
             .all(tx)
             .await?;
 
-        let version_map: HashMap<Uuid, &container_version::Model> = versions.iter().map(|v| (v.id, v)).collect();
+        let version_map: HashMap<Uuid, &container_version::Model> =
+            versions.iter().map(|v| (v.id, v)).collect();
 
         let mut responses = Vec::new();
         for c in containers {
-            if let Some(v) = pins.container.get(&c.id).and_then(|vid| version_map.get(vid)) {
+            if let Some(v) = pins
+                .container
+                .get(&c.id)
+                .and_then(|vid| version_map.get(vid))
+            {
                 responses.push(build_response(&c, v));
-                }
             }
-
-            scoped.commit().await?;
-            return Ok(Json(responses));
         }
 
-        let containers = container::Entity::find()
-            .order_by_asc(container::Column::Name)
-            .all(tx)
-            .await?;
+        scoped.commit().await?;
+        return Ok(Json(responses));
+    }
 
-        if containers.is_empty() {
-            scoped.commit().await?;
-            return Ok(Json(Vec::new()));
-        }
+    let containers = container::Entity::find()
+        .order_by_asc(container::Column::Name)
+        .all(tx)
+        .await?;
 
-        let container_ids: Vec<Uuid> = containers.iter().map(|c| c.id).collect();
+    if containers.is_empty() {
+        scoped.commit().await?;
+        return Ok(Json(Vec::new()));
+    }
 
-        let all_versions = container_version::Entity::find()
-            .filter(container_version::Column::ContainerId.is_in(container_ids))
-            .order_by_desc(container_version::Column::Version)
-            .all(tx)
-            .await?;
+    let container_ids: Vec<Uuid> = containers.iter().map(|c| c.id).collect();
 
-        let latest: HashMap<Uuid, &container_version::Model> = all_versions.iter().fold(HashMap::new(), |mut acc, v| {
+    let all_versions = container_version::Entity::find()
+        .filter(container_version::Column::ContainerId.is_in(container_ids))
+        .order_by_desc(container_version::Column::Version)
+        .all(tx)
+        .await?;
+
+    let latest: HashMap<Uuid, &container_version::Model> =
+        all_versions.iter().fold(HashMap::new(), |mut acc, v| {
             acc.entry(v.container_id).or_insert(v);
             acc
         });
 
-        scoped.commit().await?;
+    scoped.commit().await?;
 
-        let responses = containers.iter().filter_map(|c| {
-            latest.get(&c.id).map(|v| build_response(c, v))
-    }).collect();
+    let responses = containers
+        .iter()
+        .filter_map(|c| latest.get(&c.id).map(|v| build_response(c, v)))
+        .collect();
 
     Ok(Json(responses))
 }
@@ -473,7 +497,14 @@ pub async fn update_container(
 
         let mut pins = get_branch_timeline_pins(tx, &branch).await?;
         pins.set_container(container_id, version_id);
-        revisions::create_revision(tx, &branch, &pins, Some("Updated container configuration".into()), body.auto_deploy).await?;
+        revisions::create_revision(
+            tx,
+            &branch,
+            &pins,
+            Some("Updated container configuration".into()),
+            body.auto_deploy,
+        )
+        .await?;
     }
 
     events::record(tx, organization_id, c.project_id, "container:updated", serde_json::json!({"summary": format!("Updated container '{}'", c.name), "target_id": container_id.to_string(), "branch_id": branch.id.to_string()}), auth.actor_id).await?;
@@ -547,7 +578,14 @@ pub async fn delete_container(
 
     let mut pins = get_branch_timeline_pins(tx, &branch).await?;
     pins.remove_container(&container_id);
-    revisions::create_revision(tx, &branch, &pins, Some(format!("Removed container '{}'", c.name)), true).await?;
+    revisions::create_revision(
+        tx,
+        &branch,
+        &pins,
+        Some(format!("Removed container '{}'", c.name)),
+        true,
+    )
+    .await?;
     events::record(tx, organization_id, c.project_id, "container:removed", serde_json::json!({"summary": format!("Removed container '{}'", c.name), "target_id": container_id.to_string(), "branch_id": branch.id.to_string()}), auth.actor_id).await?;
 
     scoped.commit().await?;

@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -26,5 +26,4 @@ impl TimelinePins {
     pub fn remove_container(&mut self, container_id: &Uuid) {
         self.container.remove(container_id);
     }
-
 }

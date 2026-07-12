@@ -1,11 +1,9 @@
-use sea_orm::{DatabaseTransaction, Set, EntityTrait, ActiveModelTrait};
-use uuid::Uuid;
 use chrono::Utc;
+use sea_orm::{ActiveModelTrait, DatabaseTransaction, EntityTrait, Set};
+use uuid::Uuid;
 
 use crate::errors::AppError;
-use crate::models::entities::{
-    project_branch, project_timeline,
-};
+use crate::models::entities::{project_branch, project_timeline};
 use crate::models::pins::TimelinePins;
 use crate::services::agent;
 
@@ -43,7 +41,13 @@ pub async fn create_revision(
         branch_active.updated_at = Set(Utc::now().fixed_offset());
         branch_active.update(tx).await?;
 
-        agent::emit_project(branch.project_id, branch.organization_id, branch.id, inserted.id).await?;
+        agent::emit_project(
+            branch.project_id,
+            branch.organization_id,
+            branch.id,
+            inserted.id,
+        )
+        .await?;
     }
 
     Ok(inserted)

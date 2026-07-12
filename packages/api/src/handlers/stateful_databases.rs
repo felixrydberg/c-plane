@@ -1,17 +1,17 @@
 use axum::{Json, extract::Path};
-use sea_orm::{Set, EntityTrait, ActiveModelTrait, QueryFilter, ColumnTrait, QueryOrder};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
 use uuid::Uuid;
 
 use super::databases::{
-    CreateDatabaseRequest, DatabaseResponse, ListDatabasesQuery, UpdateDatabaseRequest,
-    CreateDatabaseBranchRequest, DatabaseBranchResponse, UpdateDatabaseBranchRequest,
-    verify_org_access, verify_project_in_org,
+    CreateDatabaseBranchRequest, CreateDatabaseRequest, DatabaseBranchResponse, DatabaseResponse,
+    ListDatabasesQuery, UpdateDatabaseBranchRequest, UpdateDatabaseRequest, verify_org_access,
+    verify_project_in_org,
 };
 use crate::errors::AppError;
-use crate::models::entities::{
-    stateful_postgres_database, stateful_postgres_database_branch, project_branch,
-};
 use crate::middleware::auth::AuthContext;
+use crate::models::entities::{
+    project_branch, stateful_postgres_database, stateful_postgres_database_branch,
+};
 use crate::services::events;
 use serde_json;
 
@@ -62,7 +62,9 @@ pub async fn create_database(
 
     let name = body.name.trim().to_string();
     if name.is_empty() {
-        return Err(AppError::Project(crate::errors::project::ProjectError::InvalidSlug("Name is required".into())));
+        return Err(AppError::Project(
+            crate::errors::project::ProjectError::InvalidSlug("Name is required".into()),
+        ));
     }
 
     let db_id = Uuid::new_v4();
@@ -86,21 +88,26 @@ pub async fn create_database(
         organization_id: Set(organization_id),
         default_branch_id: Set(None),
         name: Set(name.clone()),
-    }.insert(tx).await?;
+    }
+    .insert(tx)
+    .await?;
 
-    let _db_branch: stateful_postgres_database_branch::Model = stateful_postgres_database_branch::ActiveModel {
-        id: Set(db_branch_id),
-        database_id: Set(db_id),
-        branch_id: Set(main_branch.id),
-        organization_id: Set(organization_id),
-        cpu: Set(body.cpu),
-        ram: Set(body.ram),
-        high_availability: Set(body.high_availability),
-        read_replicas: Set(body.read_replicas),
-        autoscaling_enabled: Set(body.autoscaling_enabled),
-        autoscaling_min_cpu: Set(body.autoscaling_min_cpu),
-        autoscaling_max_cpu: Set(body.autoscaling_max_cpu),
-    }.insert(tx).await?;
+    let _db_branch: stateful_postgres_database_branch::Model =
+        stateful_postgres_database_branch::ActiveModel {
+            id: Set(db_branch_id),
+            database_id: Set(db_id),
+            branch_id: Set(main_branch.id),
+            organization_id: Set(organization_id),
+            cpu: Set(body.cpu),
+            ram: Set(body.ram),
+            high_availability: Set(body.high_availability),
+            read_replicas: Set(body.read_replicas),
+            autoscaling_enabled: Set(body.autoscaling_enabled),
+            autoscaling_min_cpu: Set(body.autoscaling_min_cpu),
+            autoscaling_max_cpu: Set(body.autoscaling_max_cpu),
+        }
+        .insert(tx)
+        .await?;
 
     let mut db_active: stateful_postgres_database::ActiveModel = created.clone().into();
     db_active.default_branch_id = Set(Some(db_branch_id));
@@ -109,7 +116,10 @@ pub async fn create_database(
 
     scoped.commit().await?;
 
-    Ok((axum::http::StatusCode::CREATED, Json(db_to_response(&updated))))
+    Ok((
+        axum::http::StatusCode::CREATED,
+        Json(db_to_response(&updated)),
+    ))
 }
 
 pub async fn list_databases(
@@ -124,7 +134,7 @@ pub async fn list_databases(
 
     verify_project_in_org(tx, query.project_id, organization_id).await?;
 
-    use stateful_postgres_database::{Entity, Column};
+    use stateful_postgres_database::{Column, Entity};
     let dbs = Entity::find()
         .filter(Column::ProjectId.eq(query.project_id))
         .order_by_asc(Column::Name)
@@ -367,7 +377,8 @@ pub async fn create_database_branch(
                 body.cpu.or(default.cpu),
                 body.ram.or(default.ram),
                 body.read_replicas.or(default.read_replicas),
-                body.autoscaling_enabled.or(Some(default.autoscaling_enabled)),
+                body.autoscaling_enabled
+                    .or(Some(default.autoscaling_enabled)),
                 body.autoscaling_min_cpu.or(default.autoscaling_min_cpu),
                 body.autoscaling_max_cpu.or(default.autoscaling_max_cpu),
             )
@@ -383,24 +394,30 @@ pub async fn create_database_branch(
         };
 
     let id = Uuid::new_v4();
-    let row: stateful_postgres_database_branch::Model = stateful_postgres_database_branch::ActiveModel {
-        id: Set(id),
-        database_id: Set(database_id),
-        branch_id: Set(branch.id),
-        organization_id: Set(organization_id),
-        cpu: Set(cpu),
-        ram: Set(ram),
-        high_availability: Set(false),
-        read_replicas: Set(read_replicas),
-        autoscaling_enabled: Set(autoscaling_enabled.unwrap_or(false)),
-        autoscaling_min_cpu: Set(autoscaling_min_cpu),
-        autoscaling_max_cpu: Set(autoscaling_max_cpu),
-    }.insert(tx).await?;
+    let row: stateful_postgres_database_branch::Model =
+        stateful_postgres_database_branch::ActiveModel {
+            id: Set(id),
+            database_id: Set(database_id),
+            branch_id: Set(branch.id),
+            organization_id: Set(organization_id),
+            cpu: Set(cpu),
+            ram: Set(ram),
+            high_availability: Set(false),
+            read_replicas: Set(read_replicas),
+            autoscaling_enabled: Set(autoscaling_enabled.unwrap_or(false)),
+            autoscaling_min_cpu: Set(autoscaling_min_cpu),
+            autoscaling_max_cpu: Set(autoscaling_max_cpu),
+        }
+        .insert(tx)
+        .await?;
     events::record(tx, organization_id, db.project_id, "database:linked", serde_json::json!({"summary": format!("Linked '{}' to branch '{}'", db.name, branch.name), "target_id": row.id.to_string(), "branch_id": branch.id.to_string()}), auth.actor_id).await?;
 
     scoped.commit().await?;
 
-    Ok((axum::http::StatusCode::CREATED, Json(branch_to_response(&row))))
+    Ok((
+        axum::http::StatusCode::CREATED,
+        Json(branch_to_response(&row)),
+    ))
 }
 
 #[utoipa::path(
@@ -441,10 +458,14 @@ pub async fn delete_database_branch(
         .ok_or_else(|| AppError::NotFound("Database branch link not found".into()))?;
 
     if db.default_branch_id == Some(db_branch.id) {
-        return Err(AppError::Conflict("Cannot delete the default database branch".into()));
+        return Err(AppError::Conflict(
+            "Cannot delete the default database branch".into(),
+        ));
     }
 
-    stateful_postgres_database_branch::Entity::delete_by_id(db_branch.id).exec(tx).await?;
+    stateful_postgres_database_branch::Entity::delete_by_id(db_branch.id)
+        .exec(tx)
+        .await?;
     events::record(tx, organization_id, db.project_id, "database:unlinked", serde_json::json!({"summary": format!("Unlinked '{}' from this branch", db.name), "target_id": db_branch.id.to_string(), "branch_id": branch_id.to_string()}), auth.actor_id).await?;
 
     scoped.commit().await?;
