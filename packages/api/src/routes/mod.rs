@@ -9,8 +9,11 @@ use crate::handlers::containers;
 use crate::handlers::events;
 use crate::handlers::health::health_check;
 use crate::handlers::projects;
+use crate::handlers::regions;
 use crate::handlers::serverless_databases;
 use crate::handlers::stateful_databases;
+use crate::handlers::storage_access_tokens;
+use crate::handlers::storage_buckets;
 use crate::openapi::ApiDoc;
 
 pub fn create_routes() -> Router {
@@ -25,6 +28,10 @@ pub fn create_routes() -> Router {
             get(projects::list_projects).post(projects::create_project),
         )
         .route(
+            "/api/organization/{organization_id}/regions",
+            get(regions::list_regions),
+        )
+        .route(
             "/api/organization/{organization_id}/projects/{project_id}",
             get(projects::get_project).delete(projects::delete_project),
         )
@@ -35,6 +42,19 @@ pub fn create_routes() -> Router {
         .route(
             "/api/organization/{organization_id}/projects/{project_id}/branches/{branch_id}",
             patch(projects::update_branch).delete(projects::delete_branch),
+        )
+        .route(
+            "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens",
+            get(storage_access_tokens::list_access_tokens)
+                .post(storage_access_tokens::create_access_token),
+        )
+        .route(
+            "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}",
+            axum::routing::delete(storage_access_tokens::revoke_access_token),
+        )
+        .route(
+            "/api/organization/{organization_id}/storage/buckets",
+            get(storage_buckets::list_buckets).post(storage_buckets::create_bucket),
         )
         .route(
             "/api/organization/{organization_id}/projects/{project_id}/timelines",

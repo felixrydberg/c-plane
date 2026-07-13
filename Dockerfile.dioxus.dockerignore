@@ -4,9 +4,11 @@
 !Cargo.toml
 !Cargo.lock
 !packages
-!packages/c-plane
-!packages/c-plane/Cargo.toml
-!packages/c-plane/src
-!packages/c-plane/src/main.rs
+!packages/api
+!packages/api/Cargo.toml
+!packages/api/src
+!packages/api/src/main.rs
+!packages/storage
+!packages/storage/**
 !packages/control-plane
 !packages/control-plane/**

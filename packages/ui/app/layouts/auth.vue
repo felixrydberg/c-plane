@@ -49,13 +49,13 @@ const items = computed<NavigationMenuItem[]>(() => [
     to: `/${store.organization?.slug}/secrets${navProjectId.value ? `/${navProjectId.value}` : ''}`,
   },
   {
-    type: "label",
-    label: 'Organization',
-  },
-  {
     label: "Storage",
     icon: ICONS.storage,
-    to: `/${store.organization?.slug}/storage`,
+    to: `/${store.organization?.slug}/storage${navProjectId.value ? `/${navProjectId.value}` : ''}`,
+  },
+  {
+    type: "label",
+    label: 'Organization',
   },
   {
     label: "Registry",

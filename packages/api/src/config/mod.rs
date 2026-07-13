@@ -11,6 +11,7 @@ pub struct Config {
     pub better_auth_session_url: String,
     pub control_plane_url: Option<String>,
     pub control_plane_service_token: Option<String>,
+    pub storage_endpoint_url: String,
 }
 
 pub fn load_config() -> Result<Config, AppError> {
@@ -36,6 +37,8 @@ pub fn load_config() -> Result<Config, AppError> {
     let control_plane_service_token = env::var("CPLANE_SERVICE_TOKEN")
         .ok()
         .filter(|v| !v.trim().is_empty());
+    let storage_endpoint_url =
+        env::var("STORAGE_ENDPOINT_URL").unwrap_or_else(|_| "http://localhost:8081".to_string());
 
     let server_host = env::var("SERVER_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
 
@@ -56,5 +59,6 @@ pub fn load_config() -> Result<Config, AppError> {
         better_auth_session_url,
         control_plane_url,
         control_plane_service_token,
+        storage_endpoint_url,
     })
 }

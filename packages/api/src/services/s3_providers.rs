@@ -1,5 +1,5 @@
 use crate::errors::AppError;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Clone, Deserialize)]
@@ -7,6 +7,11 @@ pub struct S3ProviderCredentials {
     pub access_key_id: String,
     pub secret_access_key: String,
     pub session_token: Option<String>,
+}
+
+#[derive(Serialize)]
+struct S3AccessTokenSecret<'a> {
+    secret_access_key: &'a str,
 }
 
 #[derive(Clone)]
@@ -53,5 +58,54 @@ impl S3ProviderClient {
             .json()
             .await
             .map_err(|error| AppError::Internal(format!("Invalid control-plane response: {error}")))
+    }
+
+    pub async fn store_access_token_secret(
+        &self,
+        credential_id: Uuid,
+        secret_access_key: &str,
+    ) -> Result<(), AppError> {
+        self.secret_request(
+            reqwest::Method::PUT,
+            credential_id,
+            Some(S3AccessTokenSecret { secret_access_key }),
+        )
+        .await
+    }
+
+    pub async fn delete_access_token_secret(&self, credential_id: Uuid) -> Result<(), AppError> {
+        self.secret_request::<S3AccessTokenSecret<'_>>(reqwest::Method::DELETE, credential_id, None)
+            .await
+    }
+
+    async fn secret_request<T: Serialize>(
+        &self,
+        method: reqwest::Method,
+        credential_id: Uuid,
+        body: Option<T>,
+    ) -> Result<(), AppError> {
+        let mut request = self
+            .http
+            .request(
+                method,
+                format!(
+                    "{}/internal/s3-access-tokens/{credential_id}",
+                    self.base_url
+                ),
+            )
+            .header("x-cplane-token", &self.service_token);
+        if let Some(body) = body {
+            request = request.json(&body);
+        }
+        let response = request.send().await.map_err(|error| {
+            AppError::Internal(format!("Control-plane request failed: {error}"))
+        })?;
+        if !response.status().is_success() {
+            return Err(AppError::Internal(format!(
+                "Control-plane returned {}",
+                response.status()
+            )));
+        }
+        Ok(())
     }
 }

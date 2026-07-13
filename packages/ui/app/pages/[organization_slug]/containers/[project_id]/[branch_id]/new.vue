@@ -35,7 +35,7 @@ const regionId = ref('')
 
 onMounted(async () => {
   if (!orgId.value) return
-  try { regions.value = await $fetch<{ id: string; display_name: string }[]>(`/api/organization/${orgId.value}/regions`) } catch { regions.value = [] }
+  try { regions.value = await $fetch<{ id: string; display_name: string }[]>(`/api/backend/organization/${orgId.value}/regions`) } catch { regions.value = [] }
 })
 
 interface EnvRow { key: string; value: string; secretId: string | null }
@@ -146,7 +146,7 @@ function backUrl() { return `/${route.params.organization_slug}/containers/${pro
           </dl>
           <div class="mt-8 flex gap-3">
             <UButton variant="ghost" color="neutral" :to="backUrl()">Cancel</UButton>
-            <UButton :icon="ICONS.check" :loading="loading" :disabled="!state.name.trim() || !state.image.trim() || !regionId" @click="handleCreate">Create Container</UButton>
+            <UButton :loading="loading" :disabled="!state.name.trim() || !state.image.trim() || !regionId" @click="handleCreate">Create Container</UButton>
           </div>
         </div>
       </aside>

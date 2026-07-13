@@ -5,7 +5,7 @@ services:
       context: .
       dockerfile: Dockerfile.rust
       args:
-        PACKAGE: c-plane
+        PACKAGE: api
     environment:
       SERVER_HOST: 0.0.0.0
       SERVER_PORT: 8080

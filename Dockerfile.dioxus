@@ -8,8 +8,9 @@ WORKDIR /usr/src/app
 
 FROM tools AS builder
 COPY Cargo.toml Cargo.lock ./
-COPY packages/c-plane/Cargo.toml ./packages/c-plane/Cargo.toml
-COPY packages/c-plane/src/main.rs ./packages/c-plane/src/main.rs
+COPY packages/api/Cargo.toml ./packages/api/Cargo.toml
+COPY packages/api/src/main.rs ./packages/api/src/main.rs
+COPY packages/storage ./packages/storage
 COPY packages/control-plane ./packages/control-plane
 WORKDIR /usr/src/app/packages/control-plane
 RUN dx build --web --fullstack true --release

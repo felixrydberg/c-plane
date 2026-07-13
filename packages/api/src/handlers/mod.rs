@@ -3,5 +3,8 @@ pub mod databases;
 pub mod events;
 pub mod health;
 pub mod projects;
+pub mod regions;
 pub mod serverless_databases;
 pub mod stateful_databases;
+pub mod storage_access_tokens;
+pub mod storage_buckets;

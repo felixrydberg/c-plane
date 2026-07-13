@@ -20,6 +20,17 @@ fn main() {
                 dioxus::server::axum::routing::get(backend::server::credentials_handler),
             )
             .route(
+                "/internal/s3-access-tokens/{id}",
+                dioxus::server::axum::routing::put(
+                    backend::server::store_access_token_secret_handler,
+                )
+                .delete(backend::server::delete_access_token_secret_handler),
+            )
+            .route(
+                "/internal/s3-access-tokens/resolve/{access_key}",
+                dioxus::server::axum::routing::get(backend::server::resolve_access_token_handler),
+            )
+            .route(
                 "/internal/regions",
                 dioxus::server::axum::routing::get(backend::server::eligible_regions_handler),
             ))

@@ -1,15 +1,18 @@
-ARG PACKAGE=vault
+ARG PACKAGE=api
+ARG BINARY=c-plane
 ARG RUST_VERSION=1.92.0
 
 FROM rust:${RUST_VERSION} AS builder
 
 ARG PACKAGE
+ARG BINARY
 
 WORKDIR /usr/src/app
 
 COPY Cargo.toml Cargo.lock ./
-COPY packages/c-plane ./packages/c-plane
+COPY packages/api ./packages/api
 COPY packages/control-plane ./packages/control-plane
+COPY packages/storage ./packages/storage
 
 RUN cd packages/${PACKAGE} && \
     cargo build --release --target x86_64-unknown-linux-gnu
@@ -23,14 +26,16 @@ FROM cgr.dev/chainguard/glibc-dynamic AS runtime-default
 COPY --from=runtime-builder /usr/lib/x86_64-linux-gnu/libssl.so* /usr/lib/
 COPY --from=runtime-builder /usr/lib/x86_64-linux-gnu/libcrypto.so* /usr/lib/
 
-FROM runtime-default AS runtime-c-plane
+FROM runtime-default AS runtime-api
+FROM runtime-default AS runtime-storage
 
 FROM runtime-${PACKAGE}
 
 ARG PACKAGE
+ARG BINARY
 
 WORKDIR /app
 
-COPY --from=builder --chmod=755 /usr/src/app/target/x86_64-unknown-linux-gnu/release/${PACKAGE} /app/binary
+COPY --from=builder --chmod=755 /usr/src/app/target/x86_64-unknown-linux-gnu/release/${BINARY} /app/binary
 
 ENTRYPOINT ["/app/binary"]

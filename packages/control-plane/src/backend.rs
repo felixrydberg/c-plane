@@ -196,7 +196,7 @@ pub mod server {
         ConnectionTrait, Database, DatabaseBackend, DatabaseConnection, QueryResult, Statement,
         TransactionTrait, Value,
     };
-    use serde::Deserialize;
+    use serde::{Deserialize, Serialize};
     use serde_json::json;
     use sha2::{Digest, Sha256};
     use std::{collections::HashMap, env};
@@ -629,6 +629,99 @@ pub mod server {
         Ok(())
     }
 
+    #[derive(Clone, Deserialize, Serialize)]
+    pub struct S3AccessTokenSecret {
+        pub secret_access_key: String,
+    }
+
+    #[derive(Deserialize)]
+    struct OpenBaoAccessTokenData {
+        data: OpenBaoAccessTokenSecret,
+    }
+
+    #[derive(Deserialize)]
+    struct OpenBaoAccessTokenSecret {
+        data: S3AccessTokenSecret,
+    }
+
+    #[derive(Serialize)]
+    pub struct ResolvedS3BucketPermission {
+        pub bucket_id: Uuid,
+        pub can_read: bool,
+        pub can_write: bool,
+    }
+
+    #[derive(Serialize)]
+    pub struct ResolvedS3AccessToken {
+        pub organization_id: Uuid,
+        pub project_id: Uuid,
+        pub credential_id: Uuid,
+        pub bucket_permissions: Vec<ResolvedS3BucketPermission>,
+        pub secret_access_key: String,
+    }
+
+    async fn access_token_secret_read(id: &str) -> Result<S3AccessTokenSecret> {
+        let (address, token) = openbao_config()?;
+        let response = Client::new()
+            .get(format!(
+                "{address}/v1/cplane/data/platform/s3/access-tokens/{id}"
+            ))
+            .header("X-Vault-Token", token)
+            .send()
+            .await
+            .map_err(CapturedError::from_display)?;
+        if !response.status().is_success() {
+            return Err(CapturedError::msg(format!(
+                "OpenBao read failed: {}",
+                response.status()
+            )));
+        }
+        response
+            .json::<OpenBaoAccessTokenData>()
+            .await
+            .map(|value| value.data.data)
+            .map_err(CapturedError::from_display)
+    }
+
+    async fn access_token_secret_write(id: &str, secret: &S3AccessTokenSecret) -> Result<()> {
+        let (address, token) = openbao_config()?;
+        let response = Client::new()
+            .post(format!(
+                "{address}/v1/cplane/data/platform/s3/access-tokens/{id}"
+            ))
+            .header("X-Vault-Token", token)
+            .json(&json!({"data": secret}))
+            .send()
+            .await
+            .map_err(CapturedError::from_display)?;
+        if !response.status().is_success() {
+            return Err(CapturedError::msg(format!(
+                "OpenBao write failed: {}",
+                response.status()
+            )));
+        }
+        Ok(())
+    }
+
+    async fn access_token_secret_delete(id: &str) -> Result<()> {
+        let (address, token) = openbao_config()?;
+        let response = Client::new()
+            .delete(format!(
+                "{address}/v1/cplane/data/platform/s3/access-tokens/{id}"
+            ))
+            .header("X-Vault-Token", token)
+            .send()
+            .await
+            .map_err(CapturedError::from_display)?;
+        if !response.status().is_success() {
+            return Err(CapturedError::msg(format!(
+                "OpenBao delete failed: {}",
+                response.status()
+            )));
+        }
+        Ok(())
+    }
+
     async fn credential_cache() -> Result<&'static RwLock<HashMap<String, S3Credentials>>> {
         CREDENTIALS
             .get_or_try_init(|| async {
@@ -805,6 +898,97 @@ pub mod server {
             .cloned()
             .map(dioxus::server::axum::Json)
             .ok_or(dioxus::server::axum::http::StatusCode::NOT_FOUND)
+    }
+
+    pub async fn store_access_token_secret_handler(
+        dioxus::server::axum::extract::Path(id): dioxus::server::axum::extract::Path<String>,
+        headers: dioxus::server::axum::http::HeaderMap,
+        dioxus::server::axum::Json(secret): dioxus::server::axum::Json<S3AccessTokenSecret>,
+    ) -> std::result::Result<
+        dioxus::server::axum::http::StatusCode,
+        dioxus::server::axum::http::StatusCode,
+    > {
+        authorize_service(&headers)?;
+        Uuid::parse_str(&id).map_err(|_| dioxus::server::axum::http::StatusCode::BAD_REQUEST)?;
+        if secret.secret_access_key.len() < 32 {
+            return Err(dioxus::server::axum::http::StatusCode::BAD_REQUEST);
+        }
+        access_token_secret_write(&id, &secret)
+            .await
+            .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+        Ok(dioxus::server::axum::http::StatusCode::NO_CONTENT)
+    }
+
+    pub async fn delete_access_token_secret_handler(
+        dioxus::server::axum::extract::Path(id): dioxus::server::axum::extract::Path<String>,
+        headers: dioxus::server::axum::http::HeaderMap,
+    ) -> std::result::Result<
+        dioxus::server::axum::http::StatusCode,
+        dioxus::server::axum::http::StatusCode,
+    > {
+        authorize_service(&headers)?;
+        Uuid::parse_str(&id).map_err(|_| dioxus::server::axum::http::StatusCode::BAD_REQUEST)?;
+        access_token_secret_delete(&id)
+            .await
+            .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+        Ok(dioxus::server::axum::http::StatusCode::NO_CONTENT)
+    }
+
+    pub async fn resolve_access_token_handler(
+        dioxus::server::axum::extract::Path(access_key): dioxus::server::axum::extract::Path<
+            String,
+        >,
+        headers: dioxus::server::axum::http::HeaderMap,
+    ) -> std::result::Result<
+        dioxus::server::axum::Json<ResolvedS3AccessToken>,
+        dioxus::server::axum::http::StatusCode,
+    > {
+        authorize_service(&headers)?;
+        let database = database()
+            .await
+            .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+        let row = database
+            .query_one(statement(
+                "SELECT id, organization_id, project_id FROM storage_access_token WHERE access_key_id=$1 AND revoked_at IS NULL",
+                vec![access_key.into()],
+            ))
+            .await
+            .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
+            .ok_or(dioxus::server::axum::http::StatusCode::NOT_FOUND)?;
+        let credential_id: Uuid = row
+            .try_get("", "id")
+            .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+        let secret = access_token_secret_read(&credential_id.to_string())
+            .await
+            .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+        let bucket_permissions = database
+            .query_all(statement(
+                "SELECT bucket_id, can_read, can_write FROM storage_access_token_bucket WHERE access_token_id=$1",
+                vec![credential_id.into()],
+            ))
+            .await
+            .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
+            .iter()
+            .map(|row| {
+                Ok(ResolvedS3BucketPermission {
+                    bucket_id: row.try_get("", "bucket_id")?,
+                    can_read: row.try_get("", "can_read")?,
+                    can_write: row.try_get("", "can_write")?,
+                })
+            })
+            .collect::<std::result::Result<Vec<_>, sea_orm::DbErr>>()
+            .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+        Ok(dioxus::server::axum::Json(ResolvedS3AccessToken {
+            organization_id: row
+                .try_get("", "organization_id")
+                .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?,
+            project_id: row
+                .try_get("", "project_id")
+                .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?,
+            credential_id,
+            bucket_permissions,
+            secret_access_key: secret.secret_access_key,
+        }))
     }
 
     pub async fn eligible_regions_handler(

@@ -5,19 +5,19 @@ services:
       context: .
       dockerfile: Dockerfile.rust
       args:
-        PACKAGE: c-plane
+        PACKAGE: api
     environment:
       SERVER_HOST: 0.0.0.0
       SERVER_PORT: 8080
       BETTER_AUTH_SESSION_URL: http://ui:3000/api/auth/get-session
       IDENTITY_DATABASE_URL: postgresql://cplane_identity:${POSTGRES_IDENTITY_PASSWORD}@postgresd:5432/cplane
       TENANT_DATABASE_URL: postgresql://cplane_tenant:${POSTGRES_TENANT_PASSWORD}@postgresd:5432/cplane
-      CONTROL_PLANE_URL: http://control-plane-ui:3001
+      CONTROL_PLANE_URL: http://control-plane:3001
       CPLANE_SERVICE_TOKEN: ${CPLANE_SERVICE_TOKEN}
     depends_on:
       - postgresd
       - ui
-      - control-plane-ui
+      - control-plane
     ports:
       - 8080:8080
 

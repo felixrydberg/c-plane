@@ -28,6 +28,11 @@ use utoipa::OpenApi;
         crate::handlers::serverless_databases::delete_database,
         crate::handlers::serverless_databases::create_database_branch,
         crate::handlers::serverless_databases::delete_database_branch,
+        crate::handlers::storage_buckets::create_bucket,
+        crate::handlers::storage_buckets::list_buckets,
+        crate::handlers::storage_access_tokens::create_access_token,
+        crate::handlers::storage_access_tokens::list_access_tokens,
+        crate::handlers::storage_access_tokens::revoke_access_token,
     ),
     components(
         schemas(
@@ -46,6 +51,12 @@ use utoipa::OpenApi;
             crate::handlers::databases::DatabaseResponse,
             crate::handlers::databases::CreateDatabaseBranchRequest,
             crate::handlers::databases::DatabaseBranchResponse,
+            crate::handlers::storage_buckets::CreateBucketRequest,
+            crate::handlers::storage_buckets::BucketResponse,
+            crate::handlers::storage_access_tokens::CreateAccessTokenRequest,
+            crate::handlers::storage_access_tokens::BucketPermissionRequest,
+            crate::handlers::storage_access_tokens::AccessTokenResponse,
+            crate::handlers::storage_access_tokens::CreatedAccessTokenResponse,
         ),
     ),
     tags(
@@ -55,6 +66,7 @@ use utoipa::OpenApi;
         (name = "events", description = "Organization activity"),
         (name = "databases/stateful", description = "Stateful database management"),
         (name = "databases/serverless", description = "Serverless database management"),
+        (name = "storage", description = "S3 bucket and access token management"),
     ),
 )]
 pub struct ApiDoc;
