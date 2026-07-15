@@ -1,6 +1,6 @@
 {
-  "id": "4a704939-bcd0-4238-bb4f-7cfc0a4fce2e",
-  "prevId": "fcdee653-4e15-4edc-a2b5-3b8010fa85fb",
+  "id": "a052ecc5-64b7-4166-90e9-af9526080cec",
+  "prevId": "d868e120-47d0-4995-a10c-c17714149d54",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -749,9 +749,19 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
+      "policies": {
+        "infrastructure_audit_log_reader": {
+          "name": "infrastructure_audit_log_reader",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "app_audit_reader"
+          ],
+          "using": "true"
+        }
+      },
       "checkConstraints": {},
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
     "public.s3_providers": {
       "name": "s3_providers",
@@ -2525,9 +2535,32 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "status": {
+          "name": "status",
+          "type": "bucket_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'provisioning'"
         }
       },
       "indexes": {
+        "bucket_name_idx": {
+          "name": "bucket_name_idx",
+          "columns": [
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
         "bucket_project_id_idx": {
           "name": "bucket_project_id_idx",
           "columns": [
@@ -2627,6 +2660,316 @@
           ],
           "using": "\"bucket\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
           "withCheck": "\"bucket\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.storage_access_token": {
+      "name": "storage_access_token",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "access_key_id": {
+          "name": "access_key_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "storage_access_token_access_key_id_uidx": {
+          "name": "storage_access_token_access_key_id_uidx",
+          "columns": [
+            {
+              "expression": "access_key_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "storage_access_token_project_name_uidx": {
+          "name": "storage_access_token_project_name_uidx",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"storage_access_token\".\"revoked_at\" is null",
+          "concurrently": false
+        },
+        "storage_access_token_organization_id_idx": {
+          "name": "storage_access_token_organization_id_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "storage_access_token_project_id_idx": {
+          "name": "storage_access_token_project_id_idx",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "storage_access_token_organization_id_organization_id_fk": {
+          "name": "storage_access_token_organization_id_organization_id_fk",
+          "tableFrom": "storage_access_token",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organization",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "storage_access_token_project_id_project_id_fk": {
+          "name": "storage_access_token_project_id_project_id_fk",
+          "tableFrom": "storage_access_token",
+          "columnsFrom": [
+            "project_id"
+          ],
+          "tableTo": "project",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "storage_access_token_tenant_rls": {
+          "name": "storage_access_token_tenant_rls",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "app_tenant"
+          ],
+          "using": "\"storage_access_token\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"storage_access_token\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.storage_access_token_bucket": {
+      "name": "storage_access_token_bucket",
+      "schema": "",
+      "columns": {
+        "access_token_id": {
+          "name": "access_token_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bucket_id": {
+          "name": "bucket_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "can_read": {
+          "name": "can_read",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "can_write": {
+          "name": "can_write",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        }
+      },
+      "indexes": {
+        "storage_access_token_bucket_uidx": {
+          "name": "storage_access_token_bucket_uidx",
+          "columns": [
+            {
+              "expression": "access_token_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "bucket_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "storage_access_token_bucket_token_id_idx": {
+          "name": "storage_access_token_bucket_token_id_idx",
+          "columns": [
+            {
+              "expression": "access_token_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "storage_access_token_bucket_bucket_id_idx": {
+          "name": "storage_access_token_bucket_bucket_id_idx",
+          "columns": [
+            {
+              "expression": "bucket_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "storage_access_token_bucket_access_token_id_storage_access_token_id_fk": {
+          "name": "storage_access_token_bucket_access_token_id_storage_access_token_id_fk",
+          "tableFrom": "storage_access_token_bucket",
+          "columnsFrom": [
+            "access_token_id"
+          ],
+          "tableTo": "storage_access_token",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "storage_access_token_bucket_bucket_id_bucket_id_fk": {
+          "name": "storage_access_token_bucket_bucket_id_bucket_id_fk",
+          "tableFrom": "storage_access_token_bucket",
+          "columnsFrom": [
+            "bucket_id"
+          ],
+          "tableTo": "bucket",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "storage_access_token_bucket_organization_id_organization_id_fk": {
+          "name": "storage_access_token_bucket_organization_id_organization_id_fk",
+          "tableFrom": "storage_access_token_bucket",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organization",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "storage_access_token_bucket_tenant_rls": {
+          "name": "storage_access_token_bucket_tenant_rls",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "app_tenant"
+          ],
+          "using": "\"storage_access_token_bucket\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"storage_access_token_bucket\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
@@ -3830,6 +4173,16 @@
         "active",
         "inactive",
         "maintenance"
+      ]
+    },
+    "public.bucket_status": {
+      "name": "bucket_status",
+      "schema": "public",
+      "values": [
+        "provisioning",
+        "ready",
+        "deleting",
+        "failed"
       ]
     },
     "public.api_key_scopes_type": {

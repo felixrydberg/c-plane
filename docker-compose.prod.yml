@@ -14,12 +14,29 @@ services:
       TENANT_DATABASE_URL: postgresql://cplane_tenant:${POSTGRES_TENANT_PASSWORD}@postgresd:5432/cplane
       CONTROL_PLANE_URL: http://control-plane:3001
       CPLANE_SERVICE_TOKEN: ${CPLANE_SERVICE_TOKEN}
+      STORAGE_ENDPOINT_URL: ${STORAGE_ENDPOINT_URL}
     depends_on:
       - postgresd
       - ui
       - control-plane
     ports:
       - 8080:8080
+
+  storage:
+    build:
+      context: .
+      dockerfile: Dockerfile.rust
+      args:
+        PACKAGE: storage
+        BINARY: c-plane-storage
+    environment:
+      STORAGE_LISTEN: 0.0.0.0:8081
+      CONTROL_PLANE_URL: http://control-plane:3001
+      CPLANE_SERVICE_TOKEN: ${CPLANE_SERVICE_TOKEN}
+    depends_on:
+      - control-plane
+    ports:
+      - 8081:8081
 
   ui:
     build:
@@ -68,11 +85,14 @@ services:
     environment:
       ADMIN_DATABASE_URL: postgresql://cplane_admin:${POSTGRES_ADMIN_PASSWORD}@postgresd:5432/cplane
       OPENBAO_ADDR: http://openbao:8200
-      OPENBAO_TOKEN: ${OPENBAO_DEV_ROOT_TOKEN}
+      OPENBAO_TOKEN: ${OPENBAO_ROOT_TOKEN}
+      REDIS_URL: redis://valkey:6379
       CPLANE_SERVICE_TOKEN: ${CPLANE_SERVICE_TOKEN}
     depends_on:
       openbao-init:
         condition: service_completed_successfully
+      valkey:
+        condition: service_started
     ports:
       - "127.0.0.1:3001:3001"
 
@@ -103,27 +123,28 @@ services:
       - VALKEY_PASSWORD=${VALKEY_PASSWORD}
     volumes:
       - valkey-data:/data
-    ports:
-      - "6379:6379"
 
   openbao:
     image: openbao/openbao:2.5.5
-    command: server -dev
+    command: server
     environment:
-      BAO_DEV_ROOT_TOKEN_ID: ${OPENBAO_DEV_ROOT_TOKEN}
-      BAO_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+      BAO_LOCAL_CONFIG: >-
+        {"disable_mlock":true,"api_addr":"http://openbao:8200","cluster_addr":"http://openbao:8201","listener":[{"tcp":{"address":"0.0.0.0:8200","tls_disable":true}}],"storage":{"raft":{"path":"/openbao/file","node_id":"cplane"}}}
+    volumes:
+      - openbao_data:/openbao/file
     healthcheck:
-      test: ["CMD-SHELL", "BAO_ADDR=http://127.0.0.1:8200 bao status"]
+      test: ["CMD-SHELL", "BAO_ADDR=http://127.0.0.1:8200 bao status >/dev/null 2>&1 || [ $? -eq 2 ]"]
       interval: 5s
       timeout: 3s
       retries: 10
 
   openbao-init:
     image: openbao/openbao:2.5.5
-    command: ["sh", "-ec", "bao secrets enable -path=cplane -version=2 kv 2>/dev/null || true"]
+    command: ["sh", "-ec", "bao operator unseal \"$${BAO_UNSEAL_KEY}\" && (bao secrets enable -path=cplane -version=2 kv 2>/dev/null || true)"]
     environment:
       BAO_ADDR: http://openbao:8200
-      BAO_TOKEN: ${OPENBAO_DEV_ROOT_TOKEN}
+      BAO_TOKEN: ${OPENBAO_ROOT_TOKEN}
+      BAO_UNSEAL_KEY: ${OPENBAO_UNSEAL_KEY}
     depends_on:
       openbao:
         condition: service_healthy
@@ -154,3 +175,4 @@ volumes:
   postgres_data:
   valkey-data:
   drizzle-gateway:
+  openbao_data:

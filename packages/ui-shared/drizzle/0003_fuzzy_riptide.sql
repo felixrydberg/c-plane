@@ -1,0 +1,1 @@
+ALTER TABLE "s3_providers" ALTER COLUMN "provider_region" SET NOT NULL;

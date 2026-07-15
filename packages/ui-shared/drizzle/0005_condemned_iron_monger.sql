@@ -1,2 +1,0 @@
-DROP INDEX "s3_access_token_branch_name_uidx";--> statement-breakpoint
-CREATE UNIQUE INDEX "s3_access_token_branch_name_uidx" ON "s3_access_token" USING btree ("project_branch_id","name") WHERE "s3_access_token"."revoked_at" is null;

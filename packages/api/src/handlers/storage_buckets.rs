@@ -1,4 +1,7 @@
-use axum::{Json, extract::Query};
+use axum::{
+    Json,
+    extract::{Path, Query},
+};
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -11,10 +14,13 @@ use crate::{
     models::entities::{
         bucket,
         region::{self, RegionRoutingMode, RegionStatus},
+        storage_access_token_bucket,
     },
 };
 
 use super::databases::{verify_org_access, verify_project_in_org};
+
+const BUCKET_PREFIX: &str = "cp-";
 
 #[derive(Deserialize)]
 pub struct ListBucketsQuery {
@@ -27,7 +33,6 @@ pub struct BucketResponse {
     pub project_id: Uuid,
     pub name: String,
     pub region: Uuid,
-    pub is_public: bool,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -35,8 +40,6 @@ pub struct CreateBucketRequest {
     pub project_id: Uuid,
     pub name: String,
     pub region: Uuid,
-    #[serde(default)]
-    pub is_public: bool,
 }
 
 #[utoipa::path(
@@ -59,6 +62,9 @@ pub async fn create_bucket(
     Json(body): Json<CreateBucketRequest>,
 ) -> Result<(axum::http::StatusCode, Json<BucketResponse>), AppError> {
     verify_org_access(&tenant_db, organization_id)?;
+    let providers = crate::state::get_app_state()
+        .s3_providers
+        .ok_or_else(|| AppError::Internal("S3 provider service is not configured".into()))?;
     let name = body.name.trim().to_ascii_lowercase();
     if !valid_bucket_name(&name) {
         return Err(AppError::Project(crate::errors::ProjectError::InvalidSlug(
@@ -77,23 +83,34 @@ pub async fn create_bucket(
     {
         return Err(AppError::Conflict("Bucket name is already reserved".into()));
     }
-    if region::Entity::find_by_id(body.region)
+    let region = region::Entity::find_by_id(body.region)
         .filter(region::Column::Status.eq(RegionStatus::Active))
         .filter(region::Column::RoutingMode.ne(RegionRoutingMode::Disabled))
         .one(tx)
         .await?
-        .is_none()
-    {
-        return Err(AppError::NotFound("Active region not found".into()));
+        .ok_or_else(|| AppError::NotFound("Active region not found".into()))?;
+    let provider_id = region
+        .s3_provider_id
+        .ok_or_else(|| AppError::Conflict("Region has no S3 provider".into()))?;
+
+    let bucket_id = Uuid::new_v4();
+    let physical_bucket_name = physical_bucket_name(bucket_id);
+    providers
+        .create_bucket(provider_id, &physical_bucket_name)
+        .await?;
+    if let Err(error) = providers.ensure_bucket_sse_key(bucket_id).await {
+        let _ = providers
+            .delete_bucket(provider_id, &physical_bucket_name)
+            .await;
+        return Err(error);
     }
 
     let created = bucket::ActiveModel {
-        id: Set(Uuid::new_v4()),
+        id: Set(bucket_id),
         project_id: Set(body.project_id),
         organization_id: Set(organization_id),
         region: Set(body.region),
         name: Set(name.clone()),
-        is_public: Set(body.is_public),
     }
     .insert(tx)
     .await?;
@@ -144,14 +161,81 @@ pub async fn list_buckets(
     Ok(Json(buckets.iter().map(response).collect()))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/organization/{organization_id}/storage/buckets/{bucket_id}",
+    params(
+        ("organization_id" = Uuid, Path, description = "Organization ID"),
+        ("bucket_id" = Uuid, Path, description = "Bucket ID"),
+    ),
+    responses(
+        (status = 204, description = "Bucket deleted"),
+        (status = 404, description = "Bucket or region not found"),
+        (status = 409, description = "Provider bucket could not be deleted"),
+    ),
+    tag = "storage",
+)]
+pub async fn delete_bucket(
+    AuthContext { tenant_db, auth }: AuthContext,
+    Path((organization_id, bucket_id)): Path<(Uuid, Uuid)>,
+) -> Result<axum::http::StatusCode, AppError> {
+    verify_org_access(&tenant_db, organization_id)?;
+    let providers = crate::state::get_app_state()
+        .s3_providers
+        .ok_or_else(|| AppError::Internal("S3 provider service is not configured".into()))?;
+    let scoped = tenant_db.begin_scoped_transaction().await?;
+    let tx = scoped.connection();
+    let bucket = bucket::Entity::find_by_id(bucket_id)
+        .filter(bucket::Column::OrganizationId.eq(organization_id))
+        .one(tx)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Bucket not found".into()))?;
+    verify_project_in_org(tx, bucket.project_id, organization_id).await?;
+    let region = region::Entity::find_by_id(bucket.region)
+        .one(tx)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Bucket region not found".into()))?;
+    let provider_id = region
+        .s3_provider_id
+        .ok_or_else(|| AppError::Conflict("Region has no S3 provider".into()))?;
+    let has_access_tokens = storage_access_token_bucket::Entity::find()
+        .filter(storage_access_token_bucket::Column::BucketId.eq(bucket.id))
+        .one(tx)
+        .await?
+        .is_some();
+
+    providers
+        .delete_bucket(provider_id, &physical_bucket_name(bucket.id))
+        .await?;
+    bucket::Entity::delete_by_id(bucket.id).exec(tx).await?;
+    crate::services::events::record(
+        tx,
+        organization_id,
+        bucket.project_id,
+        "bucket:deleted",
+        json!({ "summary": format!("Deleted bucket '{}'", bucket.name), "target_id": bucket.id }),
+        auth.actor_id,
+    )
+    .await?;
+    scoped.commit().await?;
+    if has_access_tokens {
+        providers.invalidate_access_token_cache().await?;
+    }
+
+    Ok(axum::http::StatusCode::NO_CONTENT)
+}
+
 fn response(bucket: &bucket::Model) -> BucketResponse {
     BucketResponse {
         id: bucket.id,
         project_id: bucket.project_id,
         name: bucket.name.clone(),
         region: bucket.region,
-        is_public: bucket.is_public,
     }
+}
+
+fn physical_bucket_name(id: Uuid) -> String {
+    format!("{BUCKET_PREFIX}{}", id.simple())
 }
 
 fn valid_bucket_name(name: &str) -> bool {
@@ -173,5 +257,13 @@ mod tests {
         assert!(!valid_bucket_name("UPPERCASE"));
         assert!(!valid_bucket_name("ab"));
         assert!(!valid_bucket_name("-assets"));
+    }
+
+    #[test]
+    fn prefixes_physical_bucket_names() {
+        assert_eq!(
+            super::physical_bucket_name(uuid::Uuid::nil()),
+            "cp-00000000000000000000000000000000"
+        );
     }
 }

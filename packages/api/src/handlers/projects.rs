@@ -17,6 +17,7 @@ use crate::models::entities::{
 };
 use crate::models::pins::TimelinePins;
 use crate::services::agent;
+use crate::state::get_app_state;
 use crate::utils::pagination::{PaginatedResponse, PaginationQuery};
 
 #[derive(Deserialize, ToSchema)]
@@ -377,6 +378,9 @@ pub async fn delete_project(
 
     Entity::delete_by_id(project_id).exec(tx).await?;
     scoped.commit().await?;
+    if let Some(s3_providers) = get_app_state().s3_providers {
+        s3_providers.invalidate_access_token_cache().await?;
+    }
 
     Ok(Json(serde_json::json!({ "success": true })))
 }

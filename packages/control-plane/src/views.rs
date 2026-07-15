@@ -242,7 +242,7 @@ fn CreateS3Provider(on_saved: EventHandler<()>) -> Element {
         label { "Endpoint URL" input { value: endpoint, oninput: move |e| endpoint.set(e.value()) } } label { "Provider region" input { value: region, oninput: move |e| region.set(e.value()) } }
         label { "Access key ID" input { value: access, oninput: move |e| access.set(e.value()) } } label { "Secret access key" input { r#type: "password", value: secret, oninput: move |e| secret.set(e.value()) } }
         label { "Session token" input { r#type: "password", value: session, oninput: move |e| session.set(e.value()) } } label { class: "checkbox", input { r#type: "checkbox", checked: active, onchange: move |e| active.set(e.checked()) } "Active" }
-    } ErrorMessage { message } button { class: "primary", onclick: move |_| async move { match create_s3_provider(provider_type(), endpoint(), optional(region()), access(), secret(), optional(session()), active()).await { Ok(()) => { message.set(None); access.set(String::new()); secret.set(String::new()); session.set(String::new()); on_saved.call(()); }, Err(error) => message.set(Some(error.to_string())) } }, "Create provider" } } }
+    } ErrorMessage { message } button { class: "primary", onclick: move |_| async move { match create_s3_provider(provider_type(), endpoint(), region(), access(), secret(), optional(session()), active()).await { Ok(()) => { message.set(None); access.set(String::new()); secret.set(String::new()); session.set(String::new()); on_saved.call(()); }, Err(error) => message.set(Some(error.to_string())) } }, "Create provider" } } }
 }
 
 #[component]
@@ -264,7 +264,7 @@ fn S3ProviderRow(item: S3Provider, on_saved: EventHandler<()>) -> Element {
             label { "Replacement access key" input { value: access, oninput: move |e| access.set(e.value()) } } label { "Replacement secret key" input { r#type: "password", value: secret, oninput: move |e| secret.set(e.value()) } }
             label { "Replacement session token" input { r#type: "password", value: session, oninput: move |e| session.set(e.value()) } } label { class: "checkbox", input { r#type: "checkbox", checked: active, onchange: move |e| active.set(e.checked()) } "Active" }
             ErrorMessage { message } div { class: "actions",
-                button { class: "primary", onclick: move |_| { let id = update_id.clone(); async move { match update_s3_provider(id, provider_type(), endpoint(), optional(region()), optional(access()), optional(secret()), optional(session()), active()).await { Ok(()) => { message.set(None); access.set(String::new()); secret.set(String::new()); session.set(String::new()); on_saved.call(()); }, Err(error) => message.set(Some(error.to_string())) } } }, "Save" }
+                button { class: "primary", onclick: move |_| { let id = update_id.clone(); async move { match update_s3_provider(id, provider_type(), endpoint(), region(), optional(access()), optional(secret()), optional(session()), active()).await { Ok(()) => { message.set(None); access.set(String::new()); secret.set(String::new()); on_saved.call(()); }, Err(error) => message.set(Some(error.to_string())) } } }, "Save" }
                 button { class: "danger", onclick: move |_| { let id = delete_id.clone(); async move { match delete_s3_provider(id).await { Ok(()) => on_saved.call(()), Err(error) => message.set(Some(error.to_string())) } } }, "Delete" }
             }
         } } }

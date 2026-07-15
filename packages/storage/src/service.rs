@@ -1,0 +1,537 @@
+use aws_sdk_s3::config::{BehaviorVersion, Credentials, Region};
+use axum::{
+    Router,
+    error_handling::HandleError,
+    http::{Response, StatusCode},
+    routing::get,
+};
+use s3s::{
+    Body, HttpError, S3, S3Request, S3Response, S3Result, dto::*, service::S3ServiceBuilder,
+};
+use s3s_aws::Proxy;
+
+use crate::{
+    auth::{BucketPermission, CredentialIdentity, CredentialResolver},
+    config::Config,
+    crypto::select_sse_key,
+};
+
+pub struct StorageService {
+    config: Config,
+    credentials: CredentialResolver,
+}
+
+#[derive(Clone)]
+struct ProviderProxy {
+    credentials: CredentialResolver,
+}
+
+#[async_trait::async_trait]
+impl S3 for ProviderProxy {
+    async fn list_buckets(
+        &self,
+        request: S3Request<ListBucketsInput>,
+    ) -> S3Result<S3Response<ListBucketsOutput>> {
+        let identity = identity(&request)?;
+        let mut names = accessible_bucket_names(identity);
+        names.sort();
+        let prefix = request.input.prefix.as_deref().unwrap_or_default();
+        let start_after = request
+            .input
+            .continuation_token
+            .as_deref()
+            .unwrap_or_default();
+        let limit = request.input.max_buckets.unwrap_or(10_000).max(0) as usize;
+        let mut names = names
+            .into_iter()
+            .filter(|name| name.starts_with(prefix) && name.as_str() > start_after)
+            .collect::<Vec<_>>();
+        let continuation_token =
+            (names.len() > limit && limit > 0).then(|| names[limit - 1].clone());
+        names.truncate(limit);
+        Ok(S3Response::new(ListBucketsOutput {
+            buckets: Some(
+                names
+                    .into_iter()
+                    .map(|name| Bucket {
+                        bucket_region: identity
+                            .bucket_permissions
+                            .iter()
+                            .find(|permission| permission.bucket_name == name)
+                            .map(|permission| permission.region.clone()),
+                        name: Some(name),
+                        ..Default::default()
+                    })
+                    .collect(),
+            ),
+            continuation_token,
+            prefix: request.input.prefix,
+            ..Default::default()
+        }))
+    }
+
+    async fn head_bucket(
+        &self,
+        mut request: S3Request<HeadBucketInput>,
+    ) -> S3Result<S3Response<HeadBucketOutput>> {
+        let target = self.target(&request, &request.input.bucket)?;
+        request.input.bucket = target.physical_bucket_name.clone();
+        self.provider(&target).await?.head_bucket(request).await
+    }
+
+    async fn get_bucket_location(
+        &self,
+        mut request: S3Request<GetBucketLocationInput>,
+    ) -> S3Result<S3Response<GetBucketLocationOutput>> {
+        let target = self.target(&request, &request.input.bucket)?;
+        request.input.bucket = target.physical_bucket_name.clone();
+        self.provider(&target)
+            .await?
+            .get_bucket_location(request)
+            .await
+    }
+
+    async fn delete_object(
+        &self,
+        mut request: S3Request<DeleteObjectInput>,
+    ) -> S3Result<S3Response<DeleteObjectOutput>> {
+        let target = self.target(&request, &request.input.bucket)?;
+        request.input.bucket = target.physical_bucket_name.clone();
+        self.provider(&target).await?.delete_object(request).await
+    }
+
+    async fn delete_objects(
+        &self,
+        mut request: S3Request<DeleteObjectsInput>,
+    ) -> S3Result<S3Response<DeleteObjectsOutput>> {
+        let target = self.target(&request, &request.input.bucket)?;
+        request.input.bucket = target.physical_bucket_name.clone();
+        self.provider(&target).await?.delete_objects(request).await
+    }
+
+    async fn list_objects(
+        &self,
+        mut request: S3Request<ListObjectsInput>,
+    ) -> S3Result<S3Response<ListObjectsOutput>> {
+        let logical_bucket = request.input.bucket.clone();
+        let target = self.target(&request, &request.input.bucket)?;
+        request.input.bucket = target.physical_bucket_name.clone();
+        let mut response = self.provider(&target).await?.list_objects(request).await?;
+        response.output.name = Some(logical_bucket);
+        Ok(response)
+    }
+
+    async fn list_objects_v2(
+        &self,
+        mut request: S3Request<ListObjectsV2Input>,
+    ) -> S3Result<S3Response<ListObjectsV2Output>> {
+        let logical_bucket = request.input.bucket.clone();
+        let target = self.target(&request, &request.input.bucket)?;
+        request.input.bucket = target.physical_bucket_name.clone();
+        let mut response = self
+            .provider(&target)
+            .await?
+            .list_objects_v2(request)
+            .await?;
+        response.output.name = Some(logical_bucket);
+        Ok(response)
+    }
+
+    async fn abort_multipart_upload(
+        &self,
+        mut request: S3Request<AbortMultipartUploadInput>,
+    ) -> S3Result<S3Response<AbortMultipartUploadOutput>> {
+        let target = self.target(&request, &request.input.bucket)?;
+        request.input.bucket = target.physical_bucket_name.clone();
+        self.provider(&target)
+            .await?
+            .abort_multipart_upload(request)
+            .await
+    }
+
+    async fn list_multipart_uploads(
+        &self,
+        mut request: S3Request<ListMultipartUploadsInput>,
+    ) -> S3Result<S3Response<ListMultipartUploadsOutput>> {
+        let logical_bucket = request.input.bucket.clone();
+        let target = self.target(&request, &request.input.bucket)?;
+        request.input.bucket = target.physical_bucket_name.clone();
+        let mut response = self
+            .provider(&target)
+            .await?
+            .list_multipart_uploads(request)
+            .await?;
+        response.output.bucket = Some(logical_bucket);
+        Ok(response)
+    }
+
+    async fn list_parts(
+        &self,
+        mut request: S3Request<ListPartsInput>,
+    ) -> S3Result<S3Response<ListPartsOutput>> {
+        let logical_bucket = request.input.bucket.clone();
+        let target = self.target(&request, &request.input.bucket)?;
+        request.input.bucket = target.physical_bucket_name.clone();
+        let mut response = self.provider(&target).await?.list_parts(request).await?;
+        response.output.bucket = Some(logical_bucket);
+        Ok(response)
+    }
+
+    async fn get_object(
+        &self,
+        mut request: S3Request<GetObjectInput>,
+    ) -> S3Result<S3Response<GetObjectOutput>> {
+        let target = self.target(&request, &request.input.bucket)?;
+        fill_sse(
+            &mut request.input.sse_customer_algorithm,
+            &mut request.input.sse_customer_key,
+            &mut request.input.sse_customer_key_md5,
+            &target.platform_sse_key,
+        )?;
+        request.input.bucket = target.physical_bucket_name.clone();
+        self.provider(&target).await?.get_object(request).await
+    }
+
+    async fn head_object(
+        &self,
+        mut request: S3Request<HeadObjectInput>,
+    ) -> S3Result<S3Response<HeadObjectOutput>> {
+        let target = self.target(&request, &request.input.bucket)?;
+        fill_sse(
+            &mut request.input.sse_customer_algorithm,
+            &mut request.input.sse_customer_key,
+            &mut request.input.sse_customer_key_md5,
+            &target.platform_sse_key,
+        )?;
+        request.input.bucket = target.physical_bucket_name.clone();
+        self.provider(&target).await?.head_object(request).await
+    }
+
+    async fn put_object(
+        &self,
+        mut request: S3Request<PutObjectInput>,
+    ) -> S3Result<S3Response<PutObjectOutput>> {
+        let target = self.target(&request, &request.input.bucket)?;
+        fill_sse(
+            &mut request.input.sse_customer_algorithm,
+            &mut request.input.sse_customer_key,
+            &mut request.input.sse_customer_key_md5,
+            &target.platform_sse_key,
+        )?;
+        request.input.bucket = target.physical_bucket_name.clone();
+        self.provider(&target).await?.put_object(request).await
+    }
+
+    async fn create_multipart_upload(
+        &self,
+        mut request: S3Request<CreateMultipartUploadInput>,
+    ) -> S3Result<S3Response<CreateMultipartUploadOutput>> {
+        let logical_bucket = request.input.bucket.clone();
+        let target = self.target(&request, &request.input.bucket)?;
+        fill_sse(
+            &mut request.input.sse_customer_algorithm,
+            &mut request.input.sse_customer_key,
+            &mut request.input.sse_customer_key_md5,
+            &target.platform_sse_key,
+        )?;
+        request.input.bucket = target.physical_bucket_name.clone();
+        let mut response = self
+            .provider(&target)
+            .await?
+            .create_multipart_upload(request)
+            .await?;
+        response.output.bucket = Some(logical_bucket);
+        Ok(response)
+    }
+
+    async fn upload_part(
+        &self,
+        mut request: S3Request<UploadPartInput>,
+    ) -> S3Result<S3Response<UploadPartOutput>> {
+        let target = self.target(&request, &request.input.bucket)?;
+        fill_sse(
+            &mut request.input.sse_customer_algorithm,
+            &mut request.input.sse_customer_key,
+            &mut request.input.sse_customer_key_md5,
+            &target.platform_sse_key,
+        )?;
+        request.input.bucket = target.physical_bucket_name.clone();
+        self.provider(&target).await?.upload_part(request).await
+    }
+
+    async fn complete_multipart_upload(
+        &self,
+        mut request: S3Request<CompleteMultipartUploadInput>,
+    ) -> S3Result<S3Response<CompleteMultipartUploadOutput>> {
+        let logical_bucket = request.input.bucket.clone();
+        let target = self.target(&request, &request.input.bucket)?;
+        fill_sse(
+            &mut request.input.sse_customer_algorithm,
+            &mut request.input.sse_customer_key,
+            &mut request.input.sse_customer_key_md5,
+            &target.platform_sse_key,
+        )?;
+        request.input.bucket = target.physical_bucket_name.clone();
+        let mut response = self
+            .provider(&target)
+            .await?
+            .complete_multipart_upload(request)
+            .await?;
+        response.output.bucket = Some(logical_bucket.clone());
+        if let Some(location) = response.output.location.as_mut() {
+            *location = location.replace(&target.physical_bucket_name, &logical_bucket);
+        }
+        Ok(response)
+    }
+
+    async fn copy_object(
+        &self,
+        mut request: S3Request<CopyObjectInput>,
+    ) -> S3Result<S3Response<CopyObjectOutput>> {
+        let destination = self.target(&request, &request.input.bucket)?;
+        let source = self.copy_source_target(&request, &request.input.copy_source)?;
+        rewrite_copy_source(&mut request.input.copy_source, &source.physical_bucket_name)?;
+        same_provider(&source, &destination)?;
+        fill_sse(
+            &mut request.input.sse_customer_algorithm,
+            &mut request.input.sse_customer_key,
+            &mut request.input.sse_customer_key_md5,
+            &destination.platform_sse_key,
+        )?;
+        fill_sse(
+            &mut request.input.copy_source_sse_customer_algorithm,
+            &mut request.input.copy_source_sse_customer_key,
+            &mut request.input.copy_source_sse_customer_key_md5,
+            &source.platform_sse_key,
+        )?;
+        request.input.bucket = destination.physical_bucket_name.clone();
+        self.provider(&destination)
+            .await?
+            .copy_object(request)
+            .await
+    }
+
+    async fn upload_part_copy(
+        &self,
+        mut request: S3Request<UploadPartCopyInput>,
+    ) -> S3Result<S3Response<UploadPartCopyOutput>> {
+        let destination = self.target(&request, &request.input.bucket)?;
+        let source = self.copy_source_target(&request, &request.input.copy_source)?;
+        rewrite_copy_source(&mut request.input.copy_source, &source.physical_bucket_name)?;
+        same_provider(&source, &destination)?;
+        fill_sse(
+            &mut request.input.sse_customer_algorithm,
+            &mut request.input.sse_customer_key,
+            &mut request.input.sse_customer_key_md5,
+            &destination.platform_sse_key,
+        )?;
+        fill_sse(
+            &mut request.input.copy_source_sse_customer_algorithm,
+            &mut request.input.copy_source_sse_customer_key,
+            &mut request.input.copy_source_sse_customer_key_md5,
+            &source.platform_sse_key,
+        )?;
+        request.input.bucket = destination.physical_bucket_name.clone();
+        self.provider(&destination)
+            .await?
+            .upload_part_copy(request)
+            .await
+    }
+}
+
+impl ProviderProxy {
+    fn target<T>(&self, request: &S3Request<T>, bucket: &str) -> S3Result<BucketPermission> {
+        identity(request)?
+            .bucket_permissions
+            .iter()
+            .find(|permission| permission.bucket_name == bucket)
+            .cloned()
+            .ok_or_else(|| s3s::s3_error!(AccessDenied))
+    }
+
+    fn copy_source_target<T>(
+        &self,
+        request: &S3Request<T>,
+        copy_source: &CopySource,
+    ) -> S3Result<BucketPermission> {
+        let source = copy_source.format_to_string();
+        let (bucket, _) = source
+            .split_once('/')
+            .ok_or_else(|| s3s::s3_error!(InvalidRequest, "Invalid copy source"))?;
+        let target = self.target(request, bucket)?;
+        if !target.can_read {
+            return Err(s3s::s3_error!(AccessDenied));
+        }
+        Ok(target)
+    }
+
+    async fn provider(&self, target: &BucketPermission) -> S3Result<Proxy> {
+        let provider = self.credentials.provider(target.provider_id).await.map_err(|error| {
+            tracing::error!(%error, provider_id = %target.provider_id, "provider resolver failed");
+            s3s::s3_error!(InternalError)
+        })?;
+        let region = provider
+            .provider_region
+            .clone()
+            .ok_or_else(|| s3s::s3_error!(InternalError, "Provider region is not configured"))?;
+        // build per request; cache clients by provider ID if connection setup becomes measurable.
+        let config = aws_sdk_s3::Config::builder()
+            .behavior_version(BehaviorVersion::latest())
+            .endpoint_url(provider.endpoint_url.clone())
+            .region(Region::new(region))
+            .credentials_provider(Credentials::new(
+                provider.access_key_id.clone(),
+                provider.secret_access_key.clone(),
+                provider.session_token.clone(),
+                None,
+                "c-plane-control-plane",
+            ))
+            .force_path_style(true)
+            .build();
+        Ok(Proxy::from(aws_sdk_s3::Client::from_conf(config)))
+    }
+}
+
+fn identity<T>(request: &S3Request<T>) -> S3Result<&CredentialIdentity> {
+    request
+        .extensions
+        .get::<CredentialIdentity>()
+        .ok_or_else(|| s3s::s3_error!(AccessDenied))
+}
+
+fn accessible_bucket_names(identity: &CredentialIdentity) -> Vec<String> {
+    let mut names = identity
+        .bucket_permissions
+        .iter()
+        .filter(|permission| permission.can_read || permission.can_write)
+        .map(|permission| permission.bucket_name.clone())
+        .collect::<Vec<_>>();
+    names.sort();
+    names
+}
+
+fn fill_sse(
+    algorithm: &mut Option<String>,
+    key: &mut Option<String>,
+    key_md5: &mut Option<String>,
+    platform_key: &str,
+) -> S3Result<()> {
+    let selected = select_sse_key(
+        algorithm.as_deref(),
+        key.as_deref(),
+        key_md5.as_deref(),
+        platform_key,
+    )
+    .map_err(|error| s3s::s3_error!(InvalidRequest, "{error}"))?;
+    *algorithm = Some(selected.algorithm);
+    *key = Some(selected.key);
+    *key_md5 = Some(selected.key_md5);
+    Ok(())
+}
+
+fn rewrite_copy_source(copy_source: &mut CopySource, physical_bucket: &str) -> S3Result<()> {
+    let source = copy_source.format_to_string();
+    let (_, key) = source
+        .split_once('/')
+        .ok_or_else(|| s3s::s3_error!(InvalidRequest, "Invalid copy source"))?;
+    *copy_source = CopySource::parse(&format!("{physical_bucket}/{key}"))
+        .map_err(|_| s3s::s3_error!(InvalidRequest, "Invalid copy source"))?;
+    Ok(())
+}
+
+fn same_provider(source: &BucketPermission, destination: &BucketPermission) -> S3Result<()> {
+    if source.provider_id == destination.provider_id {
+        Ok(())
+    } else {
+        Err(s3s::s3_error!(
+            InvalidRequest,
+            "Cross-provider copies are not supported"
+        ))
+    }
+}
+
+impl StorageService {
+    pub async fn from_config(config: Config) -> Result<Self, reqwest::Error> {
+        let credentials = CredentialResolver::new(
+            config.control_plane_url.clone(),
+            config.internal_token.clone(),
+        );
+        Ok(Self {
+            config,
+            credentials,
+        })
+    }
+
+    pub async fn serve(self) -> Result<(), std::io::Error> {
+        let mut builder = S3ServiceBuilder::new(ProviderProxy {
+            credentials: self.credentials.clone(),
+        });
+        builder.set_auth(self.credentials.clone());
+        builder.set_access(self.credentials);
+        let s3 = HandleError::new(builder.build(), handle_s3_error);
+        let app = Router::new()
+            .route("/health", get(|| async { "OK" }))
+            .fallback_service(s3);
+        let listener = tokio::net::TcpListener::bind(self.config.listen).await?;
+        tracing::info!(address = %self.config.listen, "storage endpoint started");
+        axum::serve(listener, app).await
+    }
+}
+
+async fn handle_s3_error(error: HttpError) -> Response<Body> {
+    tracing::error!(?error, "S3 HTTP error");
+    Response::builder()
+        .status(StatusCode::INTERNAL_SERVER_ERROR)
+        .body(Body::from("Internal Server Error".to_string()))
+        .expect("static response")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rewrites_copy_source_bucket_without_touching_the_key() {
+        let mut rewritten = CopySource::parse("uploads/path/to/file.txt?versionId=1").unwrap();
+        rewrite_copy_source(&mut rewritten, "cp-123").unwrap();
+        assert_eq!(
+            rewritten.format_to_string(),
+            "cp-123/path/to/file.txt?versionId=1"
+        );
+    }
+
+    #[test]
+    fn lists_readable_and_writable_buckets_across_regions() {
+        let identity = CredentialIdentity {
+            organization_id: uuid::Uuid::nil(),
+            project_id: uuid::Uuid::nil(),
+            credential_id: uuid::Uuid::nil(),
+            bucket_permissions: vec![
+                BucketPermission {
+                    bucket_id: uuid::Uuid::nil(),
+                    bucket_name: "write-only".into(),
+                    physical_bucket_name: "cp-write".into(),
+                    region: "eu-north-1".into(),
+                    provider_id: uuid::Uuid::nil(),
+                    platform_sse_key: "key".into(),
+                    can_read: false,
+                    can_write: true,
+                },
+                BucketPermission {
+                    bucket_id: uuid::Uuid::nil(),
+                    bucket_name: "read-only".into(),
+                    physical_bucket_name: "cp-read".into(),
+                    region: "us-east-1".into(),
+                    provider_id: uuid::Uuid::nil(),
+                    platform_sse_key: "key".into(),
+                    can_read: true,
+                    can_write: false,
+                },
+            ],
+        };
+        assert_eq!(
+            accessible_bucket_names(&identity),
+            ["read-only", "write-only"]
+        );
+    }
+}

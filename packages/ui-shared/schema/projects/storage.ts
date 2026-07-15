@@ -17,7 +17,6 @@ export const bucket = pgTable('bucket', {
     .references(() => organization.id, { onDelete: "cascade" }),
   region: uuid("region").notNull().references(() => region.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
-  is_public: boolean("is_public").notNull().default(false),
   status: bucket_status("status").notNull().default("provisioning"),
 }, (table) => [
   uniqueIndex("bucket_name_idx").on(table.name),

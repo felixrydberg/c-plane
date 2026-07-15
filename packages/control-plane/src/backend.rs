@@ -94,7 +94,7 @@ pub async fn list_s3_providers() -> Result<Vec<S3Provider>> {
 pub async fn create_s3_provider(
     provider_type: String,
     endpoint_url: String,
-    provider_region: Option<String>,
+    provider_region: String,
     access_key_id: String,
     secret_access_key: String,
     session_token: Option<String>,
@@ -120,7 +120,7 @@ pub async fn update_s3_provider(
     id: String,
     provider_type: String,
     endpoint_url: String,
-    provider_region: Option<String>,
+    provider_region: String,
     access_key_id: Option<String>,
     secret_access_key: Option<String>,
     session_token: Option<String>,
@@ -189,8 +189,10 @@ pub async fn list_audit_logs() -> Result<Vec<AuditLog>> {
 #[cfg(feature = "server")]
 pub mod server {
     use super::*;
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
     use chrono::{Duration, Utc};
     use dioxus::{CapturedError, fullstack::HeaderMap};
+    use redis::AsyncCommands;
     use reqwest::Client;
     use sea_orm::{
         ConnectionTrait, Database, DatabaseBackend, DatabaseConnection, QueryResult, Statement,
@@ -199,12 +201,16 @@ pub mod server {
     use serde::{Deserialize, Serialize};
     use serde_json::json;
     use sha2::{Digest, Sha256};
-    use std::{collections::HashMap, env};
-    use tokio::sync::{OnceCell, RwLock};
+    use std::env;
+    use tokio::sync::OnceCell;
     use uuid::Uuid;
 
+    const BUCKET_PREFIX: &str = "cp-";
+    const S3_PROVIDER_CACHE_PREFIX: &str = "cplane:s3-provider:";
+    const S3_ACCESS_TOKEN_CACHE_PREFIX: &str = "cplane:s3-access-token:";
+    const S3_ACCESS_TOKEN_CACHE_GENERATION: &str = "cplane:s3-access-token-generation";
+    const S3_ACCESS_TOKEN_CACHE_TTL_SECONDS: u64 = 86_400;
     static DATABASE: OnceCell<DatabaseConnection> = OnceCell::const_new();
-    static CREDENTIALS: OnceCell<RwLock<HashMap<String, S3Credentials>>> = OnceCell::const_new();
 
     pub async fn initialize() -> Result<()> {
         required(
@@ -212,7 +218,7 @@ pub mod server {
             "CPLANE_SERVICE_TOKEN",
         )?;
         database().await?;
-        credential_cache().await?;
+        sync_provider_cache().await?;
         Ok(())
     }
 
@@ -379,6 +385,7 @@ pub mod server {
         }
         audit(&tx, headers, "update", "region", Some(&id), json!({"slug": slug, "display_name": display_name, "status": status, "s3_provider_id": s3_provider_id})).await?;
         tx.commit().await.map_err(CapturedError::from_display)?;
+        invalidate_access_token_cache().await?;
         Ok(())
     }
 
@@ -644,20 +651,35 @@ pub mod server {
         data: S3AccessTokenSecret,
     }
 
-    #[derive(Serialize)]
+    #[derive(Clone, Deserialize, Serialize)]
     pub struct ResolvedS3BucketPermission {
         pub bucket_id: Uuid,
+        pub bucket_name: String,
+        pub physical_bucket_name: String,
+        pub region: String,
+        pub provider_id: Uuid,
+        pub platform_sse_key: String,
         pub can_read: bool,
         pub can_write: bool,
     }
 
-    #[derive(Serialize)]
+    #[derive(Clone, Deserialize, Serialize)]
     pub struct ResolvedS3AccessToken {
         pub organization_id: Uuid,
         pub project_id: Uuid,
         pub credential_id: Uuid,
         pub bucket_permissions: Vec<ResolvedS3BucketPermission>,
         pub secret_access_key: String,
+    }
+
+    #[derive(Serialize)]
+    pub struct S3ProviderConnection {
+        pub id: Uuid,
+        #[serde(flatten)]
+        pub credentials: S3Credentials,
+        pub endpoint_url: String,
+        pub provider_region: Option<String>,
+        pub provider_type: String,
     }
 
     async fn access_token_secret_read(id: &str) -> Result<S3AccessTokenSecret> {
@@ -681,6 +703,69 @@ pub mod server {
             .await
             .map(|value| value.data.data)
             .map_err(CapturedError::from_display)
+    }
+
+    #[derive(Deserialize)]
+    struct OpenBaoBucketKeyData {
+        data: OpenBaoBucketKeySecret,
+    }
+
+    #[derive(Deserialize)]
+    struct OpenBaoBucketKeySecret {
+        data: BucketKey,
+    }
+
+    #[derive(Deserialize, Serialize)]
+    struct BucketKey {
+        key: String,
+    }
+
+    async fn bucket_key_read(id: Uuid) -> Result<Option<String>> {
+        let (address, token) = openbao_config()?;
+        let response = Client::new()
+            .get(format!("{address}/v1/cplane/data/storage/sse-c/{id}"))
+            .header("X-Vault-Token", token)
+            .send()
+            .await
+            .map_err(CapturedError::from_display)?;
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+        if !response.status().is_success() {
+            return Err(CapturedError::msg(format!(
+                "OpenBao read failed: {}",
+                response.status()
+            )));
+        }
+        response
+            .json::<OpenBaoBucketKeyData>()
+            .await
+            .map(|value| Some(value.data.data.key))
+            .map_err(CapturedError::from_display)
+    }
+
+    async fn bucket_key(id: Uuid) -> Result<String> {
+        if let Some(key) = bucket_key_read(id).await? {
+            return Ok(key);
+        }
+        let mut raw = [0; 32];
+        raw[..16].copy_from_slice(Uuid::new_v4().as_bytes());
+        raw[16..].copy_from_slice(Uuid::new_v4().as_bytes());
+        let key = STANDARD.encode(raw);
+        let (address, token) = openbao_config()?;
+        let response = Client::new()
+            .post(format!("{address}/v1/cplane/data/storage/sse-c/{id}"))
+            .header("X-Vault-Token", token)
+            .json(&json!({ "options": { "cas": 0 }, "data": { "key": key } }))
+            .send()
+            .await
+            .map_err(CapturedError::from_display)?;
+        if response.status().is_success() {
+            return Ok(key);
+        }
+        bucket_key_read(id).await?.ok_or_else(|| {
+            CapturedError::msg(format!("OpenBao write failed: {}", response.status()))
+        })
     }
 
     async fn access_token_secret_write(id: &str, secret: &S3AccessTokenSecret) -> Result<()> {
@@ -722,29 +807,122 @@ pub mod server {
         Ok(())
     }
 
-    async fn credential_cache() -> Result<&'static RwLock<HashMap<String, S3Credentials>>> {
-        CREDENTIALS
-            .get_or_try_init(|| async {
-                let rows = database()
-                    .await?
-                    .query_all(statement("SELECT id::text FROM s3_providers", vec![]))
-                    .await
-                    .map_err(CapturedError::from_display)?;
-                let mut credentials = HashMap::new();
-                for row in rows {
-                    let id = text(&row, "id")?;
-                    credentials.insert(id.clone(), openbao_read(&id).await?);
-                }
-                Ok(RwLock::new(credentials))
-            })
+    fn provider_cache_key(id: &str) -> String {
+        format!("{S3_PROVIDER_CACHE_PREFIX}{id}")
+    }
+
+    async fn redis_connection() -> Result<redis::aio::MultiplexedConnection> {
+        let url = env::var("REDIS_URL").map_err(CapturedError::from_display)?;
+        let client = redis::Client::open(url).map_err(CapturedError::from_display)?;
+        client
+            .get_multiplexed_async_connection()
             .await
+            .map_err(CapturedError::from_display)
+    }
+
+    async fn cache_credentials(id: &str, credentials: &S3Credentials) -> Result<()> {
+        let mut connection = redis_connection().await?;
+        let value = serde_json::to_string(credentials).map_err(CapturedError::from_display)?;
+        let _: () = connection
+            .set(provider_cache_key(id), value)
+            .await
+            .map_err(CapturedError::from_display)?;
+        Ok(())
+    }
+
+    async fn cached_credentials(id: &str) -> Result<S3Credentials> {
+        let mut connection = redis_connection().await?;
+        let value: Option<String> = connection
+            .get(provider_cache_key(id))
+            .await
+            .map_err(CapturedError::from_display)?;
+        if let Some(value) = value {
+            return serde_json::from_str(&value).map_err(CapturedError::from_display);
+        }
+        let credentials = openbao_read(id).await?;
+        let value = serde_json::to_string(&credentials).map_err(CapturedError::from_display)?;
+        let _: () = connection
+            .set(provider_cache_key(id), value)
+            .await
+            .map_err(CapturedError::from_display)?;
+        Ok(credentials)
+    }
+
+    async fn delete_cached_credentials(id: &str) -> Result<()> {
+        let mut connection = redis_connection().await?;
+        let _: usize = connection
+            .del(provider_cache_key(id))
+            .await
+            .map_err(CapturedError::from_display)?;
+        Ok(())
+    }
+
+    fn access_token_cache_key(access_key: &str, generation: u64) -> String {
+        format!("{S3_ACCESS_TOKEN_CACHE_PREFIX}{generation}:{access_key}")
+    }
+
+    async fn cached_access_token(access_key: &str) -> Result<(u64, Option<ResolvedS3AccessToken>)> {
+        let mut connection = redis_connection().await?;
+        let generation: Option<u64> = connection
+            .get(S3_ACCESS_TOKEN_CACHE_GENERATION)
+            .await
+            .map_err(CapturedError::from_display)?;
+        let generation = generation.unwrap_or(0);
+        let value: Option<String> = connection
+            .get(access_token_cache_key(access_key, generation))
+            .await
+            .map_err(CapturedError::from_display)?;
+        let token = value
+            .map(|value| serde_json::from_str(&value).map_err(CapturedError::from_display))
+            .transpose()?;
+        Ok((generation, token))
+    }
+
+    async fn cache_access_token(
+        access_key: &str,
+        generation: u64,
+        token: &ResolvedS3AccessToken,
+    ) -> Result<()> {
+        let mut connection = redis_connection().await?;
+        let value = serde_json::to_string(token).map_err(CapturedError::from_display)?;
+        let _: () = connection
+            .set_ex(
+                access_token_cache_key(access_key, generation),
+                value,
+                S3_ACCESS_TOKEN_CACHE_TTL_SECONDS,
+            )
+            .await
+            .map_err(CapturedError::from_display)?;
+        Ok(())
+    }
+
+    async fn invalidate_access_token_cache() -> Result<()> {
+        let mut connection = redis_connection().await?;
+        let _: u64 = connection
+            .incr(S3_ACCESS_TOKEN_CACHE_GENERATION, 1)
+            .await
+            .map_err(CapturedError::from_display)?;
+        Ok(())
+    }
+
+    async fn sync_provider_cache() -> Result<()> {
+        let rows = database()
+            .await?
+            .query_all(statement("SELECT id::text FROM s3_providers", vec![]))
+            .await
+            .map_err(CapturedError::from_display)?;
+        for row in rows {
+            let id = text(&row, "id")?;
+            cache_credentials(&id, &openbao_read(&id).await?).await?;
+        }
+        Ok(())
     }
 
     pub async fn create_s3_provider(
         headers: &HeaderMap,
         provider_type: String,
         endpoint_url: String,
-        provider_region: Option<String>,
+        provider_region: String,
         credentials: S3Credentials,
         is_active: bool,
     ) -> Result<()> {
@@ -752,6 +930,7 @@ pub mod server {
         let provider_type =
             validate_choice(provider_type, &["aws_s3", "cloudflare_r2"], "provider type")?;
         let endpoint_url = required(endpoint_url, "endpoint URL")?;
+        let provider_region = required(provider_region, "provider region")?;
         required(credentials.access_key_id.clone(), "access key ID")?;
         required(credentials.secret_access_key.clone(), "secret access key")?;
         openbao_write(&id, &credentials).await?;
@@ -770,12 +949,7 @@ pub mod server {
             let _ = openbao_delete(&id).await;
             return Err(error);
         }
-        credential_cache()
-            .await?
-            .write()
-            .await
-            .insert(id, credentials);
-        Ok(())
+        cache_credentials(&id, &credentials).await
     }
 
     pub async fn update_s3_provider(
@@ -783,18 +957,15 @@ pub mod server {
         id: String,
         provider_type: String,
         endpoint_url: String,
-        provider_region: Option<String>,
+        provider_region: String,
         credentials: Option<S3Credentials>,
         is_active: bool,
     ) -> Result<()> {
         let provider_type =
             validate_choice(provider_type, &["aws_s3", "cloudflare_r2"], "provider type")?;
         let endpoint_url = required(endpoint_url, "endpoint URL")?;
-        let previous_credentials = if credentials.is_some() {
-            credential_cache().await?.read().await.get(&id).cloned()
-        } else {
-            None
-        };
+        let provider_region = required(provider_region, "provider region")?;
+        let previous_credentials = cached_credentials(&id).await?;
         if let Some(replacement) = credentials.as_ref() {
             openbao_write(&id, replacement).await?;
         }
@@ -813,29 +984,17 @@ pub mod server {
             Ok(())
         }.await;
         if let Err(error) = database_result {
-            if let Some(previous) = previous_credentials {
-                let _ = openbao_write(&id, &previous).await;
+            if credentials.is_some() {
+                let _ = openbao_write(&id, &previous_credentials).await;
             }
             return Err(error);
         }
-        if let Some(credentials) = credentials {
-            credential_cache()
-                .await?
-                .write()
-                .await
-                .insert(id, credentials);
-        }
-        Ok(())
+        cache_credentials(&id, credentials.as_ref().unwrap_or(&previous_credentials)).await?;
+        invalidate_access_token_cache().await
     }
 
     pub async fn delete_s3_provider(headers: &HeaderMap, id: String) -> Result<()> {
-        let old = credential_cache()
-            .await?
-            .read()
-            .await
-            .get(&id)
-            .cloned()
-            .ok_or_else(|| CapturedError::msg("S3 provider credentials not found"))?;
+        let old = cached_credentials(&id).await?;
         openbao_delete(&id).await?;
         let result = async {
             let tx = database()
@@ -862,8 +1021,8 @@ pub mod server {
             let _ = openbao_write(&id, &old).await;
             return Err(error);
         }
-        credential_cache().await?.write().await.remove(&id);
-        Ok(())
+        delete_cached_credentials(&id).await?;
+        invalidate_access_token_cache().await
     }
 
     fn authorize_service(
@@ -885,19 +1044,59 @@ pub mod server {
         dioxus::server::axum::extract::Path(id): dioxus::server::axum::extract::Path<String>,
         headers: dioxus::server::axum::http::HeaderMap,
     ) -> std::result::Result<
-        dioxus::server::axum::Json<S3Credentials>,
+        dioxus::server::axum::Json<S3ProviderConnection>,
         dioxus::server::axum::http::StatusCode,
     > {
         authorize_service(&headers)?;
-        credential_cache()
+        let id = Uuid::parse_str(&id)
+            .map_err(|_| dioxus::server::axum::http::StatusCode::BAD_REQUEST)?;
+        Ok(dioxus::server::axum::Json(provider_connection(id).await?))
+    }
+
+    pub async fn ensure_bucket_sse_key_handler(
+        dioxus::server::axum::extract::Path(id): dioxus::server::axum::extract::Path<String>,
+        headers: dioxus::server::axum::http::HeaderMap,
+    ) -> std::result::Result<
+        dioxus::server::axum::http::StatusCode,
+        dioxus::server::axum::http::StatusCode,
+    > {
+        authorize_service(&headers)?;
+        let id = Uuid::parse_str(&id)
+            .map_err(|_| dioxus::server::axum::http::StatusCode::BAD_REQUEST)?;
+        bucket_key(id)
+            .await
+            .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+        Ok(dioxus::server::axum::http::StatusCode::NO_CONTENT)
+    }
+
+    async fn provider_connection(
+        id: Uuid,
+    ) -> std::result::Result<S3ProviderConnection, dioxus::server::axum::http::StatusCode> {
+        let provider = database()
             .await
             .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
-            .read()
+            .query_one(statement(
+                "SELECT endpoint_url, provider_region, provider_type::text FROM s3_providers WHERE id=$1::uuid AND is_active=true",
+                vec![id.into()],
+            ))
             .await
-            .get(&id)
-            .cloned()
-            .map(dioxus::server::axum::Json)
-            .ok_or(dioxus::server::axum::http::StatusCode::NOT_FOUND)
+            .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
+            .ok_or(dioxus::server::axum::http::StatusCode::NOT_FOUND)?;
+        Ok(S3ProviderConnection {
+            id,
+            credentials: cached_credentials(&id.to_string())
+                .await
+                .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?,
+            endpoint_url: provider
+                .try_get("", "endpoint_url")
+                .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?,
+            provider_region: provider
+                .try_get("", "provider_region")
+                .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?,
+            provider_type: provider
+                .try_get("", "provider_type")
+                .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?,
+        })
     }
 
     pub async fn store_access_token_secret_handler(
@@ -916,6 +1115,9 @@ pub mod server {
         access_token_secret_write(&id, &secret)
             .await
             .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+        invalidate_access_token_cache()
+            .await
+            .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
         Ok(dioxus::server::axum::http::StatusCode::NO_CONTENT)
     }
 
@@ -928,7 +1130,23 @@ pub mod server {
     > {
         authorize_service(&headers)?;
         Uuid::parse_str(&id).map_err(|_| dioxus::server::axum::http::StatusCode::BAD_REQUEST)?;
+        invalidate_access_token_cache()
+            .await
+            .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
         access_token_secret_delete(&id)
+            .await
+            .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+        Ok(dioxus::server::axum::http::StatusCode::NO_CONTENT)
+    }
+
+    pub async fn invalidate_access_token_cache_handler(
+        headers: dioxus::server::axum::http::HeaderMap,
+    ) -> std::result::Result<
+        dioxus::server::axum::http::StatusCode,
+        dioxus::server::axum::http::StatusCode,
+    > {
+        authorize_service(&headers)?;
+        invalidate_access_token_cache()
             .await
             .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
         Ok(dioxus::server::axum::http::StatusCode::NO_CONTENT)
@@ -944,13 +1162,19 @@ pub mod server {
         dioxus::server::axum::http::StatusCode,
     > {
         authorize_service(&headers)?;
+        let (generation, cached) = cached_access_token(&access_key)
+            .await
+            .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+        if let Some(cached) = cached {
+            return Ok(dioxus::server::axum::Json(cached));
+        }
         let database = database()
             .await
             .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
         let row = database
             .query_one(statement(
                 "SELECT id, organization_id, project_id FROM storage_access_token WHERE access_key_id=$1 AND revoked_at IS NULL",
-                vec![access_key.into()],
+                vec![access_key.clone().into()],
             ))
             .await
             .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
@@ -961,24 +1185,43 @@ pub mod server {
         let secret = access_token_secret_read(&credential_id.to_string())
             .await
             .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
-        let bucket_permissions = database
+        let bucket_rows = database
             .query_all(statement(
-                "SELECT bucket_id, can_read, can_write FROM storage_access_token_bucket WHERE access_token_id=$1",
-                vec![credential_id.into()],
+                "SELECT permission.bucket_id, permission.can_read, permission.can_write, bucket.name AS bucket_name, region.slug AS region_slug, provider.id AS provider_id FROM storage_access_token_bucket permission JOIN bucket ON bucket.id=permission.bucket_id JOIN regions region ON region.id=bucket.region JOIN s3_providers provider ON provider.id=region.s3_provider_id WHERE permission.access_token_id=$1 AND bucket.project_id=$2 AND provider.is_active=true",
+                vec![credential_id.into(), row.try_get::<Uuid>("", "project_id").map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?.into()],
             ))
             .await
-            .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
-            .iter()
-            .map(|row| {
-                Ok(ResolvedS3BucketPermission {
-                    bucket_id: row.try_get("", "bucket_id")?,
-                    can_read: row.try_get("", "can_read")?,
-                    can_write: row.try_get("", "can_write")?,
-                })
-            })
-            .collect::<std::result::Result<Vec<_>, sea_orm::DbErr>>()
             .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
-        Ok(dioxus::server::axum::Json(ResolvedS3AccessToken {
+        let mut bucket_permissions = Vec::with_capacity(bucket_rows.len());
+        for bucket in bucket_rows {
+            let bucket_id: Uuid = bucket
+                .try_get("", "bucket_id")
+                .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+            let provider_id: Uuid = bucket
+                .try_get::<Uuid>("", "provider_id")
+                .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+            bucket_permissions.push(ResolvedS3BucketPermission {
+                bucket_id,
+                bucket_name: bucket
+                    .try_get("", "bucket_name")
+                    .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?,
+                physical_bucket_name: format!("{BUCKET_PREFIX}{}", bucket_id.simple()),
+                region: bucket
+                    .try_get("", "region_slug")
+                    .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?,
+                provider_id,
+                platform_sse_key: bucket_key(bucket_id)
+                    .await
+                    .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?,
+                can_read: bucket
+                    .try_get("", "can_read")
+                    .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?,
+                can_write: bucket
+                    .try_get("", "can_write")
+                    .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?,
+            });
+        }
+        let resolved = ResolvedS3AccessToken {
             organization_id: row
                 .try_get("", "organization_id")
                 .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?,
@@ -988,7 +1231,11 @@ pub mod server {
             credential_id,
             bucket_permissions,
             secret_access_key: secret.secret_access_key,
-        }))
+        };
+        cache_access_token(&access_key, generation, &resolved)
+            .await
+            .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+        Ok(dioxus::server::axum::Json(resolved))
     }
 
     pub async fn eligible_regions_handler(
@@ -1141,6 +1388,22 @@ pub mod server {
         }
         audit(&tx, headers, "delete", resource_type, Some(&id), json!({})).await?;
         tx.commit().await.map_err(CapturedError::from_display)?;
+        if matches!(table, "regions" | "organization") {
+            invalidate_access_token_cache().await?;
+        }
         Ok(())
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::access_token_cache_key;
+
+        #[test]
+        fn access_token_cache_key_changes_with_generation() {
+            assert_ne!(
+                access_token_cache_key("CP123", 1),
+                access_token_cache_key("CP123", 2)
+            );
+        }
     }
 }

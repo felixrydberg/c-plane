@@ -1,6 +1,6 @@
 use axum::{
     Router,
-    routing::{get, patch, post},
+    routing::{delete, get, patch, post},
 };
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -50,7 +50,13 @@ pub fn create_routes() -> Router {
         )
         .route(
             "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}",
-            axum::routing::delete(storage_access_tokens::revoke_access_token),
+            get(storage_access_tokens::get_access_token)
+                .patch(storage_access_tokens::update_access_token)
+                .delete(storage_access_tokens::revoke_access_token),
+        )
+        .route(
+            "/api/organization/{organization_id}/storage/buckets/{bucket_id}",
+            delete(storage_buckets::delete_bucket),
         )
         .route(
             "/api/organization/{organization_id}/storage/buckets",

@@ -20,6 +20,10 @@ fn main() {
                 dioxus::server::axum::routing::get(backend::server::credentials_handler),
             )
             .route(
+                "/internal/s3-buckets/{id}/sse-key",
+                dioxus::server::axum::routing::put(backend::server::ensure_bucket_sse_key_handler),
+            )
+            .route(
                 "/internal/s3-access-tokens/{id}",
                 dioxus::server::axum::routing::put(
                     backend::server::store_access_token_secret_handler,
@@ -29,6 +33,12 @@ fn main() {
             .route(
                 "/internal/s3-access-tokens/resolve/{access_key}",
                 dioxus::server::axum::routing::get(backend::server::resolve_access_token_handler),
+            )
+            .route(
+                "/internal/s3-access-token-cache",
+                dioxus::server::axum::routing::delete(
+                    backend::server::invalidate_access_token_cache_handler,
+                ),
             )
             .route(
                 "/internal/regions",

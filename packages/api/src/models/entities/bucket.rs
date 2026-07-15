@@ -10,7 +10,6 @@ pub struct Model {
     pub organization_id: Uuid,
     pub region: Uuid,
     pub name: String,
-    pub is_public: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

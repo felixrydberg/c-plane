@@ -1,0 +1,24 @@
+[package]
+name = "c-plane-storage"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+async-trait = "0.1.89"
+aws-sdk-s3 = "=1.135.0"
+axum = "0.8.8"
+base64 = "0.22.1"
+md-5 = "0.10.6"
+reqwest = { version = "0.12.28", default-features = false, features = ["json", "rustls-tls"] }
+s3s = "=0.14.0"
+s3s-aws = "=0.14.0"
+serde = { version = "1.0.228", features = ["derive"] }
+thiserror = "2.0.18"
+tokio = { version = "1.49.0", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tracing = { version = "0.1.44", features = ["max_level_info"] }
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+uuid = { version = "1.20.0", features = ["serde", "v4"] }
+
+[dev-dependencies]
+serde_json = "1.0.149"

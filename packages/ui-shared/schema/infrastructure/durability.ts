@@ -7,7 +7,7 @@ export const s3_provider = pgTable("s3_providers", {
   id: uuid("id").primaryKey(),
   provider_type: s3_provider_type("provider_type").notNull(),
   endpoint_url: text("endpoint_url").notNull(),
-  provider_region: text("provider_region"),
+  provider_region: text("provider_region").notNull(),
   is_active: boolean("is_active").notNull().default(true),
   created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
   updated_at: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),

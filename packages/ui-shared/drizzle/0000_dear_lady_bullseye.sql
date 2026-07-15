@@ -5,6 +5,7 @@ CREATE TYPE "public"."cluster_status" AS ENUM('pending', 'bootstrapping', 'healt
 CREATE TYPE "public"."s3_provider_type" AS ENUM('aws_s3', 'cloudflare_r2');--> statement-breakpoint
 CREATE TYPE "public"."region_routing_mode" AS ENUM('active', 'draining', 'disabled');--> statement-breakpoint
 CREATE TYPE "public"."region_status" AS ENUM('active', 'inactive', 'maintenance');--> statement-breakpoint
+CREATE TYPE "public"."bucket_status" AS ENUM('provisioning', 'ready', 'deleting', 'failed');--> statement-breakpoint
 CREATE TYPE "public"."api_key_scopes_type" AS ENUM('read:sessions', 'write:sessions');--> statement-breakpoint
 CREATE TYPE "public"."organization_invitation_status" AS ENUM('pending', 'accepted', 'declined', 'revoked');--> statement-breakpoint
 CREATE TABLE "event" (
@@ -76,6 +77,7 @@ CREATE TABLE "infrastructure_audit_log" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE "infrastructure_audit_log" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "s3_providers" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"provider_type" "s3_provider_type" NOT NULL,
@@ -214,10 +216,31 @@ CREATE TABLE "bucket" (
 	"organization_id" uuid NOT NULL,
 	"region" uuid NOT NULL,
 	"name" text NOT NULL,
-	"is_public" boolean DEFAULT false NOT NULL
+	"is_public" boolean DEFAULT false NOT NULL,
+	"status" "bucket_status" DEFAULT 'provisioning' NOT NULL
 );
 --> statement-breakpoint
 ALTER TABLE "bucket" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE TABLE "storage_access_token" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"organization_id" uuid NOT NULL,
+	"project_id" uuid NOT NULL,
+	"name" text NOT NULL,
+	"access_key_id" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"revoked_at" timestamp with time zone
+);
+--> statement-breakpoint
+ALTER TABLE "storage_access_token" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE TABLE "storage_access_token_bucket" (
+	"access_token_id" uuid NOT NULL,
+	"bucket_id" uuid NOT NULL,
+	"organization_id" uuid NOT NULL,
+	"can_read" boolean DEFAULT false NOT NULL,
+	"can_write" boolean DEFAULT false NOT NULL
+);
+--> statement-breakpoint
+ALTER TABLE "storage_access_token_bucket" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "api_key_scopes" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"api_key_id" uuid NOT NULL,
@@ -362,6 +385,11 @@ ALTER TABLE "stateful_postgres_database_branch" ADD CONSTRAINT "stateful_postgre
 ALTER TABLE "bucket" ADD CONSTRAINT "bucket_project_id_project_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."project"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "bucket" ADD CONSTRAINT "bucket_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "bucket" ADD CONSTRAINT "bucket_region_regions_id_fk" FOREIGN KEY ("region") REFERENCES "public"."regions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "storage_access_token" ADD CONSTRAINT "storage_access_token_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "storage_access_token" ADD CONSTRAINT "storage_access_token_project_id_project_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."project"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "storage_access_token_bucket" ADD CONSTRAINT "storage_access_token_bucket_access_token_id_storage_access_token_id_fk" FOREIGN KEY ("access_token_id") REFERENCES "public"."storage_access_token"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "storage_access_token_bucket" ADD CONSTRAINT "storage_access_token_bucket_bucket_id_bucket_id_fk" FOREIGN KEY ("bucket_id") REFERENCES "public"."bucket"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "storage_access_token_bucket" ADD CONSTRAINT "storage_access_token_bucket_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "api_key_scopes" ADD CONSTRAINT "api_key_scopes_api_key_id_api_keys_id_fk" FOREIGN KEY ("api_key_id") REFERENCES "public"."api_keys"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "api_key_scopes" ADD CONSTRAINT "api_key_scopes_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "api_keys" ADD CONSTRAINT "api_keys_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -425,9 +453,17 @@ CREATE INDEX "stateful_postgres_database_organization_id_idx" ON "stateful_postg
 CREATE INDEX "stateful_postgres_database_branch_database_id_idx" ON "stateful_postgres_database_branch" USING btree ("database_id");--> statement-breakpoint
 CREATE INDEX "stateful_postgres_database_branch_branch_id_idx" ON "stateful_postgres_database_branch" USING btree ("branch_id");--> statement-breakpoint
 CREATE INDEX "stateful_postgres_database_branch_organization_id_idx" ON "stateful_postgres_database_branch" USING btree ("organization_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "bucket_name_idx" ON "bucket" USING btree ("name");--> statement-breakpoint
 CREATE INDEX "bucket_project_id_idx" ON "bucket" USING btree ("project_id");--> statement-breakpoint
 CREATE INDEX "bucket_organization_id_idx" ON "bucket" USING btree ("organization_id");--> statement-breakpoint
 CREATE INDEX "bucket_region_idx" ON "bucket" USING btree ("region");--> statement-breakpoint
+CREATE UNIQUE INDEX "storage_access_token_access_key_id_uidx" ON "storage_access_token" USING btree ("access_key_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "storage_access_token_project_name_uidx" ON "storage_access_token" USING btree ("project_id","name") WHERE "storage_access_token"."revoked_at" is null;--> statement-breakpoint
+CREATE INDEX "storage_access_token_organization_id_idx" ON "storage_access_token" USING btree ("organization_id");--> statement-breakpoint
+CREATE INDEX "storage_access_token_project_id_idx" ON "storage_access_token" USING btree ("project_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "storage_access_token_bucket_uidx" ON "storage_access_token_bucket" USING btree ("access_token_id","bucket_id");--> statement-breakpoint
+CREATE INDEX "storage_access_token_bucket_token_id_idx" ON "storage_access_token_bucket" USING btree ("access_token_id");--> statement-breakpoint
+CREATE INDEX "storage_access_token_bucket_bucket_id_idx" ON "storage_access_token_bucket" USING btree ("bucket_id");--> statement-breakpoint
 CREATE INDEX "api_key_scopes_api_key_id_idx" ON "api_key_scopes" USING btree ("api_key_id");--> statement-breakpoint
 CREATE INDEX "api_key_scopes_scope_idx" ON "api_key_scopes" USING btree ("scope");--> statement-breakpoint
 CREATE INDEX "api_key_scopes_organization_id_idx" ON "api_key_scopes" USING btree ("organization_id");--> statement-breakpoint
@@ -447,6 +483,7 @@ CREATE INDEX "twoFactor_secret_idx" ON "two_factor" USING btree ("secret");--> s
 CREATE INDEX "twoFactor_userId_idx" ON "two_factor" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "verification_identifier_idx" ON "verification" USING btree ("identifier");--> statement-breakpoint
 CREATE POLICY "event_org_rls" ON "event" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("event"."organization_id" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("event"."organization_id" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
+CREATE POLICY "infrastructure_audit_log_reader" ON "infrastructure_audit_log" AS PERMISSIVE FOR SELECT TO "app_audit_reader" USING (true);--> statement-breakpoint
 CREATE POLICY "regions_tenant_select_rls" ON "regions" AS PERMISSIVE FOR SELECT TO "app_tenant" USING (true);--> statement-breakpoint
 CREATE POLICY "project_tenant_rls" ON "project" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("project"."organization_id" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("project"."organization_id" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "project_branch_tenant_rls" ON "project_branch" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("project_branch"."organization_id" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("project_branch"."organization_id" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
@@ -458,6 +495,8 @@ CREATE POLICY "serverless_postgres_database_branch_tenant_rls" ON "serverless_po
 CREATE POLICY "stateful_postgres_database_tenant_rls" ON "stateful_postgres_database" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("stateful_postgres_database"."organization_id" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("stateful_postgres_database"."organization_id" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "stateful_postgres_database_branch_tenant_rls" ON "stateful_postgres_database_branch" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("stateful_postgres_database_branch"."organization_id" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("stateful_postgres_database_branch"."organization_id" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "bucket_tenant_rls" ON "bucket" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("bucket"."organization_id" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("bucket"."organization_id" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
+CREATE POLICY "storage_access_token_tenant_rls" ON "storage_access_token" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("storage_access_token"."organization_id" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("storage_access_token"."organization_id" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
+CREATE POLICY "storage_access_token_bucket_tenant_rls" ON "storage_access_token_bucket" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("storage_access_token_bucket"."organization_id" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("storage_access_token_bucket"."organization_id" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "api_key_scopes_tenant_rls" ON "api_key_scopes" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("api_key_scopes"."organization_id" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("api_key_scopes"."organization_id" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "api_keys_tenant_rls" ON "api_keys" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("api_keys"."organization_id" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("api_keys"."organization_id" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "active_organization_tenant_rls" ON "active_organization" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("active_organization"."organization_id" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("active_organization"."organization_id" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
