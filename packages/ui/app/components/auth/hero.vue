@@ -3,34 +3,34 @@ import { ChromaFlow, Dither, FilmGrain, Shader, StudioBackground } from 'shaders
 </script>
 
 <template>
-  <div class="absolute inset-0 overflow-hidden rounded-r-4xl bg-black">
-    <div class="absolute inset-0 opacity-90">
+  <div class="absolute inset-0 overflow-hidden bg-[#0b0b0b]">
+    <div class="absolute inset-0 opacity-60">
       <Shader class="size-full" disable-telemetry>
         <StudioBackground
-          color="#121727"
-          key-color="#1f2a44"
-          fill-color="#182136"
-          back-color="#06080f"
-          :brightness="0.3"
-          :ambient-intensity="0.3"
-          :fill-intensity="0.28"
+          color="#212121"
+          key-color="#3c4758"
+          fill-color="#353535"
+          back-color="#0b0b0b"
+          :brightness="0.22"
+          :ambient-intensity="0.2"
+          :fill-intensity="0.2"
           :fill-angle="24"
-          :back-intensity="0.24"
-          :vignette="0.58"
+          :back-intensity="0.2"
+          :vignette="0.72"
         />
         <ChromaFlow
-          base-color="#1e3a8a"
-          up-color="#334155"
-          down-color="#0f172a"
-          left-color="#2563eb"
-          right-color="#1d4ed8"
-          :intensity="0.58"
+          base-color="#212121"
+          up-color="#3c4758"
+          down-color="#0b0b0b"
+          left-color="#353535"
+          right-color="#505b6c"
+          :intensity="0.36"
           :radius="2.4"
           :momentum="22"
         />
         <FilmGrain
-          :strength="0.1"
-          :opacity="0.2"
+          :strength="0.08"
+          :opacity="0.14"
         />
         <Dither
           blend-mode="overlay"

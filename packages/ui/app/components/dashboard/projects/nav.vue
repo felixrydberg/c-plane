@@ -44,16 +44,22 @@ watch([() => store.projects, routeProjectId], ([projList, pid]) => {
 }, { immediate: true })
 
 type BranchItem = { id: string; name: string; timeline: string; is_default: boolean }
+type BranchResponse = BranchItem[] | { data: BranchItem[] }
 
-const { data: branchesData, refresh: refreshBranches, pending: branchesPending } = await useFetch<BranchItem[]>(
+const { data: branchesData, refresh: refreshBranches, pending: branchesPending } = await useFetch<BranchResponse>(
   () => !!store.organization?.id && !!store.project?.id ? `/api/backend/organization/${store.organization!.id}/projects/${store.project!.id}/branches` : '',
   { immediate: computed(() => !!(store.organization?.id && store.project?.id)) },
 )
 
-watch(branchesData, (val) => {
-  if (val) {
-    store.branches = val
-    const target = val.find(b => b.id === routeBranchId.value) ?? val.find(b => b.is_default) ?? val[0] ?? null
+const branches = computed(() => {
+  const value = branchesData.value
+  return Array.isArray(value) ? value : value?.data ?? []
+})
+
+watch(branches, (val) => {
+  store.branches = val
+  if (val.length) {
+    const target = val.find(b => b.id === routeBranchId.value) ?? val.find(b => b.is_default) ?? val[0]
     if (target) store.branch = { id: target.id, name: target.name, timeline: target.timeline, is_default: target.is_default }
   }
 }, { immediate: true })
@@ -195,7 +201,7 @@ async function onConfirmDeleteBranch() {
     store.branch = null;
     await refreshBranches();
 
-    const list = branchesData.value ?? []
+    const list = branches.value
     store.branches = list
     const target = list.find(b => b.id === routeBranchId.value) ?? list.find(b => b.is_default) ?? list[0] ?? null
     if (target) {

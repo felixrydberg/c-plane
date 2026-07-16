@@ -2,35 +2,33 @@
 @import "@nuxt/ui";
 
 @theme static {
-  --color-clay-50: #fff8f4;
-  --color-clay-100: #ffede3;
-  --color-clay-200: #ffd6c3;
-  --color-clay-300: #f7b08f;
-  --color-clay-400: #eb8058;
-  --color-clay-500: #da6037;
-  --color-clay-600: #bd4728;
-  --color-clay-700: #993722;
-  --color-clay-800: #7b3022;
-  --color-clay-900: #662a20;
-  --color-clay-950: #37130d;
+  --color-coral-50: #fff5f3;
+  --color-coral-100: #ffe3df;
+  --color-coral-200: #ffc9c3;
+  --color-coral-300: #fda79e;
+  --color-coral-400: #f77d72;
+  --color-coral-500: #f36458;
+  --color-coral-600: #dc493f;
+  --color-coral-700: #b9362f;
+  --color-coral-800: #982f2a;
+  --color-coral-900: #7e2c28;
+  --color-coral-950: #451410;
 
-  --color-sepia-50: #FCFBFA;
-  --color-sepia-100: #F7F5F2;
-  --color-sepia-200: #F0EBE4;
-  --color-sepia-300: #D8D0C4;
-  --color-sepia-400: #BFB4A3;
-  --color-sepia-500: #948A79;
-  --color-sepia-600: #695F4D;
-  --color-sepia-700: #474030;
-  --color-sepia-800: #393224;
-  --color-sepia-900: #2B2718;
-  --color-sepia-950: #1A170E;
+  --color-graphite-50: #f7f7f7;
+  --color-graphite-100: #ededed;
+  --color-graphite-200: #dcdcdc;
+  --color-graphite-300: #b9b9b9;
+  --color-graphite-400: #979797;
+  --color-graphite-500: #797979;
+  --color-graphite-600: #5b5b5b;
+  --color-graphite-700: #3c4758;
+  --color-graphite-800: #353535;
+  --color-graphite-900: #212121;
+  --color-graphite-950: #0b0b0b;
 }
 
 @theme {
-  /* For special case headings */
   --font-space-mono: "Space Mono", monospace;
-  /* General font used */
   --font-space-grotesk: "Space Grotesk", sans-serif;
 }
 
@@ -50,21 +48,21 @@
 
 :root {
   color-scheme: light;
-  --cp-canvas: #f8f4ee;
-  --cp-surface: #fffdf9;
-  --cp-surface-subtle: #eee7dc;
-  --cp-surface-strong: #e4d9cb;
-  --cp-ink: #29241f;
-  --cp-ink-muted: #6d645b;
-  --cp-line: #ddd3c7;
-  --cp-line-strong: #b8aa9a;
-  --cp-clay: #bd4728;
-  --cp-focus: #da6037;
-  --ui-text-dimmed: #948a79;
+  --cp-canvas: #ffffff;
+  --cp-surface: #ffffff;
+  --cp-surface-subtle: #ededed;
+  --cp-surface-strong: #dcdcdc;
+  --cp-ink: #0b0b0b;
+  --cp-ink-muted: #797979;
+  --cp-line: #ededed;
+  --cp-line-strong: #b9b9b9;
+  --cp-brand: #f36458;
+  --cp-focus: #0052ef;
+  --ui-text-dimmed: #979797;
   --ui-text-muted: var(--cp-ink-muted);
-  --ui-text-toned: #695f4d;
+  --ui-text-toned: #5b5b5b;
   --ui-text: var(--cp-ink);
-  --ui-text-highlighted: #1a170e;
+  --ui-text-highlighted: #0b0b0b;
   --ui-bg: var(--cp-canvas);
   --ui-bg-muted: var(--cp-surface);
   --ui-bg-elevated: var(--cp-surface-subtle);
@@ -72,30 +70,27 @@
   --ui-border: var(--cp-line);
   --ui-border-muted: var(--cp-line);
   --ui-border-accented: var(--cp-line-strong);
-  --ui-radius: 0.5rem;
-  --ui-header-height: 3.5rem;
-  --shell-grid: rgba(71, 64, 48, 0.055);
-  --shell-glow: rgba(218, 96, 55, 0.1);
-  --shell-sidebar: rgba(255, 253, 249, 0.88);
+  --ui-radius: 0.375rem;
+  --ui-header-height: 4rem;
 }
 
 .dark {
   color-scheme: dark;
-  --cp-canvas: #171411;
-  --cp-surface: #201c18;
-  --cp-surface-subtle: #28221d;
-  --cp-surface-strong: #332b24;
-  --cp-ink: #f5ede2;
-  --cp-ink-muted: #b5a99a;
-  --cp-line: #423a32;
-  --cp-line-strong: #756a60;
-  --cp-clay: #eb8058;
-  --cp-focus: #f7b08f;
-  --ui-text-dimmed: #756a60;
+  --cp-canvas: #0b0b0b;
+  --cp-surface: #212121;
+  --cp-surface-subtle: #212121;
+  --cp-surface-strong: #353535;
+  --cp-ink: #ffffff;
+  --cp-ink-muted: #b9b9b9;
+  --cp-line: #353535;
+  --cp-line-strong: #505b6c;
+  --cp-brand: #f36458;
+  --cp-focus: #55beff;
+  --ui-text-dimmed: #797979;
   --ui-text-muted: var(--cp-ink-muted);
-  --ui-text-toned: #d8d0c4;
+  --ui-text-toned: #b9b9b9;
   --ui-text: var(--cp-ink);
-  --ui-text-highlighted: #fffaf4;
+  --ui-text-highlighted: #ffffff;
   --ui-bg: var(--cp-canvas);
   --ui-bg-muted: var(--cp-surface);
   --ui-bg-elevated: var(--cp-surface-subtle);
@@ -103,8 +98,5 @@
   --ui-border: var(--cp-line);
   --ui-border-muted: var(--cp-line);
   --ui-border-accented: var(--cp-line-strong);
-  --shell-grid: rgba(240, 235, 228, 0.045);
-  --shell-glow: rgba(235, 128, 88, 0.08);
-  --shell-sidebar: rgba(32, 28, 24, 0.88);
 }
 

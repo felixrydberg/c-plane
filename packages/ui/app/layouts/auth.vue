@@ -108,7 +108,7 @@ const items = computed<NavigationMenuItem[]>(() => [
       rail
       :ui="{
         container: 'h-full',
-        inner: 'bg-elevated/25 divide-transparent',
+        inner: 'bg-default divide-default',
         body: 'py-0',
       }"
     >
@@ -125,7 +125,10 @@ const items = computed<NavigationMenuItem[]>(() => [
           :popover="!open"
           :items="items"
           orientation="vertical"
-          :ui="{ link: 'p-1.5 overflow-hidden' }"
+          :ui="{
+            label: 'font-mono text-[10px] font-normal uppercase tracking-[0.08em] text-[#797979]',
+            link: 'p-1.5 overflow-hidden',
+          }"
         />
       </template>
 
@@ -135,7 +138,7 @@ const items = computed<NavigationMenuItem[]>(() => [
     </USidebar>
 
     <div class="flex-1 flex flex-col min-h-0">
-      <div class="h-(--ui-header-height) shrink-0 flex items-center gap-2 px-4 border-b border-default">
+      <div class="h-(--ui-header-height) shrink-0 flex items-center gap-2 border-b border-default bg-default px-4">
         <UButton
           :icon="open ? ICONS.sidebarCloseLeft : ICONS.sidebarCloseRight"
           color="neutral"
@@ -146,7 +149,7 @@ const items = computed<NavigationMenuItem[]>(() => [
         <dashboard-projects-nav />
       </div>
 
-      <div class="flex-1 px-6 lg:px-8 py-4">
+      <div class="flex-1 bg-default px-6 py-6 lg:px-8">
         <slot />
       </div>
     </div>

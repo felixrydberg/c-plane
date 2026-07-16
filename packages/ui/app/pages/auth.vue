@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-dvh text-highlighted">
+  <div class="min-h-dvh bg-default text-highlighted">
     <div class="grid min-h-dvh lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
       <AuthMarketingPanel />
 
