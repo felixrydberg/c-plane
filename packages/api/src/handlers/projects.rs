@@ -770,11 +770,6 @@ pub async fn delete_branch(
         .collect();
 
     if !deleted_timeline_ids.is_empty() {
-        project_timeline::Entity::delete_many()
-            .filter(project_timeline::Column::Id.is_in(deleted_timeline_ids.clone()))
-            .exec(tx)
-            .await?;
-
         // Clear parent references on other revisions that pointed to deleted timelines
         let mut other_revisions = project_timeline::Entity::find()
             .filter(project_timeline::Column::ProjectId.eq(project_id))
@@ -792,6 +787,13 @@ pub async fn delete_branch(
     project_branch::Entity::delete_by_id(branch.id)
         .exec(tx)
         .await?;
+
+    if !deleted_timeline_ids.is_empty() {
+        project_timeline::Entity::delete_many()
+            .filter(project_timeline::Column::Id.is_in(deleted_timeline_ids))
+            .exec(tx)
+            .await?;
+    }
 
     scoped.commit().await?;
 
