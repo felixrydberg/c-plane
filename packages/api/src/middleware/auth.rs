@@ -66,7 +66,6 @@ where
             let api_key: ApiKeyLookup = resolve_api_key(&identity_db, &raw_api_key)
                 .await?
                 .ok_or_else(|| AppError::Unauthorized("Invalid API key".to_string()))?;
-
             (
                 OrganizationContext {
                     allowed_organizations: vec![api_key.organization_id],
@@ -218,7 +217,7 @@ async fn resolve_api_key(
         .0
         .query_one(Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
-            "SELECT id, organization_id FROM api_keys WHERE key_hash = $1 AND (expires_at IS NULL OR expires_at > EXTRACT(EPOCH FROM NOW())::int) LIMIT 1",
+            "SELECT id, organization_id FROM api_keys WHERE key_hash = $1 AND (expires_at IS NULL OR expires_at = 0 OR created_at + make_interval(months => expires_at) > NOW()) LIMIT 1",
             vec![key_hash.into()],
         ))
         .await

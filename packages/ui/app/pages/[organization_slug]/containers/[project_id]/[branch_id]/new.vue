@@ -136,7 +136,7 @@ function backUrl() { return `/${route.params.organization_slug}/containers/${pro
       </main>
 
       <aside class="border-t border-default/60 py-7 lg:border-l lg:border-t-0 lg:pl-6">
-        <div class="sticky top-6">
+        <div class="sticky top-6 rounded-lg border border-dashed border-default p-5">
           <h2 class="text-sm font-semibold">Deployment Summary</h2>
           <dl class="mt-5 space-y-4 text-sm">
             <div><dt class="text-xs text-muted">Project</dt><dd class="mt-1">{{ projectName }}</dd></div>

@@ -38,18 +38,18 @@ async function deleteBucket() {
 </script>
 
 <template>
-  <div class="flex flex-col gap-6 w-full mx-auto max-w-6xl">
-    <div class="flex items-start justify-between gap-4">
+  <div class="flex w-full max-w-[1500px] flex-col gap-5 mx-auto">
+    <div class="flex flex-col gap-4 border-b border-default/60 pb-5 sm:flex-row sm:items-end sm:justify-between">
       <div><h1 class="text-2xl font-semibold">Storage</h1><p class="text-muted text-sm mt-1">Buckets for {{ projectName }}.</p></div>
       <div class="flex flex-wrap justify-end gap-2">
         <UButton :icon="ICONS.authentication" color="neutral" variant="solid" :to="`/${route.params.organization_slug}/storage/${projectId}/access-tokens`">Manage access tokens</UButton>
         <UButton :icon="ICONS.plus" color="primary" :to="`/${route.params.organization_slug}/storage/${projectId}/new`">New bucket</UButton>
       </div>
     </div>
-    <div v-if="!buckets.length" class="flex flex-col items-center justify-center py-14 gap-3 text-center border border-dashed border-default rounded-lg">
+    <div v-if="!buckets.length" class="flex flex-col items-center justify-center py-14 gap-3 text-center rounded-lg border border-dashed border-default bg-transparent">
       <UIcon :name="ICONS.storage" class="size-10 text-muted" /><p class="text-muted">No buckets yet.</p><p class="text-dimmed text-sm">Create your first bucket to start storing objects.</p>
     </div>
-    <section v-for="bucket in buckets" :key="bucket.id" class="overflow-hidden border border-default rounded-lg">
+    <section v-for="bucket in buckets" :key="bucket.id" class="overflow-hidden rounded-lg border border-dashed border-default bg-transparent">
       <div class="flex items-center justify-between gap-3 p-4 border-b border-default">
         <div><h2 class="font-semibold">{{ bucket.name }}</h2></div>
         <UButton :icon="ICONS.trash" color="error" size="sm" @click="confirmDelete(bucket)">Delete</UButton>

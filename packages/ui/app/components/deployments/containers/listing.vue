@@ -63,7 +63,7 @@ function secretCount(c: ContainerWithProject): number {
 </script>
 
 <template>
-  <div class="overflow-hidden rounded-md border border-default bg-muted">
+  <div class="overflow-hidden rounded-md border border-dashed border-default bg-transparent">
     <!-- Loading -->
     <div v-if="status === 'pending'" class="flex items-center gap-3 py-12 justify-center text-muted text-sm">
       <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />

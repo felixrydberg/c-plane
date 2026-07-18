@@ -77,6 +77,7 @@ metadata.
 | Secret | Logical path | Payload |
 | --- | --- | --- |
 | Regional S3 provider | `platform/s3/providers/{provider_id}` | `access_key_id`, `secret_access_key`, optional `session_token` |
+| Platform S3 service credential | `platform/s3/service-credentials/{credential_id}` | `secret_access_key` |
 | Platform bucket encryption key | `storage/sse-c/{bucket_id}` | `key` containing 32 random bytes encoded as base64 |
 | Project secret | `projects/{project_id}/secrets/{secret_id}` | `value` |
 | Registry pull credentials | `projects/{project_id}/registry/{credential_id}` | registry username/token or equivalent |
@@ -116,6 +117,10 @@ Change the value-bearing columns as follows:
   contain secret values.
 - `bucket`: no encryption key column is needed. The bucket UUID derives the
   OpenBao path in `storage/sse-c/{bucket_id}`.
+- `registry_storage`: store the Distribution service name, access-key ID,
+  provider assignment, logical bucket name, and physical bucket name. Its UUID
+  is the stable OpenBao path component. The row has no organization or project
+  owner.
 
 The database remains the source of truth for tenant authorization and
 resource relationships. OpenBao remains the source of truth for secret bytes.
@@ -129,6 +134,7 @@ API or Kubernetes workload.
 | Identity | Required access |
 | --- | --- |
 | Control plane writer | Create/update/delete project, registry, and provider paths; no list-all or broad read access |
+| Control plane S3 resolver | Read the exact `platform/s3/service-credentials/{credential_id}` selected by non-secret Postgres metadata; no list access |
 | Kubernetes workload ServiceAccount | Read only the project/registry paths needed by that workload |
 | Storage API | Read `storage/sse-c/*` and the provider path for its own region; no project-secret access |
 | Operator/bootstrap job | Configure mounts, auth, policies, rotation, and recovery; not used by services |
@@ -178,6 +184,26 @@ relationship and policy; it should still be deleted after the repair window.
 5. On rotation, write a new KV version, reload the Storage API credentials,
    and deactivate the old provider credential at the external provider only
    after the new credential has been verified.
+
+### Platform S3 service credential
+
+An installation may provision an internal service, such as Distribution, as
+an S3 client:
+
+1. Generate one access-key ID, one cryptographically random secret access key,
+   and one opaque credential ID.
+2. Store the access-key ID and storage assignment in `registry_storage`.
+3. Store the secret at
+   `platform/s3/service-credentials/{credential_id}` in OpenBao.
+4. Inject the same generated access-key pair into the service through the
+   installation secret mechanism.
+5. Grant the credential only its platform-owned logical bucket.
+
+The control plane resolves the presented access-key ID to the OpenBao secret;
+Storage verifies the request's SigV4 signature. A different injected secret
+therefore fails authentication rather than selecting a fallback identity.
+Backing-provider credentials and the bucket encryption key are never injected
+into the client service.
 
 ### Platform SSE-C bucket key
 

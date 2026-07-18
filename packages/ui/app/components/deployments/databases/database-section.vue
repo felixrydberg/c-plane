@@ -146,7 +146,7 @@ function isDefaultBranch(b: BranchInfo): boolean {
 </script>
 
 <template>
-  <section class="border-b border-default/60 bg-default last:border-b-0">
+  <section class="border-b border-default/60 bg-transparent last:border-b-0">
     <!-- Header -->
     <div class="flex items-center justify-between px-5 py-4 border-b border-default/50">
       <div class="flex items-center gap-3 min-w-0">

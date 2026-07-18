@@ -10,6 +10,9 @@ use crate::handlers::events;
 use crate::handlers::health::health_check;
 use crate::handlers::projects;
 use crate::handlers::regions;
+use crate::handlers::registry;
+use crate::handlers::registry_access_tokens;
+use crate::handlers::registry_repositories;
 use crate::handlers::serverless_databases;
 use crate::handlers::stateful_databases;
 use crate::handlers::storage_access_tokens;
@@ -19,25 +22,45 @@ use crate::openapi::ApiDoc;
 pub fn create_routes() -> Router {
     Router::new()
         .route("/health", get(health_check))
+        .route("/api/registry/token", get(registry::issue_token))
         .route(
-            "/api/organization/{organization_id}/branches",
-            get(projects::list_organization_branches),
+            "/api/organization/{organization_id}/registry/repositories",
+            get(registry_repositories::list_repositories)
+                .post(registry_repositories::create_repository),
         )
         .route(
-            "/api/organization/{organization_id}/projects",
-            get(projects::list_projects).post(projects::create_project),
+            "/api/organization/{organization_id}/registry/access-tokens",
+            get(registry_access_tokens::list_access_tokens)
+                .post(registry_access_tokens::create_access_token),
+        )
+        .route(
+            "/api/organization/{organization_id}/registry/access-tokens/{token_id}",
+            get(registry_access_tokens::get_access_token)
+                .patch(registry_access_tokens::update_access_token)
+                .delete(registry_access_tokens::revoke_access_token),
         )
         .route(
             "/api/organization/{organization_id}/regions",
             get(regions::list_regions),
         )
         .route(
+            "/api/organization/{organization_id}/branches",
+            get(projects::list_organization_branches),
+        )
+        .route(
+            "/api/organization/{organization_id}/projects",
+            get(projects::list_projects)
+                .post(projects::create_project),
+        )
+        .route(
             "/api/organization/{organization_id}/projects/{project_id}",
-            get(projects::get_project).delete(projects::delete_project),
+            get(projects::get_project)
+                .delete(projects::delete_project),
         )
         .route(
             "/api/organization/{organization_id}/projects/{project_id}/branches",
-            get(projects::list_branches).post(projects::create_branch),
+            get(projects::list_branches)
+                .post(projects::create_branch),
         )
         .route(
             "/api/organization/{organization_id}/projects/{project_id}/branches/{branch_id}",
@@ -60,23 +83,25 @@ pub fn create_routes() -> Router {
         )
         .route(
             "/api/organization/{organization_id}/storage/buckets",
-            get(storage_buckets::list_buckets).post(storage_buckets::create_bucket),
+            get(storage_buckets::list_buckets)
+                .post(storage_buckets::create_bucket),
         )
         .route(
             "/api/organization/{organization_id}/projects/{project_id}/timelines",
             get(projects::list_project_timelines),
         )
         .route(
-            "/api/organization/{organization_id}/events",
-            get(events::list_events),
-        )
-        .route(
             "/api/organization/{organization_id}/projects/{project_id}/timelines/{timeline_id}",
             get(projects::get_timeline),
         )
         .route(
+            "/api/organization/{organization_id}/events",
+            get(events::list_events),
+        )
+        .route(
             "/api/organization/{organization_id}/containers",
-            get(containers::list_containers).post(containers::create_container),
+            get(containers::list_containers)
+                .post(containers::create_container),
         )
         .route(
             "/api/organization/{organization_id}/containers/{container_id}",
@@ -86,7 +111,8 @@ pub fn create_routes() -> Router {
         )
         .route(
             "/api/organization/{organization_id}/databases/stateful",
-            get(stateful_databases::list_databases).post(stateful_databases::create_database),
+            get(stateful_databases::list_databases)
+                .post(stateful_databases::create_database),
         )
         .route(
             "/api/organization/{organization_id}/databases/stateful/{database_id}",
@@ -96,7 +122,8 @@ pub fn create_routes() -> Router {
         )
         .route(
             "/api/organization/{organization_id}/databases/serverless",
-            get(serverless_databases::list_databases).post(serverless_databases::create_database),
+            get(serverless_databases::list_databases)
+                .post(serverless_databases::create_database),
         )
         .route(
             "/api/organization/{organization_id}/databases/serverless/{database_id}",
@@ -111,7 +138,7 @@ pub fn create_routes() -> Router {
         .route(
             "/api/organization/{organization_id}/databases/stateful/{database_id}/branches/{branch_id}",
             patch(stateful_databases::update_database_branch)
-            .delete(stateful_databases::delete_database_branch),
+                .delete(stateful_databases::delete_database_branch),
         )
         .route(
             "/api/organization/{organization_id}/databases/serverless/{database_id}/branches",
@@ -120,7 +147,7 @@ pub fn create_routes() -> Router {
         .route(
             "/api/organization/{organization_id}/databases/serverless/{database_id}/branches/{branch_id}",
             patch(serverless_databases::update_database_branch)
-            .delete(serverless_databases::delete_database_branch),
+                .delete(serverless_databases::delete_database_branch),
         )
         .merge(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()))
 }

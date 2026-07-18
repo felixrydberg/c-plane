@@ -69,7 +69,7 @@ watch(() => store.refreshKey, () => { fetchAll() })
       Failed to load databases.
     </p>
 
-    <div v-else class="overflow-hidden rounded-lg border border-default/60 bg-default">
+    <div v-else class="overflow-hidden rounded-lg border border-dashed border-default bg-transparent">
       <DeploymentsDatabasesDatabaseSection
         v-for="db in databases"
         :key="db.id"

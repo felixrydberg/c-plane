@@ -60,7 +60,6 @@ const items = computed<NavigationMenuItem[]>(() => [
   {
     label: "Registry",
     icon: ICONS.registry,
-    disabled: true,
     to: `/${store.organization?.slug}/registry`,
   },
   {

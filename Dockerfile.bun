@@ -25,6 +25,9 @@ ENV CHOKIDAR_INTERVAL=250
 ENV WATCHPACK_POLLING=true
 CMD ["bun", "--bun", "run", "dev"]
 
+FROM base AS migration
+CMD ["bun", "run", "migrate"]
+
 FROM base AS production-prepack
 WORKDIR /usr/src/app/packages/${PACKAGE}
 RUN bun run --bun build

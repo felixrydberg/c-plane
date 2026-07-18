@@ -1,0 +1,1 @@
+ALTER TABLE "registry_access_tokens" DROP COLUMN "token_prefix";

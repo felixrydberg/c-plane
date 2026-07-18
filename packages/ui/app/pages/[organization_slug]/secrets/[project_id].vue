@@ -129,8 +129,8 @@ async function handleUpdate() {
 </script>
 
 <template>
-  <div class="flex flex-col gap-6 w-full mx-auto max-w-6xl">
-    <div class="flex items-center justify-between">
+  <div class="flex w-full max-w-[1500px] flex-col gap-5 mx-auto">
+    <div class="flex flex-col gap-4 border-b border-default/60 pb-5 sm:flex-row sm:items-end sm:justify-between">
       <div>
         <h1 class="text-2xl font-semibold">Secrets</h1>
         <p class="text-muted text-sm mt-1">
@@ -152,7 +152,7 @@ async function handleUpdate() {
       <UIcon name="i-lucide-loader-circle" class="size-5 text-muted animate-spin" />
     </div>
 
-    <div v-else-if="projectId && secrets.length > 0" class="border border-default rounded-lg divide-y divide-default">
+    <div v-else-if="projectId && secrets.length > 0" class="rounded-lg border border-dashed border-default bg-transparent divide-y divide-default">
       <div
         v-for="s in secrets"
         :key="s.id"

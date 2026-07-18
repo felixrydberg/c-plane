@@ -36,6 +36,14 @@ use utoipa::OpenApi;
         crate::handlers::storage_access_tokens::list_access_tokens,
         crate::handlers::storage_access_tokens::revoke_access_token,
         crate::handlers::storage_access_tokens::update_access_token,
+        crate::handlers::registry::issue_token,
+        crate::handlers::registry_access_tokens::create_access_token,
+        crate::handlers::registry_access_tokens::get_access_token,
+        crate::handlers::registry_access_tokens::list_access_tokens,
+        crate::handlers::registry_access_tokens::revoke_access_token,
+        crate::handlers::registry_access_tokens::update_access_token,
+        crate::handlers::registry_repositories::create_repository,
+        crate::handlers::registry_repositories::list_repositories,
     ),
     components(
         schemas(
@@ -62,6 +70,15 @@ use utoipa::OpenApi;
             crate::handlers::storage_access_tokens::AccessTokenResponse,
             crate::handlers::storage_access_tokens::AccessTokenDetailsResponse,
             crate::handlers::storage_access_tokens::CreatedAccessTokenResponse,
+            crate::handlers::registry::RegistryTokenResponse,
+            crate::handlers::registry_access_tokens::CreateRegistryAccessTokenRequest,
+            crate::handlers::registry_access_tokens::UpdateRegistryAccessTokenRequest,
+            crate::handlers::registry_access_tokens::RepositoryPermissionRequest,
+            crate::handlers::registry_access_tokens::RegistryAccessTokenResponse,
+            crate::handlers::registry_access_tokens::RegistryAccessTokenDetailsResponse,
+            crate::handlers::registry_access_tokens::CreatedRegistryAccessTokenResponse,
+            crate::handlers::registry_repositories::CreateRegistryRepositoryRequest,
+            crate::handlers::registry_repositories::RegistryRepositoryResponse,
         ),
     ),
     tags(
@@ -72,6 +89,7 @@ use utoipa::OpenApi;
         (name = "databases/stateful", description = "Stateful database management"),
         (name = "databases/serverless", description = "Serverless database management"),
         (name = "storage", description = "S3 bucket and access token management"),
+        (name = "registry", description = "OCI registry authentication"),
     ),
 )]
 pub struct ApiDoc;

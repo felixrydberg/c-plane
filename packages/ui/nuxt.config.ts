@@ -3,6 +3,9 @@ export default defineNuxtConfig({
   runtimeConfig: {
     controlPlaneUrl: '',
     cplaneServiceToken: '',
+    public: {
+      registryHost: 'localhost:5000',
+    },
   },
   devtools: { enabled: true },
   devServer: {

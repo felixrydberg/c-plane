@@ -2,6 +2,7 @@
 import { h } from 'vue';
 import type { TableColumn, TableRow } from '@nuxt/ui';
 import * as z from 'zod';
+import { ICONS } from '~/utils/icons'
 
 const store = useStore();
 
@@ -128,7 +129,7 @@ const onDeleteKey = async () => {
     deleteModalOpen.value = false;
     selectedKeyToDelete.value = null;
     refresh();
-  } catch (e) {
+  } catch {
     toast.add({
       title: 'Error',
       description: 'Failed to delete API key.',
@@ -147,19 +148,25 @@ const createState = reactive<CreateSchema>({
   name: '',
   expires_at: 0,
 });
+const createScopes = ref<Record<string, boolean>>({});
 
 const onCreateKey = async () => {
+  if (!Object.values(createScopes.value).some(Boolean)) {
+    toast.add({ title: 'Select at least one scope', color: 'error' });
+    return;
+  }
   try {
     const key = await $fetch<{ id: string; key: string }>(`/api/organization/${store.organization?.id as ':organization_id'}/api-keys`, {
       method: 'POST',
-      body: { name: createState.name, expires_at: createState.expires_at }
+      body: { name: createState.name, expires_at: createState.expires_at, scopes: createScopes.value }
     });
     createdKeyValue.value = key.key;
     createModalOpen.value = false;
     createState.name = '';
     createState.expires_at = 0;
+    createScopes.value = {};
     refresh();
-  } catch (e) {
+  } catch {
     toast.add({
       title: 'Error',
       description: 'Failed to create API key.',
@@ -176,7 +183,7 @@ const onCreateKey = async () => {
         <h1 class="text-2xl font-semibold">Authentication</h1>
         <p class="text-muted text-sm mt-1">Manage API keys for your organization.</p>
       </div>
-      <UButton leading-icon="i-heroicons:plus" @click="createModalOpen = true">
+      <UButton :icon="ICONS.plus" color="primary" @click="createModalOpen = true">
         Create API Key
       </UButton>
     </div>
@@ -201,9 +208,10 @@ const onCreateKey = async () => {
           <UFormField label="Expiration" name="expires_at" description="Expiration in months (0 = never)">
             <UInput v-model="createState.expires_at" type="number" min="0" class="w-full" />
           </UFormField>
+          <OrganizationApiKeyScopes v-model="createScopes" />
           <div class="flex justify-end gap-3 pt-2">
             <UButton variant="ghost" color="neutral" type="button" @click="createModalOpen = false">Cancel</UButton>
-            <UButton type="submit">Create</UButton>
+            <UButton :icon="ICONS.plus" color="primary" type="submit">Create</UButton>
           </div>
         </UForm>
       </template>
@@ -224,7 +232,7 @@ const onCreateKey = async () => {
           <p class="text-sm">Are you sure you want to delete <strong>{{ selectedKeyToDelete?.name }}</strong>?</p>
           <div class="flex justify-end gap-3 pt-2">
             <UButton variant="ghost" color="neutral" @click="deleteModalOpen = false">Cancel</UButton>
-            <UButton color="error" @click="onDeleteKey">Delete</UButton>
+            <UButton :icon="ICONS.trash" color="error" @click="onDeleteKey">Delete</UButton>
           </div>
         </div>
       </template>

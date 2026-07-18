@@ -205,7 +205,6 @@ pub mod server {
     use tokio::sync::OnceCell;
     use uuid::Uuid;
 
-    const BUCKET_PREFIX: &str = "cp-";
     const S3_PROVIDER_CACHE_PREFIX: &str = "cplane:s3-provider:";
     const S3_ACCESS_TOKEN_CACHE_PREFIX: &str = "cplane:s3-access-token:";
     const S3_ACCESS_TOKEN_CACHE_GENERATION: &str = "cplane:s3-access-token-generation";
@@ -219,6 +218,7 @@ pub mod server {
         )?;
         database().await?;
         sync_provider_cache().await?;
+        bootstrap_registry_storage().await?;
         Ok(())
     }
 
@@ -243,6 +243,13 @@ pub mod server {
             return Err(CapturedError::msg(format!("{name} is required")));
         }
         Ok(value)
+    }
+
+    fn optional_env(name: &str) -> Option<String> {
+        env::var(name)
+            .ok()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
     }
 
     fn validate_region_slug(slug: String) -> Result<String> {
@@ -665,8 +672,8 @@ pub mod server {
 
     #[derive(Clone, Deserialize, Serialize)]
     pub struct ResolvedS3AccessToken {
-        pub organization_id: Uuid,
-        pub project_id: Uuid,
+        pub organization_id: Option<Uuid>,
+        pub project_id: Option<Uuid>,
         pub credential_id: Uuid,
         pub bucket_permissions: Vec<ResolvedS3BucketPermission>,
         pub secret_access_key: String,
@@ -687,6 +694,29 @@ pub mod server {
         let response = Client::new()
             .get(format!(
                 "{address}/v1/cplane/data/platform/s3/access-tokens/{id}"
+            ))
+            .header("X-Vault-Token", token)
+            .send()
+            .await
+            .map_err(CapturedError::from_display)?;
+        if !response.status().is_success() {
+            return Err(CapturedError::msg(format!(
+                "OpenBao read failed: {}",
+                response.status()
+            )));
+        }
+        response
+            .json::<OpenBaoAccessTokenData>()
+            .await
+            .map(|value| value.data.data)
+            .map_err(CapturedError::from_display)
+    }
+
+    async fn service_credential_secret_read(id: &str) -> Result<S3AccessTokenSecret> {
+        let (address, token) = openbao_config()?;
+        let response = Client::new()
+            .get(format!(
+                "{address}/v1/cplane/data/platform/s3/service-credentials/{id}"
             ))
             .header("X-Vault-Token", token)
             .send()
@@ -773,6 +803,26 @@ pub mod server {
         let response = Client::new()
             .post(format!(
                 "{address}/v1/cplane/data/platform/s3/access-tokens/{id}"
+            ))
+            .header("X-Vault-Token", token)
+            .json(&json!({"data": secret}))
+            .send()
+            .await
+            .map_err(CapturedError::from_display)?;
+        if !response.status().is_success() {
+            return Err(CapturedError::msg(format!(
+                "OpenBao write failed: {}",
+                response.status()
+            )));
+        }
+        Ok(())
+    }
+
+    async fn service_credential_secret_write(id: &str, secret: &S3AccessTokenSecret) -> Result<()> {
+        let (address, token) = openbao_config()?;
+        let response = Client::new()
+            .post(format!(
+                "{address}/v1/cplane/data/platform/s3/service-credentials/{id}"
             ))
             .header("X-Vault-Token", token)
             .json(&json!({"data": secret}))
@@ -915,6 +965,87 @@ pub mod server {
             let id = text(&row, "id")?;
             cache_credentials(&id, &openbao_read(&id).await?).await?;
         }
+        Ok(())
+    }
+
+    async fn bootstrap_registry_storage() -> Result<()> {
+        let Some(provider_id) = optional_env("REGISTRY_STORAGE_S3_PROVIDER_ID") else {
+            return Ok(());
+        };
+        let provider_id = Uuid::parse_str(&provider_id).map_err(CapturedError::from_display)?;
+        let bucket_name = required(
+            env::var("REGISTRY_STORAGE_S3_BUCKET").map_err(CapturedError::from_display)?,
+            "REGISTRY_STORAGE_S3_BUCKET",
+        )?;
+        let physical_bucket_name = optional_env("REGISTRY_STORAGE_S3_PHYSICAL_BUCKET")
+            .unwrap_or_else(|| bucket_name.clone());
+        let access_key_id = required(
+            env::var("REGISTRY_STORAGE_S3_ACCESSKEY").map_err(CapturedError::from_display)?,
+            "REGISTRY_STORAGE_S3_ACCESSKEY",
+        )?;
+        let secret_access_key = required(
+            env::var("REGISTRY_STORAGE_S3_SECRETKEY").map_err(CapturedError::from_display)?,
+            "REGISTRY_STORAGE_S3_SECRETKEY",
+        )?;
+        if secret_access_key.len() < 32 {
+            return Err(CapturedError::msg(
+                "REGISTRY_STORAGE_S3_SECRETKEY must be at least 32 characters",
+            ));
+        }
+
+        let database = database().await?;
+        if database
+            .query_one(statement(
+                "SELECT id FROM s3_providers WHERE id=$1::uuid AND is_active=true",
+                vec![provider_id.into()],
+            ))
+            .await
+            .map_err(CapturedError::from_display)?
+            .is_none()
+        {
+            return Err(CapturedError::msg(
+                "REGISTRY_STORAGE_S3_PROVIDER_ID does not identify an active provider",
+            ));
+        }
+        if database
+            .query_one(statement(
+                "SELECT id FROM storage_access_token WHERE access_key_id=$1 AND revoked_at IS NULL",
+                vec![access_key_id.clone().into()],
+            ))
+            .await
+            .map_err(CapturedError::from_display)?
+            .is_some()
+        {
+            return Err(CapturedError::msg(
+                "registry access key conflicts with a tenant storage credential",
+            ));
+        }
+
+        let row = database
+            .query_one(statement(
+                "INSERT INTO registry_storage (id, service, provider_id, bucket_name, physical_bucket_name, access_key_id) VALUES ($1::uuid, 'distribution', $2::uuid, $3, $4, $5) ON CONFLICT (service) DO UPDATE SET provider_id=EXCLUDED.provider_id, bucket_name=EXCLUDED.bucket_name, physical_bucket_name=EXCLUDED.physical_bucket_name, access_key_id=EXCLUDED.access_key_id, updated_at=NOW() RETURNING id",
+                vec![
+                    Uuid::new_v4().into(),
+                    provider_id.into(),
+                    bucket_name.into(),
+                    physical_bucket_name.into(),
+                    access_key_id.into(),
+                ],
+            ))
+            .await
+            .map_err(CapturedError::from_display)?
+            .ok_or_else(|| CapturedError::msg("registry storage bootstrap returned no row"))?;
+        let id: Uuid = row.try_get("", "id").map_err(CapturedError::from_display)?;
+        let secret = S3AccessTokenSecret { secret_access_key };
+        let secret_changed = match service_credential_secret_read(&id.to_string()).await {
+            Ok(stored) => stored.secret_access_key != secret.secret_access_key,
+            Err(_) => true,
+        };
+        if secret_changed {
+            service_credential_secret_write(&id.to_string(), &secret).await?;
+        }
+        bucket_key(id).await?;
+        invalidate_access_token_cache().await?;
         Ok(())
     }
 
@@ -1171,27 +1302,58 @@ pub mod server {
         let database = database()
             .await
             .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
-        let row = database
-            .query_one(statement(
-                "SELECT id, organization_id, project_id FROM storage_access_token WHERE access_key_id=$1 AND revoked_at IS NULL",
+        let mut rows = database
+            .query_all(statement(
+                "SELECT 'tenant'::text AS credential_kind, id, organization_id, project_id FROM storage_access_token WHERE access_key_id=$1 AND revoked_at IS NULL UNION ALL SELECT 'distribution'::text AS credential_kind, id, NULL::uuid AS organization_id, NULL::uuid AS project_id FROM registry_storage WHERE access_key_id=$1 AND service='distribution'",
                 vec![access_key.clone().into()],
             ))
             .await
-            .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
+            .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+        if rows.len() > 1 {
+            return Err(dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+        }
+        let row = rows
+            .pop()
             .ok_or(dioxus::server::axum::http::StatusCode::NOT_FOUND)?;
+        let credential_kind: String = row
+            .try_get("", "credential_kind")
+            .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
         let credential_id: Uuid = row
             .try_get("", "id")
             .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
-        let secret = access_token_secret_read(&credential_id.to_string())
-            .await
+        let secret = match credential_kind.as_str() {
+            "tenant" => access_token_secret_read(&credential_id.to_string()).await,
+            "distribution" => service_credential_secret_read(&credential_id.to_string()).await,
+            _ => return Err(dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR),
+        }
+        .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+        let organization_id: Option<Uuid> = row
+            .try_get("", "organization_id")
             .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
-        let bucket_rows = database
-            .query_all(statement(
-                "SELECT permission.bucket_id, permission.can_read, permission.can_write, bucket.name AS bucket_name, region.slug AS region_slug, provider.id AS provider_id FROM storage_access_token_bucket permission JOIN bucket ON bucket.id=permission.bucket_id JOIN regions region ON region.id=bucket.region JOIN s3_providers provider ON provider.id=region.s3_provider_id WHERE permission.access_token_id=$1 AND bucket.project_id=$2 AND provider.is_active=true",
-                vec![credential_id.into(), row.try_get::<Uuid>("", "project_id").map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?.into()],
-            ))
-            .await
+        let project_id: Option<Uuid> = row
+            .try_get("", "project_id")
             .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+        let bucket_rows = match credential_kind.as_str() {
+            "tenant" => database
+                .query_all(statement(
+                    "SELECT permission.bucket_id, permission.can_read, permission.can_write, bucket.name AS bucket_name, region.slug AS region_slug, provider.id AS provider_id, CONCAT('cp-', REPLACE(bucket.id::text, '-', '')) AS physical_bucket_name FROM storage_access_token_bucket permission JOIN bucket ON bucket.id=permission.bucket_id JOIN regions region ON region.id=bucket.region JOIN s3_providers provider ON provider.id=region.s3_provider_id WHERE permission.access_token_id=$1 AND bucket.project_id=$2 AND provider.is_active=true",
+                    vec![
+                        credential_id.into(),
+                        project_id
+                            .ok_or(dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
+                            .into(),
+                    ],
+                ))
+                .await,
+            "distribution" => database
+                .query_all(statement(
+                    "SELECT storage.id AS bucket_id, true AS can_read, true AS can_write, storage.bucket_name, provider.provider_region AS region_slug, provider.id AS provider_id, storage.physical_bucket_name FROM registry_storage storage JOIN s3_providers provider ON provider.id=storage.provider_id WHERE storage.id=$1 AND storage.service='distribution' AND provider.is_active=true",
+                    vec![credential_id.into()],
+                ))
+                .await,
+            _ => unreachable!(),
+        }
+        .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
         let mut bucket_permissions = Vec::with_capacity(bucket_rows.len());
         for bucket in bucket_rows {
             let bucket_id: Uuid = bucket
@@ -1205,7 +1367,9 @@ pub mod server {
                 bucket_name: bucket
                     .try_get("", "bucket_name")
                     .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?,
-                physical_bucket_name: format!("{BUCKET_PREFIX}{}", bucket_id.simple()),
+                physical_bucket_name: bucket
+                    .try_get("", "physical_bucket_name")
+                    .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?,
                 region: bucket
                     .try_get("", "region_slug")
                     .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?,
@@ -1222,12 +1386,8 @@ pub mod server {
             });
         }
         let resolved = ResolvedS3AccessToken {
-            organization_id: row
-                .try_get("", "organization_id")
-                .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?,
-            project_id: row
-                .try_get("", "project_id")
-                .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?,
+            organization_id,
+            project_id,
             credential_id,
             bucket_permissions,
             secret_access_key: secret.secret_access_key,

@@ -5,6 +5,6 @@ export default defineConfig({
   schema: "./schema/index.ts",
   out: "./drizzle",
   dbCredentials: {
-    url: "postgresql://cplane:mysecretpassword@localhost:5432/cplane"
+    url: process.env.DATABASE_URL ?? "postgresql://cplane:mysecretpassword@localhost:5432/cplane"
   }
 })

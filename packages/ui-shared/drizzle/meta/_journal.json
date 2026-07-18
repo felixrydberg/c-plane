@@ -29,6 +29,27 @@
       "when": 1784062749846,
       "tag": "0003_fuzzy_riptide",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784318848816,
+      "tag": "0004_flashy_nextwave",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784323753786,
+      "tag": "0005_overrated_magus",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784330209145,
+      "tag": "0006_modern_wild_pack",
+      "breakpoints": true
     }
   ]
 }

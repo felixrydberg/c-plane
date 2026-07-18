@@ -78,10 +78,10 @@ watch(() => store.refreshKey, () => { refreshData() })
       <UButton class="shrink-0" :icon="ICONS.plus" :to="`/${route.params.organization_slug}/containers/${projectId}/${branchId}/new`">New Container</UButton>
     </div>
 
-    <div class="grid gap-px overflow-hidden rounded-md border border-default bg-muted sm:grid-cols-3">
-      <div class="bg-muted px-4 py-3"><p class="text-xs text-muted">Branch</p><p class="mt-1 text-sm font-medium">{{ branchName }}</p></div>
-      <div class="bg-muted px-4 py-3"><p class="text-xs text-muted">Containers</p><p class="mt-1 font-mono text-sm">{{ containers.length }}</p></div>
-      <div class="bg-muted px-4 py-3"><p class="text-xs text-muted">Desired replicas</p><p class="mt-1 font-mono text-sm">{{ containers.reduce((total, container) => total + (container.current_version?.replica_count ?? 0), 0) }}</p></div>
+    <div class="grid overflow-hidden rounded-md border border-dashed border-default bg-transparent sm:grid-cols-3">
+      <div class="px-4 py-3"><p class="text-xs text-muted">Branch</p><p class="mt-1 text-sm font-medium">{{ branchName }}</p></div>
+      <div class="px-4 py-3"><p class="text-xs text-muted">Containers</p><p class="mt-1 font-mono text-sm">{{ containers.length }}</p></div>
+      <div class="px-4 py-3"><p class="text-xs text-muted">Desired replicas</p><p class="mt-1 font-mono text-sm">{{ containers.reduce((total, container) => total + (container.current_version?.replica_count ?? 0), 0) }}</p></div>
     </div>
 
     <DeploymentsContainersListing

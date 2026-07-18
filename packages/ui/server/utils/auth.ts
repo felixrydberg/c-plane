@@ -5,8 +5,6 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createClient } from "redis"
 import * as schema from "../schema";
 import { and, eq } from "drizzle-orm";
-import { sendEmail } from "./email";
-import { createResetPasswordEmailTemplate, createVerifyEmailTemplate } from "./email-templates";
 import { getIdentityDb } from "./db";
 
 const { NUXT_REDIS_URL, NUXT_DATABASE_URL, NUXT_AUTH_BASE_URL } = process.env;
@@ -27,8 +25,6 @@ redis.on("error", (error) => {
 })
 
 await redis.connect()
-
-console.log("Connecting to database...")
 
 const db = drizzle(NUXT_DATABASE_URL, { schema })
 export const getAuthDb = () => db
@@ -95,24 +91,12 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     sendResetPassword: async ({ user, url }) => {
-      const template = createResetPasswordEmailTemplate({ url });
-
-      void sendEmail({
-        to: user.email,
-        subject: template.subject,
-        html: template.html
-      });
+      console.error("sendResetPassword is not implemented. User:", user, "URL:", url);
     },
   },
   emailVerification: {
     sendVerificationEmail: async ({ user, url, token: _token }) => {
-      const template = createVerifyEmailTemplate({ url });
-
-      void sendEmail({
-        to: user.email,
-        subject: template.subject,
-        html: template.html
-      });
+      console.error("sendVerificationEmail is not implemented. User:", user, "URL:", url);
     }
   },
   socialProviders: {},

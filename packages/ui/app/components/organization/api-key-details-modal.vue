@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { z } from 'zod';
-import { useClipboard } from '@vueuse/core';
 
 const open = defineModel<boolean>("open");
 const props = defineProps<{
@@ -12,6 +11,14 @@ const props = defineProps<{
 
 const toast = useToast();
 
+type ApiKeyDetails = {
+  name: string;
+  allowed_ips: string | null;
+  scopes: string[];
+  created_at: string;
+  expires_at: number | null;
+};
+
 const apiKeyStateSchema = z.object({
   name: z.string(),
   allowed_ips: z.string().optional(),
@@ -20,8 +27,7 @@ const apiKeyStateSchema = z.object({
 
 type ApiKeyState = z.infer<typeof apiKeyStateSchema>;
 
-const { data, status, refresh } = await useFetch(`/api/organization/${props.organizationId as ':organization_id'}/api-keys/${props.apiKeyId as ':api_key_id'}`);
-type ApiKeyDetails = NonNullable<typeof data.value>;
+const { data, status, refresh } = await useFetch<ApiKeyDetails>(`/api/organization/${props.organizationId as ':organization_id'}/api-keys/${props.apiKeyId as ':api_key_id'}`);
 
 const apiKeyDetails = computed(() => data.value as ApiKeyDetails | undefined);
 const isLoading = computed(() => status.value === 'pending');
@@ -31,8 +37,6 @@ const state = ref<ApiKeyState>({
   allowed_ips: '',
   scopes: {},
 });
-
-const { copy } = useClipboard();
 
 const hasChanged = computed(() => {
   if (!apiKeyDetails.value) return false;
@@ -91,12 +95,15 @@ const onSubmit = async () => {
 const copyKey = async () => {
   const keyToCopy = props.apiKey;
   if (!keyToCopy) return;
-  await copy(keyToCopy);
+  await navigator.clipboard.writeText(keyToCopy);
   toast.add({
     title: 'Success',
     description: 'API key copied to clipboard',
     color: 'success'
   });
+};
+const closeModal = () => {
+  open.value = false;
 };
 
 const getExpiredDate = (created_at: string, expires_in: number) => {
@@ -183,7 +190,7 @@ const getExpiredDate = (created_at: string, expires_in: number) => {
             variant="ghost"
             color="neutral"
             type="button"
-            @click="open = false"
+            @click="closeModal"
           >
             Cancel
           </UButton>

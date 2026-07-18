@@ -25,7 +25,7 @@ const currentBranch = computed(() =>
         <p class="mt-2 text-sm text-muted">Infrastructure, deployments, and credentials in one place.</p>
       </div>
 
-      <div class="rounded-md border border-default bg-muted px-4 py-3 sm:min-w-52">
+      <div class="rounded-md border border-dashed border-default bg-transparent px-4 py-3 sm:min-w-52">
         <p class="font-space-mono text-[10px] uppercase tracking-[0.08em] text-muted">Current branch</p>
         <p class="mt-1 flex items-center gap-2 text-sm font-medium">
           <span class="size-1.5 rounded-full bg-primary" aria-hidden="true" />
@@ -41,7 +41,7 @@ const currentBranch = computed(() =>
       </div>
 
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <UCard class="bg-muted" :ui="{ body: 'p-5' }">
+        <UCard class="border-dashed border-default bg-transparent" :ui="{ body: 'p-5' }">
           <div class="flex items-start justify-between gap-4">
             <div>
               <p class="text-sm text-muted">Databases</p>
@@ -52,7 +52,7 @@ const currentBranch = computed(() =>
             </div>
           </div>
         </UCard>
-        <UCard class="bg-muted" :ui="{ body: 'p-5' }">
+        <UCard class="border-dashed border-default bg-transparent" :ui="{ body: 'p-5' }">
           <div class="flex items-start justify-between gap-4">
             <div>
               <p class="text-sm text-muted">Containers</p>
@@ -63,7 +63,7 @@ const currentBranch = computed(() =>
             </div>
           </div>
         </UCard>
-        <UCard class="bg-muted" :ui="{ body: 'p-5' }">
+        <UCard class="border-dashed border-default bg-transparent" :ui="{ body: 'p-5' }">
           <div class="flex items-start justify-between gap-4">
             <div>
               <p class="text-sm text-muted">Secrets</p>

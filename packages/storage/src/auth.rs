@@ -27,8 +27,8 @@ pub struct CredentialResolver {
 
 #[derive(Clone, Deserialize)]
 pub struct ResolvedCredential {
-    pub organization_id: Uuid,
-    pub project_id: Uuid,
+    pub organization_id: Option<Uuid>,
+    pub project_id: Option<Uuid>,
     pub credential_id: Uuid,
     pub bucket_permissions: Vec<BucketPermission>,
     pub secret_access_key: String,
@@ -48,8 +48,8 @@ pub struct BucketPermission {
 
 #[derive(Clone)]
 pub struct CredentialIdentity {
-    pub organization_id: Uuid,
-    pub project_id: Uuid,
+    pub organization_id: Option<Uuid>,
+    pub project_id: Option<Uuid>,
     pub credential_id: Uuid,
     pub bucket_permissions: Vec<BucketPermission>,
 }
@@ -181,12 +181,14 @@ mod tests {
         Path(access_key): Path<String>,
         headers: HeaderMap,
     ) -> Result<Json<serde_json::Value>, StatusCode> {
-        if access_key != "VALID" || headers.get("x-cplane-token").is_none_or(|v| v != "service") {
+        if !matches!(access_key.as_str(), "VALID" | "SERVICE")
+            || headers.get("x-cplane-token").is_none_or(|v| v != "service")
+        {
             return Err(StatusCode::NOT_FOUND);
         }
         Ok(Json(json!({
-            "organization_id": Uuid::nil(),
-            "project_id": Uuid::nil(),
+            "organization_id": (access_key == "VALID").then(Uuid::nil),
+            "project_id": (access_key == "VALID").then(Uuid::nil),
             "credential_id": Uuid::nil(),
             "bucket_permissions": [{
                 "bucket_id": Uuid::nil(),
@@ -242,6 +244,10 @@ mod tests {
         let resolver = CredentialResolver::new(format!("http://{address}"), "service".into());
         assert_eq!(
             resolver.get_secret_key("VALID").await.unwrap().expose(),
+            "secret"
+        );
+        assert_eq!(
+            resolver.get_secret_key("SERVICE").await.unwrap().expose(),
             "secret"
         );
         assert_eq!(

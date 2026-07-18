@@ -1,0 +1,148 @@
+use axum::{Json, extract::Path, http::StatusCode};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use utoipa::ToSchema;
+use uuid::Uuid;
+
+use crate::{
+    errors::AppError, middleware::auth::AuthContext, models::entities::registry_repository,
+};
+
+use super::{databases::verify_org_access, registry_access_tokens::record_event};
+
+#[derive(Deserialize, ToSchema)]
+pub struct CreateRegistryRepositoryRequest {
+    pub name: String,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct RegistryRepositoryResponse {
+    pub id: Uuid,
+    pub name: String,
+    pub created_at: String,
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/organization/{organization_id}/registry/repositories",
+    request_body = CreateRegistryRepositoryRequest,
+    params(("organization_id" = Uuid, Path, description = "Organization ID")),
+    responses(
+        (status = 201, description = "Registry repository created", body = RegistryRepositoryResponse),
+        (status = 403, description = "Organization access required"),
+        (status = 409, description = "Invalid or duplicate repository name"),
+    ),
+    tag = "registry",
+)]
+pub async fn create_repository(
+    AuthContext { tenant_db, auth }: AuthContext,
+    Path(organization_id): Path<Uuid>,
+    Json(body): Json<CreateRegistryRepositoryRequest>,
+) -> Result<(StatusCode, Json<RegistryRepositoryResponse>), AppError> {
+    verify_org_access(&tenant_db, organization_id)?;
+    let name = body.name.trim();
+    if !valid_repository_name(name) {
+        return Err(AppError::Conflict(
+            "Repository names must use lowercase letters, numbers, dots, underscores, dashes, and slashes"
+                .into(),
+        ));
+    }
+
+    let scoped = tenant_db.begin_scoped_transaction().await?;
+    let tx = scoped.connection();
+    if registry_repository::Entity::find()
+        .filter(registry_repository::Column::OrganizationId.eq(organization_id))
+        .filter(registry_repository::Column::Name.eq(name))
+        .one(tx)
+        .await?
+        .is_some()
+    {
+        return Err(AppError::Conflict("Repository already exists".into()));
+    }
+    let created = registry_repository::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        organization_id: Set(organization_id),
+        name: Set(name.into()),
+        ..Default::default()
+    }
+    .insert(tx)
+    .await?;
+    record_event(
+        tx,
+        organization_id,
+        auth.actor_id,
+        "registry-repository:created",
+        json!({ "summary": format!("Created registry repository '{name}'"), "target_id": created.id }),
+    )
+    .await?;
+    scoped.commit().await?;
+
+    Ok((StatusCode::CREATED, Json(response(&created))))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/organization/{organization_id}/registry/repositories",
+    params(("organization_id" = Uuid, Path, description = "Organization ID")),
+    responses(
+        (status = 200, description = "Organization registry repositories", body = Vec<RegistryRepositoryResponse>),
+        (status = 403, description = "Organization access required"),
+    ),
+    tag = "registry",
+)]
+pub async fn list_repositories(
+    AuthContext { tenant_db, .. }: AuthContext,
+    Path(organization_id): Path<Uuid>,
+) -> Result<Json<Vec<RegistryRepositoryResponse>>, AppError> {
+    verify_org_access(&tenant_db, organization_id)?;
+    let scoped = tenant_db.begin_scoped_transaction().await?;
+    let tx = scoped.connection();
+    let repositories = registry_repository::Entity::find()
+        .filter(registry_repository::Column::OrganizationId.eq(organization_id))
+        .order_by_asc(registry_repository::Column::Name)
+        .all(tx)
+        .await?;
+    scoped.commit().await?;
+    Ok(Json(repositories.iter().map(response).collect()))
+}
+
+fn response(repository: &registry_repository::Model) -> RegistryRepositoryResponse {
+    RegistryRepositoryResponse {
+        id: repository.id,
+        name: repository.name.clone(),
+        created_at: repository.created_at.to_rfc3339(),
+    }
+}
+
+fn valid_repository_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 200
+        && name.split('/').all(|segment| {
+            let bytes = segment.as_bytes();
+            !bytes.is_empty()
+                && bytes.first().is_some_and(u8::is_ascii_alphanumeric)
+                && bytes.last().is_some_and(u8::is_ascii_alphanumeric)
+                && bytes.iter().all(|byte| {
+                    byte.is_ascii_lowercase()
+                        || byte.is_ascii_digit()
+                        || matches!(byte, b'.' | b'_' | b'-')
+                })
+                && !bytes.windows(2).any(|pair| {
+                    !pair[0].is_ascii_alphanumeric() && !pair[1].is_ascii_alphanumeric()
+                })
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::valid_repository_name;
+
+    #[test]
+    fn validates_distribution_repository_names() {
+        assert!(valid_repository_name("backend/api-v2"));
+        assert!(!valid_repository_name("Backend"));
+        assert!(!valid_repository_name("backend//api"));
+        assert!(!valid_repository_name("backend..api"));
+    }
+}

@@ -2,8 +2,6 @@ import { organization_invitation, organization_member, user, organization } from
 import { withTenantDb } from "~~/server/utils/db";
 import { and, eq } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
-import { createOrganizationInvitationEmailTemplate } from "~~/server/utils/email-templates";
-import { sendEmail } from "~~/server/utils/email";
 import { logEvent } from "~~/server/utils/events";
 
 export default defineEventHandler(async (event) => {
@@ -152,34 +150,6 @@ export default defineEventHandler(async (event) => {
       inviteUrl: inviteUrl.toString(),
     };
   });
-
-  try {
-    const template = createOrganizationInvitationEmailTemplate({
-      organizationName: orgName,
-      inviterName,
-      action: inviteAction,
-      url: inviteUrl,
-    });
-
-    await sendEmail({
-      to: inviteEmail,
-      subject: template.subject,
-      html: template.html,
-    });
-  } catch (error) {
-    await withTenantDb([organization_id], async (tx) => {
-      await tx
-        .update(organization_invitation)
-        .set({ status: "revoked" })
-        .where(eq(organization_invitation.id, invitation.id));
-    });
-
-    console.error("Failed to send invitation email:", error);
-    throw createError({
-      statusCode: 500,
-      statusMessage: "Failed to deliver invitation email",
-    });
-  }
 
   return invitation;
 });

@@ -19,8 +19,8 @@ const projectDropdownItems = computed<DropdownMenuItem[][]>(() => {
 </script>
 
 <template>
-  <div class="flex flex-col gap-6 w-full mx-auto max-w-6xl">
-    <div class="flex items-center justify-between">
+  <div class="flex w-full max-w-[1500px] flex-col gap-5 mx-auto">
+    <div class="flex flex-col gap-4 border-b border-default/60 pb-5 sm:flex-row sm:items-end sm:justify-between">
       <div>
         <h1 class="text-2xl font-semibold">Secrets</h1>
         <p class="text-muted text-sm mt-1">Manage environment variables and secrets across projects.</p>
