@@ -58,7 +58,6 @@ export default defineEventHandler(async (event) => {
       name,
       email,
       slug,
-      polar_customer_id: uuidv7(),
     }).returning({
       id: organization.id,
       name: organization.name,

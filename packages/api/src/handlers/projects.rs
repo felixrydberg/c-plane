@@ -152,9 +152,7 @@ pub async fn create_project(
 
     let name = body.name.trim().to_string();
     if name.is_empty() {
-        return Err(AppError::Project(
-            crate::errors::project::ProjectError::InvalidSlug("Name is required".into()),
-        ));
+        return Err(AppError::BadRequest("Name is required".into()));
     }
 
     let project_id = Uuid::new_v4();
@@ -247,10 +245,10 @@ pub async fn list_projects(
     use project::{Column, Entity};
     let mut select = Entity::find().filter(Column::OrganizationId.eq(organization_id));
 
-    if let Some(ref search) = query.search {
-        if !search.trim().is_empty() {
-            select = select.filter(Column::Name.contains(search.trim()));
-        }
+    if let Some(ref search) = query.search
+        && !search.trim().is_empty()
+    {
+        select = select.filter(Column::Name.contains(search.trim()));
     }
 
     let total = select.clone().count(tx).await?;
@@ -504,9 +502,7 @@ pub async fn create_branch(
 
     let name = body.name.trim().to_string();
     if name.is_empty() {
-        return Err(AppError::Project(
-            crate::errors::project::ProjectError::InvalidSlug("Name is required".into()),
-        ));
+        return Err(AppError::BadRequest("Name is required".into()));
     }
 
     let scoped = tenant_db.begin_scoped_transaction().await?;

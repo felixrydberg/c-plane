@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const existingOrganization = await withTenantDb([organizationId], async (tx) => {
+  await withTenantDb([organizationId], async (tx) => {
     const rows = await tx
       .select()
       .from(organization)
@@ -27,20 +27,8 @@ export default defineEventHandler(async (event) => {
       });
     }
 
-    const org = rows[0]!;
-
     await tx.delete(organization).where(eq(organization.id, organizationId));
-
-    return org;
   });
-
-  if (existingOrganization.polar_customer_id) {
-    try {
-      await polar.customers.delete({ id: existingOrganization.polar_customer_id });
-    } catch (error) {
-      console.error(`Failed to delete Polar customer ${existingOrganization.polar_customer_id}:`, error);
-    }
-  }
 
   return { success: true };
 });

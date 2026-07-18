@@ -21,11 +21,9 @@ export const organization = pgTable(
     slug: text("slug").notNull().unique(),
     logo: text("logo"),
     created_at: timestamp("created_at").defaultNow().notNull(),
-    polar_customer_id: uuid("polar_customer_id").notNull().unique(),
   },
   (table) => [
     uniqueIndex("organization_slug_uidx").on(table.slug),
-    index("organization_polar_customer_id_idx").on(table.polar_customer_id),
     index("organization_id_idx").on(table.id),
     pgPolicy("organization_tenant_rls_select", {
       as: "permissive",

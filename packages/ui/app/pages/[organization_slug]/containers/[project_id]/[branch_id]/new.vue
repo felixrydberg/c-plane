@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { DropdownMenuItem } from '@nuxt/ui'
 import { ICONS } from '~/utils/icons'
+import { COMPUTE_UNIT_ITEMS, computeUnitByLabel } from '~/utils/compute-units'
 
 const store = useStore()
 const route = useRoute()
@@ -23,11 +23,6 @@ const state = reactive({
   healthCheckPath: '/health',
 })
 
-const highAvailability = ref(false)
-const readReplicas = ref(2)
-
-import { COMPUTE_UNIT_ITEMS, computeUnitByLabel } from '~/utils/compute-units'
-
 const computeUnit = ref('0.5')
 
 const regions = ref<{ id: string; display_name: string }[]>([])
@@ -38,35 +33,11 @@ onMounted(async () => {
   try { regions.value = await $fetch<{ id: string; display_name: string }[]>(`/api/backend/organization/${orgId.value}/regions`) } catch { regions.value = [] }
 })
 
-interface EnvRow { key: string; value: string; secretId: string | null }
+interface EnvRow { key: string; value: string }
 const envRows = ref<EnvRow[]>([])
 
-interface ProjectSecret { id: string; name: string; version_count: number }
-const projectSecrets = ref<ProjectSecret[]>([])
-
-onMounted(async () => {
-  if (!orgId.value || !projectId.value) return
-  try {
-    const res = await $fetch(`/api/backend/organization/${orgId.value}/projects/${projectId.value}/secrets`)
-    projectSecrets.value = (res?.data ?? res ?? []) as ProjectSecret[]
-  } catch { projectSecrets.value = [] }
-})
-
-function addEnvRow() { envRows.value.push({ key: '', value: '', secretId: null }) }
+function addEnvRow() { envRows.value.push({ key: '', value: '' }) }
 function removeEnvRow(i: number) { envRows.value.splice(i, 1) }
-function setRowSecret(i: number, secretId: string) { envRows.value[i].secretId = secretId; envRows.value[i].value = '' }
-function clearRowSecret(i: number) { envRows.value[i].secretId = null }
-function secretNameForId(id: string): string { return projectSecrets.value.find(s => s.id === id)?.name ?? 'Unknown' }
-function buildValueMenuItems(rowIndex: number) {
-  const items: DropdownMenuItem[] = [{ label: 'Custom value', icon: ICONS.pencil, onSelect: () => clearRowSecret(rowIndex) }]
-  if (projectSecrets.value.length > 0) {
-    items.push({ type: 'separator', label: 'Project secrets' })
-    for (const s of projectSecrets.value) {
-      items.push({ label: s.name, icon: s.id === envRows.value[rowIndex]?.secretId ? ICONS.check : undefined, onSelect: () => setRowSecret(rowIndex, s.id) })
-    }
-  }
-  return items
-}
 
 async function handleCreate() {
   if (!orgId.value || !projectId.value || !regionId.value || !branchId.value) return
@@ -74,8 +45,7 @@ async function handleCreate() {
   const unit = computeUnitByLabel(computeUnit.value)
   try {
     const envObj: Record<string, string> = {}
-    const secretRefObj: Record<string, string> = {}
-    for (const row of envRows.value) { const k = row.key.trim(); if (!k) continue; if (row.secretId) secretRefObj[k] = row.secretId; else envObj[k] = row.value }
+    for (const row of envRows.value) { const k = row.key.trim(); if (k) envObj[k] = row.value }
 
     const body: Record<string, unknown> = {
       name: state.name.trim(), image: state.image.trim(), project_id: projectId.value, branch_id: branchId.value,
@@ -84,7 +54,6 @@ async function handleCreate() {
       resources: { cpu: { min: unit.cpu, max: unit.cpu }, memory: { min: `${Math.round(unit.ramGib * 1024)}Mi`, max: `${Math.round(unit.ramGib * 1024)}Mi` } },
     }
     if (Object.keys(envObj).length > 0) body.env = envObj
-    if (Object.keys(secretRefObj).length > 0) body.env_secret_refs = secretRefObj
 
     await $fetch(`/api/backend/organization/${orgId.value}/containers`, { method: 'POST', body })
     toast.add({ title: 'Container created', color: 'success' })
@@ -121,11 +90,11 @@ function backUrl() { return `/${route.params.organization_slug}/containers/${pro
           <div class="grid gap-4"><UFormField label="Region" description="Where your container runs. Pick the region closest to your users."><USelect v-model="regionId" :items="regions.map(r => ({ label: r.display_name, value: r.id }))" placeholder="Select a region" class="w-full" /></UFormField><UFormField label="Health check" description="Path your app exposes for liveness probes (e.g. /health)."><UInput v-model="state.healthCheckPath" placeholder="/health" class="w-full" /></UFormField><UFormField label="Endpoint visibility"><div class="mt-1 grid grid-cols-2 gap-2"><button type="button" class="flex flex-col items-start gap-0.5 rounded-lg border-2 p-3 text-left transition-colors" :class="!state.isPublic ? 'border-primary bg-primary/10' : 'border-default/40 hover:border-default/60'" @click="state.isPublic = false"><span class="text-sm font-semibold">Private</span><span class="text-xs text-muted">Internal network only</span></button><button type="button" class="flex flex-col items-start gap-0.5 rounded-lg border-2 p-3 text-left transition-colors" :class="state.isPublic ? 'border-primary bg-primary/10' : 'border-default/40 hover:border-default/60'" @click="state.isPublic = true"><span class="text-sm font-semibold">Public</span><span class="text-xs text-muted">Accessible from the web</span></button></div></UFormField></div>
         </section>
         <section class="grid gap-4 py-7 lg:grid-cols-[190px_minmax(0,1fr)]">
-          <div><h2 class="text-sm font-semibold">Environment</h2><p class="mt-1 text-xs text-muted">Custom values and project secrets.</p></div>
+          <div><h2 class="text-sm font-semibold">Environment</h2><p class="mt-1 text-xs text-muted">Custom environment variables.</p></div>
           <div class="space-y-3">
             <div v-for="(row, i) in envRows" :key="i" class="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)_auto]">
               <UInput v-model="row.key" placeholder="KEY" />
-              <div class="flex gap-2"><UDropdownMenu :items="[buildValueMenuItems(i)]" :content="{ align: 'start' }"><UButton :label="row.secretId ? `Secret: ${secretNameForId(row.secretId)}` : 'Custom value'" trailing-icon="i-lucide-chevrons-up-down" color="neutral" variant="solid" /></UDropdownMenu><UInput v-if="!row.secretId" v-model="row.value" placeholder="value" class="flex-1" /></div>
+              <UInput v-model="row.value" placeholder="value" />
               <UButton size="xs" color="error" :icon="ICONS.trash" @click="removeEnvRow(i)">Remove</UButton>
             </div>
             <p v-if="envRows.length === 0" class="text-sm text-muted">No environment variables configured.</p>

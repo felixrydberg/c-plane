@@ -21,7 +21,7 @@ impl<T> PaginatedResponse<T> {
         let total_pages = if total == 0 {
             1
         } else {
-            (total + per_page - 1) / per_page
+            total.div_ceil(per_page)
         };
         let has_next = page < total_pages;
         let has_prev = page > 1;
@@ -52,6 +52,6 @@ impl PaginationQuery {
     }
 
     pub fn per_page(&self) -> u64 {
-        self.per_page.unwrap_or(10).min(100).max(1) // Default 10, max 100, min 1
+        self.per_page.unwrap_or(10).clamp(1, 100)
     }
 }

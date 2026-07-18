@@ -11,7 +11,6 @@ interface ContainerVersionRow {
   replica_count: number
   port: number | null
   env: Record<string, string> | null
-  env_secret_refs: Record<string, string> | null
   health_check: Record<string, unknown> | null
   pull_secret_id: string | null
   created_at: string
@@ -54,18 +53,11 @@ const port = ref<number | null>(null)
 const replicaCount = ref(1)
 const isPublic = ref(false)
 const healthCheckPath = ref('')
-const envRows = ref<{ key: string; value: string; secretId: string | null }[]>([])
+const envRows = ref<{ key: string; value: string }[]>([])
 const hasChanges = ref(false)
 const saving = ref(false)
 const loading = ref(true)
 const recentActivity = ref<{ refresh: () => Promise<void> } | null>(null)
-
-interface ProjectSecret {
-  id: string
-  name: string
-  version_count: number
-}
-const projectSecrets = ref<ProjectSecret[]>([])
 
 async function fetchContainer() {
   if (!orgId.value || !containerId.value) return
@@ -82,14 +74,10 @@ async function fetchContainer() {
       isPublic.value = c.current_version.public
       const healthCheckPath = c.current_version.health_check?.path
       healthCheckPath.value = typeof healthCheckPath === 'string' ? healthCheckPath : ''
-      envRows.value = buildEnvRows(c.current_version.env, c.current_version.env_secret_refs)
+      envRows.value = buildEnvRows(c.current_version.env)
     }
     hasChanges.value = false
 
-    const res = await $fetch<{ data?: ProjectSecret[] }>(
-      `/api/backend/organization/${orgId.value}/projects/${projectId.value}/secrets`
-    )
-    projectSecrets.value = (res?.data ?? res ?? []) as ProjectSecret[]
   } catch {
     toast.add({ title: 'Failed to load container', color: 'error' })
   } finally {
@@ -99,42 +87,23 @@ async function fetchContainer() {
 
 watch(containerId, fetchContainer, { immediate: true })
 
-function buildEnvRows(env: Record<string, string> | null, refs: Record<string, string> | null): { key: string; value: string; secretId: string | null }[] {
-  const rows: { key: string; value: string; secretId: string | null }[] = []
-  if (env) {
-    for (const [key, value] of Object.entries(env)) {
-      rows.push({ key, value: refs?.[key] ? '' : value, secretId: refs?.[key] ?? null })
-    }
-  }
-  if (refs) {
-    for (const [key, secretId] of Object.entries(refs)) {
-      if (!rows.some(r => r.key === key)) {
-        rows.push({ key, value: '', secretId: secretId ?? null })
-      }
-    }
-  }
-  return rows
+function buildEnvRows(env: Record<string, string> | null): { key: string; value: string }[] {
+  return Object.entries(env ?? {}).map(([key, value]) => ({ key, value }))
 }
 
 function markChanged() { hasChanges.value = true }
 
-function addEnvRow() { envRows.value.push({ key: '', value: '', secretId: null }); markChanged() }
+function addEnvRow() { envRows.value.push({ key: '', value: '' }); markChanged() }
 function removeEnvRow(i: number) { envRows.value.splice(i, 1); markChanged() }
-function setRowSecret(i: number, secretId: string) { envRows.value[i].secretId = secretId; envRows.value[i].value = ''; markChanged() }
 
 async function save() {
   if (!orgId.value || !containerId.value) return
   saving.value = true
   try {
     const env: Record<string, string> = {}
-    const env_secret_refs: Record<string, string> = {}
     for (const row of envRows.value) {
       if (!row.key) continue
-      if (row.secretId) {
-        env_secret_refs[row.key] = row.secretId
-      } else {
-        env[row.key] = row.value
-      }
+      env[row.key] = row.value
     }
 
     await $fetch(
@@ -147,7 +116,6 @@ async function save() {
           replica_count: replicaCount.value,
           public: isPublic.value,
           env: Object.keys(env).length > 0 ? env : null,
-          env_secret_refs: Object.keys(env_secret_refs).length > 0 ? env_secret_refs : null,
           health_check: healthCheckPath.value ? { path: healthCheckPath.value } : null,
         },
       }
@@ -242,7 +210,8 @@ watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged(
                 </section>
 
                 <dl class="grid gap-px overflow-hidden rounded-md bg-default/60 sm:grid-cols-2 lg:grid-cols-4">
-                  <div v-for="stat in [
+                  <div
+                    v-for="stat in [
                     ['Replicas', replicaCount, `Desired: ${replicaCount}`],
                     ['Restart Count', '—', 'Metrics unavailable'],
                     ['CPU (Current)', '—', 'Metrics unavailable'],
@@ -275,13 +244,11 @@ watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged(
                   <UInput v-model="healthCheckPath" placeholder="/health" @input="markChanged" />
                 </section>
                 <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
-                  <div><h3 class="text-sm font-semibold">Environment</h3><p class="mt-1 text-xs text-muted">Values and project secrets.</p></div>
+                  <div><h3 class="text-sm font-semibold">Environment</h3><p class="mt-1 text-xs text-muted">Custom environment variables.</p></div>
                   <div class="space-y-3">
-                    <div v-for="(row, i) in envRows" :key="i" class="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)_170px_auto]">
+                    <div v-for="(row, i) in envRows" :key="i" class="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)_auto]">
                       <UInput v-model="row.key" placeholder="KEY" @input="markChanged" />
-                      <UInput v-if="!row.secretId" v-model="row.value" placeholder="value" type="password" @input="markChanged" />
-                      <div v-else class="rounded-md bg-elevated px-3 py-2 text-sm text-muted">Project secret</div>
-                      <USelect v-model="row.secretId" :items="[{ label: 'Custom value', value: '' }, ...projectSecrets.map(s => ({ label: s.name, value: s.id }))]" @update:model-value="(v: string) => setRowSecret(i, v)" />
+                      <UInput v-model="row.value" placeholder="value" type="password" @input="markChanged" />
                       <UButton size="xs" color="error" :icon="ICONS.trash" @click="removeEnvRow(i)">Remove</UButton>
                     </div>
                     <p v-if="envRows.length === 0" class="text-sm text-muted">No environment variables configured.</p>
@@ -302,7 +269,7 @@ watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged(
           </Transition>
         </main>
 
-        <DeploymentsRecentActivity ref="recentActivity" v-if="orgId && projectId && containerId" :organization-id="orgId" :project-id="projectId" :branch-id="branchId" event-type-prefix="container" :target-id="containerId" />
+        <DeploymentsRecentActivity v-if="orgId && projectId && containerId" ref="recentActivity" :organization-id="orgId" :project-id="projectId" :branch-id="branchId" event-type-prefix="container" :target-id="containerId" />
       </div>
     </div>
   </div>

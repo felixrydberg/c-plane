@@ -11,8 +11,6 @@ pub mod region;
 pub mod registry_access_token;
 pub mod registry_repository;
 pub mod registry_repository_grant;
-pub mod serverless_postgres_database;
-pub mod serverless_postgres_database_branch;
 pub mod stateful_postgres_database;
 pub mod stateful_postgres_database_branch;
 pub mod storage_access_token;

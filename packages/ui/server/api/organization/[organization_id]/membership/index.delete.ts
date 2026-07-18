@@ -1,5 +1,5 @@
 import { active_organization, organization_member } from "~~/server/schema";
-import { withTenantDb } from "~~/server/utils/db";
+import { getIdentityDb, withTenantDb } from "~~/server/utils/db";
 import { and, desc, eq, ne } from "drizzle-orm";
 
 export default defineEventHandler(async (event) => {
@@ -13,32 +13,48 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const membership = await withTenantDb([organization_id], async (tx) =>
-    tx.select().from(organization_member)
-      .where(and(
-        eq(organization_member.user_id, session.user.id),
-        eq(organization_member.organization_id, organization_id),
-      ))
-      .limit(1),
-  );
+  const membership = await getIdentityDb().select().from(organization_member)
+    .where(and(
+      eq(organization_member.user_id, session.user.id),
+      eq(organization_member.organization_id, organization_id),
+    ))
+    .limit(1);
 
-  if (!membership[0]) {
+  const currentMembership = membership[0];
+  if (!currentMembership) {
     throw createError({
       statusCode: 404,
       statusMessage: "Membership not found",
     });
   }
 
-  if (membership[0].role === "owner" || membership[0].role === "admin") {
+  if (currentMembership.role === "owner" || currentMembership.role === "admin") {
     throw createError({
       statusCode: 403,
       statusMessage: "Admins and owners cannot leave from this action",
     });
   }
 
-  await withTenantDb([organization_id], async (tx) => {
+  const nextMembership = await getIdentityDb().select({
+    organization_id: organization_member.organization_id,
+  })
+    .from(organization_member)
+    .where(and(
+      eq(organization_member.user_id, session.user.id),
+      ne(organization_member.organization_id, organization_id),
+    ))
+    .orderBy(desc(organization_member.created_at))
+    .limit(1);
+
+  const replacementOrganizationId = nextMembership[0]?.organization_id;
+  const allowedOrganizations = [organization_id];
+  if (replacementOrganizationId) {
+    allowedOrganizations.push(replacementOrganizationId);
+  }
+
+  await withTenantDb(allowedOrganizations, async (tx) => {
     await tx.delete(organization_member)
-      .where(eq(organization_member.id, membership[0].id));
+      .where(eq(organization_member.id, currentMembership.id));
 
     const activeOrganization = await tx.select().from(active_organization)
       .where(eq(active_organization.user_id, session.user.id))
@@ -48,25 +64,14 @@ export default defineEventHandler(async (event) => {
       return;
     }
 
-    const nextMembership = await tx.select({
-      organization_id: organization_member.organization_id,
-    })
-      .from(organization_member)
-      .where(and(
-        eq(organization_member.user_id, session.user.id),
-        ne(organization_member.organization_id, organization_id),
-      ))
-      .orderBy(desc(organization_member.created_at))
-      .limit(1);
-
-    if (!nextMembership[0]) {
+    if (!replacementOrganizationId) {
       await tx.delete(active_organization)
         .where(eq(active_organization.user_id, session.user.id));
       return;
     }
 
     await tx.update(active_organization)
-      .set({ organization_id: nextMembership[0].organization_id })
+      .set({ organization_id: replacementOrganizationId })
       .where(eq(active_organization.user_id, session.user.id));
   });
 });

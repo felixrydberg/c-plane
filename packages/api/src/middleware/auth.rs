@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 use std::time::Duration;
 use uuid::Uuid;
 
-use crate::errors::{AppError, DatabaseError};
+use crate::errors::AppError;
 use crate::state::{AppDatabase, OrganizationContext, TenantDatabase, get_app_state};
 
 fn reqwest_client() -> &'static Client {
@@ -46,7 +46,6 @@ struct BetterAuthSession {
 struct ApiKeyLookup {
     id: Uuid,
     organization_id: Uuid,
-    scopes: Vec<String>,
 }
 
 impl<S> FromRequestParts<S> for AuthContext
@@ -69,7 +68,6 @@ where
             (
                 OrganizationContext {
                     allowed_organizations: vec![api_key.organization_id],
-                    actor_id: api_key.id,
                 },
                 RequestAuthContext {
                     actor_id: api_key.id,
@@ -93,7 +91,6 @@ where
             (
                 OrganizationContext {
                     allowed_organizations,
-                    actor_id,
                 },
                 RequestAuthContext { actor_id },
             )
@@ -159,10 +156,10 @@ async fn resolve_user_from_cookie(cookie_header: &str) -> Result<Uuid, AppError>
 }
 
 fn extract_api_key_from_parts(parts: &Parts) -> Option<&str> {
-    if let Some(value) = parts.headers.get("x-api-key").and_then(|h| h.to_str().ok()) {
-        if !value.trim().is_empty() {
-            return Some(value.trim());
-        }
+    if let Some(value) = parts.headers.get("x-api-key").and_then(|h| h.to_str().ok())
+        && !value.trim().is_empty()
+    {
+        return Some(value.trim());
     }
 
     let auth_header = parts
@@ -194,13 +191,13 @@ async fn resolve_user_organizations(
             vec![actor_id.into()],
         ))
         .await
-        .map_err(|err| AppError::Database(DatabaseError::QueryFailed(err.to_string())))?;
+        .map_err(|err| AppError::Internal(err.to_string()))?;
 
     let mut organizations = Vec::with_capacity(rows.len());
     for row in rows {
         let org_id = row
             .try_get::<Uuid>("", "organization_id")
-            .map_err(|err| AppError::Database(DatabaseError::QueryFailed(err.to_string())))?;
+            .map_err(|err| AppError::Internal(err.to_string()))?;
         organizations.push(org_id);
     }
 
@@ -221,7 +218,7 @@ async fn resolve_api_key(
             vec![key_hash.into()],
         ))
         .await
-        .map_err(|err| AppError::Database(DatabaseError::QueryFailed(err.to_string())))?;
+        .map_err(|err| AppError::Internal(err.to_string()))?;
 
     let Some(row) = key_row else {
         return Ok(None);
@@ -229,32 +226,13 @@ async fn resolve_api_key(
 
     let key_id = row
         .try_get::<Uuid>("", "id")
-        .map_err(|err| AppError::Database(DatabaseError::QueryFailed(err.to_string())))?;
+        .map_err(|err| AppError::Internal(err.to_string()))?;
     let organization_id = row
         .try_get::<Uuid>("", "organization_id")
-        .map_err(|err| AppError::Database(DatabaseError::QueryFailed(err.to_string())))?;
-
-    let scope_rows = app_db
-        .0
-        .query_all(Statement::from_sql_and_values(
-            DatabaseBackend::Postgres,
-            "SELECT scope FROM api_key_scopes WHERE api_key_id = $1",
-            vec![key_id.into()],
-        ))
-        .await
-        .map_err(|err| AppError::Database(DatabaseError::QueryFailed(err.to_string())))?;
-
-    let mut scopes = Vec::with_capacity(scope_rows.len());
-    for row in scope_rows {
-        let scope = row
-            .try_get::<String>("", "scope")
-            .map_err(|err| AppError::Database(DatabaseError::QueryFailed(err.to_string())))?;
-        scopes.push(scope);
-    }
+        .map_err(|err| AppError::Internal(err.to_string()))?;
 
     Ok(Some(ApiKeyLookup {
         id: key_id,
         organization_id,
-        scopes,
     }))
 }

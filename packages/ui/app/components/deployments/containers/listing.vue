@@ -7,15 +7,7 @@ interface Container extends ContainerRow {
   project_id: string | null;
 }
 
-interface ContainerVersion extends ContainerVersionRow {
-  env_secret_refs?: Record<string, string> | null;
-}
-
-interface ContainerWithVersion extends Container {
-  current_version: ContainerVersion | null;
-}
-
-export interface ContainerWithProject extends ContainerWithVersion {
+export interface ContainerWithProject extends Container {
   _projectName?: string;
   _projectId?: string;
 }
@@ -56,10 +48,6 @@ const deleteModalOpen = computed({
   set: (v) => { if (!v) deleteTarget.value = null },
 })
 
-function secretCount(c: ContainerWithProject): number {
-  const refs = c.current_version?.env_secret_refs;
-  return refs ? Object.keys(refs).length : 0;
-}
 </script>
 
 <template>
@@ -94,7 +82,6 @@ function secretCount(c: ContainerWithProject): number {
             <span class="text-sm font-medium truncate">{{ c.name }}</span>
             <span v-if="c.current_version?.public" class="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">Public</span>
           </div>
-          <p v-if="secretCount(c)" class="mt-1 text-[11px] text-muted">{{ secretCount(c) }} secret{{ secretCount(c) === 1 ? '' : 's' }}</p>
         </div>
         <code class="truncate font-mono text-xs text-muted">{{ c.current_version?.image ?? 'No version' }}</code>
         <span class="font-mono text-xs text-muted">{{ c.current_version?.replica_count ?? 0 }}</span>

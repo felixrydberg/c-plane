@@ -29,24 +29,12 @@ const items = computed<NavigationMenuItem[]>(() => [
   {
     label: 'Databases',
     icon: ICONS.databases,
-    type: 'trigger',
-    open: true,
-    children: [
-      {
-        label: 'Stateful',
-        to: `/${store.organization?.slug}/databases/stateful${navProjectId.value ? `/${navProjectId.value}` : ''}`,
-      },
-      {
-        label: 'Serverless',
-        disabled: true,
-        to: `/${store.organization?.slug}/databases/serverless`,
-      },
-    ],
+    to: `/${store.organization?.slug}/databases/stateful${navProjectId.value ? `/${navProjectId.value}` : ''}`,
   },
   {
     label: 'Secrets',
     icon: ICONS.secrets,
-    to: `/${store.organization?.slug}/secrets${navProjectId.value ? `/${navProjectId.value}` : ''}`,
+    disabled: true,
   },
   {
     label: "Storage",

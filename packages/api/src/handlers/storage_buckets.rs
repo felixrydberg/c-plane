@@ -67,9 +67,7 @@ pub async fn create_bucket(
         .ok_or_else(|| AppError::Internal("S3 provider service is not configured".into()))?;
     let name = body.name.trim().to_ascii_lowercase();
     if !valid_bucket_name(&name) {
-        return Err(AppError::Project(crate::errors::ProjectError::InvalidSlug(
-            "Invalid bucket name".into(),
-        )));
+        return Err(AppError::BadRequest("Invalid bucket name".into()));
     }
 
     let scoped = tenant_db.begin_scoped_transaction().await?;

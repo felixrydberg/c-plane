@@ -40,7 +40,7 @@ const currentBranch = computed(() =>
         <p class="font-space-mono text-[10px] uppercase tracking-[0.08em] text-muted">Current project</p>
       </div>
 
-      <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <UCard class="border-dashed border-default bg-transparent" :ui="{ body: 'p-5' }">
           <div class="flex items-start justify-between gap-4">
             <div>
@@ -60,17 +60,6 @@ const currentBranch = computed(() =>
             </div>
             <div class="flex size-10 items-center justify-center rounded-md bg-primary/10">
               <UIcon :name="ICONS.containers" class="size-5 text-primary" />
-            </div>
-          </div>
-        </UCard>
-        <UCard class="border-dashed border-default bg-transparent" :ui="{ body: 'p-5' }">
-          <div class="flex items-start justify-between gap-4">
-            <div>
-              <p class="text-sm text-muted">Secrets</p>
-              <p class="mt-3 text-4xl font-normal tracking-[-0.04em]">0</p>
-            </div>
-            <div class="flex size-10 items-center justify-center rounded-md bg-primary/10">
-              <UIcon :name="ICONS.secrets" class="size-5 text-primary" />
             </div>
           </div>
         </UCard>

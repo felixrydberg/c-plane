@@ -27,8 +27,7 @@ async fn main() -> Result<(), AppError> {
         .with_target(false)
         .init();
 
-    create_app_state().await?;
-    let config = config::load_config()?;
+    let config = create_app_state().await?.config;
 
     let app = routes::create_routes().layer(TraceLayer::new_for_http());
 

@@ -120,10 +120,15 @@ async fn get_branch(
     tx: &impl sea_orm::ConnectionTrait,
     branch_id: Uuid,
     organization_id: Uuid,
+    project_id: Option<Uuid>,
 ) -> Result<project_branch::Model, AppError> {
-    project_branch::Entity::find()
+    let mut query = project_branch::Entity::find()
         .filter(project_branch::Column::Id.eq(branch_id))
-        .filter(project_branch::Column::OrganizationId.eq(organization_id))
+        .filter(project_branch::Column::OrganizationId.eq(organization_id));
+    if let Some(project_id) = project_id {
+        query = query.filter(project_branch::Column::ProjectId.eq(project_id));
+    }
+    query
         .one(tx)
         .await?
         .ok_or_else(|| AppError::NotFound("Branch not found".into()))
@@ -178,20 +183,14 @@ pub async fn create_container(
 
     let name = body.name.trim().to_string();
     if name.is_empty() {
-        return Err(AppError::Project(
-            crate::errors::project::ProjectError::InvalidSlug("Name is required".into()),
-        ));
+        return Err(AppError::BadRequest("Name is required".into()));
     }
     let image = body.image.trim().to_string();
     if image.is_empty() {
-        return Err(AppError::Project(
-            crate::errors::project::ProjectError::InvalidSlug("Image is required".into()),
-        ));
+        return Err(AppError::BadRequest("Image is required".into()));
     }
     if body.region_id.is_nil() {
-        return Err(AppError::Project(
-            crate::errors::project::ProjectError::InvalidSlug("Region is required".into()),
-        ));
+        return Err(AppError::BadRequest("Region is required".into()));
     }
 
     let container_id = Uuid::new_v4();
@@ -200,7 +199,7 @@ pub async fn create_container(
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
 
-    let branch = get_branch(tx, body.branch_id, organization_id).await?;
+    let branch = get_branch(tx, body.branch_id, organization_id, Some(body.project_id)).await?;
 
     let created_container: container::Model = container::ActiveModel {
         id: Set(container_id),
@@ -276,7 +275,7 @@ pub async fn list_containers(
     let tx = scoped.connection();
 
     let branch = if let Some(branch_id) = query.branch_id {
-        Some(get_branch(tx, branch_id, organization_id).await?)
+        Some(get_branch(tx, branch_id, organization_id, query.project_id).await?)
     } else if let Some(project_id) = query.project_id {
         Some(find_main_branch_containers(tx, project_id, organization_id).await?)
     } else {
@@ -452,7 +451,7 @@ pub async fn update_container(
         .await?
         .ok_or_else(|| AppError::NotFound("Container not found".into()))?;
 
-    let branch = get_branch(tx, action.branch_id, organization_id).await?;
+    let branch = get_branch(tx, action.branch_id, organization_id, Some(c.project_id)).await?;
 
     if let Some(ref new_name) = body.name {
         let trimmed = new_name.trim().to_string();
@@ -574,7 +573,7 @@ pub async fn delete_container(
         .await?
         .ok_or_else(|| AppError::NotFound("Container not found".into()))?;
 
-    let branch = get_branch(tx, action.branch_id, organization_id).await?;
+    let branch = get_branch(tx, action.branch_id, organization_id, Some(c.project_id)).await?;
 
     let mut pins = get_branch_timeline_pins(tx, &branch).await?;
     pins.remove_container(&container_id);

@@ -4,8 +4,8 @@ VALUES ('3336daf6-36b8-4855-a1d0-168b711dc9cf', 'felix', 'felixryd@proton.me', f
 INSERT INTO "account" ("id", "account_id", "provider_id", "user_id", "access_token", "refresh_token", "id_token", "access_token_expires_at", "refresh_token_expires_at", "scope", "password", "created_at", "updated_at")
 VALUES ('a16ca4e9-dd1a-4531-80cd-4c3a5285f377', '3336daf6-36b8-4855-a1d0-168b711dc9cf', 'credential', '3336daf6-36b8-4855-a1d0-168b711dc9cf', null, null, null, null, null, null, 'ca4aa4374c2148a316e8dbc3d1ed1c61:0c25dc481c21054da3bfcdee6acd92eaf103a607c3076c98f12f48701b3bac33be55345f91e6a327b432b75952ea224f624d477cb427f0a118eda70c9461919c', '2026-02-12 18:09:57.698', '2026-02-12 18:09:57.698');
 
-INSERT INTO "organization" ("id", "name", "email", "slug", "logo", "created_at", "polar_customer_id")
-VALUES ('07fdaa2a-c89b-4fcf-886b-c35f079df0d5', 'felix''s Organization', 'felixryd@proton.me', 'felixs-organization', null, '2026-02-12 18:47:08.638927', 'e61d6259-038b-49f8-b549-aa55f99c679d');
+INSERT INTO "organization" ("id", "name", "email", "slug", "logo", "created_at")
+VALUES ('07fdaa2a-c89b-4fcf-886b-c35f079df0d5', 'felix''s Organization', 'felixryd@proton.me', 'felixs-organization', null, '2026-02-12 18:47:08.638927');
 
 INSERT INTO "active_organization" ("user_id", "organization_id")
 VALUES ('3336daf6-36b8-4855-a1d0-168b711dc9cf', '07fdaa2a-c89b-4fcf-886b-c35f079df0d5');

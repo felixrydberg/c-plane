@@ -1,5 +1,5 @@
 use crate::config::{Config, load_config};
-use crate::errors::{AppError, DatabaseError};
+use crate::errors::AppError;
 use crate::services::s3_providers::S3ProviderClient;
 use sea_orm::{
     ConnectOptions, ConnectionTrait, Database, DatabaseBackend, DatabaseConnection,
@@ -15,7 +15,6 @@ pub struct AppDatabase(pub DatabaseConnection);
 #[derive(Clone)]
 pub struct OrganizationContext {
     pub allowed_organizations: Vec<Uuid>,
-    pub actor_id: Uuid,
 }
 
 #[derive(Clone)]
@@ -39,10 +38,6 @@ impl TenantDatabase {
         Self { tenant_db, context }
     }
 
-    pub fn connection(&self) -> &DatabaseConnection {
-        &self.tenant_db
-    }
-
     fn allowed_orgs_literal(&self) -> String {
         if self.context.allowed_organizations.is_empty() {
             return "{}".into();
@@ -58,10 +53,11 @@ impl TenantDatabase {
     }
 
     pub async fn begin_scoped_transaction(&self) -> Result<ScopedTenantTransaction, AppError> {
-        let tx =
-            self.tenant_db.begin().await.map_err(|err| {
-                AppError::Database(DatabaseError::TransactionFailed(err.to_string()))
-            })?;
+        let tx = self
+            .tenant_db
+            .begin()
+            .await
+            .map_err(|err| AppError::Internal(err.to_string()))?;
 
         let literal = self.allowed_orgs_literal();
 
@@ -72,24 +68,9 @@ impl TenantDatabase {
 
         tx.execute(statement)
             .await
-            .map_err(|err| AppError::Database(DatabaseError::QueryFailed(err.to_string())))?;
+            .map_err(|err| AppError::Internal(err.to_string()))?;
 
         Ok(ScopedTenantTransaction { tx })
-    }
-
-    pub async fn prepare_connection(&self) -> Result<(), AppError> {
-        let literal = self.allowed_orgs_literal();
-        self.tenant_db
-            .execute(Statement::from_string(
-                DatabaseBackend::Postgres,
-                format!(
-                    "SELECT set_config('app.allowed_organizations', '{}', false)",
-                    literal
-                ),
-            ))
-            .await
-            .map_err(|err| AppError::Database(DatabaseError::QueryFailed(err.to_string())))?;
-        Ok(())
     }
 }
 
@@ -102,14 +83,7 @@ impl ScopedTenantTransaction {
         self.tx
             .commit()
             .await
-            .map_err(|err| AppError::Database(DatabaseError::TransactionFailed(err.to_string())))
-    }
-
-    pub async fn rollback(self) -> Result<(), AppError> {
-        self.tx
-            .rollback()
-            .await
-            .map_err(|err| AppError::Database(DatabaseError::TransactionFailed(err.to_string())))
+            .map_err(|err| AppError::Internal(err.to_string()))
     }
 }
 
@@ -143,7 +117,7 @@ pub async fn create_app_state() -> Result<State, AppError> {
     };
     STATE
         .set(state)
-        .map_err(|_| AppError::Internal(format!("Couldnt set STATE")))?;
+        .map_err(|_| AppError::Internal("Couldn't set STATE".into()))?;
     Ok(get_app_state())
 }
 
@@ -154,11 +128,9 @@ async fn connect_database(
     let mut options = ConnectOptions::new(database_url);
     options.sqlx_logging(false);
 
-    Database::connect(options).await.map_err(|err| {
-        AppError::Database(DatabaseError::ConnectionFailed(format!(
-            "Failed to connect {role_name} database: {err}",
-        )))
-    })
+    Database::connect(options)
+        .await
+        .map_err(|err| AppError::Internal(format!("Failed to connect {role_name} database: {err}")))
 }
 
 pub fn get_app_state() -> State {

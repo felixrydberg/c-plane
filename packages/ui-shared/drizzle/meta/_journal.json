@@ -50,6 +50,13 @@
       "when": 1784330209145,
       "tag": "0006_modern_wild_pack",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784373903090,
+      "tag": "0007_windy_callisto",
+      "breakpoints": true
     }
   ]
 }

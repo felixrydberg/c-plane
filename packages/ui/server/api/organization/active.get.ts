@@ -1,6 +1,6 @@
 
 import { active_organization, organization, organization_member } from "~~/server/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getIdentityDb } from "~~/server/utils/db";
 
 export default defineEventHandler(async (event) => {
@@ -19,7 +19,10 @@ export default defineEventHandler(async (event) => {
   }).from(active_organization)
     .innerJoin(organization_member, eq(active_organization.organization_id, organization_member.organization_id))
     .innerJoin(organization, eq(organization.id, active_organization.organization_id))
-    .where(eq(organization_member.user_id, session.user.id))
+    .where(and(
+      eq(active_organization.user_id, session.user.id),
+      eq(organization_member.user_id, session.user.id),
+    ))
     .limit(1);
 
   if (!activeOrganization || activeOrganization.length === 0) {

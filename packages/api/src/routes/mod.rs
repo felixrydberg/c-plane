@@ -1,6 +1,6 @@
 use axum::{
     Router,
-    routing::{delete, get, patch, post},
+    routing::{delete, get, patch},
 };
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -13,7 +13,6 @@ use crate::handlers::regions;
 use crate::handlers::registry;
 use crate::handlers::registry_access_tokens;
 use crate::handlers::registry_repositories;
-use crate::handlers::serverless_databases;
 use crate::handlers::stateful_databases;
 use crate::handlers::storage_access_tokens;
 use crate::handlers::storage_buckets;
@@ -121,33 +120,14 @@ pub fn create_routes() -> Router {
                 .delete(stateful_databases::delete_database),
         )
         .route(
-            "/api/organization/{organization_id}/databases/serverless",
-            get(serverless_databases::list_databases)
-                .post(serverless_databases::create_database),
-        )
-        .route(
-            "/api/organization/{organization_id}/databases/serverless/{database_id}",
-            get(serverless_databases::get_database)
-                .patch(serverless_databases::update_database)
-                .delete(serverless_databases::delete_database),
-        )
-        .route(
             "/api/organization/{organization_id}/databases/stateful/{database_id}/branches",
-            post(stateful_databases::create_database_branch),
+            get(stateful_databases::list_database_branches)
+                .post(stateful_databases::create_database_branch),
         )
         .route(
             "/api/organization/{organization_id}/databases/stateful/{database_id}/branches/{branch_id}",
             patch(stateful_databases::update_database_branch)
                 .delete(stateful_databases::delete_database_branch),
-        )
-        .route(
-            "/api/organization/{organization_id}/databases/serverless/{database_id}/branches",
-            post(serverless_databases::create_database_branch),
-        )
-        .route(
-            "/api/organization/{organization_id}/databases/serverless/{database_id}/branches/{branch_id}",
-            patch(serverless_databases::update_database_branch)
-                .delete(serverless_databases::delete_database_branch),
         )
         .merge(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()))
 }

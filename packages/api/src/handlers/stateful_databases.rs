@@ -62,9 +62,7 @@ pub async fn create_database(
 
     let name = body.name.trim().to_string();
     if name.is_empty() {
-        return Err(AppError::Project(
-            crate::errors::project::ProjectError::InvalidSlug("Name is required".into()),
-        ));
+        return Err(AppError::BadRequest("Name is required".into()));
     }
 
     let db_id = Uuid::new_v4();
@@ -239,6 +237,19 @@ pub async fn delete_database(
     Ok(Json(serde_json::json!({ "success": true })))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/organization/{organization_id}/databases/stateful/{database_id}/branches",
+    params(
+        ("organization_id" = Uuid, Path, description = "Organization ID"),
+        ("database_id" = Uuid, Path, description = "Database ID"),
+    ),
+    responses(
+        (status = 200, description = "Database branch links", body = Vec<DatabaseBranchResponse>),
+        (status = 404, description = "Not found"),
+    ),
+    tag = "databases/stateful",
+)]
 pub async fn list_database_branches(
     AuthContext { tenant_db, .. }: AuthContext,
     Path((organization_id, database_id)): Path<(Uuid, Uuid)>,
@@ -367,31 +378,40 @@ pub async fn create_database_branch(
         return Ok((axum::http::StatusCode::OK, Json(branch_to_response(&row))));
     }
 
-    let (cpu, ram, read_replicas, autoscaling_enabled, autoscaling_min_cpu, autoscaling_max_cpu) =
-        if let Some(default_id) = db.default_branch_id {
-            let default = stateful_postgres_database_branch::Entity::find_by_id(default_id)
-                .one(tx)
-                .await?
-                .ok_or_else(|| AppError::NotFound("Default database branch not found".into()))?;
-            (
-                body.cpu.or(default.cpu),
-                body.ram.or(default.ram),
-                body.read_replicas.or(default.read_replicas),
-                body.autoscaling_enabled
-                    .or(Some(default.autoscaling_enabled)),
-                body.autoscaling_min_cpu.or(default.autoscaling_min_cpu),
-                body.autoscaling_max_cpu.or(default.autoscaling_max_cpu),
-            )
-        } else {
-            (
-                body.cpu,
-                body.ram,
-                body.read_replicas,
-                body.autoscaling_enabled,
-                body.autoscaling_min_cpu,
-                body.autoscaling_max_cpu,
-            )
-        };
+    let (
+        cpu,
+        ram,
+        high_availability,
+        read_replicas,
+        autoscaling_enabled,
+        autoscaling_min_cpu,
+        autoscaling_max_cpu,
+    ) = if let Some(default_id) = db.default_branch_id {
+        let default = stateful_postgres_database_branch::Entity::find_by_id(default_id)
+            .one(tx)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Default database branch not found".into()))?;
+        (
+            body.cpu.or(default.cpu),
+            body.ram.or(default.ram),
+            body.high_availability.or(Some(default.high_availability)),
+            body.read_replicas.or(default.read_replicas),
+            body.autoscaling_enabled
+                .or(Some(default.autoscaling_enabled)),
+            body.autoscaling_min_cpu.or(default.autoscaling_min_cpu),
+            body.autoscaling_max_cpu.or(default.autoscaling_max_cpu),
+        )
+    } else {
+        (
+            body.cpu,
+            body.ram,
+            body.high_availability,
+            body.read_replicas,
+            body.autoscaling_enabled,
+            body.autoscaling_min_cpu,
+            body.autoscaling_max_cpu,
+        )
+    };
 
     let id = Uuid::new_v4();
     let row: stateful_postgres_database_branch::Model =
@@ -402,7 +422,7 @@ pub async fn create_database_branch(
             organization_id: Set(organization_id),
             cpu: Set(cpu),
             ram: Set(ram),
-            high_availability: Set(false),
+            high_availability: Set(high_availability.unwrap_or(false)),
             read_replicas: Set(read_replicas),
             autoscaling_enabled: Set(autoscaling_enabled.unwrap_or(false)),
             autoscaling_min_cpu: Set(autoscaling_min_cpu),
