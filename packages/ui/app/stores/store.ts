@@ -10,6 +10,7 @@ type Branch = {
   name: string
   timeline: string
   is_default: boolean
+  has_recent_undeployed_revision: boolean
 }
 
 type State = {
@@ -21,6 +22,7 @@ type State = {
   projects: Project[]
   branch: Branch | null
   branches: Branch[]
+  branches_project_id: string | null
   // ponytail: change counter watched by resource pages.
   // Bump when a repoint/delete invalidates cached lists.
   // Incremented instead of keyed to avoid coupling to specific fetch shapes.
@@ -37,6 +39,7 @@ export const useStore = defineStore("auth", {
     projects: [],
     branch: null,
     branches: [],
+    branches_project_id: null,
     refreshKey: 0,
   }),
 

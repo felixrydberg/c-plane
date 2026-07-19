@@ -5,7 +5,6 @@ use uuid::Uuid;
 use crate::errors::AppError;
 use crate::models::entities::{project_branch, project_timeline};
 use crate::models::pins::TimelinePins;
-use crate::services::agent;
 
 pub async fn create_revision(
     tx: &DatabaseTransaction,
@@ -40,14 +39,6 @@ pub async fn create_revision(
         branch_active.timeline = Set(inserted.id);
         branch_active.updated_at = Set(Utc::now().fixed_offset());
         branch_active.update(tx).await?;
-
-        agent::emit_project(
-            branch.project_id,
-            branch.organization_id,
-            branch.id,
-            inserted.id,
-        )
-        .await?;
     }
 
     Ok(inserted)

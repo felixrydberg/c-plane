@@ -25,6 +25,34 @@ export const createClient = () => {
 export type ClientType = ReturnType<typeof createClient>
 type InternalFetch = <T = unknown>(url: string, options?: Record<string, unknown>) => Promise<T>;
 
+type Branch = {
+  id: string
+  name: string
+  timeline: string
+  is_default: boolean
+  has_recent_undeployed_revision: boolean
+}
+
+export async function loadProjectBranches(projectId: string, branchId?: string) {
+  const store = useStore()
+  if (!store.organization?.id) return
+
+  const project = store.projects.find(project => project.id === projectId)
+  if (!project) return
+
+  const requestFetch: InternalFetch = import.meta.server ? useRequestFetch() as InternalFetch : $fetch
+  const response = await requestFetch<Branch[] | { data: Branch[] }>(
+    `/api/backend/organization/${store.organization.id}/projects/${project.id}/branches`
+  )
+  const branches = Array.isArray(response) ? response : response.data
+  const branch = branches.find(branch => branch.id === branchId) ?? branches.find(branch => branch.is_default) ?? branches[0] ?? null
+
+  store.project = project
+  store.branches = branches
+  store.branches_project_id = project.id
+  store.branch = branch
+}
+
 export const getSession = async (cache: boolean = true) => {
   const store = useStore();
   const route = useRoute();
@@ -147,9 +175,12 @@ export const setOrganization = async (id: string, redirect: string = '/') => {
       });
     }
     
-    store.organization = (data as typeof store.organization) || null;
+    store.organization = data || null;
     store.project = null;
-    store.projects = (data as any)?.projects ?? [];
+    store.projects = data?.projects ?? [];
+    store.branch = null;
+    store.branches = [];
+    store.branches_project_id = null;
     await router.push(redirect);
   } catch {
     throw new Error("Organization not found");

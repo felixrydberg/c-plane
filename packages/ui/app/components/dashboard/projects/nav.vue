@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
+import { loadProjectBranches } from '~/utils/auth'
 import { ICONS } from '~/utils/icons'
 
 const store = useStore()
@@ -43,26 +44,7 @@ watch([() => store.projects, routeProjectId], ([projList, pid]) => {
   if (matched) store.project = matched
 }, { immediate: true })
 
-type BranchItem = { id: string; name: string; timeline: string; is_default: boolean }
-type BranchResponse = BranchItem[] | { data: BranchItem[] }
-
-const { data: branchesData, refresh: refreshBranches, pending: branchesPending } = await useFetch<BranchResponse>(
-  () => !!store.organization?.id && !!store.project?.id ? `/api/backend/organization/${store.organization!.id}/projects/${store.project!.id}/branches` : '',
-  { immediate: computed(() => !!(store.organization?.id && store.project?.id)) },
-)
-
-const branches = computed(() => {
-  const value = branchesData.value
-  return Array.isArray(value) ? value : value?.data ?? []
-})
-
-watch(branches, (val) => {
-  store.branches = val
-  if (val.length) {
-    const target = val.find(b => b.id === routeBranchId.value) ?? val.find(b => b.is_default) ?? val[0]
-    if (target) store.branch = { id: target.id, name: target.name, timeline: target.timeline, is_default: target.is_default }
-  }
-}, { immediate: true })
+type BranchItem = { id: string; name: string; timeline: string; is_default: boolean; has_recent_undeployed_revision: boolean }
 
 const createProjectModal = ref(false)
 const deleteProjectModal = ref(false)
@@ -96,14 +78,11 @@ const projectItems = computed<DropdownMenuItem[][]>(() => {
 
 const branchLabel = computed(() => {
   if (!store.project) return 'Select branch'
-  if (branchesPending.value) return 'Loading...'
   if (!store.branch) return store.branches.length ? 'Select branch' : 'No branches'
   return store.branch.name
 })
-
 const branchItems = computed<DropdownMenuItem[][]>(() => {
   if (!store.project) return [[{ label: 'Select a project first', disabled: true }]]
-  if (branchesPending.value) return [[{ label: 'Loading branches...', disabled: true }]]
   if (!store.branches.length) return [[
     { label: 'No branches', disabled: true },
   ], [
@@ -142,6 +121,7 @@ async function selectProject(projectId: string | null) {
 
   if (!projectRoutesEnabled.value) {
     store.branches = []
+    store.branches_project_id = null
     if (projectId) {
       store.project = store.projects.find(p => p.id === projectId) ?? null
     } else {
@@ -160,17 +140,21 @@ async function selectProject(projectId: string | null) {
 
   if (projectId) {
     store.project = store.projects.find(p => p.id === projectId) ?? null
+    store.branch = null
+    store.branches = []
+    store.branches_project_id = null
     router.push(`/${slug}/${baseSection}/${projectId}`)
   } else {
     store.project = null
     store.branch = null
     store.branches = []
+    store.branches_project_id = null
     router.push(`/${slug}`)
   }
 }
 
 function selectBranch(b: BranchItem) {
-  store.branch = { id: b.id, name: b.name, timeline: b.timeline, is_default: b.is_default }
+  store.branch = { id: b.id, name: b.name, timeline: b.timeline, is_default: b.is_default, has_recent_undeployed_revision: b.has_recent_undeployed_revision }
 
   const slug = store.organization?.slug
   const pid = routeProjectId.value
@@ -187,6 +171,11 @@ function selectBranch(b: BranchItem) {
 
 async function onProjectCreated() { await refreshProjects() }
 async function onProjectDeleted() { await refreshProjects(); selectProject(null) }
+async function refreshBranches() {
+  if (!store.project) return
+  await loadProjectBranches(store.project.id, routeBranchId.value)
+}
+
 async function onBranchCreated() { await refreshBranches() }
 
 async function onConfirmDeleteBranch() {
@@ -201,11 +190,10 @@ async function onConfirmDeleteBranch() {
     store.branch = null;
     await refreshBranches();
 
-    const list = branches.value
-    store.branches = list
+    const list = store.branches
     const target = list.find(b => b.id === routeBranchId.value) ?? list.find(b => b.is_default) ?? list[0] ?? null
     if (target) {
-      store.branch = { id: target.id, name: target.name, timeline: target.timeline, is_default: target.is_default }
+      store.branch = { id: target.id, name: target.name, timeline: target.timeline, is_default: target.is_default, has_recent_undeployed_revision: target.has_recent_undeployed_revision }
       const slug = store.organization?.slug
       const pid = routeProjectId.value
       if (pid && slug && projectRoutesEnabled.value) {
@@ -226,18 +214,17 @@ const graphModalOpen = ref(false)
 </script>
 
 <template>
-  <div class="flex items-center gap-2">
-    <UDropdownMenu size="sm" :items="projectItems" :content="{ align: 'start', collisionPadding: 12 }" :ui="{ content: 'w-64' }">
+  <div class="flex min-w-0 items-center gap-2">
+    <UDropdownMenu size="sm" :items="projectItems" :content="{ align: 'start', collisionPadding: 12 }" :ui="{ content: 'w-64' }" class="shrink-0">
       <UButton :label="projectLabel" :trailing-icon="ICONS.chevronUpDown" size="sm" color="neutral" variant="soft" class="data-[state=open]:bg-elevated" :ui="{ trailingIcon: 'text-dimmed' }" />
     </UDropdownMenu>
 
-    <USeparator orientation="vertical" class="h-6" />
+    <USeparator orientation="vertical" class="h-6 shrink-0" />
 
-    <UDropdownMenu size="sm" :items="branchItems" :content="{ align: 'start', collisionPadding: 12 }" :ui="{ content: 'w-64' }">
+    <UDropdownMenu size="sm" :items="branchItems" :content="{ align: 'start', collisionPadding: 12 }" :ui="{ content: 'w-64' }" class="shrink-0">
       <UButton :label="branchLabel" :trailing-icon="ICONS.chevronUpDown" size="sm" color="neutral" variant="soft" :disabled="!store.project" class="data-[state=open]:bg-elevated" :ui="{ trailingIcon: 'text-dimmed' }" />
     </UDropdownMenu>
-
-    <UButton v-if="store.project" :icon="ICONS.graph" variant="ghost" color="neutral" size="sm" class="rotate-180" aria-label="Branch graph" @click="graphModalOpen = true" />
+    <UButton v-if="store.project" :icon="ICONS.graph" variant="ghost" color="neutral" size="sm" class="shrink-0 rotate-180" aria-label="Branch graph" @click="graphModalOpen = true" />
 
     <DashboardProjectsCreateModal v-model:open="createProjectModal" @created="onProjectCreated" />
     <DashboardProjectsDeleteModal v-model:open="deleteProjectModal" @deleted="onProjectDeleted" />

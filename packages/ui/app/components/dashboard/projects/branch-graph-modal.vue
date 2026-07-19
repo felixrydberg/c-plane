@@ -342,7 +342,7 @@ async function loadGraph(preserveSelection = false) {
     const X_SPACING = 360;
 
     const mainBranch = branches.find(b => b.name === 'main') || branches[0];
-    const mainRevs = allRevs.filter(r => r.branchId === mainBranch.id).map(r => r.rev).sort((a, b) => a.timeline - b.timeline);
+    const mainRevs = allRevs.filter(r => r.branchId === mainBranch.id).map(r => r.rev).sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
 
     const childrenMap = new Map<string, BranchRevision[]>();
     for (const { rev } of allRevs) {

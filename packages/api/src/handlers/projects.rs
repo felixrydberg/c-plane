@@ -1,19 +1,17 @@
 use axum::{Json, extract::Path};
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, Set,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use super::databases::verify_org_access;
 use crate::errors::AppError;
 use crate::middleware::auth::AuthContext;
-use crate::models::entities::{
-    postgres_database, postgres_database_branch, project, project_branch, project_timeline,
-};
+use crate::models::entities::{project, project_branch, project_timeline};
 use crate::models::pins::TimelinePins;
 use crate::services::agent;
 use crate::state::get_app_state;
@@ -28,12 +26,6 @@ pub struct CreateProjectRequest {
 pub struct CreateBranchRequest {
     pub name: String,
     pub parent_timeline_id: Option<Uuid>,
-    #[serde(default = "default_true")]
-    pub auto_branch_databases: bool,
-}
-
-pub fn default_true() -> bool {
-    true
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -60,6 +52,7 @@ pub struct BranchResponse {
     pub name: String,
     pub timeline: String,
     pub is_default: bool,
+    pub has_recent_undeployed_revision: bool,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -86,59 +79,6 @@ pub struct TimelineResponse {
 #[derive(Deserialize, ToSchema)]
 pub struct ListTimelinesQuery {
     pub branch_id: Option<Uuid>,
-}
-
-async fn branch_databases_for_project(
-    tx: &impl sea_orm::ConnectionTrait,
-    project_id: Uuid,
-    branch_id: Uuid,
-    organization_id: Uuid,
-) -> Result<(), AppError> {
-    let databases = postgres_database::Entity::find()
-        .filter(postgres_database::Column::ProjectId.eq(project_id))
-        .all(tx)
-        .await?;
-
-    for db in databases {
-        let exists = postgres_database_branch::Entity::find()
-            .filter(postgres_database_branch::Column::DatabaseId.eq(db.id))
-            .filter(postgres_database_branch::Column::BranchId.eq(branch_id))
-            .one(tx)
-            .await?
-            .is_some();
-
-        if !exists {
-            let default = if let Some(default_id) = db.default_branch_id {
-                postgres_database_branch::Entity::find_by_id(default_id)
-                    .one(tx)
-                    .await?
-            } else {
-                None
-            };
-            postgres_database_branch::ActiveModel {
-                id: Set(Uuid::new_v4()),
-                database_id: Set(db.id),
-                branch_id: Set(branch_id),
-                organization_id: Set(organization_id),
-                backup_retention_days: Set(default.as_ref().and_then(|b| b.backup_retention_days)),
-                cpu: Set(default.as_ref().and_then(|b| b.cpu.clone())),
-                ram: Set(default.as_ref().and_then(|b| b.ram.clone())),
-                high_availability: Set(default.as_ref().is_some_and(|b| b.high_availability)),
-                read_replicas: Set(default.as_ref().and_then(|b| b.read_replicas)),
-                autoscaling_enabled: Set(default.as_ref().is_some_and(|b| b.autoscaling_enabled)),
-                autoscaling_min_cpu: Set(default
-                    .as_ref()
-                    .and_then(|b| b.autoscaling_min_cpu.clone())),
-                autoscaling_max_cpu: Set(default
-                    .as_ref()
-                    .and_then(|b| b.autoscaling_max_cpu.clone())),
-            }
-            .insert(tx)
-            .await?;
-        }
-    }
-
-    Ok(())
 }
 
 #[utoipa::path(
@@ -229,6 +169,7 @@ pub async fn create_project(
                 name: main_branch.name,
                 timeline: main_branch.timeline.to_string(),
                 is_default: true,
+                has_recent_undeployed_revision: false,
             }),
             created_at: updated_project.created_at.to_string(),
             updated_at: updated_project.updated_at.to_string(),
@@ -285,6 +226,7 @@ pub async fn list_projects(
                 name: b.name,
                 timeline: b.timeline.to_string(),
                 is_default: p.default_branch_id == Some(b.id),
+                has_recent_undeployed_revision: false,
             }),
             created_at: p.created_at.to_string(),
             updated_at: p.updated_at.to_string(),
@@ -333,6 +275,7 @@ pub async fn get_project(
                 name: b.name,
                 timeline: b.timeline.to_string(),
                 is_default: p.default_branch_id == Some(b.id),
+                has_recent_undeployed_revision: false,
             })
     } else {
         None
@@ -474,6 +417,27 @@ pub async fn list_branches(
         .all(tx)
         .await?;
 
+    let branch_updated_at: HashMap<Uuid, _> = branches
+        .iter()
+        .map(|branch| (branch.id, branch.updated_at))
+        .collect();
+    let undeployed_branch_ids: HashSet<Uuid> = project_timeline::Entity::find()
+        .filter(project_timeline::Column::ProjectId.eq(project_id))
+        .filter(
+            project_timeline::Column::CreatedAt.gte(Utc::now().fixed_offset() - Duration::hours(1)),
+        )
+        .all(tx)
+        .await?
+        .into_iter()
+        .filter_map(|revision| {
+            let branch_id = revision.branch_id?;
+            branch_updated_at
+                .get(&branch_id)
+                .is_some_and(|updated_at| revision.created_at > *updated_at)
+                .then_some(branch_id)
+        })
+        .collect();
+
     scoped.commit().await?;
 
     let responses = branches
@@ -483,6 +447,7 @@ pub async fn list_branches(
             name: b.name,
             timeline: b.timeline.to_string(),
             is_default: project.default_branch_id == Some(b.id),
+            has_recent_undeployed_revision: undeployed_branch_ids.contains(&b.id),
         })
         .collect();
 
@@ -581,10 +546,6 @@ pub async fn create_branch(
     .insert(tx)
     .await?;
 
-    if body.auto_branch_databases {
-        branch_databases_for_project(tx, project_id, branch_id, organization_id).await?;
-    }
-
     scoped.commit().await?;
 
     Ok((
@@ -594,6 +555,7 @@ pub async fn create_branch(
             name: branch.name,
             timeline: branch.timeline.to_string(),
             is_default: project.default_branch_id == Some(branch.id),
+            has_recent_undeployed_revision: false,
         }),
     ))
 }
@@ -653,8 +615,6 @@ pub async fn list_project_timelines(
 #[derive(Deserialize, ToSchema)]
 pub struct UpdateBranchRequest {
     pub timeline_id: Uuid,
-    #[serde(default)]
-    pub branch_databases: bool,
 }
 
 #[utoipa::path(
@@ -707,19 +667,15 @@ pub async fn update_branch(
     active.updated_at = Set(Utc::now().fixed_offset());
     let updated = active.update(tx).await?;
 
-    if body.branch_databases {
-        branch_databases_for_project(tx, project_id, branch_id, organization_id).await?;
-    }
-
-    agent::emit_project(project.id, organization_id, branch_id, body.timeline_id).await?;
-
     scoped.commit().await?;
+    agent::emit_compute(project.id, organization_id, branch_id, body.timeline_id).await?;
 
     Ok(Json(BranchResponse {
         id: updated.id,
         name: updated.name,
         timeline: updated.timeline.to_string(),
         is_default: project.default_branch_id == Some(updated.id),
+        has_recent_undeployed_revision: false,
     }))
 }
 

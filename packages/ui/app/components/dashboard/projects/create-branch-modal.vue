@@ -26,7 +26,6 @@ const timelines = ref<TimelineRevision[]>([]);
 const timelinesLoading = ref(false);
 const selectedTimelineId = ref<string>('');
 const isDropdownOpen = ref(false);
-const autoBranchDatabases = ref(true);
 
 const selectedTimelineLabel = computed(() => {
   if (!selectedTimelineId.value) return 'Latest revision';
@@ -86,10 +85,7 @@ async function handleCreate() {
   error.value = '';
 
   try {
-    const body: Record<string, unknown> = {
-      name: name.value.trim(),
-      auto_branch_databases: autoBranchDatabases.value,
-    };
+    const body: Record<string, unknown> = { name: name.value.trim() };
     if (selectedTimelineId.value) {
       body.parent_timeline_id = selectedTimelineId.value;
     }
@@ -146,13 +142,6 @@ async function handleCreate() {
               />
             </UDropdownMenu>
           </UFormField>
-
-          <UCheckbox
-            v-model="autoBranchDatabases"
-            label="Auto-branch databases"
-            description="Associate all existing Postgres databases with this branch"
-            :disabled="loading"
-          />
 
           <p v-if="error" class="text-sm text-red-500">{{ error }}</p>
 

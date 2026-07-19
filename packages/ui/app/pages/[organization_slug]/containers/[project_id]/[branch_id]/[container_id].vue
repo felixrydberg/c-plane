@@ -56,6 +56,7 @@ const healthCheckPath = ref('')
 const envRows = ref<{ key: string; value: string }[]>([])
 const hasChanges = ref(false)
 const saving = ref(false)
+const autoDeploy = ref(false)
 const loading = ref(true)
 const recentActivity = ref<{ refresh: () => Promise<void> } | null>(null)
 
@@ -117,11 +118,15 @@ async function save() {
           public: isPublic.value,
           env: Object.keys(env).length > 0 ? env : null,
           health_check: healthCheckPath.value ? { path: healthCheckPath.value } : null,
+          auto_deploy: autoDeploy.value,
         },
       }
     )
     toast.add({ title: 'Container updated', color: 'success' })
     hasChanges.value = false
+    const branch = store.branches.find(branch => branch.id === branchId.value)
+    if (branch) branch.has_recent_undeployed_revision = !autoDeploy.value
+    autoDeploy.value = false
     await recentActivity.value?.refresh()
   } catch {
     toast.add({ title: 'Failed to save', color: 'error' })
@@ -260,6 +265,7 @@ watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged(
                   <pre class="overflow-x-auto rounded-md bg-elevated/40 p-4 font-mono text-xs text-muted">{{ yamlPreview }}</pre>
                 </section>
                 <div class="flex justify-end gap-3 py-5">
+                  <UCheckbox v-model="autoDeploy" label="Deploy this revision" description="Make this revision active in the environment." class="mr-auto" />
                   <UButton variant="ghost" color="neutral" :to="backUrl()">Cancel</UButton>
                   <UButton :icon="ICONS.check" :loading="saving" :disabled="!hasChanges" @click="save">Save Changes</UButton>
                 </div>

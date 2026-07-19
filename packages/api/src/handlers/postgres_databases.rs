@@ -10,7 +10,7 @@ use super::databases::{
 use crate::errors::AppError;
 use crate::middleware::auth::AuthContext;
 use crate::models::entities::{postgres_database, postgres_database_branch, project_branch};
-use crate::services::events;
+use crate::services::{agent, events};
 use serde_json;
 
 fn db_to_response(db: &postgres_database::Model) -> DatabaseResponse {
@@ -113,6 +113,7 @@ pub async fn create_database(
     events::record(tx, organization_id, body.project_id, "database:created", serde_json::json!({"summary": format!("Created database '{}'", name), "target_id": db_branch_id.to_string(), "branch_id": main_branch.id.to_string()}), auth.actor_id).await?;
 
     scoped.commit().await?;
+    agent::emit_postgres_branch(db_id, organization_id, main_branch.id, db_branch_id).await?;
 
     Ok((
         axum::http::StatusCode::CREATED,
@@ -228,11 +229,24 @@ pub async fn delete_database(
 
     verify_project_in_org(tx, db.project_id, organization_id).await?;
 
+    let database_branches = postgres_database_branch::Entity::find()
+        .filter(postgres_database_branch::Column::DatabaseId.eq(database_id))
+        .all(tx)
+        .await?;
     if let Some(target_id) = db.default_branch_id {
         events::record(tx, organization_id, db.project_id, "database:deleted", serde_json::json!({"summary": format!("Deleted database '{}'", db.name), "target_id": target_id.to_string()}), auth.actor_id).await?;
     }
     Entity::delete_by_id(database_id).exec(tx).await?;
     scoped.commit().await?;
+    for database_branch in database_branches {
+        agent::emit_postgres_branch(
+            database_id,
+            organization_id,
+            database_branch.branch_id,
+            database_branch.id,
+        )
+        .await?;
+    }
 
     Ok(Json(serde_json::json!({ "success": true })))
 }
@@ -335,6 +349,7 @@ pub async fn update_database_branch(
     let updated = active.update(tx).await?;
     events::record(tx, organization_id, db.project_id, "database:updated", serde_json::json!({"summary": format!("Updated '{}' branch configuration", db.name), "target_id": db_branch.id.to_string(), "branch_id": branch_id.to_string()}), auth.actor_id).await?;
     scoped.commit().await?;
+    agent::emit_postgres_branch(database_id, organization_id, branch_id, updated.id).await?;
 
     Ok(Json(branch_to_response(&updated)))
 }
@@ -447,6 +462,7 @@ pub async fn create_database_branch(
     events::record(tx, organization_id, db.project_id, "database:linked", serde_json::json!({"summary": format!("Linked '{}' to branch '{}'", db.name, branch.name), "target_id": row.id.to_string(), "branch_id": branch.id.to_string()}), auth.actor_id).await?;
 
     scoped.commit().await?;
+    agent::emit_postgres_branch(database_id, organization_id, branch.id, row.id).await?;
 
     Ok((
         axum::http::StatusCode::CREATED,
@@ -503,6 +519,7 @@ pub async fn delete_database_branch(
     events::record(tx, organization_id, db.project_id, "database:unlinked", serde_json::json!({"summary": format!("Unlinked '{}' from this branch", db.name), "target_id": db_branch.id.to_string(), "branch_id": branch_id.to_string()}), auth.actor_id).await?;
 
     scoped.commit().await?;
+    agent::emit_postgres_branch(database_id, organization_id, branch_id, db_branch.id).await?;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }

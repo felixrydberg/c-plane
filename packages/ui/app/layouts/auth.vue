@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '@nuxt/ui'
+import DashboardProjectsDeploymentAlert from '~/components/dashboard/projects/deployment-alert.vue'
 import { ICONS } from '~/utils/icons'
 
 const store = useStore();
@@ -141,6 +142,8 @@ const items = computed<NavigationMenuItem[]>(() => [
         />
         <dashboard-projects-nav />
       </div>
+
+      <DashboardProjectsDeploymentAlert v-if="store.branch" />
 
       <div class="flex-1 bg-default px-6 py-6 lg:px-8">
         <slot />

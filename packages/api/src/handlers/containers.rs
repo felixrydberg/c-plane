@@ -7,12 +7,11 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use super::databases::verify_org_access;
-use super::projects::default_true;
 use crate::errors::AppError;
 use crate::middleware::auth::AuthContext;
 use crate::models::entities::{container, container_version, project_branch, project_timeline};
 use crate::models::pins::TimelinePins;
-use crate::services::{events, revisions};
+use crate::services::{agent, events, revisions};
 
 #[derive(Deserialize, ToSchema)]
 pub struct CreateContainerRequest {
@@ -29,6 +28,8 @@ pub struct CreateContainerRequest {
     pub resources: Option<serde_json::Value>,
     pub pull_secret_id: Option<Uuid>,
     pub health_check: Option<serde_json::Value>,
+    #[serde(default)]
+    pub auto_deploy: bool,
     pub region_id: Uuid,
 }
 
@@ -47,7 +48,7 @@ pub struct UpdateContainerRequest {
     pub resources: Option<serde_json::Value>,
     pub pull_secret_id: Option<Uuid>,
     pub health_check: Option<serde_json::Value>,
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub auto_deploy: bool,
 }
 
@@ -233,17 +234,20 @@ pub async fn create_container(
 
     let mut pins = get_branch_timeline_pins(tx, &branch).await?;
     pins.set_container(container_id, version_id);
-    revisions::create_revision(
+    let revision = revisions::create_revision(
         tx,
         &branch,
         &pins,
         Some(format!("Created container '{}'", name)),
-        true,
+        body.auto_deploy,
     )
     .await?;
     events::record(tx, organization_id, body.project_id, "container:created", serde_json::json!({"summary": format!("Created container '{}'", name), "target_id": container_id.to_string(), "branch_id": branch.id.to_string()}), auth.actor_id).await?;
 
     scoped.commit().await?;
+    if body.auto_deploy {
+        agent::emit_compute(branch.project_id, organization_id, branch.id, revision.id).await?;
+    }
 
     Ok((
         axum::http::StatusCode::CREATED,
@@ -464,6 +468,7 @@ pub async fn update_container(
     }
 
     let mut new_version: Option<container_version::Model> = None;
+    let mut compute_revision = None;
 
     if has_config_change(&body) {
         let latest = container_version::Entity::find()
@@ -496,7 +501,7 @@ pub async fn update_container(
 
         let mut pins = get_branch_timeline_pins(tx, &branch).await?;
         pins.set_container(container_id, version_id);
-        revisions::create_revision(
+        let revision = revisions::create_revision(
             tx,
             &branch,
             &pins,
@@ -504,11 +509,17 @@ pub async fn update_container(
             body.auto_deploy,
         )
         .await?;
+        if body.auto_deploy {
+            compute_revision = Some(revision.id);
+        }
     }
 
     events::record(tx, organization_id, c.project_id, "container:updated", serde_json::json!({"summary": format!("Updated container '{}'", c.name), "target_id": container_id.to_string(), "branch_id": branch.id.to_string()}), auth.actor_id).await?;
 
     scoped.commit().await?;
+    if let Some(revision_id) = compute_revision {
+        agent::emit_compute(branch.project_id, organization_id, branch.id, revision_id).await?;
+    }
 
     let scoped2 = tenant_db.begin_scoped_transaction().await?;
     let tx2 = scoped2.connection();
@@ -577,7 +588,7 @@ pub async fn delete_container(
 
     let mut pins = get_branch_timeline_pins(tx, &branch).await?;
     pins.remove_container(&container_id);
-    revisions::create_revision(
+    let revision = revisions::create_revision(
         tx,
         &branch,
         &pins,
@@ -588,6 +599,7 @@ pub async fn delete_container(
     events::record(tx, organization_id, c.project_id, "container:removed", serde_json::json!({"summary": format!("Removed container '{}'", c.name), "target_id": container_id.to_string(), "branch_id": branch.id.to_string()}), auth.actor_id).await?;
 
     scoped.commit().await?;
+    agent::emit_compute(branch.project_id, organization_id, branch.id, revision.id).await?;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }
