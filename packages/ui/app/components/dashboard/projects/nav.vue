@@ -10,7 +10,7 @@ const toast = useToast()
 const routeProjectId = computed(() => route.params.project_id as string | undefined)
 const routeBranchId = computed(() => route.params.branch_id as string | undefined)
 
-const PROJECT_PAGES = ['containers', 'databases/stateful', 'secrets']
+const PROJECT_PAGES = ['containers', 'databases/postgres', 'secrets']
 const BRANCH_PAGES = ['containers']
 
 const currentSection = computed(() => {

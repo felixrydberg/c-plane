@@ -12,8 +12,7 @@ use super::databases::verify_org_access;
 use crate::errors::AppError;
 use crate::middleware::auth::AuthContext;
 use crate::models::entities::{
-    project, project_branch, project_timeline, stateful_postgres_database,
-    stateful_postgres_database_branch,
+    postgres_database, postgres_database_branch, project, project_branch, project_timeline,
 };
 use crate::models::pins::TimelinePins;
 use crate::services::agent;
@@ -95,32 +94,44 @@ async fn branch_databases_for_project(
     branch_id: Uuid,
     organization_id: Uuid,
 ) -> Result<(), AppError> {
-    let databases = stateful_postgres_database::Entity::find()
-        .filter(stateful_postgres_database::Column::ProjectId.eq(project_id))
+    let databases = postgres_database::Entity::find()
+        .filter(postgres_database::Column::ProjectId.eq(project_id))
         .all(tx)
         .await?;
 
     for db in databases {
-        let exists = stateful_postgres_database_branch::Entity::find()
-            .filter(stateful_postgres_database_branch::Column::DatabaseId.eq(db.id))
-            .filter(stateful_postgres_database_branch::Column::BranchId.eq(branch_id))
+        let exists = postgres_database_branch::Entity::find()
+            .filter(postgres_database_branch::Column::DatabaseId.eq(db.id))
+            .filter(postgres_database_branch::Column::BranchId.eq(branch_id))
             .one(tx)
             .await?
             .is_some();
 
         if !exists {
-            stateful_postgres_database_branch::ActiveModel {
+            let default = if let Some(default_id) = db.default_branch_id {
+                postgres_database_branch::Entity::find_by_id(default_id)
+                    .one(tx)
+                    .await?
+            } else {
+                None
+            };
+            postgres_database_branch::ActiveModel {
                 id: Set(Uuid::new_v4()),
                 database_id: Set(db.id),
                 branch_id: Set(branch_id),
                 organization_id: Set(organization_id),
-                cpu: Set(None),
-                ram: Set(None),
-                high_availability: Set(false),
-                read_replicas: Set(None),
-                autoscaling_enabled: Set(false),
-                autoscaling_min_cpu: Set(None),
-                autoscaling_max_cpu: Set(None),
+                backup_retention_days: Set(default.as_ref().and_then(|b| b.backup_retention_days)),
+                cpu: Set(default.as_ref().and_then(|b| b.cpu.clone())),
+                ram: Set(default.as_ref().and_then(|b| b.ram.clone())),
+                high_availability: Set(default.as_ref().is_some_and(|b| b.high_availability)),
+                read_replicas: Set(default.as_ref().and_then(|b| b.read_replicas)),
+                autoscaling_enabled: Set(default.as_ref().is_some_and(|b| b.autoscaling_enabled)),
+                autoscaling_min_cpu: Set(default
+                    .as_ref()
+                    .and_then(|b| b.autoscaling_min_cpu.clone())),
+                autoscaling_max_cpu: Set(default
+                    .as_ref()
+                    .and_then(|b| b.autoscaling_max_cpu.clone())),
             }
             .insert(tx)
             .await?;

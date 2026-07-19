@@ -1,178 +1,132 @@
-# Postgres — Refined Decisions
+# Postgres
 
-## Deployment Modes
+## Decision
 
-Postgres databases run in one of two modes: **Stateful** or **Serverless**.
+Postgres is managed by [CloudNativePG](https://cloudnative-pg.io/). C-Plane
+renders CloudNativePG resources directly; it does not add another Kubernetes
+operator around CloudNativePG.
 
-### Stateful (Xata Operator)
+Every `postgres_database_branch` is one independent CloudNativePG `Cluster`.
+The project branch selects the cluster and credentials used by its workloads.
 
-A dedicated Postgres cluster per database with persistent compute, managed by the [Xata operator](https://github.com/xataio/xata-operator).
-
-- Always-on primary instance with optional replicas in the same Kubernetes cluster.
-- Predictable performance. No cold starts. Connection pools remain active.
-- Best for production workloads, high-throughput applications, and databases that must respond immediately.
-- Autoscaling: CPU and memory can change within operator-defined limits. Vertical scaling may trigger a brief restart but does not drop connections to replicas.
-- Cost: compute runs continuously regardless of traffic. Suitable for databases that are never idle.
-
-### Serverless (Neon Operator)
-
-A Postgres instance that scales to zero when idle, managed by a custom [Neon](https://neon.tech)-based operator.
-
-- Compute is suspended after an idle period (no active connections). On the next connection, the operator resumes the instance using Neon's branch-and-restore compute model. Cold start is bounded by page replay from storage.
-- Best for development branches, preview environments, staging databases, and workloads with intermittent traffic.
-- Autoscaling: compute scales up during load and scales to zero when idle. Scaling behaviour is configured per database.
-- Cost: compute cost is proportional to active time. Storage cost is unchanged.
-
-### Choosing Between Them
-
-| Concern | Stateful | Serverless |
-|---------|----------|------------|
-| Cold start | None | Page replay on resume |
-| Compute cost | Always-on | Proportional to active time |
-| Idle behaviour | Running, minimal cost | Suspended, zero compute cost |
-| Connection persistence | Connections stay alive | Connections drop on suspend |
-| Use case | Production, APIs, high traffic | Branches, staging, preview, batch |
-
-Each mode uses its own operator with different architecture. The following sections note which mode(s) they apply to.
-
----
-
-## What a Postgres Database Is
-
-*Applies to: both modes*
-
-- A region-scoped managed database service.
-- Users deploy databases to regions, never to clusters.
-- That Kubernetes cluster is disposable. The database is not.
-
----
+- Standard branches run one Postgres instance.
+- High-availability branches run one primary and the requested replicas.
+- Compute stays running. CPU and memory may be reduced or increased through
+  the branch configuration.
+- Scale-to-zero and wake-on-connection are out of scope.
 
 ## Resource Model
 
-*Applies to: both modes*
+- `Database` — the logical database owned by an organization, project, and
+  region.
+- `DatabaseBranch` — the isolated database attached to one project branch. It
+  owns compute, HA, backup retention, and runtime state.
+- `DatabasePlacement` — the internal association between a database branch and
+  the Kubernetes cluster currently running it.
+- `DatabaseStorage` — the regional object-store location, backup prefix, and
+  recovery-window policy.
 
-- `Database` — logical database resource owned by a workspace and a region.
-- `DatabasePlacement` — internal record linking a database to the Kubernetes cluster currently hosting it. Never user-visible.
-- `DatabaseStorage` — backup bucket, WAL prefix, and retention policy. Always region-scoped object storage.
+Users choose a region, not a Kubernetes cluster. Placement remains internal.
+Database backup storage is accessed only through the regional Storage API.
 
----
+## Durability
 
-## Durability Model
+- Local PVCs contain the active Postgres data directory.
+- CloudNativePG replicas handle pod and node failures inside one Kubernetes
+  cluster.
+- The Barman Cloud Plugin continuously archives WAL and takes physical base
+  backups through the regional Storage API, which owns provider access.
+- A whole-cluster loss is recovered by creating a new CloudNativePG cluster
+  from the latest base backup and replaying archived WAL.
+- A planned cluster removal must migrate and promote a caught-up replica before
+  the source is deleted.
 
-*Applies to: Stateful (Xata)*
+The platform requires Kubernetes storage and an S3-compatible endpoint. It
+does not require Ceph or another platform-owned storage cluster.
 
-- Durability comes from in-cluster replication + WAL shipping + continuous S3 backups. Not from the PVC.
-- PVCs are working storage only. They are discarded on cluster drain.
-- If a cluster dies: new cluster restores from S3, replays WAL, resumes service.
-- Minimum self-host requirement: Kubernetes + S3-compatible storage. No Ceph required.
+## Backup Retention
 
-*Applies to: Serverless (Neon)*
+Backup retention is a recovery window, not a raw count of WAL files. The Barman
+Cloud Plugin retains the base backup and WAL needed to recover to any point
+inside that window.
 
-- Durability is managed by the Neon operator's page-level storage architecture with safekeepers.
-- Compute nodes are ephemeral; all data is persisted to shared storage before suspension.
-- On resume, the operator creates a new compute node that reads from the same storage layer.
+Retention is configurable per database branch because every branch is an
+independent CloudNativePG cluster and has its own object-store configuration
+and prefix. Main branches receive a durable default. Short-lived preview
+branches may use a shorter window or disable independent backups when they can
+be recreated from their parent.
 
----
+Postgres `wal_keep_size` and replication-slot retention are internal replication
+settings. They are not the user-facing backup-retention control.
 
-## High Availability Modes (Future)
+## Branch Creation
 
-*Applies to: Stateful (Xata)*
+C-Plane explicitly chooses the fastest valid source. CloudNativePG does not
+automatically reuse the parent cluster's volume.
 
-- **Single primary (reactive)** — one primary instance, backups to S3. On failure, restore from backup and start a new primary. Simplest mode.
-- **Single-cluster HA (preferred)** — one Xata-managed Postgres cluster with primary + replicas in the same Kubernetes cluster. Pod/node failures are handled by local failover; whole-cluster loss is handled by restore to a replacement cluster.
+1. **CSI snapshot** — when source and destination use a snapshot-capable storage
+   backend, create an on-demand `VolumeSnapshot` backup and bootstrap the new
+   cluster from it.
+2. **Live clone** — when the source is healthy and snapshots are unavailable,
+   bootstrap with `pg_basebackup` over streaming replication.
+3. **Object-store recovery** — when the source is unavailable, on another
+   incompatible storage backend, or a historical recovery target is requested,
+   restore a base backup and replay WAL from S3.
 
-*Applies to: Serverless (Neon)*
+The target always receives new writable volumes and a new backup prefix. A
+source PVC must never be mounted by two writable Postgres clusters. The storage
+driver decides whether a snapshot restore is an instant copy-on-write clone or
+a physical copy.
 
-- HA is provided by the Neon operator's compute-storage separation. Failed compute nodes are replaced on resume.
+Preview branches start with one instance so they become available as soon as
+the restored primary is healthy. Replicas are added afterward when HA is
+requested.
 
----
+## Recovery and Relocation
 
-## Cluster Relocation Flow (Single-Cluster Deployment)
+Recovery uses the shortest available path:
 
-*Applies to: Stateful (Xata)*
+| Failure or operation | Source |
+|---|---|
+| Pod or node failure | Existing CloudNativePG replica |
+| Planned cluster relocation | Streaming replica cluster, then promotion |
+| Branch on compatible storage | CSI volume snapshot |
+| Branch without snapshots | Live `pg_basebackup` |
+| Whole-cluster loss | S3 base backup and archived WAL |
+| Historical branch or restore | Base backup or snapshot plus archived WAL |
 
-1. Run one Postgres cluster per database on one Kubernetes cluster.
-2. Keep multiple Postgres instances inside that cluster for local failover.
-3. On full Kubernetes cluster failure or drain, control plane creates a replacement cluster on another Kubernetes cluster.
-4. Replacement cluster restores from base backup, replays WAL from object storage, and becomes healthy.
-5. Control plane switches the stable regional endpoint to the replacement cluster.
+Automatic recovery from whole-cluster loss is introduced only after restore and
+cutover drills are reliable. Initial disaster recovery may be runbook-driven.
 
----
-
-## Future Note: Recovery Automation Complexity
-
-*Applies to: Stateful (Xata)*
-
-- Manual DR promotion is feasible early and should be the first milestone.
-- Fully automatic cluster-loss recovery is a distributed-systems feature.
-- Production-safe automation requires: reliable failure detection, deterministic restore policy, endpoint cutover, and a clean rejoin/rebuild path.
-- Recommended rollout: runbook-driven manual failover first, then guarded automation, then full automation after repeated failure-injection drills.
-
----
-
-## Lifecycle States
-
-*Applies to: Stateful (Xata)*
+## Lifecycle
 
 `pending → provisioning → restoring → healthy → scaling → draining → failed → deleted`
 
-*Applies to: Serverless (Neon)*
+Deletion removes the CloudNativePG resources and branch-specific snapshots.
+While a branch is active, Barman enforces its recovery window. Branch deletion
+schedules a durable C-Plane cleanup job for the branch's unique object-store
+prefix after the configured retention period; that cleanup must not depend on
+the database pods still existing.
 
-`pending → provisioning → healthy → suspended → resuming → deleted`
+## Networking
 
----
+- Users connect with a standard PostgreSQL connection string over TLS.
+- Public databases use a Cilium Gateway `TCPRoute`.
+- Private databases expose only a ClusterIP service through the regional mesh.
+- The stable product endpoint is independent of the current placement and is
+  switched only after the destination is healthy.
+- C-Plane provisions branch-scoped credentials. Restored branches rotate their
+  application credentials before becoming reachable.
 
-## Cluster Drain Behaviour
+## Ownership
 
-*Applies to: Stateful (Xata)*
+The control plane owns database metadata, placement, source selection,
+credentials, retention policy, lifecycle transitions, and endpoint cutover.
 
-- Control plane creates a replacement Postgres cluster on another Kubernetes cluster.
-- Replacement restores from S3 and replays WAL.
-- PVC: discarded.
-- Data: recovered via in-cluster replication (for pod/node faults) or S3 restore (for cluster relocation).
-- Endpoint: switched to replacement cluster after health checks pass.
-- No manual migration required.
+The render pipeline emits CloudNativePG, backup, snapshot, service, policy, and
+route resources. The cluster agent applies that desired state and reports
+status. CloudNativePG owns Postgres reconciliation, replication, failover,
+backup execution, and recovery inside the target Kubernetes cluster.
 
-*Applies to: Serverless (Neon)*
-
-- Compute nodes are ephemeral and replaced on resume. No drain migration needed.
-- Storage is always preserved in the shared storage layer.
-
----
-
-## Networking & Connection
-
-*Applies to: both modes*
-
-- Users connect using a standard PostgreSQL connection string.
-- **Public database**: `postgresql://user:password@<id>.eu-west.platform.dev:5432/dbname` — traffic enters via Cilium Gateway TCPRoute.
-- **Private database**: `postgresql://user:password@<id>.internal:5432/dbname` — traffic stays inside the Cilium mesh, resolved via internal ClusterIP Service only.
-- The platform provisions credentials and hands the user the connection string. Standard PostgreSQL auth (username/password + SSL) handles the rest.
-- No intermediate auth proxy.
-
----
-
-## Control Plane Responsibilities
-
-*Applies to: both modes*
-
-- Owns: database metadata, scheduling decisions, credential issuance, backup policies, lifecycle transitions.
-- Clusters own: execution, reconciliation, health reporting.
-
----
-
-## Cluster Agent Responsibilities
-
-*Applies to: Stateful (Xata)*
-
-- Creates Xata Postgres cluster resource.
-- Creates PVC.
-- Configures backup to S3.
-- Configures streaming replication.
-- Reports placement health to control plane.
-
-*Applies to: Serverless (Neon)*
-
-- Creates Neon compute node resource on resume.
-- Configures connection to shared storage.
-- Reports compute health to control plane.
+See [Postgres implementation guide](postgres-implementation.md) for the resource
+mapping and workflows.

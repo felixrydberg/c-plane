@@ -22,7 +22,7 @@ OpenBao Kubernetes integration.
 
 ## Deployment boundary
 
-Run OpenBao as a separate stateful service in the platform's management or
+Run OpenBao as a separate persistent service in the platform's management or
 regional infrastructure:
 
 ```text

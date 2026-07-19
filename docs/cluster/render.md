@@ -50,6 +50,17 @@ For TCP-based services (e.g. Postgres), the render pipeline defines `TCPRoute` i
 - `TCPRoute` routes raw TCP traffic from a Gateway TCP listener to the Service.
 - Public databases get a `TCPRoute`; private databases use ClusterIP only.
 
+### Per-database resources
+
+For each placed Postgres database branch, the render pipeline defines:
+- CloudNativePG `Cluster` — instances, resources, bootstrap source, and Postgres configuration.
+- Barman `ObjectStore` and `ScheduledBackup` — branch-specific WAL archive, base backups, and recovery window.
+- `Backup` and volume-snapshot references — only while branch or recovery operations require them.
+- `Service`, network policy, and optional `TCPRoute` — stable database connectivity.
+
+Source selection and lifecycle workflows are documented in
+`docs/services/postgres-implementation.md`.
+
 ### Region mesh resources
 
 The render pipeline defines region mesh configuration per cluster, including:

@@ -1,0 +1,1 @@
+ALTER TABLE "postgres_database_branch" ADD COLUMN "backup_retention_days" integer DEFAULT 30;

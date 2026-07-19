@@ -29,7 +29,13 @@ const items = computed<NavigationMenuItem[]>(() => [
   {
     label: 'Databases',
     icon: ICONS.databases,
-    to: `/${store.organization?.slug}/databases/stateful${navProjectId.value ? `/${navProjectId.value}` : ''}`,
+    open: true,
+    children: [
+      {
+        label: 'Postgres',
+        to: `/${store.organization?.slug}/databases/postgres${navProjectId.value ? `/${navProjectId.value}` : ''}`,
+      },
+    ]
   },
   {
     label: 'Secrets',

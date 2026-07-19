@@ -3,7 +3,7 @@ import { project, project_branch } from "."
 import { organization } from "../tenants/organization";
 import { app_tenant, orgAllowed } from "../rls";
 
-export const stateful_postgres_database = pgTable('stateful_postgres_database', {
+export const postgres_database = pgTable('postgres_database', {
   id: uuid("id").primaryKey(),
   project_id: uuid("project_id")
     .notNull()
@@ -12,7 +12,7 @@ export const stateful_postgres_database = pgTable('stateful_postgres_database', 
     .notNull()
     .references(() => organization.id, { onDelete: "cascade" }),
   default_branch_id: uuid("default_branch_id")
-    .references((): AnyPgColumn => stateful_postgres_database_branch.id, { onDelete: "cascade" }),
+    .references((): AnyPgColumn => postgres_database_branch.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   cpu: text("cpu"),
   ram: text("ram"),
@@ -22,9 +22,9 @@ export const stateful_postgres_database = pgTable('stateful_postgres_database', 
   autoscaling_min_cpu: text("autoscaling_min_cpu"),
   autoscaling_max_cpu: text("autoscaling_max_cpu"),
 }, (table) => [
-  index("stateful_postgres_database_project_id_idx").on(table.project_id),
-  index("stateful_postgres_database_organization_id_idx").on(table.organization_id),
-  pgPolicy("stateful_postgres_database_tenant_rls", {
+  index("postgres_database_project_id_idx").on(table.project_id),
+  index("postgres_database_organization_id_idx").on(table.organization_id),
+  pgPolicy("postgres_database_tenant_rls", {
     as: "permissive",
     for: "all",
     to: app_tenant,
@@ -33,23 +33,24 @@ export const stateful_postgres_database = pgTable('stateful_postgres_database', 
   }),
 ]).enableRLS();
 
-export const stateful_postgres_database_branch = pgTable('stateful_postgres_database_branch', {
+export const postgres_database_branch = pgTable('postgres_database_branch', {
   id: uuid("id").primaryKey(),
   database_id: uuid("database_id")
     .notNull()
-    .references((): AnyPgColumn => stateful_postgres_database.id, { onDelete: "cascade" }),
+    .references((): AnyPgColumn => postgres_database.id, { onDelete: "cascade" }),
   branch_id: uuid("branch_id")
     .notNull()
     .references(() => project_branch.id, { onDelete: "cascade" }),
   organization_id: uuid("organization_id")
     .notNull()
     .references(() => organization.id, { onDelete: "cascade" }),
+  backup_retention_days: integer("backup_retention_days").default(30),
 
 }, (table) => [
-  index("stateful_postgres_database_branch_database_id_idx").on(table.database_id),
-  index("stateful_postgres_database_branch_branch_id_idx").on(table.branch_id),
-  index("stateful_postgres_database_branch_organization_id_idx").on(table.organization_id),
-  pgPolicy("stateful_postgres_database_branch_tenant_rls", {
+  index("postgres_database_branch_database_id_idx").on(table.database_id),
+  index("postgres_database_branch_branch_id_idx").on(table.branch_id),
+  index("postgres_database_branch_organization_id_idx").on(table.organization_id),
+  pgPolicy("postgres_database_branch_tenant_rls", {
     as: "permissive",
     for: "all",
     to: app_tenant,

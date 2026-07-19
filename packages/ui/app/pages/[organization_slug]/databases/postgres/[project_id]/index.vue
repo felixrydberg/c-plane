@@ -23,7 +23,7 @@ async function fetchAll() {
   status.value = 'pending'
   try {
     databases.value = await $fetch<DatabaseRow[]>(
-      `/api/backend/organization/${orgId.value}/databases/stateful`,
+      `/api/backend/organization/${orgId.value}/databases/postgres`,
       { query: { project_id: projectId.value } }
     )
     status.value = databases.value.length > 0 ? 'success' : 'idle'
@@ -47,10 +47,10 @@ watch(() => store.refreshKey, () => { fetchAll() })
     <div class="flex flex-col gap-4 border-b border-default/60 pb-5 sm:flex-row sm:items-end sm:justify-between">
       <div class="min-w-0">
         <p class="mb-2 truncate text-sm text-muted">{{ projectName }}</p>
-        <h1 class="text-2xl font-semibold">Stateful Databases</h1>
+        <h1 class="text-2xl font-semibold">Postgres Databases</h1>
         <p class="mt-1 text-sm text-muted">Postgres databases and their linked project branches.</p>
       </div>
-      <UButton class="shrink-0" :icon="ICONS.plus" :to="`/${route.params.organization_slug}/databases/stateful/${projectId}/new`">New Database</UButton>
+      <UButton class="shrink-0" :icon="ICONS.plus" :to="`/${route.params.organization_slug}/databases/postgres/${projectId}/new`">New Database</UButton>
     </div>
 
     <div v-if="status === 'pending'" class="text-center py-8">

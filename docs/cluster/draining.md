@@ -28,9 +28,12 @@
 ## Database Persistence Model
 
 - Local PVC for working storage.
-- Streaming replication to replicas on other clusters.
+- CloudNativePG replication handles pod and node failure inside a cluster.
 - Continuous WAL backup to S3.
-- On cluster loss: new cluster restores from S3, replays WAL, resumes service.
+- Planned cluster removal creates and promotes a caught-up destination replica
+  before deleting the source.
+- On unplanned cluster loss, a new cluster restores from S3, replays WAL, and
+  resumes service.
 
 ## Ephemeral Data Loss (e.g. in-progress jobs)
 
@@ -41,8 +44,8 @@
 ## Drain Sequence
 
 1. Scheduling freeze — no new workloads assigned to the cluster.
-2. Workload migration — stateless pods rescheduled, jobs retried, databases failed over to replicas.
-3. Storage handling — ephemeral volumes deleted, PVCs detached, databases promoted elsewhere, object storage untouched.
+2. Workload migration — stateless pods rescheduled, jobs retried, destination database replicas created and caught up.
+3. Storage handling — databases promoted and endpoints switched before source PVCs are deleted; object storage remains untouched.
 4. Cluster removal — safe because all durable state is external.
 
 ## Key Rules

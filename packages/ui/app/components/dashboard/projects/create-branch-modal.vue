@@ -150,7 +150,7 @@ async function handleCreate() {
           <UCheckbox
             v-model="autoBranchDatabases"
             label="Auto-branch databases"
-            description="Associate all existing stateful databases with this branch"
+            description="Associate all existing Postgres databases with this branch"
             :disabled="loading"
           />
 

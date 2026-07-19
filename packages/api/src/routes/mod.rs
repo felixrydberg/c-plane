@@ -8,12 +8,12 @@ use utoipa_swagger_ui::SwaggerUi;
 use crate::handlers::containers;
 use crate::handlers::events;
 use crate::handlers::health::health_check;
+use crate::handlers::postgres_databases;
 use crate::handlers::projects;
 use crate::handlers::regions;
 use crate::handlers::registry;
 use crate::handlers::registry_access_tokens;
 use crate::handlers::registry_repositories;
-use crate::handlers::stateful_databases;
 use crate::handlers::storage_access_tokens;
 use crate::handlers::storage_buckets;
 use crate::openapi::ApiDoc;
@@ -109,25 +109,25 @@ pub fn create_routes() -> Router {
                 .delete(containers::delete_container),
         )
         .route(
-            "/api/organization/{organization_id}/databases/stateful",
-            get(stateful_databases::list_databases)
-                .post(stateful_databases::create_database),
+            "/api/organization/{organization_id}/databases/postgres",
+            get(postgres_databases::list_databases)
+                .post(postgres_databases::create_database),
         )
         .route(
-            "/api/organization/{organization_id}/databases/stateful/{database_id}",
-            get(stateful_databases::get_database)
-                .patch(stateful_databases::update_database)
-                .delete(stateful_databases::delete_database),
+            "/api/organization/{organization_id}/databases/postgres/{database_id}",
+            get(postgres_databases::get_database)
+                .patch(postgres_databases::update_database)
+                .delete(postgres_databases::delete_database),
         )
         .route(
-            "/api/organization/{organization_id}/databases/stateful/{database_id}/branches",
-            get(stateful_databases::list_database_branches)
-                .post(stateful_databases::create_database_branch),
+            "/api/organization/{organization_id}/databases/postgres/{database_id}/branches",
+            get(postgres_databases::list_database_branches)
+                .post(postgres_databases::create_database_branch),
         )
         .route(
-            "/api/organization/{organization_id}/databases/stateful/{database_id}/branches/{branch_id}",
-            patch(stateful_databases::update_database_branch)
-                .delete(stateful_databases::delete_database_branch),
+            "/api/organization/{organization_id}/databases/postgres/{database_id}/branches/{branch_id}",
+            patch(postgres_databases::update_database_branch)
+                .delete(postgres_databases::delete_database_branch),
         )
         .merge(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()))
 }

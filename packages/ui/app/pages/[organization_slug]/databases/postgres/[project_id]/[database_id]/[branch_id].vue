@@ -8,6 +8,7 @@ interface DatabaseBranchRow {
   id: string
   database_id: string
   branch_id: string
+  backup_retention_days: number | null
   cpu: string | null
   ram: string | null
   high_availability: boolean
@@ -46,6 +47,7 @@ const tabs = [
 const cpuPresets = [0.25, 0.5, 1, 2, 4, 8].map(value => ({ label: `${value} cores`, value }))
 
 const computeUnit = ref('0.5')
+const backupRetentionDays = ref<number | null>(30)
 const state = ref({
   highAvailability: false,
   readReplicas: 1,
@@ -57,6 +59,12 @@ const state = ref({
 const dbName = ref('')
 const branchName = ref('')
 const isDefault = ref(false)
+const retentionOptions = computed(() => [
+  ...(isDefault.value ? [] : [{ label: 'Disabled', value: null }]),
+  { label: '1 day', value: 1 },
+  { label: '7 days', value: 7 },
+  { label: '30 days', value: 30 },
+])
 const defaultDatabaseBranchId = ref<string | null>(null)
 const databaseBranches = ref<(DatabaseBranchRow & { _name: string })[]>([])
 
@@ -78,8 +86,8 @@ async function fetchData() {
   loading.value = true
   try {
     const [db, branches, projBranches] = await Promise.all([
-      $fetch<DatabaseRow>(`/api/backend/organization/${orgId.value}/databases/stateful/${databaseId.value}`),
-      $fetch<DatabaseBranchRow[]>(`/api/backend/organization/${orgId.value}/databases/stateful/${databaseId.value}/branches`),
+      $fetch<DatabaseRow>(`/api/backend/organization/${orgId.value}/databases/postgres/${databaseId.value}`),
+      $fetch<DatabaseBranchRow[]>(`/api/backend/organization/${orgId.value}/databases/postgres/${databaseId.value}/branches`),
       $fetch<BranchItem[]>(`/api/backend/organization/${orgId.value}/projects/${projectId.value}/branches`),
     ])
 
@@ -93,6 +101,7 @@ async function fetchData() {
     isDefault.value = db.default_branch_id === branch?.id
     if (branch) {
       computeUnit.value = resolveComputeUnitLabel(branch.cpu, branch.ram)
+      backupRetentionDays.value = branch.backup_retention_days
       state.value = {
         highAvailability: branch.high_availability,
         readReplicas: branch.read_replicas ?? 1,
@@ -117,10 +126,11 @@ async function save() {
   const unit = computeUnitByLabel(computeUnit.value)
   try {
     await $fetch(
-      `/api/backend/organization/${orgId.value}/databases/stateful/${databaseId.value}/branches/${branchId.value}`,
+      `/api/backend/organization/${orgId.value}/databases/postgres/${databaseId.value}/branches/${branchId.value}`,
       {
         method: 'PATCH',
         body: {
+          backup_retention_days: backupRetentionDays.value,
           cpu: `${unit?.cpu ?? 0.5}`,
           ram: `${Math.round((unit?.ramGib ?? 1) * 1024)}Mi`,
           high_availability: state.value.highAvailability,
@@ -142,7 +152,7 @@ async function save() {
 
 function backUrl() {
   const orgSlug = route.params.organization_slug?.toString() ?? ''
-  return `/${orgSlug}/databases/stateful/${projectId.value}`
+  return `/${orgSlug}/databases/postgres/${projectId.value}`
 }
 
 const connectionString = computed(() => `postgresql://username:password@${dbName.value || 'database'}-${branchName.value || 'branch'}:5432/postgres`)
@@ -153,15 +163,15 @@ const connectionString = computed(() => `postgresql://username:password@${dbName
     <div v-if="loading && !dbName" class="flex justify-center py-20"><UIcon name="i-lucide-loader-circle" class="size-5 animate-spin text-muted" /></div>
     <div v-else class="overflow-hidden rounded-lg border border-default/60 bg-default">
       <header class="flex flex-col gap-4 border-b border-default/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div><UiBackLink :label="dbName" :to="backUrl()" /><div class="mt-2 flex items-center gap-2"><h1 class="text-xl font-semibold">{{ dbName }} / {{ branchName }}</h1><UBadge v-if="isDefault" size="sm" variant="soft" color="primary">Default</UBadge></div><p class="mt-1 text-xs text-muted">Stateful Postgres database branch</p></div>
-        <UButton :icon="ICONS.plus" :to="`/${route.params.organization_slug}/databases/stateful/${projectId}/new`">New Database</UButton>
+        <div><UiBackLink :label="dbName" :to="backUrl()" /><div class="mt-2 flex items-center gap-2"><h1 class="text-xl font-semibold">{{ dbName }} / {{ branchName }}</h1><UBadge v-if="isDefault" size="sm" variant="soft" color="primary">Default</UBadge></div><p class="mt-1 text-xs text-muted">Postgres database branch</p></div>
+        <UButton :icon="ICONS.plus" :to="`/${route.params.organization_slug}/databases/postgres/${projectId}/new`">New Database</UButton>
       </header>
 
       <div class="grid min-h-[720px] xl:grid-cols-[270px_minmax(0,1fr)_280px]">
         <aside class="border-b border-default/60 p-4 xl:border-b-0 xl:border-r">
           <p class="text-sm font-semibold">{{ dbName }}</p><p class="mt-1 text-xs text-muted">Database branches</p>
           <nav class="mt-4 space-y-1" aria-label="Database branches">
-            <NuxtLink v-for="branch in databaseBranches" :key="branch.id" :to="`/${route.params.organization_slug}/databases/stateful/${projectId}/${databaseId}/${branch.branch_id}`" class="block rounded-md px-3 py-3 transition-colors" :class="{'border-primary bg-elevated': branch.branch_id === branchId}">
+            <NuxtLink v-for="branch in databaseBranches" :key="branch.id" :to="`/${route.params.organization_slug}/databases/postgres/${projectId}/${databaseId}/${branch.branch_id}`" class="block rounded-md px-3 py-3 transition-colors" :class="{'border-primary bg-elevated': branch.branch_id === branchId}">
               <div class="flex items-center gap-2"><span class="truncate text-sm font-medium">{{ branch._name }}</span><span v-if="branch.id === defaultDatabaseBranchId" class="text-[10px] text-primary">Default</span></div>
               <p class="mt-1 font-mono text-[11px] text-muted">{{ branch.cpu ?? '0.5' }}c &middot; {{ branch.ram ?? '1024Mi' }}</p>
             </NuxtLink>
@@ -197,6 +207,7 @@ const connectionString = computed(() => `postgresql://username:password@${dbName
                 <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]"><div><h2 class="text-sm font-semibold">Compute</h2><p class="mt-1 text-xs text-muted">CPU and RAM scale together.</p></div><UFormField label="Compute Unit" description="1 CU includes 1 vCPU and 2 GB RAM."><USelect v-model="computeUnit" :items="COMPUTE_UNIT_ITEMS" class="w-full" /></UFormField></section>
                 <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]"><div><h2 class="text-sm font-semibold">High Availability</h2><p class="mt-1 text-xs text-muted">Automatic failover and read replicas.</p></div><div class="space-y-4"><UCheckbox v-model="state.highAvailability" label="Enable high availability" /><UFormField v-if="state.highAvailability" label="Read replicas"><UInput v-model.number="state.readReplicas" type="number" :min="1" class="w-full" /></UFormField></div></section>
                 <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]"><div><h2 class="text-sm font-semibold">Autoscaling</h2><p class="mt-1 text-xs text-muted">Grow compute with demand.</p></div><div class="space-y-4"><UCheckbox v-model="state.autoscalingEnabled" label="Enable autoscaling" /><div v-if="state.autoscalingEnabled" class="grid gap-3 sm:grid-cols-2"><UFormField label="Minimum CPU"><USelect v-model="state.autoscalingMinCpu" :items="cpuPresets" class="w-full" /></UFormField><UFormField label="Maximum CPU"><USelect v-model="state.autoscalingMaxCpu" :items="cpuPresets" class="w-full" /></UFormField></div></div></section>
+                <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]"><div><h2 class="text-sm font-semibold">Backup retention</h2><p class="mt-1 text-xs text-muted">Recovery window for this branch's backups.</p></div><UFormField label="Retention period"><USelect v-model="backupRetentionDays" :items="retentionOptions" class="w-full" /></UFormField></section>
                 <div class="flex justify-end gap-3 py-5"><UButton variant="ghost" color="neutral" :to="backUrl()">Cancel</UButton><UButton :icon="ICONS.check" :loading="saving" @click="save">Save Changes</UButton></div>
               </div>
             </template>

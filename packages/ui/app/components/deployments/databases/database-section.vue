@@ -58,7 +58,7 @@ async function fetchBranches() {
   try {
     const [data, projBranches] = await Promise.all([
       $fetch<BranchInfo[]>(
-        `/api/backend/organization/${props.organizationId}/databases/stateful/${props.databaseId}/branches`
+        `/api/backend/organization/${props.organizationId}/databases/postgres/${props.databaseId}/branches`
       ),
       $fetch<ProjectBranch[]>(
         `/api/backend/organization/${props.organizationId}/projects/${props.projectId}/branches`
@@ -81,7 +81,7 @@ async function linkBranch(pb: ProjectBranch) {
   busy.value = true
   try {
     const created = await $fetch<BranchInfo>(
-      `/api/backend/organization/${props.organizationId}/databases/stateful/${props.databaseId}/branches`,
+      `/api/backend/organization/${props.organizationId}/databases/postgres/${props.databaseId}/branches`,
       { method: 'POST', body: { branch_id: pb.id } }
     )
     branches.value = [...branches.value, { ...created, _name: pb.name }]
@@ -99,7 +99,7 @@ async function unlinkBranch(b: BranchInfo & { _name: string }) {
   busy.value = true
   try {
     await $fetch(
-      `/api/backend/organization/${props.organizationId}/databases/stateful/${props.databaseId}/branches/${b.branch_id}`,
+      `/api/backend/organization/${props.organizationId}/databases/postgres/${props.databaseId}/branches/${b.branch_id}`,
       { method: 'DELETE' }
     )
     branches.value = branches.value.filter(br => br.id !== b.id)
@@ -116,7 +116,7 @@ async function handleDelete() {
   deleting.value = true
   try {
     await $fetch(
-      `/api/backend/organization/${props.organizationId}/databases/stateful/${props.databaseId}`,
+      `/api/backend/organization/${props.organizationId}/databases/postgres/${props.databaseId}`,
       { method: 'DELETE' }
     )
     deleteModalOpen.value = false
@@ -195,7 +195,7 @@ function isDefaultBranch(b: BranchInfo): boolean {
       <NuxtLink
         v-for="b in branches"
         :key="b.id"
-        :to="`/${route.params.organization_slug}/databases/stateful/${projectId}/${databaseId}/${b.branch_id}`"
+        :to="`/${route.params.organization_slug}/databases/postgres/${projectId}/${databaseId}/${b.branch_id}`"
         class="group grid gap-3 border-b border-default/30 px-5 py-4 transition-colors hover:bg-elevated/50 last:border-b-0 lg:grid-cols-[minmax(0,1.7fr)_90px_90px_100px_100px_auto] lg:items-center"
       >
         <div class="min-w-0 flex-1">
