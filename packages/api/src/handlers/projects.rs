@@ -11,7 +11,7 @@ use uuid::Uuid;
 use super::databases::verify_org_access;
 use crate::errors::AppError;
 use crate::middleware::auth::AuthContext;
-use crate::models::entities::{project, project_branch, project_timeline};
+use crate::models::entities::{project, project_environment, project_timeline};
 use crate::models::pins::TimelinePins;
 use crate::services::agent;
 use crate::state::get_app_state;
@@ -23,7 +23,7 @@ pub struct CreateProjectRequest {
 }
 
 #[derive(Deserialize, ToSchema)]
-pub struct CreateBranchRequest {
+pub struct CreateEnvironmentRequest {
     pub name: String,
     pub parent_timeline_id: Option<Uuid>,
 }
@@ -40,14 +40,14 @@ pub struct ProjectResponse {
     pub id: Uuid,
     pub organization_id: Uuid,
     pub name: String,
-    pub default_branch_id: Option<Uuid>,
-    pub main_branch: Option<BranchResponse>,
+    pub default_environment_id: Option<Uuid>,
+    pub main_environment: Option<EnvironmentResponse>,
     pub created_at: String,
     pub updated_at: String,
 }
 
 #[derive(Serialize, ToSchema)]
-pub struct BranchResponse {
+pub struct EnvironmentResponse {
     pub id: Uuid,
     pub name: String,
     pub timeline: String,
@@ -56,7 +56,7 @@ pub struct BranchResponse {
 }
 
 #[derive(Serialize, ToSchema)]
-pub struct BranchWithProjectResponse {
+pub struct EnvironmentWithProjectResponse {
     pub id: Uuid,
     pub name: String,
     pub timeline: String,
@@ -68,7 +68,7 @@ pub struct BranchWithProjectResponse {
 #[derive(Serialize, ToSchema)]
 pub struct TimelineResponse {
     pub id: Uuid,
-    pub branch_id: Option<Uuid>,
+    pub environment_id: Option<Uuid>,
     pub timeline: i32,
     pub name: Option<String>,
     pub parent_timeline_id: Option<Uuid>,
@@ -78,7 +78,7 @@ pub struct TimelineResponse {
 
 #[derive(Deserialize, ToSchema)]
 pub struct ListTimelinesQuery {
-    pub branch_id: Option<Uuid>,
+    pub environment_id: Option<Uuid>,
 }
 
 #[utoipa::path(
@@ -107,7 +107,7 @@ pub async fn create_project(
     }
 
     let project_id = Uuid::new_v4();
-    let branch_id = Uuid::new_v4();
+    let environment_id = Uuid::new_v4();
     let timeline_id = Uuid::new_v4();
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
@@ -117,7 +117,7 @@ pub async fn create_project(
         id: Set(project_id),
         organization_id: Set(organization_id),
         name: Set(name.clone()),
-        default_branch_id: Set(None),
+        default_environment_id: Set(None),
         created_at: Set(Utc::now().fixed_offset()),
         updated_at: Set(Utc::now().fixed_offset()),
     }
@@ -127,7 +127,7 @@ pub async fn create_project(
     let _timeline: project_timeline::Model = project_timeline::ActiveModel {
         id: Set(timeline_id),
         project_id: Set(project_id),
-        branch_id: Set(Some(branch_id)),
+        environment_id: Set(Some(environment_id)),
         organization_id: Set(organization_id),
         timeline: Set(1),
         name: Set(Some("Initial".into())),
@@ -138,8 +138,8 @@ pub async fn create_project(
     .insert(tx)
     .await?;
 
-    let main_branch: project_branch::Model = project_branch::ActiveModel {
-        id: Set(branch_id),
+    let main_environment: project_environment::Model = project_environment::ActiveModel {
+        id: Set(environment_id),
         project_id: Set(project_id),
         organization_id: Set(organization_id),
         name: Set("main".into()),
@@ -151,7 +151,7 @@ pub async fn create_project(
     .await?;
 
     let mut project_active: project::ActiveModel = created.clone().into();
-    project_active.default_branch_id = Set(Some(branch_id));
+    project_active.default_environment_id = Set(Some(environment_id));
     project_active.updated_at = Set(Utc::now().fixed_offset());
     let updated_project: project::Model = project_active.update(tx).await?;
 
@@ -163,11 +163,11 @@ pub async fn create_project(
             id: updated_project.id,
             organization_id: updated_project.organization_id,
             name: updated_project.name,
-            default_branch_id: updated_project.default_branch_id,
-            main_branch: Some(BranchResponse {
-                id: main_branch.id,
-                name: main_branch.name,
-                timeline: main_branch.timeline.to_string(),
+            default_environment_id: updated_project.default_environment_id,
+            main_environment: Some(EnvironmentResponse {
+                id: main_environment.id,
+                name: main_environment.name,
+                timeline: main_environment.timeline.to_string(),
                 is_default: true,
                 has_recent_undeployed_revision: false,
             }),
@@ -205,27 +205,28 @@ pub async fn list_projects(
 
     let total = select.clone().count(tx).await?;
 
-    let projects_with_branches: Vec<(project::Model, Option<project_branch::Model>)> = select
-        .order_by_asc(Column::Name)
-        .find_also_related(project_branch::Entity)
-        .paginate(tx, per_page)
-        .fetch_page(page - 1)
-        .await?;
+    let projects_with_environments: Vec<(project::Model, Option<project_environment::Model>)> =
+        select
+            .order_by_asc(Column::Name)
+            .find_also_related(project_environment::Entity)
+            .paginate(tx, per_page)
+            .fetch_page(page - 1)
+            .await?;
 
     scoped.commit().await?;
 
-    let data = projects_with_branches
+    let data = projects_with_environments
         .into_iter()
-        .map(|(p, branch)| ProjectResponse {
+        .map(|(p, environment)| ProjectResponse {
             id: p.id,
             organization_id: p.organization_id,
             name: p.name,
-            default_branch_id: p.default_branch_id,
-            main_branch: branch.map(|b| BranchResponse {
+            default_environment_id: p.default_environment_id,
+            main_environment: environment.map(|b| EnvironmentResponse {
                 id: b.id,
                 name: b.name,
                 timeline: b.timeline.to_string(),
-                is_default: p.default_branch_id == Some(b.id),
+                is_default: p.default_environment_id == Some(b.id),
                 has_recent_undeployed_revision: false,
             }),
             created_at: p.created_at.to_string(),
@@ -266,15 +267,15 @@ pub async fn get_project(
         .await?
         .ok_or_else(|| AppError::NotFound("Project not found".into()))?;
 
-    let main_branch = if let Some(branch_id) = p.default_branch_id {
-        project_branch::Entity::find_by_id(branch_id)
+    let main_environment = if let Some(environment_id) = p.default_environment_id {
+        project_environment::Entity::find_by_id(environment_id)
             .one(tx)
             .await?
-            .map(|b| BranchResponse {
+            .map(|b| EnvironmentResponse {
                 id: b.id,
                 name: b.name,
                 timeline: b.timeline.to_string(),
-                is_default: p.default_branch_id == Some(b.id),
+                is_default: p.default_environment_id == Some(b.id),
                 has_recent_undeployed_revision: false,
             })
     } else {
@@ -287,8 +288,8 @@ pub async fn get_project(
         id: p.id,
         organization_id: p.organization_id,
         name: p.name,
-        default_branch_id: p.default_branch_id,
-        main_branch,
+        default_environment_id: p.default_environment_id,
+        main_environment,
         created_at: p.created_at.to_string(),
         updated_at: p.updated_at.to_string(),
     }))
@@ -337,22 +338,22 @@ pub async fn delete_project(
     Ok(Json(serde_json::json!({ "success": true })))
 }
 
-pub async fn list_organization_branches(
+pub async fn list_organization_environments(
     AuthContext { tenant_db, .. }: AuthContext,
     Path(organization_id): Path<Uuid>,
-) -> Result<Json<Vec<BranchWithProjectResponse>>, AppError> {
+) -> Result<Json<Vec<EnvironmentWithProjectResponse>>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
 
-    let branches = project_branch::Entity::find()
-        .filter(project_branch::Column::OrganizationId.eq(organization_id))
-        .order_by_asc(project_branch::Column::Name)
+    let environments = project_environment::Entity::find()
+        .filter(project_environment::Column::OrganizationId.eq(organization_id))
+        .order_by_asc(project_environment::Column::Name)
         .all(tx)
         .await?;
 
-    let project_ids: Vec<Uuid> = branches.iter().map(|b| b.project_id).collect();
+    let project_ids: Vec<Uuid> = environments.iter().map(|b| b.project_id).collect();
 
     let projects = project::Entity::find()
         .filter(project::Column::Id.is_in(project_ids))
@@ -363,21 +364,21 @@ pub async fn list_organization_branches(
     let mut project_defaults: HashMap<Uuid, Option<Uuid>> = HashMap::new();
     for p in projects {
         let project_id = p.id;
-        let default_branch_id = p.default_branch_id;
+        let default_environment_id = p.default_environment_id;
         project_names.insert(project_id, p.name);
-        project_defaults.insert(project_id, default_branch_id);
+        project_defaults.insert(project_id, default_environment_id);
     }
 
     scoped.commit().await?;
 
-    let responses = branches
+    let responses = environments
         .into_iter()
         .map(|b| {
             let is_default = project_defaults
                 .get(&b.project_id)
                 .map(|default_id| *default_id == Some(b.id))
                 .unwrap_or(false);
-            BranchWithProjectResponse {
+            EnvironmentWithProjectResponse {
                 id: b.id,
                 name: b.name,
                 timeline: b.timeline.to_string(),
@@ -394,10 +395,10 @@ pub async fn list_organization_branches(
     Ok(Json(responses))
 }
 
-pub async fn list_branches(
+pub async fn list_environments(
     AuthContext { tenant_db, .. }: AuthContext,
     Path((organization_id, project_id)): Path<(Uuid, Uuid)>,
-) -> Result<Json<Vec<BranchResponse>>, AppError> {
+) -> Result<Json<Vec<EnvironmentResponse>>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
@@ -410,18 +411,18 @@ pub async fn list_branches(
         .await?
         .ok_or_else(|| AppError::NotFound("Project not found".into()))?;
 
-    use project_branch::{Column, Entity};
-    let branches = Entity::find()
+    use project_environment::{Column, Entity};
+    let environments = Entity::find()
         .filter(Column::ProjectId.eq(project_id))
         .order_by_asc(Column::Name)
         .all(tx)
         .await?;
 
-    let branch_updated_at: HashMap<Uuid, _> = branches
+    let environment_updated_at: HashMap<Uuid, _> = environments
         .iter()
-        .map(|branch| (branch.id, branch.updated_at))
+        .map(|environment| (environment.id, environment.updated_at))
         .collect();
-    let undeployed_branch_ids: HashSet<Uuid> = project_timeline::Entity::find()
+    let undeployed_environment_ids: HashSet<Uuid> = project_timeline::Entity::find()
         .filter(project_timeline::Column::ProjectId.eq(project_id))
         .filter(
             project_timeline::Column::CreatedAt.gte(Utc::now().fixed_offset() - Duration::hours(1)),
@@ -430,24 +431,24 @@ pub async fn list_branches(
         .await?
         .into_iter()
         .filter_map(|revision| {
-            let branch_id = revision.branch_id?;
-            branch_updated_at
-                .get(&branch_id)
+            let environment_id = revision.environment_id?;
+            environment_updated_at
+                .get(&environment_id)
                 .is_some_and(|updated_at| revision.created_at > *updated_at)
-                .then_some(branch_id)
+                .then_some(environment_id)
         })
         .collect();
 
     scoped.commit().await?;
 
-    let responses = branches
+    let responses = environments
         .into_iter()
-        .map(|b| BranchResponse {
+        .map(|b| EnvironmentResponse {
             id: b.id,
             name: b.name,
             timeline: b.timeline.to_string(),
-            is_default: project.default_branch_id == Some(b.id),
-            has_recent_undeployed_revision: undeployed_branch_ids.contains(&b.id),
+            is_default: project.default_environment_id == Some(b.id),
+            has_recent_undeployed_revision: undeployed_environment_ids.contains(&b.id),
         })
         .collect();
 
@@ -456,24 +457,24 @@ pub async fn list_branches(
 
 #[utoipa::path(
     post,
-    path = "/api/organization/{organization_id}/projects/{project_id}/branches",
-    request_body = CreateBranchRequest,
+    path = "/api/organization/{organization_id}/projects/{project_id}/environments",
+    request_body = CreateEnvironmentRequest,
     params(
         ("organization_id" = Uuid, Path, description = "Organization ID"),
         ("project_id" = Uuid, Path, description = "Project ID"),
     ),
     responses(
-        (status = 201, description = "Branch created", body = BranchResponse),
+        (status = 201, description = "Environment created", body = EnvironmentResponse),
         (status = 404, description = "Not found"),
-        (status = 409, description = "Branch name already exists"),
+        (status = 409, description = "Environment name already exists"),
     ),
-    tag = "branches",
+    tag = "environments",
 )]
-pub async fn create_branch(
+pub async fn create_environment(
     AuthContext { tenant_db, .. }: AuthContext,
     Path((organization_id, project_id)): Path<(Uuid, Uuid)>,
-    Json(body): Json<CreateBranchRequest>,
-) -> Result<(axum::http::StatusCode, Json<BranchResponse>), AppError> {
+    Json(body): Json<CreateEnvironmentRequest>,
+) -> Result<(axum::http::StatusCode, Json<EnvironmentResponse>), AppError> {
     verify_org_access(&tenant_db, organization_id)?;
 
     let name = body.name.trim().to_string();
@@ -491,15 +492,15 @@ pub async fn create_branch(
         .await?
         .ok_or_else(|| AppError::NotFound("Project not found".into()))?;
 
-    let existing = project_branch::Entity::find()
-        .filter(project_branch::Column::ProjectId.eq(project_id))
-        .filter(project_branch::Column::Name.eq(&name))
+    let existing = project_environment::Entity::find()
+        .filter(project_environment::Column::ProjectId.eq(project_id))
+        .filter(project_environment::Column::Name.eq(&name))
         .one(tx)
         .await?;
 
     if existing.is_some() {
         return Err(AppError::Conflict(
-            "A branch with this name already exists".into(),
+            "A environment with this name already exists".into(),
         ));
     }
 
@@ -515,7 +516,7 @@ pub async fn create_branch(
         serde_json::json!({ "container": {}, "secret": {} })
     };
 
-    let branch_id = Uuid::new_v4();
+    let environment_id = Uuid::new_v4();
     let timeline_id = Uuid::new_v4();
 
     let parent_timeline_id = body.parent_timeline_id;
@@ -523,10 +524,10 @@ pub async fn create_branch(
     let _timeline: project_timeline::Model = project_timeline::ActiveModel {
         id: Set(timeline_id),
         project_id: Set(project_id),
-        branch_id: Set(Some(branch_id)),
+        environment_id: Set(Some(environment_id)),
         organization_id: Set(organization_id),
         timeline: Set(1),
-        name: Set(Some(format!("Branch '{}' created", name))),
+        name: Set(Some(format!("Environment '{}' created", name))),
         parent_timeline_id: Set(parent_timeline_id),
         pins: Set(pins),
         created_at: Set(Utc::now().fixed_offset()),
@@ -534,8 +535,8 @@ pub async fn create_branch(
     .insert(tx)
     .await?;
 
-    let branch: project_branch::Model = project_branch::ActiveModel {
-        id: Set(branch_id),
+    let environment: project_environment::Model = project_environment::ActiveModel {
+        id: Set(environment_id),
         project_id: Set(project_id),
         organization_id: Set(organization_id),
         name: Set(name),
@@ -550,11 +551,11 @@ pub async fn create_branch(
 
     Ok((
         axum::http::StatusCode::CREATED,
-        Json(BranchResponse {
-            id: branch.id,
-            name: branch.name,
-            timeline: branch.timeline.to_string(),
-            is_default: project.default_branch_id == Some(branch.id),
+        Json(EnvironmentResponse {
+            id: environment.id,
+            name: environment.name,
+            timeline: environment.timeline.to_string(),
+            is_default: project.default_environment_id == Some(environment.id),
             has_recent_undeployed_revision: false,
         }),
     ))
@@ -584,8 +585,8 @@ pub async fn list_project_timelines(
     use project_timeline::{Column, Entity};
     let mut select = Entity::find().filter(Column::ProjectId.eq(project_id));
 
-    if let Some(branch_id) = query.branch_id {
-        select = select.filter(Column::BranchId.eq(branch_id));
+    if let Some(environment_id) = query.environment_id {
+        select = select.filter(Column::EnvironmentId.eq(environment_id));
     }
 
     let timelines = select
@@ -600,7 +601,7 @@ pub async fn list_project_timelines(
         .into_iter()
         .map(|t| TimelineResponse {
             id: t.id,
-            branch_id: t.branch_id,
+            environment_id: t.environment_id,
             timeline: t.timeline,
             name: t.name,
             parent_timeline_id: t.parent_timeline_id,
@@ -613,30 +614,30 @@ pub async fn list_project_timelines(
 }
 
 #[derive(Deserialize, ToSchema)]
-pub struct UpdateBranchRequest {
+pub struct UpdateEnvironmentRequest {
     pub timeline_id: Uuid,
 }
 
 #[utoipa::path(
     patch,
-    path = "/api/organization/{organization_id}/projects/{project_id}/branches/{branch_id}",
-    request_body = UpdateBranchRequest,
+    path = "/api/organization/{organization_id}/projects/{project_id}/environments/{environment_id}",
+    request_body = UpdateEnvironmentRequest,
     params(
         ("organization_id" = Uuid, Path, description = "Organization ID"),
         ("project_id" = Uuid, Path, description = "Project ID"),
-        ("branch_id" = Uuid, Path, description = "Branch ID"),
+        ("environment_id" = Uuid, Path, description = "Environment ID"),
     ),
     responses(
-        (status = 200, description = "Branch updated", body = BranchResponse),
+        (status = 200, description = "Environment updated", body = EnvironmentResponse),
         (status = 404, description = "Not found"),
     ),
-    tag = "branches",
+    tag = "environments",
 )]
-pub async fn update_branch(
+pub async fn update_environment(
     AuthContext { tenant_db, .. }: AuthContext,
-    Path((organization_id, project_id, branch_id)): Path<(Uuid, Uuid, Uuid)>,
-    Json(body): Json<UpdateBranchRequest>,
-) -> Result<Json<BranchResponse>, AppError> {
+    Path((organization_id, project_id, environment_id)): Path<(Uuid, Uuid, Uuid)>,
+    Json(body): Json<UpdateEnvironmentRequest>,
+) -> Result<Json<EnvironmentResponse>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
@@ -656,47 +657,54 @@ pub async fn update_branch(
         .await?
         .ok_or_else(|| AppError::NotFound("Timeline revision not found".into()))?;
 
-    let mut active: project_branch::ActiveModel = project_branch::Entity::find_by_id(branch_id)
-        .filter(project_branch::Column::ProjectId.eq(project_id))
-        .one(tx)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Branch not found".into()))?
-        .into();
+    let mut active: project_environment::ActiveModel =
+        project_environment::Entity::find_by_id(environment_id)
+            .filter(project_environment::Column::ProjectId.eq(project_id))
+            .one(tx)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Environment not found".into()))?
+            .into();
 
     active.timeline = Set(body.timeline_id);
     active.updated_at = Set(Utc::now().fixed_offset());
     let updated = active.update(tx).await?;
 
     scoped.commit().await?;
-    agent::emit_compute(project.id, organization_id, branch_id, body.timeline_id).await?;
+    agent::emit_compute(
+        project.id,
+        organization_id,
+        environment_id,
+        body.timeline_id,
+    )
+    .await?;
 
-    Ok(Json(BranchResponse {
+    Ok(Json(EnvironmentResponse {
         id: updated.id,
         name: updated.name,
         timeline: updated.timeline.to_string(),
-        is_default: project.default_branch_id == Some(updated.id),
+        is_default: project.default_environment_id == Some(updated.id),
         has_recent_undeployed_revision: false,
     }))
 }
 
 #[utoipa::path(
     delete,
-    path = "/api/organization/{organization_id}/projects/{project_id}/branches/{branch_id}",
+    path = "/api/organization/{organization_id}/projects/{project_id}/environments/{environment_id}",
     params(
         ("organization_id" = Uuid, Path, description = "Organization ID"),
         ("project_id" = Uuid, Path, description = "Project ID"),
-        ("branch_id" = Uuid, Path, description = "Branch ID"),
+        ("environment_id" = Uuid, Path, description = "Environment ID"),
     ),
     responses(
-        (status = 200, description = "Branch deleted"),
+        (status = 200, description = "Environment deleted"),
         (status = 404, description = "Not found"),
-        (status = 409, description = "Cannot delete default branch"),
+        (status = 409, description = "Cannot delete default environment"),
     ),
-    tag = "branches",
+    tag = "environments",
 )]
-pub async fn delete_branch(
+pub async fn delete_environment(
     AuthContext { tenant_db, .. }: AuthContext,
-    Path((organization_id, project_id, branch_id)): Path<(Uuid, Uuid, Uuid)>,
+    Path((organization_id, project_id, environment_id)): Path<(Uuid, Uuid, Uuid)>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
 
@@ -710,22 +718,22 @@ pub async fn delete_branch(
         .await?
         .ok_or_else(|| AppError::NotFound("Project not found".into()))?;
 
-    if project.default_branch_id == Some(branch_id) {
+    if project.default_environment_id == Some(environment_id) {
         return Err(AppError::Conflict(
-            "Cannot delete the default branch".into(),
+            "Cannot delete the default environment".into(),
         ));
     }
 
-    let branch = project_branch::Entity::find_by_id(branch_id)
-        .filter(project_branch::Column::ProjectId.eq(project_id))
+    let environment = project_environment::Entity::find_by_id(environment_id)
+        .filter(project_environment::Column::ProjectId.eq(project_id))
         .one(tx)
         .await?
-        .ok_or_else(|| AppError::NotFound("Branch not found".into()))?;
+        .ok_or_else(|| AppError::NotFound("Environment not found".into()))?;
 
-    // Delete timeline revisions belonging to this branch
+    // Delete timeline revisions belonging to this environment
     let deleted_timeline_ids: Vec<Uuid> = project_timeline::Entity::find()
         .filter(project_timeline::Column::ProjectId.eq(project_id))
-        .filter(project_timeline::Column::BranchId.eq(branch_id))
+        .filter(project_timeline::Column::EnvironmentId.eq(environment_id))
         .all(tx)
         .await?
         .into_iter()
@@ -747,7 +755,7 @@ pub async fn delete_branch(
         }
     }
 
-    project_branch::Entity::delete_by_id(branch.id)
+    project_environment::Entity::delete_by_id(environment.id)
         .exec(tx)
         .await?;
 
@@ -775,7 +783,7 @@ pub struct ResolvedContainerPin {
 #[derive(Serialize, ToSchema)]
 pub struct ResolvedTimelineResponse {
     pub id: Uuid,
-    pub branch_id: Option<Uuid>,
+    pub environment_id: Option<Uuid>,
     pub timeline: i32,
     pub name: Option<String>,
     pub parent_timeline_id: Option<Uuid>,
@@ -845,7 +853,7 @@ pub async fn get_timeline(
 
     Ok(Json(ResolvedTimelineResponse {
         id: t.id,
-        branch_id: t.branch_id,
+        environment_id: t.environment_id,
         timeline: t.timeline,
         name: t.name,
         parent_timeline_id: t.parent_timeline_id,

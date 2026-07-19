@@ -16,7 +16,7 @@ const props = defineProps<{
   containers: ContainerWithProject[]
   organizationId: string
   projectId: string | null
-  branchId: string | null
+  environmentId: string | null
   status: string
 }>();
 
@@ -30,7 +30,7 @@ async function confirmDelete() {
   if (!deleteTarget.value || !props.organizationId || !deleteTarget.value.id) return
   deleting.value = true
   try {
-    await $fetch(`/api/backend/organization/${props.organizationId}/containers/${deleteTarget.value.id}?branch_id=${props.branchId ?? ''}`, {
+    await $fetch(`/api/backend/organization/${props.organizationId}/containers/${deleteTarget.value.id}?environment_id=${props.environmentId ?? ''}`, {
       method: 'DELETE',
     });
     toast.add({ title: 'Container removed', color: 'success' });
@@ -61,8 +61,8 @@ const deleteModalOpen = computed({
     <!-- Empty -->
     <div v-else-if="containers.length === 0" class="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
       <div>
-        <p class="text-sm font-medium">No containers in this branch</p>
-        <p class="mt-1 text-sm text-muted">Deploy a container to give this branch a running service.</p>
+        <p class="text-sm font-medium">No containers in this environment</p>
+        <p class="mt-1 text-sm text-muted">Deploy a container to give this environment a running service.</p>
       </div>
     </div>
 
@@ -74,7 +74,7 @@ const deleteModalOpen = computed({
       <NuxtLink
         v-for="c in containers"
         :key="c.id"
-        :to="`/${$route.params.organization_slug}/containers/${projectId}/${branchId}/${c.id}`"
+        :to="`/${$route.params.organization_slug}/containers/${projectId}/${environmentId}/${c.id}`"
         class="group grid w-full gap-3 border-b border-default/30 px-5 py-4 transition-colors hover:bg-elevated/50 last:border-b-0 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_90px_90px_100px_110px_auto] lg:items-center lg:gap-4"
       >
         <div class="min-w-0 flex-1">
@@ -105,7 +105,7 @@ const deleteModalOpen = computed({
 
   <UModal v-model:open="deleteModalOpen" title="Delete Container">
     <template #body>
-      <p class="text-sm">Remove <strong>{{ deleteTarget?.name }}</strong> from this branch? The container definition will still exist in the project.</p>
+      <p class="text-sm">Remove <strong>{{ deleteTarget?.name }}</strong> from this environment? The container definition will still exist in the project.</p>
       <div class="flex justify-end gap-3 pt-4">
         <UButton variant="ghost" color="neutral" @click="deleteTarget = null">Cancel</UButton>
         <UButton color="error" :icon="ICONS.trash" :loading="deleting" @click="confirmDelete">Delete</UButton>

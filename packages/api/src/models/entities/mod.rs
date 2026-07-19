@@ -7,7 +7,7 @@ pub mod organisation_member;
 pub mod postgres_database;
 pub mod postgres_database_branch;
 pub mod project;
-pub mod project_branch;
+pub mod project_environment;
 pub mod project_timeline;
 pub mod region;
 pub mod registry_access_token;

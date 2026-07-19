@@ -2,6 +2,7 @@
 const props = defineProps<{
   organizationId: string
   projectId: string
+  environmentId?: string | null
   branchId?: string | null
   eventTypePrefix: string
   targetId: string
@@ -21,6 +22,7 @@ const url = computed(() => props.organizationId && props.projectId
 const { data: activity, status, refresh } = await useFetch<ActivityItem[]>(url, {
   query: computed(() => ({
     project_id: props.projectId,
+    environment_id: props.environmentId || undefined,
     branch_id: props.branchId || undefined,
     event_type_prefix: props.eventTypePrefix,
     target_id: props.targetId,
@@ -41,7 +43,7 @@ defineExpose({ refresh })
     </div>
 
     <div v-else-if="!activity?.length" class="py-8 text-sm text-muted">
-      No recent activity for this branch.
+      No recent activity for this {{ props.branchId ? 'branch' : 'environment' }}.
     </div>
 
     <ol v-else class="mt-6 space-y-6">

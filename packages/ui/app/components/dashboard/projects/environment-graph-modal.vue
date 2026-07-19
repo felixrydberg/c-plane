@@ -6,7 +6,7 @@ import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import { markRaw, computed } from 'vue'
-import DotNode from './branch-graph-dot-node.vue'
+import DotNode from './environment-graph-dot-node.vue'
 import { ICONS } from '~/utils/icons'
 
 const dotNodeType = markRaw(DotNode)
@@ -18,9 +18,9 @@ const open = defineModel<boolean>('open', { required: true });
 
 const modalContentClass = 'max-w-7xl';
 
-interface BranchRevision {
+interface EnvironmentRevision {
   id: string
-  branch_id: string
+  environment_id: string
   timeline: number
   name: string | null
   parent_timeline_id: string | null
@@ -44,7 +44,7 @@ interface ResolvedSecret {
 
 interface ResolvedTimeline {
   id: string
-  branch_id: string | null
+  environment_id: string | null
   timeline: number
   name: string | null
   parent_timeline_id: string | null
@@ -53,7 +53,7 @@ interface ResolvedTimeline {
   created_at: string
 }
 
-interface BranchMeta {
+interface EnvironmentMeta {
   id: string
   name: string
   isDefault: boolean
@@ -61,9 +61,9 @@ interface BranchMeta {
 }
 
 interface NodeMeta {
-  branchName: string
+  environmentName: string
   color: string
-  branches: BranchMeta[]
+  environments: EnvironmentMeta[]
 }
 
 const loading = ref(false);
@@ -71,15 +71,15 @@ const error = ref('');
 const nodes = ref<any[]>([]);
 const edges = ref<any[]>([]);
 
-const createBranchModalOpen = ref(false);
-const createBranchFromRevisionId = ref('');
+const createEnvironmentModalOpen = ref(false);
+const createEnvironmentFromRevisionId = ref('');
 const repointModalOpen = ref(false);
 const repointRevisionId = ref('');
-const repointBranchId = ref('');
-const allBranches = ref<{ id: string; name: string }[]>([]);
+const repointEnvironmentId = ref('');
+const allEnvironments = ref<{ id: string; name: string }[]>([]);
 
-const removeBranchId = ref('');
-const removeBranchName = ref('');
+const removeEnvironmentId = ref('');
+const removeEnvironmentName = ref('');
 const removeModalOpen = ref(false);
 
 // --- Detail panel state ---
@@ -123,7 +123,7 @@ async function selectRevision(revisionId: string) {
     );
     selectedTimelineData.value = {
       id: data.id,
-      branch_id: data.branch_id ?? null,
+      environment_id: data.environment_id ?? null,
       timeline: data.timeline,
       name: data.name ?? null,
       parent_timeline_id: data.parent_timeline_id ?? null,
@@ -146,52 +146,52 @@ watch(selectedRevisionId, (newId) => {
   }));
 });
 
-// --- Branch management (called from sidebar) ---
-function onCreateBranch(revisionId: string) {
-  createBranchFromRevisionId.value = revisionId;
-  createBranchModalOpen.value = true;
+// --- Environment management (called from sidebar) ---
+function onCreateEnvironment(revisionId: string) {
+  createEnvironmentFromRevisionId.value = revisionId;
+  createEnvironmentModalOpen.value = true;
 }
 
-function onRepointBranch(revisionId: string) {
+function onRepointEnvironment(revisionId: string) {
   repointRevisionId.value = revisionId;
   repointModalOpen.value = true;
 }
 
-function onRemoveBranch(branchId: string) {
-  const branch = allBranches.value.find(b => b.id === branchId);
-  removeBranchId.value = branchId;
-  removeBranchName.value = branch?.name ?? branchId;
+function onRemoveEnvironment(environmentId: string) {
+  const environment = allEnvironments.value.find(b => b.id === environmentId);
+  removeEnvironmentId.value = environmentId;
+  removeEnvironmentName.value = environment?.name ?? environmentId;
   removeModalOpen.value = true;
 }
 
-async function onConfirmRemoveBranch() {
-  if (!store.organization?.id || !store.project?.id || !removeBranchId.value) return;
+async function onConfirmRemoveEnvironment() {
+  if (!store.organization?.id || !store.project?.id || !removeEnvironmentId.value) return;
   try {
     await $fetch(
-      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/branches/${removeBranchId.value}`,
+      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/environments/${removeEnvironmentId.value}`,
       { method: 'DELETE' }
     );
-    toast.add({ title: 'Branch removed', color: 'success' });
-    const deletedId = removeBranchId.value;
+    toast.add({ title: 'Environment removed', color: 'success' });
+    const deletedId = removeEnvironmentId.value;
     removeModalOpen.value = false;
-    removeBranchId.value = '';
-    removeBranchName.value = '';
+    removeEnvironmentId.value = '';
+    removeEnvironmentName.value = '';
 
-    // Remove from branch list
-    allBranches.value = allBranches.value.filter(b => b.id !== deletedId);
+    // Remove from environment list
+    allEnvironments.value = allEnvironments.value.filter(b => b.id !== deletedId);
 
-    // Update nodes that had this branch pointing at them
+    // Update nodes that had this environment pointing at them
     nodes.value = nodes.value.map(n => {
-      const nodeBranches: BranchMeta[] = n.data.branches || [];
-      const filtered = nodeBranches.filter((b: BranchMeta) => b.id !== deletedId);
-      if (filtered.length === nodeBranches.length) return n;
+      const nodeEnvironments: EnvironmentMeta[] = n.data.environments || [];
+      const filtered = nodeEnvironments.filter((b: EnvironmentMeta) => b.id !== deletedId);
+      if (filtered.length === nodeEnvironments.length) return n;
       return {
         ...n,
         data: {
           ...n.data,
-          branches: filtered,
-          branchLabels: filtered.filter((b: BranchMeta) => b.exists).map((b: BranchMeta) => b.name),
-          isHead: filtered.some((b: BranchMeta) => b.exists),
+          environments: filtered,
+          environmentLabels: filtered.filter((b: EnvironmentMeta) => b.exists).map((b: EnvironmentMeta) => b.name),
+          isHead: filtered.some((b: EnvironmentMeta) => b.exists),
         },
       };
     });
@@ -199,9 +199,9 @@ async function onConfirmRemoveBranch() {
     // Update nodeMeta cache
     const updatedMeta = new Map(nodeMetaMap.value);
     for (const [id, meta] of updatedMeta) {
-      const filtered = meta.branches.filter(b => b.id !== deletedId);
-      if (filtered.length !== meta.branches.length) {
-        updatedMeta.set(id, { ...meta, branches: filtered });
+      const filtered = meta.environments.filter(b => b.id !== deletedId);
+      if (filtered.length !== meta.environments.length) {
+        updatedMeta.set(id, { ...meta, environments: filtered });
       }
     }
     nodeMetaMap.value = updatedMeta;
@@ -211,26 +211,26 @@ async function onConfirmRemoveBranch() {
       selectRevision(selectedRevisionId.value);
     }
   } catch {
-    toast.add({ title: 'Failed to remove branch', color: 'error' });
+    toast.add({ title: 'Failed to remove environment', color: 'error' });
   }
 }
 
-function onBranchCreated(branch: { id: string; name: string; timeline: string; is_default: boolean }) {
-  // Add branch to local branch list
-  allBranches.value = [...allBranches.value, { id: branch.id, name: branch.name }];
+function onEnvironmentCreated(environment: { id: string; name: string; timeline: string; is_default: boolean }) {
+  // Add environment to local environment list
+  allEnvironments.value = [...allEnvironments.value, { id: environment.id, name: environment.name }];
 
-  // Find the node this branch was forked from and update it
+  // Find the node this environment was forked from and update it
   nodes.value = nodes.value.map(n => {
-    if (n.id !== createBranchFromRevisionId.value) return n;
-    const nodeBranches: BranchMeta[] = n.data.branches || [];
-    const newBranch: BranchMeta = { id: branch.id, name: branch.name, isDefault: branch.is_default, exists: true };
-    const updated = [...nodeBranches.filter(b => b.id !== branch.id), newBranch];
+    if (n.id !== createEnvironmentFromRevisionId.value) return n;
+    const nodeEnvironments: EnvironmentMeta[] = n.data.environments || [];
+    const newEnvironment: EnvironmentMeta = { id: environment.id, name: environment.name, isDefault: environment.is_default, exists: true };
+    const updated = [...nodeEnvironments.filter(b => b.id !== environment.id), newEnvironment];
     return {
       ...n,
       data: {
         ...n.data,
-        branches: updated,
-        branchLabels: updated.filter(b => b.exists).map(b => b.name),
+        environments: updated,
+        environmentLabels: updated.filter(b => b.exists).map(b => b.name),
         isHead: updated.some(b => b.exists),
       },
     };
@@ -238,12 +238,12 @@ function onBranchCreated(branch: { id: string; name: string; timeline: string; i
 
   // Update nodeMeta cache
   const updatedMeta = new Map(nodeMetaMap.value);
-  const meta = updatedMeta.get(createBranchFromRevisionId.value);
+  const meta = updatedMeta.get(createEnvironmentFromRevisionId.value);
   if (meta) {
-    const newBranch: BranchMeta = { id: branch.id, name: branch.name, isDefault: branch.is_default, exists: true };
-    updatedMeta.set(createBranchFromRevisionId.value, {
+    const newEnvironment: EnvironmentMeta = { id: environment.id, name: environment.name, isDefault: environment.is_default, exists: true };
+    updatedMeta.set(createEnvironmentFromRevisionId.value, {
       ...meta,
-      branches: [...meta.branches.filter(b => b.id !== branch.id), newBranch],
+      environments: [...meta.environments.filter(b => b.id !== environment.id), newEnvironment],
     });
   }
   nodeMetaMap.value = updatedMeta;
@@ -254,31 +254,31 @@ function onBranchCreated(branch: { id: string; name: string; timeline: string; i
   }
 }
 
-async function onSelectRepointBranch() {
-  if (!store.organization?.id || !store.project?.id || !repointBranchId.value) return;
+async function onSelectRepointEnvironment() {
+  if (!store.organization?.id || !store.project?.id || !repointEnvironmentId.value) return;
   try {
     await $fetch(
-      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/branches/${repointBranchId.value}`,
+      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/environments/${repointEnvironmentId.value}`,
       { method: 'PATCH', body: { timeline_id: repointRevisionId.value } }
     );
-    toast.add({ title: 'Branch repointed', color: 'success' });
+    toast.add({ title: 'Environment repointed', color: 'success' });
     store.refreshKey++;
     repointModalOpen.value = false;
-    repointBranchId.value = '';
+    repointEnvironmentId.value = '';
     refresh();
   } catch {
-    toast.add({ title: 'Failed to repoint branch', color: 'error' });
+    toast.add({ title: 'Failed to repoint environment', color: 'error' });
   }
 }
 
-const branchColors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
+const environmentColors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
 
 async function loadGraph(preserveSelection = false) {
   if (!store.organization?.id || !store.project?.id) return;
   loading.value = true;
   error.value = '';
 
-  // Preserve selection for refreshes triggered by sub-actions (branch create, repoint, delete)
+  // Preserve selection for refreshes triggered by sub-actions (environment create, repoint, delete)
   const savedRevisionId = preserveSelection ? selectedRevisionId.value : null;
   if (!preserveSelection) {
     selectedRevisionId.value = null;
@@ -287,64 +287,64 @@ async function loadGraph(preserveSelection = false) {
   }
 
   try {
-    const branches = await $fetch<{ id: string; name: string; timeline: string; is_default: boolean }[]>(
-      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/branches`
+    const environments = await $fetch<{ id: string; name: string; timeline: string; is_default: boolean }[]>(
+      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/environments`
     );
 
-    allBranches.value = branches.map(b => ({ id: b.id, name: b.name }));
+    allEnvironments.value = environments.map(b => ({ id: b.id, name: b.name }));
 
     const isDefaultMap = new Map<string, boolean>();
-    branches.forEach(b => isDefaultMap.set(b.id, b.is_default));
+    environments.forEach(b => isDefaultMap.set(b.id, b.is_default));
 
-    const allTimelines = await $fetch<BranchRevision[]>(
+    const allTimelines = await $fetch<EnvironmentRevision[]>(
       `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/timelines`
     );
 
-    const branchTimelines = new Map<string, BranchRevision[]>();
+    const environmentTimelines = new Map<string, EnvironmentRevision[]>();
     for (const t of allTimelines) {
-      if (!t.branch_id) continue;
-      const list = branchTimelines.get(t.branch_id) || [];
+      if (!t.environment_id) continue;
+      const list = environmentTimelines.get(t.environment_id) || [];
       list.push(t);
-      branchTimelines.set(t.branch_id, list);
+      environmentTimelines.set(t.environment_id, list);
     }
 
-    const branchHeadTimelineMap = new Map<string, string>();
+    const environmentHeadTimelineMap = new Map<string, string>();
     const colorMap = new Map<string, string>();
-    const branchNames = new Map<string, string>();
-    const branchExists = new Map<string, boolean>();
+    const environmentNames = new Map<string, string>();
+    const environmentExists = new Map<string, boolean>();
 
-    branches.forEach((b, i) => {
-      branchHeadTimelineMap.set(b.id, b.timeline);
-      colorMap.set(b.id, branchColors[i % branchColors.length]);
-      branchNames.set(b.id, b.name);
-      branchExists.set(b.id, true);
+    environments.forEach((b, i) => {
+      environmentHeadTimelineMap.set(b.id, b.timeline);
+      colorMap.set(b.id, environmentColors[i % environmentColors.length]);
+      environmentNames.set(b.id, b.name);
+      environmentExists.set(b.id, true);
     });
 
-    for (const branchId of branchTimelines.keys()) {
-      if (branchNames.has(branchId)) continue;
-      branchNames.set(branchId, 'Deleted Branch');
-      colorMap.set(branchId, '#6b7280');
-      branchExists.set(branchId, false);
-      const revs = branchTimelines.get(branchId)!;
+    for (const environmentId of environmentTimelines.keys()) {
+      if (environmentNames.has(environmentId)) continue;
+      environmentNames.set(environmentId, 'Deleted Environment');
+      colorMap.set(environmentId, '#6b7280');
+      environmentExists.set(environmentId, false);
+      const revs = environmentTimelines.get(environmentId)!;
       const head = revs.reduce((a, b) => a.timeline > b.timeline ? a : b);
-      branchHeadTimelineMap.set(branchId, head.id);
+      environmentHeadTimelineMap.set(environmentId, head.id);
     }
 
-    const allRevs: { branchId: string; branchName: string; rev: BranchRevision }[] = [];
-    for (const [branchId, revs] of branchTimelines) {
-      const name = branchNames.get(branchId) || branchId;
+    const allRevs: { environmentId: string; environmentName: string; rev: EnvironmentRevision }[] = [];
+    for (const [environmentId, revs] of environmentTimelines) {
+      const name = environmentNames.get(environmentId) || environmentId;
       for (const rev of revs) {
-        allRevs.push({ branchId, branchName: name, rev });
+        allRevs.push({ environmentId, environmentName: name, rev });
       }
     }
 
     const Y_SPACING = 120;
     const X_SPACING = 360;
 
-    const mainBranch = branches.find(b => b.name === 'main') || branches[0];
-    const mainRevs = allRevs.filter(r => r.branchId === mainBranch.id).map(r => r.rev).sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+    const mainEnvironment = environments.find(b => b.name === 'main') || environments[0];
+    const mainRevs = allRevs.filter(r => r.environmentId === mainEnvironment.id).map(r => r.rev).sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
 
-    const childrenMap = new Map<string, BranchRevision[]>();
+    const childrenMap = new Map<string, EnvironmentRevision[]>();
     for (const { rev } of allRevs) {
       if (rev.parent_timeline_id) {
         const list = childrenMap.get(rev.parent_timeline_id) || [];
@@ -393,7 +393,7 @@ async function loadGraph(preserveSelection = false) {
     const seen = new Set<string>();
     const metaMap = new Map<string, NodeMeta>();
 
-    for (const { rev, branchName } of allRevs) {
+    for (const { rev, environmentName } of allRevs) {
       if (seen.has(rev.id)) continue;
       seen.add(rev.id);
 
@@ -401,25 +401,25 @@ async function loadGraph(preserveSelection = false) {
       const lane = yLaneMap.get(rev.id) || 0;
       const y = lane * Y_SPACING - centerY;
 
-      const branchLabels: string[] = [];
-      const pointingBranches: BranchMeta[] = [];
-      for (const [id, name] of branchNames) {
-        if (branchHeadTimelineMap.get(id) !== rev.id) continue;
-        const exists = branchExists.get(id) ?? false;
+      const environmentLabels: string[] = [];
+      const pointingEnvironments: EnvironmentMeta[] = [];
+      for (const [id, name] of environmentNames) {
+        if (environmentHeadTimelineMap.get(id) !== rev.id) continue;
+        const exists = environmentExists.get(id) ?? false;
         if (exists) {
-          branchLabels.push(name);
+          environmentLabels.push(name);
         }
-        pointingBranches.push({
+        pointingEnvironments.push({
           id,
-          name: exists ? name : 'Deleted Branch',
+          name: exists ? name : 'Deleted Environment',
           isDefault: isDefaultMap.get(id) || false,
           exists,
         });
       }
 
-      const color = colorMap.get(rev.branch_id) || '#888';
+      const color = colorMap.get(rev.environment_id) || '#888';
 
-      metaMap.set(rev.id, { branchName, color, branches: pointingBranches });
+      metaMap.set(rev.id, { environmentName, color, environments: pointingEnvironments });
 
       newNodes.push({
         id: rev.id,
@@ -427,13 +427,13 @@ async function loadGraph(preserveSelection = false) {
         position: { x, y },
         data: {
           label: rev.name || `Revision ${rev.timeline}`,
-          branchName,
+          environmentName,
           timeline: rev.timeline,
           date: new Date(rev.created_at).toLocaleString(),
           color,
-          isHead: pointingBranches.some(b => b.exists),
-          branches: pointingBranches,
-          branchLabels,
+          isHead: pointingEnvironments.some(b => b.exists),
+          environments: pointingEnvironments,
+          environmentLabels,
           isSelected: false,
         },
       });
@@ -487,7 +487,7 @@ watch(open, (isOpen) => {
 </script>
 
 <template>
-  <UModal v-model:open="open" title="Branch Graph" :description="`${store.project?.name ?? ''} — revision timeline`" :ui="{ content: modalContentClass }">
+  <UModal v-model:open="open" title="Environment Graph" :description="`${store.project?.name ?? ''} — revision timeline`" :ui="{ content: modalContentClass }">
     <template #body>
       <div class="flex flex-col gap-4 relative" style="height: 600px">
         <div v-if="loading" class="flex items-center justify-center h-full"><UIcon name="i-lucide-loader-circle" class="size-5 text-muted animate-spin" /></div>
@@ -559,12 +559,12 @@ watch(open, (isOpen) => {
                 </div>
 
                 <div class="flex-1 overflow-y-auto pl-5 pb-5 space-y-5">
-                  <!-- Branches -->
-                  <div v-if="selectedNodeMeta && selectedNodeMeta.branches.length > 0">
-                    <div class="text-xs font-medium text-muted mb-1.5 uppercase tracking-wider">Branches</div>
+                  <!-- Environments -->
+                  <div v-if="selectedNodeMeta && selectedNodeMeta.environments.length > 0">
+                    <div class="text-xs font-medium text-muted mb-1.5 uppercase tracking-wider">Environments</div>
                     <div class="border border-default/40 rounded-lg overflow-hidden">
                       <button
-                        v-for="b in selectedNodeMeta.branches"
+                        v-for="b in selectedNodeMeta.environments"
                         :key="b.id"
                         :disabled="!b.exists"
                         class="group w-full text-left flex items-center gap-3 px-4 py-2.5 hover:bg-elevated/50 transition-colors border-b border-default/10 last:border-b-0 disabled:opacity-50"
@@ -582,7 +582,7 @@ watch(open, (isOpen) => {
                           size="xs"
                           color="error"
                           :icon="ICONS.trash"
-                          @click.prevent.stop="onRemoveBranch(b.id)"
+                          @click.prevent.stop="onRemoveEnvironment(b.id)"
                         >
                           Delete
                         </UButton>
@@ -597,9 +597,9 @@ watch(open, (isOpen) => {
                       <button
                         v-for="c in selectedTimelineData.containers"
                         :key="c.container_id"
-                        :disabled="!selectedTimelineData.branch_id"
+                        :disabled="!selectedTimelineData.environment_id"
                         class="group w-full text-left flex items-center gap-3 px-4 py-2.5 hover:bg-elevated/50 transition-colors border-b border-default/10 last:border-b-0 disabled:opacity-50"
-                        @click="selectedTimelineData.branch_id ? navigateAndClose(`/${store.organization?.slug}/containers/${store.project?.id}/${selectedTimelineData.branch_id}/${c.container_id}`) : undefined"
+                        @click="selectedTimelineData.environment_id ? navigateAndClose(`/${store.organization?.slug}/containers/${store.project?.id}/${selectedTimelineData.environment_id}/${c.container_id}`) : undefined"
                       >
                         <div class="min-w-0 flex-1">
                           <span class="text-sm font-medium truncate block">{{ c.container_name }}</span>
@@ -635,7 +635,7 @@ watch(open, (isOpen) => {
 
                   <!-- Fully empty -->
                   <div
-                    v-if="selectedTimelineData.containers.length === 0 && selectedTimelineData.secrets.length === 0 && (!selectedNodeMeta || selectedNodeMeta.branches.length === 0)"
+                    v-if="selectedTimelineData.containers.length === 0 && selectedTimelineData.secrets.length === 0 && (!selectedNodeMeta || selectedNodeMeta.environments.length === 0)"
                     class="py-12 text-center"
                   >
                     <p class="text-sm text-muted/50">Nothing pinned at this revision.</p>
@@ -650,9 +650,9 @@ watch(open, (isOpen) => {
                     color="neutral"
                     :icon="ICONS.plus"
                     block
-                    @click="onCreateBranch(selectedRevisionId!)"
+                    @click="onCreateEnvironment(selectedRevisionId!)"
                   >
-                    Create branch
+                    Create environment
                   </UButton>
                   <UButton
                     variant="solid"
@@ -660,7 +660,7 @@ watch(open, (isOpen) => {
                     color="neutral"
                     :icon="ICONS.arrowTopRight"
                     block
-                    @click="onRepointBranch(selectedRevisionId!)"
+                    @click="onRepointEnvironment(selectedRevisionId!)"
                   >
                     Repoint
                   </UButton>
@@ -676,21 +676,21 @@ watch(open, (isOpen) => {
           </Transition>
         </div>
 
-        <DashboardProjectsCreateBranchModal
-          v-model:open="createBranchModalOpen"
-          :parent-timeline-id="createBranchFromRevisionId"
-          @created="onBranchCreated"
+        <DashboardProjectsCreateEnvironmentModal
+          v-model:open="createEnvironmentModalOpen"
+          :parent-timeline-id="createEnvironmentFromRevisionId"
+          @created="onEnvironmentCreated"
         />
 
-        <UModal v-model:open="repointModalOpen" title="Repoint Branch" :ui="{ content: 'max-w-sm' }">
+        <UModal v-model:open="repointModalOpen" title="Repoint Environment" :ui="{ content: 'max-w-sm' }">
           <template #body>
-            <p class="text-sm text-muted mb-4">Choose a branch to repoint to this revision.</p>
+            <p class="text-sm text-muted mb-4">Choose a environment to repoint to this revision.</p>
             <div class="border border-default/40 rounded-lg overflow-hidden max-h-48 overflow-y-auto">
               <button
-                v-for="b in allBranches"
+                v-for="b in allEnvironments"
                 :key="b.id"
                 class="group w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-elevated/50 transition-colors border-b border-default/10 last:border-b-0"
-                @click="repointBranchId = b.id; onSelectRepointBranch()"
+                @click="repointEnvironmentId = b.id; onSelectRepointEnvironment()"
               >
                 <div class="size-7 shrink-0 rounded-md bg-elevated flex items-center justify-center">
                   <UIcon name="i-heroicons:folder" class="size-3.5 text-muted" />
@@ -698,22 +698,22 @@ watch(open, (isOpen) => {
                 <span class="text-sm capitalize flex-1">{{ b.name }}</span>
                 <UIcon name="i-heroicons:chevron-right" class="size-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
               </button>
-              <p v-if="allBranches.length === 0" class="text-sm text-muted px-4 py-3">No branches available.</p>
+              <p v-if="allEnvironments.length === 0" class="text-sm text-muted px-4 py-3">No environments available.</p>
             </div>
             <div class="flex justify-end gap-3 pt-3">
-              <UButton variant="ghost"color="neutral" @click="repointModalOpen = false; repointBranchId = ''">Cancel</UButton>
+              <UButton variant="ghost"color="neutral" @click="repointModalOpen = false; repointEnvironmentId = ''">Cancel</UButton>
             </div>
           </template>
         </UModal>
 
-        <UModal v-model:open="removeModalOpen" title="Remove Branch" :ui="{ content: 'max-w-sm' }">
+        <UModal v-model:open="removeModalOpen" title="Remove Environment" :ui="{ content: 'max-w-sm' }">
           <template #body>
             <p class="text-sm">
-              Are you sure you want to remove the branch <strong class="capitalize">{{ removeBranchName }}</strong>? Timeline revisions will be preserved and can be repointed to.
+              Are you sure you want to remove the environment <strong class="capitalize">{{ removeEnvironmentName }}</strong>? Timeline revisions will be preserved and can be repointed to.
             </p>
             <div class="flex justify-end gap-3 pt-4">
               <UButton variant="ghost" color="neutral" @click="removeModalOpen = false">Cancel</UButton>
-              <UButton color="error" @click="onConfirmRemoveBranch">Remove</UButton>
+              <UButton color="error" @click="onConfirmRemoveEnvironment">Remove</UButton>
             </div>
           </template>
         </UModal>

@@ -1,5 +1,5 @@
 import { boolean, integer, pgTable, text, uuid, index, pgPolicy, AnyPgColumn } from "drizzle-orm/pg-core"
-import { project, project_branch } from "."
+import { project, project_environment } from "."
 import { organization } from "../tenants/organization";
 import { app_tenant, orgAllowed } from "../rls";
 
@@ -40,7 +40,7 @@ export const postgres_database_branch = pgTable('postgres_database_branch', {
     .references((): AnyPgColumn => postgres_database.id, { onDelete: "cascade" }),
   branch_id: uuid("branch_id")
     .notNull()
-    .references(() => project_branch.id, { onDelete: "cascade" }),
+    .references(() => project_environment.id, { onDelete: "cascade" }),
   organization_id: uuid("organization_id")
     .notNull()
     .references(() => organization.id, { onDelete: "cascade" }),

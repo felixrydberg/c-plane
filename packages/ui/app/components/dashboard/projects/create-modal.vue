@@ -23,7 +23,7 @@ async function handleCreate() {
       id: response.id,
       organization_id: response.organization_id,
       name: response.name,
-      default_branch_id: response.default_branch_id,
+      default_environment_id: response.default_environment_id,
     }];
 
     name.value = '';

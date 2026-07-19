@@ -9,7 +9,7 @@ use super::databases::{
 };
 use crate::errors::AppError;
 use crate::middleware::auth::AuthContext;
-use crate::models::entities::{postgres_database, postgres_database_branch, project_branch};
+use crate::models::entities::{postgres_database, postgres_database_branch, project_environment};
 use crate::services::{agent, events};
 use serde_json;
 
@@ -73,12 +73,12 @@ pub async fn create_database(
 
     verify_project_in_org(tx, body.project_id, organization_id).await?;
 
-    let main_branch = project_branch::Entity::find()
-        .filter(project_branch::Column::ProjectId.eq(body.project_id))
-        .filter(project_branch::Column::Name.eq("main"))
+    let main_environment = project_environment::Entity::find()
+        .filter(project_environment::Column::ProjectId.eq(body.project_id))
+        .filter(project_environment::Column::Name.eq("main"))
         .one(tx)
         .await?
-        .ok_or_else(|| AppError::NotFound("Main branch not found".into()))?;
+        .ok_or_else(|| AppError::NotFound("Main environment not found".into()))?;
 
     let created: postgres_database::Model = postgres_database::ActiveModel {
         id: Set(db_id),
@@ -93,7 +93,7 @@ pub async fn create_database(
     let _db_branch: postgres_database_branch::Model = postgres_database_branch::ActiveModel {
         id: Set(db_branch_id),
         database_id: Set(db_id),
-        branch_id: Set(main_branch.id),
+        branch_id: Set(main_environment.id),
         organization_id: Set(organization_id),
         backup_retention_days: Set(body.backup_retention_days.or(Some(30))),
         cpu: Set(body.cpu),
@@ -110,10 +110,10 @@ pub async fn create_database(
     let mut db_active: postgres_database::ActiveModel = created.clone().into();
     db_active.default_branch_id = Set(Some(db_branch_id));
     let updated = db_active.update(tx).await?;
-    events::record(tx, organization_id, body.project_id, "database:created", serde_json::json!({"summary": format!("Created database '{}'", name), "target_id": db_branch_id.to_string(), "branch_id": main_branch.id.to_string()}), auth.actor_id).await?;
+    events::record(tx, organization_id, body.project_id, "database:created", serde_json::json!({"summary": format!("Created database '{}'", name), "target_id": db_branch_id.to_string(), "branch_id": main_environment.id.to_string()}), auth.actor_id).await?;
 
     scoped.commit().await?;
-    agent::emit_postgres_branch(db_id, organization_id, main_branch.id, db_branch_id).await?;
+    agent::emit_postgres_branch(db_id, organization_id, main_environment.id, db_branch_id).await?;
 
     Ok((
         axum::http::StatusCode::CREATED,
@@ -386,8 +386,8 @@ pub async fn create_database_branch(
 
     verify_project_in_org(tx, db.project_id, organization_id).await?;
 
-    let branch = project_branch::Entity::find_by_id(body.branch_id)
-        .filter(project_branch::Column::ProjectId.eq(db.project_id))
+    let branch = project_environment::Entity::find_by_id(body.branch_id)
+        .filter(project_environment::Column::ProjectId.eq(db.project_id))
         .one(tx)
         .await?
         .ok_or_else(|| AppError::NotFound("Branch not found in database's project".into()))?;

@@ -1,5 +1,5 @@
 import useStore from "~/stores/store"
-import { getSession, loadProjectBranches } from "~/utils/auth"
+import { getSession, loadProjectEnvironments } from "~/utils/auth"
 
 async function fetchProjects() {
   const store = useStore()
@@ -7,7 +7,7 @@ async function fetchProjects() {
 
   const requestFetch = import.meta.server ? useRequestFetch() : $fetch
 
-  const { data } = await requestFetch<{ data: Array<{ id: string; organization_id: string; name: string; default_branch_id: string | null }> }>(
+  const { data } = await requestFetch<{ data: Array<{ id: string; organization_id: string; name: string; default_environment_id: string | null }> }>(
     `/api/backend/organization/${store.organization.id}/projects`
   )
   if (data?.length) {
@@ -15,7 +15,7 @@ async function fetchProjects() {
   }
 }
 
-async function syncCurrentProjectBranches() {
+async function syncCurrentProjectEnvironments() {
   const store = useStore()
   const route = useRoute()
   const projectId = route.params.project_id as string | undefined
@@ -24,14 +24,14 @@ async function syncCurrentProjectBranches() {
   const project = store.projects.find(project => project.id === projectId)
   if (!project) return
 
-  const branchId = route.params.branch_id as string | undefined
-  if (store.branches_project_id === project.id) {
+  const environmentId = route.params.environment_id as string | undefined
+  if (store.environments_project_id === project.id) {
     store.project = project
-    store.branch = store.branches.find(branch => branch.id === branchId) ?? store.branches.find(branch => branch.is_default) ?? store.branches[0] ?? null
+    store.environment = store.environments.find(environment => environment.id === environmentId) ?? store.environments.find(environment => environment.is_default) ?? store.environments[0] ?? null
     return
   }
 
-  await loadProjectBranches(project.id, branchId)
+  await loadProjectEnvironments(project.id, environmentId)
 }
 
 export default defineNuxtPlugin(async () => {
@@ -39,11 +39,11 @@ export default defineNuxtPlugin(async () => {
   if (import.meta.server && store.session === null) {
     await getSession();
     await fetchProjects();
-    await syncCurrentProjectBranches();
+    await syncCurrentProjectEnvironments();
   }
 
   if (import.meta.client) {
     const route = useRoute()
-    watch([() => route.params.project_id, () => route.params.branch_id], () => void syncCurrentProjectBranches(), { immediate: true })
+    watch([() => route.params.project_id, () => route.params.environment_id, () => store.projects], () => void syncCurrentProjectEnvironments(), { immediate: true })
   }
 })

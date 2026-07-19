@@ -27,7 +27,7 @@ async function revoke(token: Token) {
 <template>
   <section class="space-y-3">
     <div v-if="!tokens.length" class="flex flex-col items-center justify-center py-16 gap-3 text-center border border-dashed border-default rounded-lg">
-      <UIcon :name="ICONS.authentication" class="size-10 text-muted" /><p class="text-muted">No S3 access tokens for this branch.</p>
+      <UIcon :name="ICONS.authentication" class="size-10 text-muted" /><p class="text-muted">No S3 access tokens for this environment.</p>
     </div>
     <div v-else class="overflow-hidden border border-default rounded-lg">
       <table class="w-full text-sm"><thead class="bg-elevated text-left"><tr><th class="p-3">Name</th><th class="p-3">Access key ID</th><th class="p-3">Created</th><th class="p-3" /></tr></thead>

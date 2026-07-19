@@ -71,6 +71,13 @@
       "when": 1784415923225,
       "tag": "0009_clear_karma",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1784495115913,
+      "tag": "0010_curvy_tyrannus",
+      "breakpoints": true
     }
   ]
 }

@@ -12,7 +12,7 @@ const emit = defineEmits<{ created: [{ id: string; name: string; timeline: strin
 
 interface TimelineRevision {
   id: string
-  branch_id: string
+  environment_id: string
   timeline: number
   parent_timeline_id: string | null
   pins: Record<string, unknown>
@@ -91,17 +91,17 @@ async function handleCreate() {
     }
 
     const created = await $fetch<{ id: string; name: string; timeline: string; is_default: boolean }>(
-      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/branches`,
+      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/environments`,
       { method: 'POST', body }
     );
 
-    toast.add({ title: 'Branch created', color: 'success' });
+    toast.add({ title: 'Environment created', color: 'success' });
     name.value = '';
     selectedTimelineId.value = '';
     open.value = false;
     emit('created', created);
   } catch (e: unknown) {
-    error.value = (e as { data?: { message?: string } })?.data?.message || (e as { message?: string })?.message || 'Failed to create branch';
+    error.value = (e as { data?: { message?: string } })?.data?.message || (e as { message?: string })?.message || 'Failed to create environment';
   } finally {
     loading.value = false;
   }
@@ -109,10 +109,10 @@ async function handleCreate() {
 </script>
 
 <template>
-  <UModal v-model:open="open" title="Create Branch" description="Fork a new branch from a timeline revision.">
+  <UModal v-model:open="open" title="Create Environment" description="Fork a new environment from a timeline revision.">
     <template #body>
       <form class="w-full space-y-4" @submit.prevent="handleCreate">
-          <UFormField label="Branch name" required>
+          <UFormField label="Environment name" required>
             <UInput
               v-model="name"
               placeholder="e.g. staging"
@@ -150,7 +150,7 @@ async function handleCreate() {
               Cancel
             </UButton>
             <UButton type="submit" :loading="loading" :disabled="!name.trim()">
-              Create Branch
+              Create Environment
             </UButton>
           </div>
         </form>

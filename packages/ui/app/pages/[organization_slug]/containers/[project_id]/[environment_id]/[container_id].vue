@@ -22,7 +22,7 @@ const toast = useToast()
 
 const orgId = computed(() => store.organization?.id ?? '')
 const projectId = computed(() => route.params.project_id?.toString() || null)
-const branchId = computed(() => route.params.branch_id?.toString() || null)
+const environmentId = computed(() => route.params.environment_id?.toString() || null)
 const containerId = computed(() => route.params.container_id?.toString() || null)
 
 const projectName = computed(() => store.projects.find(p => p.id === projectId.value)?.name ?? projectId.value ?? '')
@@ -39,11 +39,11 @@ interface ContainerListItem {
   current_version: ContainerVersionRow | null
 }
 
-const listUrl = computed(() => orgId.value && projectId.value && branchId.value
+const listUrl = computed(() => orgId.value && projectId.value && environmentId.value
   ? `/api/backend/organization/${orgId.value}/containers`
   : '')
 const { data: containerList } = await useFetch<ContainerListItem[]>(listUrl, {
-  query: { project_id: projectId, branch_id: branchId },
+  query: { project_id: projectId, environment_id: environmentId },
   immediate: !!listUrl.value,
 })
 
@@ -108,7 +108,7 @@ async function save() {
     }
 
     await $fetch(
-      `/api/backend/organization/${orgId.value}/containers/${containerId.value}?branch_id=${branchId.value ?? ''}`,
+      `/api/backend/organization/${orgId.value}/containers/${containerId.value}?environment_id=${environmentId.value ?? ''}`,
       {
         method: 'PATCH',
         body: {
@@ -124,8 +124,8 @@ async function save() {
     )
     toast.add({ title: 'Container updated', color: 'success' })
     hasChanges.value = false
-    const branch = store.branches.find(branch => branch.id === branchId.value)
-    if (branch) branch.has_recent_undeployed_revision = !autoDeploy.value
+    const environment = store.environments.find(environment => environment.id === environmentId.value)
+    if (environment) environment.has_recent_undeployed_revision = !autoDeploy.value
     autoDeploy.value = false
     await recentActivity.value?.refresh()
   } catch {
@@ -137,7 +137,7 @@ async function save() {
 
 function backUrl() {
   const orgSlug = route.params.organization_slug?.toString() ?? ''
-  return `/${orgSlug}/containers/${projectId.value}/${branchId.value}`
+  return `/${orgSlug}/containers/${projectId.value}/${environmentId.value}`
 }
 
 const yamlPreview = computed(() => [
@@ -170,18 +170,18 @@ watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged(
             <span class="text-xs text-muted">&middot; {{ replicaCount }} replica{{ replicaCount === 1 ? '' : 's' }}</span>
           </div>
         </div>
-        <UButton :icon="ICONS.plus" :to="`/${route.params.organization_slug}/containers/${projectId}/${branchId}/new`">New Container</UButton>
+        <UButton :icon="ICONS.plus" :to="`/${route.params.organization_slug}/containers/${projectId}/${environmentId}/new`">New Container</UButton>
       </header>
 
       <div class="grid min-h-[720px] xl:grid-cols-[300px_minmax(0,1fr)_280px]">
         <aside class="border-b border-default/60 p-4 xl:border-b-0 xl:border-r">
           <p class="text-sm font-semibold">Containers</p>
-          <p class="mt-1 text-xs text-muted">{{ containerList?.length ?? 0 }} in this branch</p>
-          <nav class="mt-4 space-y-1" aria-label="Branch containers">
+          <p class="mt-1 text-xs text-muted">{{ containerList?.length ?? 0 }} in this environment</p>
+          <nav class="mt-4 space-y-1" aria-label="Environment containers">
             <NuxtLink
               v-for="container in containerList"
               :key="container.id"
-              :to="`/${route.params.organization_slug}/containers/${projectId}/${branchId}/${container.id}`"
+              :to="`/${route.params.organization_slug}/containers/${projectId}/${environmentId}/${container.id}`"
               class="block rounded-md px-3 py-3 transition-colors"
               :class="{'bg-elevated text-highlighted': container.id === containerId}"
             >
@@ -275,7 +275,7 @@ watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged(
           </Transition>
         </main>
 
-        <DeploymentsRecentActivity v-if="orgId && projectId && containerId" ref="recentActivity" :organization-id="orgId" :project-id="projectId" :branch-id="branchId" event-type-prefix="container" :target-id="containerId" />
+        <DeploymentsRecentActivity v-if="orgId && projectId && containerId" ref="recentActivity" :organization-id="orgId" :project-id="projectId" :environment-id="environmentId" event-type-prefix="container" :target-id="containerId" />
       </div>
     </div>
   </div>

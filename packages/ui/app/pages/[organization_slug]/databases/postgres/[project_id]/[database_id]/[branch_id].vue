@@ -25,7 +25,7 @@ interface DatabaseRow {
   default_branch_id: string | null
 }
 
-type BranchItem = { id: string; name: string; timeline: string; is_default: boolean }
+type EnvironmentItem = { id: string; name: string; timeline: string; is_default: boolean }
 
 const store = useStore()
 const route = useRoute()
@@ -85,17 +85,17 @@ async function fetchData() {
   if (!orgId.value || !databaseId.value || !branchId.value || !projectId.value) return
   loading.value = true
   try {
-    const [db, branches, projBranches] = await Promise.all([
+    const [db, branches, projectEnvironments] = await Promise.all([
       $fetch<DatabaseRow>(`/api/backend/organization/${orgId.value}/databases/postgres/${databaseId.value}`),
       $fetch<DatabaseBranchRow[]>(`/api/backend/organization/${orgId.value}/databases/postgres/${databaseId.value}/branches`),
-      $fetch<BranchItem[]>(`/api/backend/organization/${orgId.value}/projects/${projectId.value}/branches`),
+      $fetch<EnvironmentItem[]>(`/api/backend/organization/${orgId.value}/projects/${projectId.value}/environments`),
     ])
 
     dbName.value = db.name
     defaultDatabaseBranchId.value = db.default_branch_id
     databaseBranches.value = branches.map(branch => ({
       ...branch,
-      _name: projBranches.find(projectBranch => projectBranch.id === branch.branch_id)?.name ?? branch.branch_id,
+      _name: projectEnvironments.find(projectEnvironment => projectEnvironment.id === branch.branch_id)?.name ?? branch.branch_id,
     }))
     const branch = branches.find(b => b.branch_id === branchId.value)
     isDefault.value = db.default_branch_id === branch?.id
@@ -110,7 +110,7 @@ async function fetchData() {
         autoscalingMaxCpu: branch.autoscaling_max_cpu ? Number.parseFloat(branch.autoscaling_max_cpu) : 4,
       }
     }
-    branchName.value = projBranches.find(pb => pb.id === branchId.value)?.name ?? branchId.value
+    branchName.value = projectEnvironments.find(environment => environment.id === branchId.value)?.name ?? branchId.value
   } catch {
     toast.add({ title: 'Failed to load branch config', color: 'error' })
   } finally {

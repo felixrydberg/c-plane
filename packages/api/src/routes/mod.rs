@@ -43,8 +43,8 @@ pub fn create_routes() -> Router {
             get(regions::list_regions),
         )
         .route(
-            "/api/organization/{organization_id}/branches",
-            get(projects::list_organization_branches),
+            "/api/organization/{organization_id}/environments",
+            get(projects::list_organization_environments),
         )
         .route(
             "/api/organization/{organization_id}/projects",
@@ -57,13 +57,13 @@ pub fn create_routes() -> Router {
                 .delete(projects::delete_project),
         )
         .route(
-            "/api/organization/{organization_id}/projects/{project_id}/branches",
-            get(projects::list_branches)
-                .post(projects::create_branch),
+            "/api/organization/{organization_id}/projects/{project_id}/environments",
+            get(projects::list_environments)
+                .post(projects::create_environment),
         )
         .route(
-            "/api/organization/{organization_id}/projects/{project_id}/branches/{branch_id}",
-            patch(projects::update_branch).delete(projects::delete_branch),
+            "/api/organization/{organization_id}/projects/{project_id}/environments/{environment_id}",
+            patch(projects::update_environment).delete(projects::delete_environment),
         )
         .route(
             "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens",

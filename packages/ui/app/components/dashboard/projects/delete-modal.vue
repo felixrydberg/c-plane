@@ -20,8 +20,8 @@ async function handleDelete() {
       { method: 'DELETE' }
     );
     store.project = null;
-    store.branch = null;
-    store.branches = [];
+    store.environment = null;
+    store.environments = [];
     toast.add({ title: 'Project deleted', color: 'success' });
     open.value = false;
     emit('deleted');

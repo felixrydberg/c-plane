@@ -2,10 +2,10 @@ type Project = {
   id: string
   organization_id: string
   name: string
-  default_branch_id: string | null
+  default_environment_id: string | null
 }
 
-type Branch = {
+type Environment = {
   id: string
   name: string
   timeline: string
@@ -20,9 +20,9 @@ type State = {
   organizations: Organization[]
   project: Project | null
   projects: Project[]
-  branch: Branch | null
-  branches: Branch[]
-  branches_project_id: string | null
+  environment: Environment | null
+  environments: Environment[]
+  environments_project_id: string | null
   // ponytail: change counter watched by resource pages.
   // Bump when a repoint/delete invalidates cached lists.
   // Incremented instead of keyed to avoid coupling to specific fetch shapes.
@@ -37,9 +37,9 @@ export const useStore = defineStore("auth", {
     organizations: [],
     project: null,
     projects: [],
-    branch: null,
-    branches: [],
-    branches_project_id: null,
+    environment: null,
+    environments: [],
+    environments_project_id: null,
     refreshKey: 0,
   }),
 

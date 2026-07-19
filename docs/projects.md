@@ -69,11 +69,11 @@ The control plane renders revisions into concrete desired state for cluster agen
 
 ---
 
-# Branches
+# Environments
 
-Projects support isolated branches.
+Projects support isolated environments.
 
-Branches behave similarly to Git branches and allow independent project environments to exist simultaneously.
+Environments allow independent project versions to exist simultaneously.
 
 Example:
 
@@ -84,7 +84,7 @@ main
  └── feature/payments
 ```
 
-Each branch maintains:
+Each environment maintains:
 
 * independent revisions,
 * isolated containers,
@@ -92,7 +92,7 @@ Each branch maintains:
 * isolated networking,
 * isolated runtime state.
 
-Changes made to one branch do not affect other branches. They are not expected to be merged or long lived either. They are expected to be short lived and may be deleted when no longer needed.
+Changes made to one environment do not affect other environments. They are not expected to be merged or long lived either. They are expected to be short lived and may be deleted when no longer needed.
 
 ---
 

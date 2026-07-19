@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
-import { loadProjectBranches } from '~/utils/auth'
+import { loadProjectEnvironments } from '~/utils/auth'
 import { ICONS } from '~/utils/icons'
 
 const store = useStore()
@@ -9,10 +9,10 @@ const router = useRouter()
 const toast = useToast()
 
 const routeProjectId = computed(() => route.params.project_id as string | undefined)
-const routeBranchId = computed(() => route.params.branch_id as string | undefined)
+const routeEnvironmentId = computed(() => route.params.environment_id as string | undefined)
 
 const PROJECT_PAGES = ['containers', 'databases/postgres', 'secrets']
-const BRANCH_PAGES = ['containers']
+const ENVIRONMENT_PAGES = ['containers']
 
 const currentSection = computed(() => {
   const pathAfterSlug = route.path.slice((store.organization?.slug?.length ?? 0) + 1)
@@ -21,18 +21,18 @@ const currentSection = computed(() => {
   return segment.replace(/^\/+|\/+$/g, '')
 })
 const projectRoutesEnabled = computed(() => PROJECT_PAGES.includes(currentSection.value))
-const branchRoutesEnabled = computed(() => BRANCH_PAGES.includes(currentSection.value))
+const environmentRoutesEnabled = computed(() => ENVIRONMENT_PAGES.includes(currentSection.value))
 
 // Projects are loaded by the auth plugin on every request.
 // Refresh only needed after create/delete.
 async function refreshProjects() {
   if (!store.organization?.id) return
-  const { data } = await $fetch<{ data: { id: string; organization_id: string; name: string; default_branch_id: string | null }[] }>(
+  const { data } = await $fetch<{ data: { id: string; organization_id: string; name: string; default_environment_id: string | null }[] }>(
     `/api/backend/organization/${store.organization.id}/projects`
   )
   if (data) {
     store.projects = data.map(p => ({
-      id: p.id, organization_id: p.organization_id, name: p.name, default_branch_id: p.default_branch_id,
+      id: p.id, organization_id: p.organization_id, name: p.name, default_environment_id: p.default_environment_id,
     }))
   }
 }
@@ -44,12 +44,12 @@ watch([() => store.projects, routeProjectId], ([projList, pid]) => {
   if (matched) store.project = matched
 }, { immediate: true })
 
-type BranchItem = { id: string; name: string; timeline: string; is_default: boolean; has_recent_undeployed_revision: boolean }
+type EnvironmentItem = { id: string; name: string; timeline: string; is_default: boolean; has_recent_undeployed_revision: boolean }
 
 const createProjectModal = ref(false)
 const deleteProjectModal = ref(false)
-const createBranchModal = ref(false)
-const deleteBranchModal = ref(false)
+const createEnvironmentModal = ref(false)
+const deleteEnvironmentModal = ref(false)
 
 const projectLabel = computed(() => store.project?.name || 'All Projects')
 
@@ -76,36 +76,36 @@ const projectItems = computed<DropdownMenuItem[][]>(() => {
   return [list, actions]
 })
 
-const branchLabel = computed(() => {
-  if (!store.project) return 'Select branch'
-  if (!store.branch) return store.branches.length ? 'Select branch' : 'No branches'
-  return store.branch.name
+const environmentLabel = computed(() => {
+  if (!store.project) return 'Select environment'
+  if (!store.environment) return store.environments.length ? 'Select environment' : 'No environments'
+  return store.environment.name
 })
-const branchItems = computed<DropdownMenuItem[][]>(() => {
+const environmentItems = computed<DropdownMenuItem[][]>(() => {
   if (!store.project) return [[{ label: 'Select a project first', disabled: true }]]
-  if (!store.branches.length) return [[
-    { label: 'No branches', disabled: true },
+  if (!store.environments.length) return [[
+    { label: 'No environments', disabled: true },
   ], [
-    { label: 'Create Branch', icon: ICONS.folderPlus, onSelect() { createBranchModal.value = true } },
+    { label: 'Create Environment', icon: ICONS.folderPlus, onSelect() { createEnvironmentModal.value = true } },
   ]]
 
-  const list: DropdownMenuItem[] = store.branches.map(b => ({
+  const list: DropdownMenuItem[] = store.environments.map(b => ({
     label: b.name + (b.is_default ? ' (default)' : ''),
     icon: ICONS.folder,
-    onSelect() { selectBranch(b) },
+    onSelect() { selectEnvironment(b) },
   }))
   const actions: DropdownMenuItem[] = [
-    { label: 'Create Branch', icon: ICONS.folderPlus, onSelect() { createBranchModal.value = true } },
+    { label: 'Create Environment', icon: ICONS.folderPlus, onSelect() { createEnvironmentModal.value = true } },
   ]
-  if (store.branch) {
+  if (store.environment) {
     actions.push({
-      label: 'Delete Branch',
+      label: 'Delete Environment',
       icon: 'i-heroicons:trash',
       color: 'error' as const,
-      disabled: store.branch.is_default,
-      description: store.branch.is_default ? 'Cannot delete the default branch' : undefined,
+      disabled: store.environment.is_default,
+      description: store.environment.is_default ? 'Cannot delete the default environment' : undefined,
       onSelect() {
-        if (!store.branch?.is_default) deleteBranchModal.value = true;
+        if (!store.environment?.is_default) deleteEnvironmentModal.value = true;
       },
     })
   }
@@ -120,13 +120,14 @@ async function selectProject(projectId: string | null) {
   if (projectId === current) return
 
   if (!projectRoutesEnabled.value) {
-    store.branches = []
-    store.branches_project_id = null
+    store.environments = []
+    store.environments_project_id = null
     if (projectId) {
       store.project = store.projects.find(p => p.id === projectId) ?? null
+      await loadProjectEnvironments(projectId)
     } else {
       store.project = null
-      store.branch = null
+      store.environment = null
     }
     return
   }
@@ -140,30 +141,30 @@ async function selectProject(projectId: string | null) {
 
   if (projectId) {
     store.project = store.projects.find(p => p.id === projectId) ?? null
-    store.branch = null
-    store.branches = []
-    store.branches_project_id = null
+    store.environment = null
+    store.environments = []
+    store.environments_project_id = null
     router.push(`/${slug}/${baseSection}/${projectId}`)
   } else {
     store.project = null
-    store.branch = null
-    store.branches = []
-    store.branches_project_id = null
+    store.environment = null
+    store.environments = []
+    store.environments_project_id = null
     router.push(`/${slug}`)
   }
 }
 
-function selectBranch(b: BranchItem) {
-  store.branch = { id: b.id, name: b.name, timeline: b.timeline, is_default: b.is_default, has_recent_undeployed_revision: b.has_recent_undeployed_revision }
+function selectEnvironment(b: EnvironmentItem) {
+  store.environment = { id: b.id, name: b.name, timeline: b.timeline, is_default: b.is_default, has_recent_undeployed_revision: b.has_recent_undeployed_revision }
 
   const slug = store.organization?.slug
   const pid = routeProjectId.value
   if (!pid || !slug || !projectRoutesEnabled.value) return
-  if (b.id === routeBranchId.value) return
+  if (b.id === routeEnvironmentId.value) return
 
   const pathAfterSlug = route.path.slice(slug.length + 1)
   const baseSection = pathAfterSlug.slice(0, pathAfterSlug.indexOf(pid) - 1).replace(/^\/+|\/+$/g, '')
-  const url = branchRoutesEnabled.value
+  const url = environmentRoutesEnabled.value
     ? `/${slug}/${baseSection}/${pid}/${b.id}`
     : `/${slug}/${baseSection}/${pid}`
   router.push(url)
@@ -171,42 +172,42 @@ function selectBranch(b: BranchItem) {
 
 async function onProjectCreated() { await refreshProjects() }
 async function onProjectDeleted() { await refreshProjects(); selectProject(null) }
-async function refreshBranches() {
+async function refreshEnvironments() {
   if (!store.project) return
-  await loadProjectBranches(store.project.id, routeBranchId.value)
+  await loadProjectEnvironments(store.project.id, routeEnvironmentId.value)
 }
 
-async function onBranchCreated() { await refreshBranches() }
+async function onEnvironmentCreated() { await refreshEnvironments() }
 
-async function onConfirmDeleteBranch() {
-  if (!store.organization?.id || !store.project?.id || !store.branch) return;
+async function onConfirmDeleteEnvironment() {
+  if (!store.organization?.id || !store.project?.id || !store.environment) return;
   try {
     await $fetch(
-      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/branches/${store.branch.id}`,
+      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/environments/${store.environment.id}`,
       { method: 'DELETE' }
     );
-    toast.add({ title: 'Branch removed', color: 'success' });
-    deleteBranchModal.value = false;
-    store.branch = null;
-    await refreshBranches();
+    toast.add({ title: 'Environment removed', color: 'success' });
+    deleteEnvironmentModal.value = false;
+    store.environment = null;
+    await refreshEnvironments();
 
-    const list = store.branches
-    const target = list.find(b => b.id === routeBranchId.value) ?? list.find(b => b.is_default) ?? list[0] ?? null
+    const list = store.environments
+    const target = list.find(b => b.id === routeEnvironmentId.value) ?? list.find(b => b.is_default) ?? list[0] ?? null
     if (target) {
-      store.branch = { id: target.id, name: target.name, timeline: target.timeline, is_default: target.is_default, has_recent_undeployed_revision: target.has_recent_undeployed_revision }
+      store.environment = { id: target.id, name: target.name, timeline: target.timeline, is_default: target.is_default, has_recent_undeployed_revision: target.has_recent_undeployed_revision }
       const slug = store.organization?.slug
       const pid = routeProjectId.value
       if (pid && slug && projectRoutesEnabled.value) {
         const pathAfterSlug = route.path.slice(slug.length + 1)
         const baseSection = pathAfterSlug.slice(0, pathAfterSlug.indexOf(pid) - 1).replace(/^\/+|\/+$/g, '')
-        const url = branchRoutesEnabled.value
+        const url = environmentRoutesEnabled.value
           ? `/${slug}/${baseSection}/${pid}/${target.id}`
           : `/${slug}/${baseSection}/${pid}`
         router.push(url)
       }
     }
   } catch {
-    toast.add({ title: 'Failed to remove branch', color: 'error' });
+    toast.add({ title: 'Failed to remove environment', color: 'error' });
   }
 }
 
@@ -221,24 +222,24 @@ const graphModalOpen = ref(false)
 
     <USeparator orientation="vertical" class="h-6 shrink-0" />
 
-    <UDropdownMenu size="sm" :items="branchItems" :content="{ align: 'start', collisionPadding: 12 }" :ui="{ content: 'w-64' }" class="shrink-0">
-      <UButton :label="branchLabel" :trailing-icon="ICONS.chevronUpDown" size="sm" color="neutral" variant="soft" :disabled="!store.project" class="data-[state=open]:bg-elevated" :ui="{ trailingIcon: 'text-dimmed' }" />
+    <UDropdownMenu size="sm" :items="environmentItems" :content="{ align: 'start', collisionPadding: 12 }" :ui="{ content: 'w-64' }" class="shrink-0">
+      <UButton :label="environmentLabel" :trailing-icon="ICONS.chevronUpDown" size="sm" color="neutral" variant="soft" :disabled="!routeProjectId && !store.project" class="data-[state=open]:bg-elevated" :ui="{ trailingIcon: 'text-dimmed' }" />
     </UDropdownMenu>
-    <UButton v-if="store.project" :icon="ICONS.graph" variant="ghost" color="neutral" size="sm" class="shrink-0 rotate-180" aria-label="Branch graph" @click="graphModalOpen = true" />
+    <UButton v-if="store.project" :icon="ICONS.graph" variant="ghost" color="neutral" size="sm" class="shrink-0 rotate-180" aria-label="Environment graph" @click="graphModalOpen = true" />
 
     <DashboardProjectsCreateModal v-model:open="createProjectModal" @created="onProjectCreated" />
     <DashboardProjectsDeleteModal v-model:open="deleteProjectModal" @deleted="onProjectDeleted" />
-    <DashboardProjectsCreateBranchModal v-model:open="createBranchModal" @created="onBranchCreated" />
-    <DashboardProjectsBranchGraphModal v-model:open="graphModalOpen" />
+    <DashboardProjectsCreateEnvironmentModal v-model:open="createEnvironmentModal" @created="onEnvironmentCreated" />
+    <DashboardProjectsEnvironmentGraphModal v-model:open="graphModalOpen" />
 
-    <UModal v-model:open="deleteBranchModal" title="Delete Branch" :ui="{ content: 'max-w-sm' }">
+    <UModal v-model:open="deleteEnvironmentModal" title="Delete Environment" :ui="{ content: 'max-w-sm' }">
       <template #body>
         <p class="text-sm">
-          Are you sure you want to delete the branch <strong class="capitalize">{{ store.branch?.name }}</strong>? Timeline revisions will be preserved and can be repointed to.
+          Are you sure you want to delete the environment <strong class="capitalize">{{ store.environment?.name }}</strong>? Timeline revisions will be preserved and can be repointed to.
         </p>
         <div class="flex justify-end gap-3 pt-4">
-          <UButton variant="ghost" color="neutral" @click="deleteBranchModal = false">Cancel</UButton>
-          <UButton color="error" :icon="ICONS.trash" @click="onConfirmDeleteBranch">Delete</UButton>
+          <UButton variant="ghost" color="neutral" @click="deleteEnvironmentModal = false">Cancel</UButton>
+          <UButton color="error" :icon="ICONS.trash" @click="onConfirmDeleteEnvironment">Delete</UButton>
         </div>
       </template>
     </UModal>

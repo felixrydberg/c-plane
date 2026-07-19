@@ -3,28 +3,28 @@ use sea_orm::{ActiveModelTrait, DatabaseTransaction, EntityTrait, Set};
 use uuid::Uuid;
 
 use crate::errors::AppError;
-use crate::models::entities::{project_branch, project_timeline};
+use crate::models::entities::{project_environment, project_timeline};
 use crate::models::pins::TimelinePins;
 
 pub async fn create_revision(
     tx: &DatabaseTransaction,
-    branch: &project_branch::Model,
+    environment: &project_environment::Model,
     updated_pins: &TimelinePins,
     name: Option<String>,
-    update_branch: bool,
+    update_environment: bool,
 ) -> Result<project_timeline::Model, AppError> {
     use project_timeline::{ActiveModel, Entity};
 
-    let head = Entity::find_by_id(branch.timeline)
+    let head = Entity::find_by_id(environment.timeline)
         .one(tx)
         .await?
-        .ok_or_else(|| AppError::NotFound("Branch timeline not found".into()))?;
+        .ok_or_else(|| AppError::NotFound("Environment timeline not found".into()))?;
 
     let new_entry = ActiveModel {
         id: Set(Uuid::new_v4()),
-        project_id: Set(branch.project_id),
-        branch_id: Set(Some(branch.id)),
-        organization_id: Set(branch.organization_id),
+        project_id: Set(environment.project_id),
+        environment_id: Set(Some(environment.id)),
+        organization_id: Set(environment.organization_id),
         timeline: Set(head.timeline + 1),
         name: Set(name),
         parent_timeline_id: Set(Some(head.id)),
@@ -34,11 +34,11 @@ pub async fn create_revision(
 
     let inserted = new_entry.insert(tx).await?;
 
-    if update_branch {
-        let mut branch_active: project_branch::ActiveModel = branch.clone().into();
-        branch_active.timeline = Set(inserted.id);
-        branch_active.updated_at = Set(Utc::now().fixed_offset());
-        branch_active.update(tx).await?;
+    if update_environment {
+        let mut environment_active: project_environment::ActiveModel = environment.clone().into();
+        environment_active.timeline = Set(inserted.id);
+        environment_active.updated_at = Set(Utc::now().fixed_offset());
+        environment_active.update(tx).await?;
     }
 
     Ok(inserted)

@@ -14,7 +14,7 @@ use crate::{errors::AppError, middleware::auth::AuthContext, models::entities::e
 pub struct ListEventsQuery {
     pub project_id: Uuid,
     pub event_type_prefix: Option<String>,
-    pub branch_id: Option<Uuid>,
+    pub environment_id: Option<Uuid>,
     pub target_id: Option<Uuid>,
     pub limit: Option<u64>,
 }
@@ -47,7 +47,7 @@ fn event_action(event_type: &str) -> &str {
         ("organization_id" = Uuid, Path, description = "Organization ID"),
         ("project_id" = Uuid, Query, description = "Project ID"),
         ("event_type_prefix" = Option<String>, Query, description = "Event type prefix filter (e.g. 'container' matches 'container:created')"),
-        ("branch_id" = Option<Uuid>, Query, description = "Branch filter (matched against payload->>'branch_id')"),
+        ("environment_id" = Option<Uuid>, Query, description = "Environment filter (matched against payload->>'environment_id')"),
         ("target_id" = Option<Uuid>, Query, description = "Resource ID filter (matched against payload->>'target_id')"),
         ("limit" = Option<u64>, Query, description = "Maximum events (default 10, max 50)"),
     ),
@@ -71,9 +71,9 @@ pub async fn list_events(
     if let Some(ref prefix) = query.event_type_prefix {
         select = select.filter(event::Column::EventType.like(format!("{prefix}:%")));
     }
-    if let Some(branch_id) = query.branch_id {
+    if let Some(environment_id) = query.environment_id {
         select = select.filter(sea_orm::sea_query::Expr::cust(format!(
-            "payload->>'branch_id' = '{branch_id}'"
+            "payload->>'environment_id' = '{environment_id}'"
         )));
     }
     if let Some(target_id) = query.target_id {

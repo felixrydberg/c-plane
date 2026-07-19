@@ -8,7 +8,7 @@ const route = useRoute();
 const open = ref(true);
 
 const routeProjectId = computed(() => route.params.project_id as string | undefined)
-const routeBranchId = computed(() => route.params.branch_id as string | undefined)
+const routeEnvironmentId = computed(() => route.params.environment_id as string | undefined)
 const navProjectId = computed(() => routeProjectId.value ?? store.project?.id)
 
 const items = computed<NavigationMenuItem[]>(() => [
@@ -25,7 +25,7 @@ const items = computed<NavigationMenuItem[]>(() => [
   {
     label: 'Containers',
     icon: ICONS.containers,
-    to: `/${store.organization?.slug}/containers${navProjectId.value ? `/${navProjectId.value}${routeBranchId.value ? `/${routeBranchId.value}` : ''}` : ''}`,
+    to: `/${store.organization?.slug}/containers${navProjectId.value ? `/${navProjectId.value}${routeEnvironmentId.value ? `/${routeEnvironmentId.value}` : ''}` : ''}`,
   },
   {
     label: 'Databases',
@@ -143,7 +143,7 @@ const items = computed<NavigationMenuItem[]>(() => [
         <dashboard-projects-nav />
       </div>
 
-      <DashboardProjectsDeploymentAlert v-if="store.branch" />
+      <DashboardProjectsDeploymentAlert v-if="store.environment" />
 
       <div class="flex-1 bg-default px-6 py-6 lg:px-8">
         <slot />

@@ -48,7 +48,7 @@ watch(() => store.refreshKey, () => { fetchAll() })
       <div class="min-w-0">
         <p class="mb-2 truncate text-sm text-muted">{{ projectName }}</p>
         <h1 class="text-2xl font-semibold">Postgres Databases</h1>
-        <p class="mt-1 text-sm text-muted">Postgres databases and their linked project branches.</p>
+        <p class="mt-1 text-sm text-muted">Postgres databases and their linked project environments.</p>
       </div>
       <UButton class="shrink-0" :icon="ICONS.plus" :to="`/${route.params.organization_slug}/databases/postgres/${projectId}/new`">New Database</UButton>
     </div>

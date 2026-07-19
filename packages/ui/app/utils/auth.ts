@@ -25,7 +25,7 @@ export const createClient = () => {
 export type ClientType = ReturnType<typeof createClient>
 type InternalFetch = <T = unknown>(url: string, options?: Record<string, unknown>) => Promise<T>;
 
-type Branch = {
+type Environment = {
   id: string
   name: string
   timeline: string
@@ -33,7 +33,7 @@ type Branch = {
   has_recent_undeployed_revision: boolean
 }
 
-export async function loadProjectBranches(projectId: string, branchId?: string) {
+export async function loadProjectEnvironments(projectId: string, environmentId?: string) {
   const store = useStore()
   if (!store.organization?.id) return
 
@@ -41,16 +41,16 @@ export async function loadProjectBranches(projectId: string, branchId?: string) 
   if (!project) return
 
   const requestFetch: InternalFetch = import.meta.server ? useRequestFetch() as InternalFetch : $fetch
-  const response = await requestFetch<Branch[] | { data: Branch[] }>(
-    `/api/backend/organization/${store.organization.id}/projects/${project.id}/branches`
+  const response = await requestFetch<Environment[] | { data: Environment[] }>(
+    `/api/backend/organization/${store.organization.id}/projects/${project.id}/environments`
   )
-  const branches = Array.isArray(response) ? response : response.data
-  const branch = branches.find(branch => branch.id === branchId) ?? branches.find(branch => branch.is_default) ?? branches[0] ?? null
+  const environments = Array.isArray(response) ? response : response.data
+  const environment = environments.find(environment => environment.id === environmentId) ?? environments.find(environment => environment.is_default) ?? environments[0] ?? null
 
   store.project = project
-  store.branches = branches
-  store.branches_project_id = project.id
-  store.branch = branch
+  store.environments = environments
+  store.environments_project_id = project.id
+  store.environment = environment
 }
 
 export const getSession = async (cache: boolean = true) => {
@@ -148,7 +148,7 @@ export const setOrganization = async (id: string, redirect: string = '/') => {
     : null;
 
   try {
-    type OrgResponse = typeof store.organization & { projects?: Array<{ id: string; organization_id: string; name: string; default_branch_id: string | null }> };
+    type OrgResponse = typeof store.organization & { projects?: Array<{ id: string; organization_id: string; name: string; default_environment_id: string | null }> };
     const data = import.meta.server
       ? await requestFetch!<OrgResponse>(`/api/organization/${id as ':organization_id'}`)
       : await $fetch<OrgResponse>(`/api/organization/${id as ':organization_id'}`, {
@@ -178,9 +178,9 @@ export const setOrganization = async (id: string, redirect: string = '/') => {
     store.organization = data || null;
     store.project = null;
     store.projects = data?.projects ?? [];
-    store.branch = null;
-    store.branches = [];
-    store.branches_project_id = null;
+    store.environment = null;
+    store.environments = [];
+    store.environments_project_id = null;
     await router.push(redirect);
   } catch {
     throw new Error("Organization not found");

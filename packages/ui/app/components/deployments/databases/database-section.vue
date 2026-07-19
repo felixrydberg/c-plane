@@ -14,7 +14,7 @@ interface BranchInfo {
   autoscaling_max_cpu: string | null
 }
 
-type ProjectBranch = { id: string; name: string }
+type ProjectEnvironment = { id: string; name: string }
 
 const props = defineProps<{
   organizationId: string
@@ -31,7 +31,7 @@ const toast = useToast()
 const route = useRoute()
 
 const branches = ref<(BranchInfo & { _name: string })[]>([])
-const projectBranches = ref<ProjectBranch[]>([])
+const projectEnvironments = ref<ProjectEnvironment[]>([])
 const branchesLoading = ref(false)
 
 const deleteModalOpen = ref(false)
@@ -51,23 +51,23 @@ function confirmUnlink() {
 }
 
 const linkedBranchIds = computed(() => new Set(branches.value.map(b => b.branch_id)))
-const unlinkedBranches = computed(() => projectBranches.value.filter(pb => !linkedBranchIds.value.has(pb.id)))
+const unlinkedEnvironments = computed(() => projectEnvironments.value.filter(environment => !linkedBranchIds.value.has(environment.id)))
 
 async function fetchBranches() {
   branchesLoading.value = true
   try {
-    const [data, projBranches] = await Promise.all([
+    const [data, projectEnvironmentsList] = await Promise.all([
       $fetch<BranchInfo[]>(
         `/api/backend/organization/${props.organizationId}/databases/postgres/${props.databaseId}/branches`
       ),
-      $fetch<ProjectBranch[]>(
-        `/api/backend/organization/${props.organizationId}/projects/${props.projectId}/branches`
+      $fetch<ProjectEnvironment[]>(
+        `/api/backend/organization/${props.organizationId}/projects/${props.projectId}/environments`
       ),
     ])
-    projectBranches.value = projBranches
+    projectEnvironments.value = projectEnvironmentsList
     branches.value = data.map(b => ({
       ...b,
-      _name: projBranches.find(pb => pb.id === b.branch_id)?.name ?? b.branch_id,
+      _name: projectEnvironmentsList.find(environment => environment.id === b.branch_id)?.name ?? b.branch_id,
     }))
   } catch {
     branches.value = []
@@ -76,7 +76,7 @@ async function fetchBranches() {
   }
 }
 
-async function linkBranch(pb: ProjectBranch) {
+async function linkBranch(pb: ProjectEnvironment) {
   linkBranchModalOpen.value = false
   busy.value = true
   try {
@@ -167,7 +167,7 @@ function isDefaultBranch(b: BranchInfo): boolean {
           {{ branches.length }} branch{{ branches.length !== 1 ? 'es' : '' }}
         </span>
         <UButton
-          v-if="unlinkedBranches.length > 0"
+          v-if="unlinkedEnvironments.length > 0"
           variant="solid"
           size="xs"
           color="neutral"
@@ -224,7 +224,7 @@ function isDefaultBranch(b: BranchInfo): boolean {
     </template>
     <div v-else class="px-5 py-12 text-center">
       <p class="text-sm font-medium">No branches linked</p>
-      <p class="mt-1 text-sm text-muted">Link a project branch to configure this database for it.</p>
+  <p class="mt-1 text-sm text-muted">Link a project environment to configure this database for it.</p>
     </div>
   </section>
 
@@ -241,10 +241,10 @@ function isDefaultBranch(b: BranchInfo): boolean {
 
   <UModal v-model:open="linkBranchModalOpen" title="Link Branch" :ui="{ content: 'max-w-sm' }">
     <template #body>
-      <p class="text-sm text-muted mb-4">Choose a project branch to link {{ databaseName }} to.</p>
+      <p class="text-sm text-muted mb-4">Choose a project environment to link {{ databaseName }} to.</p>
       <div class="border border-default/40 rounded-lg overflow-hidden">
         <UButton
-          v-for="pb in unlinkedBranches"
+          v-for="pb in unlinkedEnvironments"
           :key="pb.id"
           variant="solid"
           color="neutral"
@@ -270,7 +270,7 @@ function isDefaultBranch(b: BranchInfo): boolean {
           <ul class="list-disc list-inside space-y-0.5">
             <li>The database and all its data</li>
             <li>All backups associated with this database</li>
-            <li>All database branches across every project branch</li>
+            <li>All database branches across every project environment</li>
           </ul>
         </div>
       </div>

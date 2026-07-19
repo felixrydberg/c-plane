@@ -9,7 +9,9 @@ use uuid::Uuid;
 use super::databases::verify_org_access;
 use crate::errors::AppError;
 use crate::middleware::auth::AuthContext;
-use crate::models::entities::{container, container_version, project_branch, project_timeline};
+use crate::models::entities::{
+    container, container_version, project_environment, project_timeline,
+};
 use crate::models::pins::TimelinePins;
 use crate::services::{agent, events, revisions};
 
@@ -18,7 +20,7 @@ pub struct CreateContainerRequest {
     pub name: String,
     pub image: String,
     pub project_id: Uuid,
-    pub branch_id: Uuid,
+    pub environment_id: Uuid,
     #[serde(default)]
     pub public: bool,
     #[serde(default = "default_replica_count")]
@@ -54,13 +56,13 @@ pub struct UpdateContainerRequest {
 
 #[derive(Deserialize, ToSchema)]
 pub struct ContainerActionQuery {
-    pub branch_id: Uuid,
+    pub environment_id: Uuid,
 }
 
 #[derive(Deserialize, ToSchema)]
 pub struct ListContainersQuery {
     pub project_id: Option<Uuid>,
-    pub branch_id: Option<Uuid>,
+    pub environment_id: Option<Uuid>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -117,32 +119,32 @@ fn has_config_change(req: &UpdateContainerRequest) -> bool {
         || req.health_check.is_some()
 }
 
-async fn get_branch(
+async fn get_environment(
     tx: &impl sea_orm::ConnectionTrait,
-    branch_id: Uuid,
+    environment_id: Uuid,
     organization_id: Uuid,
     project_id: Option<Uuid>,
-) -> Result<project_branch::Model, AppError> {
-    let mut query = project_branch::Entity::find()
-        .filter(project_branch::Column::Id.eq(branch_id))
-        .filter(project_branch::Column::OrganizationId.eq(organization_id));
+) -> Result<project_environment::Model, AppError> {
+    let mut query = project_environment::Entity::find()
+        .filter(project_environment::Column::Id.eq(environment_id))
+        .filter(project_environment::Column::OrganizationId.eq(organization_id));
     if let Some(project_id) = project_id {
-        query = query.filter(project_branch::Column::ProjectId.eq(project_id));
+        query = query.filter(project_environment::Column::ProjectId.eq(project_id));
     }
     query
         .one(tx)
         .await?
-        .ok_or_else(|| AppError::NotFound("Branch not found".into()))
+        .ok_or_else(|| AppError::NotFound("Environment not found".into()))
 }
 
-async fn get_branch_timeline_pins(
+async fn get_environment_timeline_pins(
     tx: &impl sea_orm::ConnectionTrait,
-    branch: &project_branch::Model,
+    environment: &project_environment::Model,
 ) -> Result<TimelinePins, AppError> {
-    let head = project_timeline::Entity::find_by_id(branch.timeline)
+    let head = project_timeline::Entity::find_by_id(environment.timeline)
         .one(tx)
         .await?
-        .ok_or_else(|| AppError::NotFound("Branch timeline not found".into()))?;
+        .ok_or_else(|| AppError::NotFound("Environment timeline not found".into()))?;
     Ok(TimelinePins::from_json_value(&head.pins))
 }
 
@@ -200,7 +202,13 @@ pub async fn create_container(
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
 
-    let branch = get_branch(tx, body.branch_id, organization_id, Some(body.project_id)).await?;
+    let environment = get_environment(
+        tx,
+        body.environment_id,
+        organization_id,
+        Some(body.project_id),
+    )
+    .await?;
 
     let created_container: container::Model = container::ActiveModel {
         id: Set(container_id),
@@ -232,21 +240,27 @@ pub async fn create_container(
     .insert(tx)
     .await?;
 
-    let mut pins = get_branch_timeline_pins(tx, &branch).await?;
+    let mut pins = get_environment_timeline_pins(tx, &environment).await?;
     pins.set_container(container_id, version_id);
     let revision = revisions::create_revision(
         tx,
-        &branch,
+        &environment,
         &pins,
         Some(format!("Created container '{}'", name)),
         body.auto_deploy,
     )
     .await?;
-    events::record(tx, organization_id, body.project_id, "container:created", serde_json::json!({"summary": format!("Created container '{}'", name), "target_id": container_id.to_string(), "branch_id": branch.id.to_string()}), auth.actor_id).await?;
+    events::record(tx, organization_id, body.project_id, "container:created", serde_json::json!({"summary": format!("Created container '{}'", name), "target_id": container_id.to_string(), "environment_id": environment.id.to_string()}), auth.actor_id).await?;
 
     scoped.commit().await?;
     if body.auto_deploy {
-        agent::emit_compute(branch.project_id, organization_id, branch.id, revision.id).await?;
+        agent::emit_compute(
+            environment.project_id,
+            organization_id,
+            environment.id,
+            revision.id,
+        )
+        .await?;
     }
 
     Ok((
@@ -261,7 +275,7 @@ pub async fn create_container(
     params(
         ("organization_id" = Uuid, Path, description = "Organization ID"),
         ("project_id" = Option<Uuid>, Query, description = "Filter by project"),
-        ("branch_id" = Option<Uuid>, Query, description = "Filter by branch"),
+        ("environment_id" = Option<Uuid>, Query, description = "Filter by environment"),
     ),
     responses(
         (status = 200, description = "List of containers", body = Vec<ContainerResponse>),
@@ -278,16 +292,16 @@ pub async fn list_containers(
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
 
-    let branch = if let Some(branch_id) = query.branch_id {
-        Some(get_branch(tx, branch_id, organization_id, query.project_id).await?)
+    let environment = if let Some(environment_id) = query.environment_id {
+        Some(get_environment(tx, environment_id, organization_id, query.project_id).await?)
     } else if let Some(project_id) = query.project_id {
-        Some(find_main_branch_containers(tx, project_id, organization_id).await?)
+        Some(find_main_environment_containers(tx, project_id, organization_id).await?)
     } else {
         None
     };
 
-    if let Some(branch) = branch {
-        let pins = get_branch_timeline_pins(tx, &branch).await?;
+    if let Some(environment) = environment {
+        let pins = get_environment_timeline_pins(tx, &environment).await?;
 
         if pins.container.is_empty() {
             scoped.commit().await?;
@@ -359,18 +373,18 @@ pub async fn list_containers(
     Ok(Json(responses))
 }
 
-async fn find_main_branch_containers(
+async fn find_main_environment_containers(
     tx: &impl sea_orm::ConnectionTrait,
     project_id: Uuid,
     organization_id: Uuid,
-) -> Result<project_branch::Model, AppError> {
-    project_branch::Entity::find()
-        .filter(project_branch::Column::ProjectId.eq(project_id))
-        .filter(project_branch::Column::OrganizationId.eq(organization_id))
-        .filter(project_branch::Column::Name.eq("main"))
+) -> Result<project_environment::Model, AppError> {
+    project_environment::Entity::find()
+        .filter(project_environment::Column::ProjectId.eq(project_id))
+        .filter(project_environment::Column::OrganizationId.eq(organization_id))
+        .filter(project_environment::Column::Name.eq("main"))
         .one(tx)
         .await?
-        .ok_or_else(|| AppError::NotFound("Main branch not found for project".into()))
+        .ok_or_else(|| AppError::NotFound("Main environment not found for project".into()))
 }
 
 #[utoipa::path(
@@ -429,7 +443,7 @@ pub async fn get_container(
     params(
         ("organization_id" = Uuid, Path, description = "Organization ID"),
         ("container_id" = Uuid, Path, description = "Container ID"),
-        ("branch_id" = Uuid, Query, description = "Branch ID for the revision"),
+        ("environment_id" = Uuid, Query, description = "Environment ID for the revision"),
     ),
     responses(
         (status = 200, description = "Container updated", body = ContainerResponse),
@@ -455,7 +469,13 @@ pub async fn update_container(
         .await?
         .ok_or_else(|| AppError::NotFound("Container not found".into()))?;
 
-    let branch = get_branch(tx, action.branch_id, organization_id, Some(c.project_id)).await?;
+    let environment = get_environment(
+        tx,
+        action.environment_id,
+        organization_id,
+        Some(c.project_id),
+    )
+    .await?;
 
     if let Some(ref new_name) = body.name {
         let trimmed = new_name.trim().to_string();
@@ -499,11 +519,11 @@ pub async fn update_container(
 
         new_version = Some(cv.insert(tx).await?);
 
-        let mut pins = get_branch_timeline_pins(tx, &branch).await?;
+        let mut pins = get_environment_timeline_pins(tx, &environment).await?;
         pins.set_container(container_id, version_id);
         let revision = revisions::create_revision(
             tx,
-            &branch,
+            &environment,
             &pins,
             Some("Updated container configuration".into()),
             body.auto_deploy,
@@ -514,11 +534,17 @@ pub async fn update_container(
         }
     }
 
-    events::record(tx, organization_id, c.project_id, "container:updated", serde_json::json!({"summary": format!("Updated container '{}'", c.name), "target_id": container_id.to_string(), "branch_id": branch.id.to_string()}), auth.actor_id).await?;
+    events::record(tx, organization_id, c.project_id, "container:updated", serde_json::json!({"summary": format!("Updated container '{}'", c.name), "target_id": container_id.to_string(), "environment_id": environment.id.to_string()}), auth.actor_id).await?;
 
     scoped.commit().await?;
     if let Some(revision_id) = compute_revision {
-        agent::emit_compute(branch.project_id, organization_id, branch.id, revision_id).await?;
+        agent::emit_compute(
+            environment.project_id,
+            organization_id,
+            environment.id,
+            revision_id,
+        )
+        .await?;
     }
 
     let scoped2 = tenant_db.begin_scoped_transaction().await?;
@@ -559,7 +585,7 @@ pub async fn update_container(
     params(
         ("organization_id" = Uuid, Path, description = "Organization ID"),
         ("container_id" = Uuid, Path, description = "Container ID"),
-        ("branch_id" = Uuid, Query, description = "Branch ID for the revision"),
+        ("environment_id" = Uuid, Query, description = "Environment ID for the revision"),
     ),
     responses(
         (status = 200, description = "Container deleted"),
@@ -584,22 +610,34 @@ pub async fn delete_container(
         .await?
         .ok_or_else(|| AppError::NotFound("Container not found".into()))?;
 
-    let branch = get_branch(tx, action.branch_id, organization_id, Some(c.project_id)).await?;
+    let environment = get_environment(
+        tx,
+        action.environment_id,
+        organization_id,
+        Some(c.project_id),
+    )
+    .await?;
 
-    let mut pins = get_branch_timeline_pins(tx, &branch).await?;
+    let mut pins = get_environment_timeline_pins(tx, &environment).await?;
     pins.remove_container(&container_id);
     let revision = revisions::create_revision(
         tx,
-        &branch,
+        &environment,
         &pins,
         Some(format!("Removed container '{}'", c.name)),
         true,
     )
     .await?;
-    events::record(tx, organization_id, c.project_id, "container:removed", serde_json::json!({"summary": format!("Removed container '{}'", c.name), "target_id": container_id.to_string(), "branch_id": branch.id.to_string()}), auth.actor_id).await?;
+    events::record(tx, organization_id, c.project_id, "container:removed", serde_json::json!({"summary": format!("Removed container '{}'", c.name), "target_id": container_id.to_string(), "environment_id": environment.id.to_string()}), auth.actor_id).await?;
 
     scoped.commit().await?;
-    agent::emit_compute(branch.project_id, organization_id, branch.id, revision.id).await?;
+    agent::emit_compute(
+        environment.project_id,
+        organization_id,
+        environment.id,
+        revision.id,
+    )
+    .await?;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }

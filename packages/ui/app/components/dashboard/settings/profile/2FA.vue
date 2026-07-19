@@ -328,11 +328,11 @@ const onDisable2FASubmit = async () => {
         </div>
         <UAlert
           color="warning"
-          variant="soft"
+          variant="subtle"
           icon="i-heroicons:exclamation-triangle"
           title="Important"
           description="Store these codes securely. If you lose access to your authenticator app, these codes are the only way to recover your account."
-          class="mb-4"
+          class="mb-4 border border-warning/40 bg-warning/15 text-warning-800 dark:border-warning-400/40 dark:bg-warning-950/40 dark:text-warning-200"
         />
         <UCheckbox
           v-model="backupCodesAcknowledgement"

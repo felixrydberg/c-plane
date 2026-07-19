@@ -30,9 +30,9 @@ pub enum Relation {
     )]
     Database,
     #[sea_orm(
-        belongs_to = "super::project_branch::Entity",
+        belongs_to = "super::project_environment::Entity",
         from = "Column::BranchId",
-        to = "super::project_branch::Column::Id",
+        to = "super::project_environment::Column::Id",
         on_update = "Cascade",
         on_delete = "Cascade"
     )]

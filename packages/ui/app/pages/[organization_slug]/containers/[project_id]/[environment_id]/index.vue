@@ -15,9 +15,9 @@ interface ContainerWithProject extends Container {
 const store = useStore()
 const route = useRoute()
 const projectId = computed(() => route.params.project_id?.toString() || null)
-const branchId = computed(() => route.params.branch_id?.toString() || null)
+const environmentId = computed(() => route.params.environment_id?.toString() || null)
 
-type BranchItem = { id: string; name: string; timeline: string; is_default: boolean }
+type EnvironmentItem = { id: string; name: string; timeline: string; is_default: boolean }
 
 const orgId = computed(() => store.organization?.id)
 
@@ -25,20 +25,20 @@ const projectName = computed(() =>
   store.projects.find(p => p.id === projectId.value)?.name ?? projectId.value ?? ''
 )
 
-const { data: branchList } = await useFetch<BranchItem[]>(
-  () => orgId.value && projectId.value ? `/api/backend/organization/${orgId.value}/projects/${projectId.value}/branches` : '',
+const { data: environmentList } = await useFetch<EnvironmentItem[]>(
+  () => orgId.value && projectId.value ? `/api/backend/organization/${orgId.value}/projects/${projectId.value}/environments` : '',
   { immediate: computed(() => !!(orgId.value && projectId.value)) },
 )
 
-const branchName = computed(() => {
-  if (!branchId.value) return 'default'
-  const list = branchList.value ?? store.branches
-  return list.find(b => b.id === branchId.value)?.name ?? branchId.value
+const environmentName = computed(() => {
+  if (!environmentId.value) return 'default'
+  const list = environmentList.value ?? store.environments
+  return list.find(b => b.id === environmentId.value)?.name ?? environmentId.value
 })
 
 const fetchUrl = computed(() => {
   const orgId = store.organization?.id
-  if (!orgId || !projectId.value || !branchId.value) return ''
+  if (!orgId || !projectId.value || !environmentId.value) return ''
   return `/api/backend/organization/${orgId}/containers`
 })
 
@@ -48,9 +48,9 @@ const { data, status, refresh: refreshData } = await useLazyFetch<Container[]>(
     key: 'project-resources',
     query: {
       project_id: projectId,
-      branch_id: branchId,
+      environment_id: environmentId,
     },
-    immediate: computed(() => !!(store.organization?.id && projectId.value && branchId.value)),
+    immediate: computed(() => !!(store.organization?.id && projectId.value && environmentId.value)),
   },
 )
 
@@ -71,25 +71,25 @@ watch(() => store.refreshKey, () => { refreshData() })
   <div class="flex w-full max-w-[1500px] flex-col gap-5 mx-auto">
     <div class="flex flex-col gap-4 border-b border-default/60 pb-5 sm:flex-row sm:items-end sm:justify-between">
       <div class="min-w-0">
-        <p class="mb-2 truncate text-sm text-muted">{{ projectName }} <span class="mx-1 text-default/30">/</span> {{ branchName }}</p>
+        <p class="mb-2 truncate text-sm text-muted">{{ projectName }} <span class="mx-1 text-default/30">/</span> {{ environmentName }}</p>
         <h1 class="text-2xl font-semibold">Containers</h1>
-        <p class="mt-1 text-sm text-muted">Runtime services deployed to this branch.</p>
+        <p class="mt-1 text-sm text-muted">Runtime services deployed to this environment.</p>
       </div>
-      <UButton class="shrink-0" :icon="ICONS.plus" :to="`/${route.params.organization_slug}/containers/${projectId}/${branchId}/new`">New Container</UButton>
+      <UButton class="shrink-0" :icon="ICONS.plus" :to="`/${route.params.organization_slug}/containers/${projectId}/${environmentId}/new`">New Container</UButton>
     </div>
 
     <div class="grid overflow-hidden rounded-md border border-dashed border-default bg-transparent sm:grid-cols-3">
-      <div class="px-4 py-3"><p class="text-xs text-muted">Branch</p><p class="mt-1 text-sm font-medium">{{ branchName }}</p></div>
+      <div class="px-4 py-3"><p class="text-xs text-muted">Environment</p><p class="mt-1 text-sm font-medium">{{ environmentName }}</p></div>
       <div class="px-4 py-3"><p class="text-xs text-muted">Containers</p><p class="mt-1 font-mono text-sm">{{ containers.length }}</p></div>
       <div class="px-4 py-3"><p class="text-xs text-muted">Desired replicas</p><p class="mt-1 font-mono text-sm">{{ containers.reduce((total, container) => total + (container.current_version?.replica_count ?? 0), 0) }}</p></div>
     </div>
 
     <DeploymentsContainersListing
-      v-if="projectId && branchId && store.organization"
+      v-if="projectId && environmentId && store.organization"
       :containers="containers"
       :organization-id="store.organization.id"
       :project-id="projectId"
-      :branch-id="branchId"
+      :environment-id="environmentId"
       :status="status"
       @refresh="refresh"
     />

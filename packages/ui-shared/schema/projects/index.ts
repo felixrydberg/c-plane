@@ -11,8 +11,8 @@ export const project = pgTable('project', {
   organization_id: uuid("organization_id")
     .notNull()
     .references(() => organization.id, { onDelete: "cascade" }),
-  default_branch_id: uuid("default_branch_id")
-    .references((): AnyPgColumn => project_branch.id, { onDelete: "set null" }),
+  default_environment_id: uuid("default_environment_id")
+    .references((): AnyPgColumn => project_environment.id, { onDelete: "set null" }),
   name: text("name").notNull(),
   created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
   updated_at: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
@@ -20,7 +20,7 @@ export const project = pgTable('project', {
   uniqueIndex("project_organization_id_name_uidx").on(table.organization_id, table.name),
   uniqueIndex("project_id_organization_id_uidx").on(table.id, table.organization_id),
   index("project_organization_id_idx").on(table.organization_id),
-  index("project_default_branch_id_idx").on(table.default_branch_id),
+  index("project_default_environment_id_idx").on(table.default_environment_id),
   pgPolicy("project_tenant_rls", {
     as: "permissive",
     for: "all",
@@ -30,7 +30,7 @@ export const project = pgTable('project', {
   }),
 ]).enableRLS();
 
-export const project_branch = pgTable('project_branch', {
+export const project_environment = pgTable('project_environment', {
   id: uuid("id").primaryKey(),
   project_id: uuid("project_id")
     .notNull()
@@ -43,11 +43,11 @@ export const project_branch = pgTable('project_branch', {
   created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
   updated_at: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 }, (table) => [
-  uniqueIndex("project_branch_project_id_name_uidx").on(table.project_id, table.name),
-  uniqueIndex("project_branch_id_project_id_organization_id_uidx").on(table.id, table.project_id, table.organization_id),
-  index("project_branch_organization_id_idx").on(table.organization_id),
-  index("project_branch_project_id_idx").on(table.project_id),
-  pgPolicy("project_branch_tenant_rls", {
+  uniqueIndex("project_environment_project_id_name_uidx").on(table.project_id, table.name),
+  uniqueIndex("project_environment_id_project_id_organization_id_uidx").on(table.id, table.project_id, table.organization_id),
+  index("project_environment_organization_id_idx").on(table.organization_id),
+  index("project_environment_project_id_idx").on(table.project_id),
+  pgPolicy("project_environment_tenant_rls", {
     as: "permissive",
     for: "all",
     to: app_tenant,
@@ -61,7 +61,7 @@ export const project_timeline = pgTable('project_timeline', {
   project_id: uuid("project_id")
     .notNull()
     .references(() => project.id, { onDelete: "cascade" }),
-  branch_id: uuid("branch_id"),
+  environment_id: uuid("environment_id"),
   organization_id: uuid("organization_id")
     .notNull()
     .references(() => organization.id, { onDelete: "cascade" }),
@@ -83,7 +83,7 @@ export const project_timeline = pgTable('project_timeline', {
     name: "project_timeline_parent_scope_fk",
   }),
   index("project_timeline_id_idx").on(table.id),
-  index("project_timeline_branch_id_idx").on(table.branch_id),
+  index("project_timeline_environment_id_idx").on(table.environment_id),
   index("project_timeline_organization_id_idx").on(table.organization_id),
   index("project_timeline_project_id_idx").on(table.project_id),
   index("project_timeline_parent_timeline_id_idx").on(table.parent_timeline_id),

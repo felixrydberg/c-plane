@@ -8,7 +8,7 @@ const toast = useToast()
 
 const orgId = computed(() => store.organization?.id ?? '')
 const projectId = computed(() => route.params.project_id?.toString() || null)
-const branchId = computed(() => route.params.branch_id?.toString() || null)
+const environmentId = computed(() => route.params.environment_id?.toString() || null)
 const projectName = computed(() => store.projects.find(p => p.id === projectId.value)?.name ?? projectId.value ?? '')
 
 const loading = ref(false)
@@ -40,7 +40,7 @@ function addEnvRow() { envRows.value.push({ key: '', value: '' }) }
 function removeEnvRow(i: number) { envRows.value.splice(i, 1) }
 
 async function handleCreate() {
-  if (!orgId.value || !projectId.value || !regionId.value || !branchId.value) return
+  if (!orgId.value || !projectId.value || !regionId.value || !environmentId.value) return
   loading.value = true; error.value = ''
   const unit = computeUnitByLabel(computeUnit.value)
   try {
@@ -48,7 +48,7 @@ async function handleCreate() {
     for (const row of envRows.value) { const k = row.key.trim(); if (k) envObj[k] = row.value }
 
     const body: Record<string, unknown> = {
-      name: state.name.trim(), image: state.image.trim(), project_id: projectId.value, branch_id: branchId.value,
+      name: state.name.trim(), image: state.image.trim(), project_id: projectId.value, environment_id: environmentId.value,
       port: state.port, replica_count: state.replicas, public: state.isPublic,
       health_check: { path: state.healthCheckPath }, region_id: regionId.value,
       resources: { cpu: { min: unit.cpu, max: unit.cpu }, memory: { min: `${Math.round(unit.ramGib * 1024)}Mi`, max: `${Math.round(unit.ramGib * 1024)}Mi` } },
@@ -57,14 +57,14 @@ async function handleCreate() {
 
     await $fetch(`/api/backend/organization/${orgId.value}/containers`, { method: 'POST', body })
     toast.add({ title: 'Container created', color: 'success' })
-    navigateTo(`/${route.params.organization_slug}/containers/${projectId.value}/${branchId.value}`)
+    navigateTo(`/${route.params.organization_slug}/containers/${projectId.value}/${environmentId.value}`)
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Failed to create container'
     toast.add({ title: 'Failed to create container', color: 'error' })
   } finally { loading.value = false }
 }
 
-function backUrl() { return `/${route.params.organization_slug}/containers/${projectId.value}/${branchId.value}` }
+function backUrl() { return `/${route.params.organization_slug}/containers/${projectId.value}/${environmentId.value}` }
 </script>
 
 <template>

@@ -38,7 +38,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  let projects: Array<{ id: string; organization_id: string; name: string; default_branch_id: string | null }> = [];
+  let projects: Array<{ id: string; organization_id: string; name: string; default_environment_id: string | null }> = [];
   try {
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:8080';
     const headers = getRequestHeaders(event);

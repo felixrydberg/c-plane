@@ -5,10 +5,10 @@ const store = useStore();
 
 const selectedProject = computed(() => store.project);
 const showOnboarding = computed(() => store.projects.length === 0);
-const currentBranch = computed(() =>
-  store.branch?.name
-  ?? store.branches.find(branch => branch.id === selectedProject.value?.default_branch_id)?.name
-  ?? 'No branch selected',
+const currentEnvironment = computed(() =>
+  store.environment?.name
+  ?? store.environments.find(environment => environment.id === selectedProject.value?.default_environment_id)?.name
+  ?? 'No environment selected',
 )
 </script>
 
@@ -26,10 +26,10 @@ const currentBranch = computed(() =>
       </div>
 
       <div class="rounded-md border border-dashed border-default bg-transparent px-4 py-3 sm:min-w-52">
-        <p class="font-space-mono text-[10px] uppercase tracking-[0.08em] text-muted">Current branch</p>
+        <p class="font-space-mono text-[10px] uppercase tracking-[0.08em] text-muted">Current environment</p>
         <p class="mt-1 flex items-center gap-2 text-sm font-medium">
           <span class="size-1.5 rounded-full bg-primary" aria-hidden="true" />
-          {{ currentBranch }}
+          {{ currentEnvironment }}
         </p>
       </div>
     </div>

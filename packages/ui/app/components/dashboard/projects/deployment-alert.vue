@@ -6,27 +6,27 @@ const toast = useToast()
 const deploying = ref(false)
 
 const hasRecentUndeployedRevision = computed(() =>
-  store.branches.find(branch => branch.id === store.branch?.id)?.has_recent_undeployed_revision ?? false
+  store.environments.find(environment => environment.id === store.environment?.id)?.has_recent_undeployed_revision ?? false
 )
 
 async function deployLatestRevision() {
-  if (!store.organization?.id || !store.project?.id || !store.branch) return
+  if (!store.organization?.id || !store.project?.id || !store.environment) return
   deploying.value = true
   try {
     const revisions = await $fetch<TimelineRevision[]>(
       `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/timelines`,
-      { query: { branch_id: store.branch.id } }
+      { query: { environment_id: store.environment.id } }
     )
     const latest = revisions[0]
     if (!latest) return
 
     await $fetch(
-      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/branches/${store.branch.id}`,
+      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/environments/${store.environment.id}`,
       { method: 'PATCH', body: { timeline_id: latest.id } }
     )
-    store.branch.has_recent_undeployed_revision = false
-    const branch = store.branches.find(branch => branch.id === store.branch?.id)
-    if (branch) branch.has_recent_undeployed_revision = false
+    store.environment.has_recent_undeployed_revision = false
+    const environment = store.environments.find(environment => environment.id === store.environment?.id)
+    if (environment) environment.has_recent_undeployed_revision = false
     store.refreshKey++
     toast.add({ title: 'Latest revision deployed', color: 'success' })
   } catch {
@@ -39,7 +39,7 @@ async function deployLatestRevision() {
 
 <template>
   <div v-if="hasRecentUndeployedRevision" class="shrink-0 bg-default px-6 py-3 lg:px-8">
-    <UAlert color="warning" variant="soft" icon="i-heroicons:exclamation-triangle" title="Environment updated, not deployed" description="Deploy the latest revision to make its changes active." orientation="horizontal">
+    <UAlert color="warning" variant="subtle" icon="i-heroicons:exclamation-triangle" title="Environment updated, not deployed" description="Deploy the latest revision to make its changes active." orientation="horizontal" class="border border-warning/40 bg-warning/15 text-warning-800 dark:border-warning-400/40 dark:bg-warning-950/40 dark:text-warning-200">
       <template #actions>
         <UButton color="primary" size="sm" :loading="deploying" @click="deployLatestRevision">Deploy latest</UButton>
       </template>
