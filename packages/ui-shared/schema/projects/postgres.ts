@@ -14,13 +14,6 @@ export const postgres_database = pgTable('postgres_database', {
   default_branch_id: uuid("default_branch_id")
     .references((): AnyPgColumn => postgres_database_branch.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
-  cpu: text("cpu"),
-  ram: text("ram"),
-  high_availability: boolean("high_availability").notNull().default(false),
-  read_replicas: integer("read_replicas"),
-  autoscaling_enabled: boolean("autoscaling_enabled").notNull().default(false),
-  autoscaling_min_cpu: text("autoscaling_min_cpu"),
-  autoscaling_max_cpu: text("autoscaling_max_cpu"),
 }, (table) => [
   index("postgres_database_project_id_idx").on(table.project_id),
   index("postgres_database_organization_id_idx").on(table.organization_id),
@@ -45,6 +38,13 @@ export const postgres_database_branch = pgTable('postgres_database_branch', {
     .notNull()
     .references(() => organization.id, { onDelete: "cascade" }),
   backup_retention_days: integer("backup_retention_days").default(30),
+  cpu: text("cpu"),
+  ram: text("ram"),
+  high_availability: boolean("high_availability").notNull().default(false),
+  read_replicas: integer("read_replicas"),
+  autoscaling_enabled: boolean("autoscaling_enabled").notNull().default(false),
+  autoscaling_min_cpu: text("autoscaling_min_cpu"),
+  autoscaling_max_cpu: text("autoscaling_max_cpu"),
 
 }, (table) => [
   index("postgres_database_branch_database_id_idx").on(table.database_id),
