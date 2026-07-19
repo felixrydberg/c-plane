@@ -69,7 +69,7 @@ const defaultDatabaseBranchId = ref<string | null>(null)
 const databaseBranches = ref<(DatabaseBranchRow & { _name: string })[]>([])
 
 const loading = ref(true)
-const recentActivity = ref<{ refresh: () => Promise<void> } | null>(null)
+const recentActivity = useTemplateRef<{ refresh: () => Promise<void> }>('recentActivity')
 const currentDatabaseBranch = computed(() => databaseBranches.value.find(branch => branch.branch_id === branchId.value))
 const currentDatabaseBranchId = computed(() => currentDatabaseBranch.value?.id ?? '')
 const replicas = computed(() => [
@@ -142,7 +142,7 @@ async function save() {
       }
     )
     toast.add({ title: 'Branch config saved', color: 'success' })
-    await recentActivity.value?.refresh()
+    await recentActivity.value?.refresh().catch(() => undefined)
   } catch {
     toast.add({ title: 'Failed to save', color: 'error' })
   } finally {
