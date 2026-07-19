@@ -50,6 +50,9 @@ const createProjectModal = ref(false)
 const deleteProjectModal = ref(false)
 const createEnvironmentModal = ref(false)
 const deleteEnvironmentModal = ref(false)
+const renameEnvironmentModal = ref(false)
+const environmentName = ref('')
+const renamingEnvironment = ref(false)
 
 const projectLabel = computed(() => store.project?.name || 'All Projects')
 
@@ -98,6 +101,14 @@ const environmentItems = computed<DropdownMenuItem[][]>(() => {
     { label: 'Create Environment', icon: ICONS.folderPlus, onSelect() { createEnvironmentModal.value = true } },
   ]
   if (store.environment) {
+    actions.push({
+      label: 'Rename Environment',
+      icon: ICONS.pencil,
+      onSelect() {
+        environmentName.value = store.environment?.name ?? ''
+        renameEnvironmentModal.value = true
+      },
+    })
     actions.push({
       label: 'Delete Environment',
       icon: 'i-heroicons:trash',
@@ -179,6 +190,27 @@ async function refreshEnvironments() {
 
 async function onEnvironmentCreated() { await refreshEnvironments() }
 
+async function onRenameEnvironment() {
+  if (!store.organization?.id || !store.project?.id || !store.environment || !environmentName.value.trim()) return
+
+  renamingEnvironment.value = true
+  try {
+    const updated = await $fetch<EnvironmentItem>(
+      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/environments/${store.environment.id}`,
+      { method: 'PATCH', body: { name: environmentName.value.trim() } },
+    )
+    store.environment = updated
+    const index = store.environments.findIndex(environment => environment.id === updated.id)
+    if (index !== -1) store.environments[index] = updated
+    renameEnvironmentModal.value = false
+    toast.add({ title: 'Environment renamed', color: 'success' })
+  } catch (error) {
+    toast.add({ title: (error as { data?: { message?: string } })?.data?.message || 'Failed to rename environment', color: 'error' })
+  } finally {
+    renamingEnvironment.value = false
+  }
+}
+
 async function onConfirmDeleteEnvironment() {
   if (!store.organization?.id || !store.project?.id || !store.environment) return;
   try {
@@ -231,6 +263,20 @@ const graphModalOpen = ref(false)
     <DashboardProjectsDeleteModal v-model:open="deleteProjectModal" @deleted="onProjectDeleted" />
     <DashboardProjectsCreateEnvironmentModal v-model:open="createEnvironmentModal" @created="onEnvironmentCreated" />
     <DashboardProjectsEnvironmentGraphModal v-model:open="graphModalOpen" />
+
+    <UModal v-model:open="renameEnvironmentModal" title="Rename Environment" :ui="{ content: 'max-w-sm' }">
+      <template #body>
+        <form class="space-y-4" @submit.prevent="onRenameEnvironment">
+          <UFormField label="Environment name" required>
+            <UInput v-model="environmentName" :disabled="renamingEnvironment" autofocus class="w-full" />
+          </UFormField>
+          <div class="flex justify-end gap-3">
+            <UButton color="neutral" variant="ghost" :disabled="renamingEnvironment" @click="renameEnvironmentModal = false">Cancel</UButton>
+            <UButton type="submit" :icon="ICONS.check" color="primary" :loading="renamingEnvironment" :disabled="!environmentName.trim()">Save</UButton>
+          </div>
+        </form>
+      </template>
+    </UModal>
 
     <UModal v-model:open="deleteEnvironmentModal" title="Delete Environment" :ui="{ content: 'max-w-sm' }">
       <template #body>

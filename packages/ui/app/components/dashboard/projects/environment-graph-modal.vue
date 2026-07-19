@@ -81,6 +81,10 @@ const allEnvironments = ref<{ id: string; name: string }[]>([]);
 const removeEnvironmentId = ref('');
 const removeEnvironmentName = ref('');
 const removeModalOpen = ref(false);
+const renameEnvironmentId = ref('');
+const renameEnvironmentName = ref('');
+const renameModalOpen = ref(false);
+const renamingEnvironment = ref(false);
 
 // --- Detail panel state ---
 const selectedRevisionId = ref<string | null>(null);
@@ -162,6 +166,34 @@ function onRemoveEnvironment(environmentId: string) {
   removeEnvironmentId.value = environmentId;
   removeEnvironmentName.value = environment?.name ?? environmentId;
   removeModalOpen.value = true;
+}
+
+function onRenameEnvironment(environmentId: string) {
+  const environment = allEnvironments.value.find(b => b.id === environmentId);
+  renameEnvironmentId.value = environmentId;
+  renameEnvironmentName.value = environment?.name ?? '';
+  renameModalOpen.value = true;
+}
+
+async function onConfirmRenameEnvironment() {
+  if (!store.organization?.id || !store.project?.id || !renameEnvironmentId.value || !renameEnvironmentName.value.trim()) return;
+
+  renamingEnvironment.value = true;
+  try {
+    const updated = await $fetch<{ id: string; name: string; timeline: string; is_default: boolean; has_recent_undeployed_revision: boolean }>(
+      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/environments/${renameEnvironmentId.value}`,
+      { method: 'PATCH', body: { name: renameEnvironmentName.value.trim() } }
+    );
+    if (store.environment?.id === updated.id) store.environment = updated;
+    store.environments = store.environments.map(environment => environment.id === updated.id ? updated : environment);
+    renameModalOpen.value = false;
+    toast.add({ title: 'Environment renamed', color: 'success' });
+    refresh();
+  } catch (error) {
+    toast.add({ title: (error as { data?: { message?: string } })?.data?.message || 'Failed to rename environment', color: 'error' });
+  } finally {
+    renamingEnvironment.value = false;
+  }
 }
 
 async function onConfirmRemoveEnvironment() {
@@ -577,6 +609,16 @@ watch(open, (isOpen) => {
                         <span v-if="b.isDefault" class="text-[10px] text-muted">default</span>
                         <UIcon v-if="b.exists" name="i-heroicons:chevron-right" class="size-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                         <UButton
+                          v-if="b.exists"
+                          variant="solid"
+                          size="xs"
+                          color="neutral"
+                          :icon="ICONS.pencil"
+                          @click.prevent.stop="onRenameEnvironment(b.id)"
+                        >
+                          Rename
+                        </UButton>
+                        <UButton
                           v-if="!b.isDefault && b.exists"
                           variant="solid"
                           size="xs"
@@ -701,7 +743,7 @@ watch(open, (isOpen) => {
               <p v-if="allEnvironments.length === 0" class="text-sm text-muted px-4 py-3">No environments available.</p>
             </div>
             <div class="flex justify-end gap-3 pt-3">
-              <UButton variant="ghost"color="neutral" @click="repointModalOpen = false; repointEnvironmentId = ''">Cancel</UButton>
+              <UButton variant="ghost" color="neutral" @click="repointModalOpen = false; repointEnvironmentId = ''">Cancel</UButton>
             </div>
           </template>
         </UModal>
@@ -715,6 +757,20 @@ watch(open, (isOpen) => {
               <UButton variant="ghost" color="neutral" @click="removeModalOpen = false">Cancel</UButton>
               <UButton color="error" @click="onConfirmRemoveEnvironment">Remove</UButton>
             </div>
+          </template>
+        </UModal>
+
+        <UModal v-model:open="renameModalOpen" title="Rename Environment" :ui="{ content: 'max-w-sm' }">
+          <template #body>
+            <form class="space-y-4" @submit.prevent="onConfirmRenameEnvironment">
+              <UFormField label="Environment name" required>
+                <UInput v-model="renameEnvironmentName" :disabled="renamingEnvironment" autofocus class="w-full" />
+              </UFormField>
+              <div class="flex justify-end gap-3">
+                <UButton color="neutral" variant="ghost" :disabled="renamingEnvironment" @click="renameModalOpen = false">Cancel</UButton>
+                <UButton type="submit" :icon="ICONS.check" color="primary" :loading="renamingEnvironment" :disabled="!renameEnvironmentName.trim()">Save</UButton>
+              </div>
+            </form>
           </template>
         </UModal>
       </div>

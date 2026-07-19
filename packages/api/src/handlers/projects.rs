@@ -615,7 +615,22 @@ pub async fn list_project_timelines(
 
 #[derive(Deserialize, ToSchema)]
 pub struct UpdateEnvironmentRequest {
-    pub timeline_id: Uuid,
+    pub name: Option<String>,
+    pub timeline_id: Option<Uuid>,
+}
+
+#[cfg(test)]
+mod update_environment_request_tests {
+    use super::UpdateEnvironmentRequest;
+
+    #[test]
+    fn accepts_a_rename_without_a_timeline_change() {
+        let request: UpdateEnvironmentRequest =
+            serde_json::from_str(r#"{"name":"staging"}"#).unwrap();
+
+        assert_eq!(request.name.as_deref(), Some("staging"));
+        assert_eq!(request.timeline_id, None);
+    }
 }
 
 #[utoipa::path(
@@ -629,7 +644,9 @@ pub struct UpdateEnvironmentRequest {
     ),
     responses(
         (status = 200, description = "Environment updated", body = EnvironmentResponse),
+        (status = 400, description = "Name or timeline is required"),
         (status = 404, description = "Not found"),
+        (status = 409, description = "Environment name already exists"),
     ),
     tag = "environments",
 )]
@@ -639,6 +656,14 @@ pub async fn update_environment(
     Json(body): Json<UpdateEnvironmentRequest>,
 ) -> Result<Json<EnvironmentResponse>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
+
+    let name = body.name.map(|name| name.trim().to_string());
+    if name.as_ref().is_some_and(String::is_empty) {
+        return Err(AppError::BadRequest("Name is required".into()));
+    }
+    if name.is_none() && body.timeline_id.is_none() {
+        return Err(AppError::BadRequest("Name or timeline is required".into()));
+    }
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
@@ -650,33 +675,49 @@ pub async fn update_environment(
         .await?
         .ok_or_else(|| AppError::NotFound("Project not found".into()))?;
 
-    let _timeline = project_timeline::Entity::find()
-        .filter(project_timeline::Column::Id.eq(body.timeline_id))
-        .filter(project_timeline::Column::ProjectId.eq(project_id))
-        .one(tx)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Timeline revision not found".into()))?;
-
-    let mut active: project_environment::ActiveModel =
-        project_environment::Entity::find_by_id(environment_id)
-            .filter(project_environment::Column::ProjectId.eq(project_id))
+    if let Some(timeline_id) = body.timeline_id {
+        project_timeline::Entity::find()
+            .filter(project_timeline::Column::Id.eq(timeline_id))
+            .filter(project_timeline::Column::ProjectId.eq(project_id))
             .one(tx)
             .await?
-            .ok_or_else(|| AppError::NotFound("Environment not found".into()))?
-            .into();
+            .ok_or_else(|| AppError::NotFound("Timeline revision not found".into()))?;
+    }
 
-    active.timeline = Set(body.timeline_id);
+    let environment = project_environment::Entity::find_by_id(environment_id)
+        .filter(project_environment::Column::ProjectId.eq(project_id))
+        .one(tx)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Environment not found".into()))?;
+
+    if let Some(ref name) = name
+        && name != &environment.name
+        && project_environment::Entity::find()
+            .filter(project_environment::Column::ProjectId.eq(project_id))
+            .filter(project_environment::Column::Name.eq(name))
+            .one(tx)
+            .await?
+            .is_some()
+    {
+        return Err(AppError::Conflict(
+            "A environment with this name already exists".into(),
+        ));
+    }
+
+    let mut active: project_environment::ActiveModel = environment.into();
+    if let Some(name) = name {
+        active.name = Set(name);
+    }
+    if let Some(timeline_id) = body.timeline_id {
+        active.timeline = Set(timeline_id);
+    }
     active.updated_at = Set(Utc::now().fixed_offset());
     let updated = active.update(tx).await?;
 
     scoped.commit().await?;
-    agent::emit_compute(
-        project.id,
-        organization_id,
-        environment_id,
-        body.timeline_id,
-    )
-    .await?;
+    if let Some(timeline_id) = body.timeline_id {
+        agent::emit_compute(project.id, organization_id, environment_id, timeline_id).await?;
+    }
 
     Ok(Json(EnvironmentResponse {
         id: updated.id,
