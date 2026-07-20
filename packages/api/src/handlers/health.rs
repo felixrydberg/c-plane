@@ -1,6 +1,20 @@
 use axum::Json;
-use serde_json::json;
+use serde::Serialize;
+use utoipa::ToSchema;
 
-pub async fn health_check() -> Json<serde_json::Value> {
-    Json(json!({"status": "healthy"}))
+#[derive(Serialize, ToSchema)]
+pub struct HealthResponse {
+    pub status: String,
+}
+
+#[utoipa::path(
+    get,
+    path = "/health",
+    responses((status = 200, description = "API health status", body = HealthResponse)),
+    tag = "health",
+)]
+pub async fn health_check() -> Json<HealthResponse> {
+    Json(HealthResponse {
+        status: "healthy".into(),
+    })
 }

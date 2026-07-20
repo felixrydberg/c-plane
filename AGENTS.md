@@ -16,4 +16,5 @@ Before writing any UI code, read these:
 
 - Error handling: prefer `AppError::NotFound` / `AppError::Conflict` over custom error variants. Add new variants only when existing ones don't cover the case.
 - API: every handler takes `AuthContext` (tenant_db resolves org access). Verify org access first, then project-in-org, then operate.
+- OpenAPI: every Rust route must have a matching `utoipa::path` entry and all request/response types exposed by that route must be registered in `packages/api/src/openapi.rs`.
 - Frontend: use `useFetch` / `await useFetch` during SSR to avoid hydration mismatches. Store projects in `store.projects` — they're loaded by the auth plugin before any page renders.

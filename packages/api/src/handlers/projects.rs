@@ -177,6 +177,18 @@ pub async fn create_project(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/organization/{organization_id}/projects",
+    params(
+        ("organization_id" = Uuid, Path, description = "Organization ID"),
+        ("search" = Option<String>, Query, description = "Project name search"),
+        ("page" = Option<u64>, Query, description = "Page number"),
+        ("per_page" = Option<u64>, Query, description = "Items per page"),
+    ),
+    responses((status = 200, description = "Paginated projects", body = PaginatedResponse<ProjectResponse>)),
+    tag = "projects",
+)]
 pub async fn list_projects(
     AuthContext { tenant_db, .. }: AuthContext,
     Path(organization_id): Path<Uuid>,
@@ -338,6 +350,13 @@ pub async fn delete_project(
     Ok(Json(serde_json::json!({ "success": true })))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/organization/{organization_id}/environments",
+    params(("organization_id" = Uuid, Path, description = "Organization ID")),
+    responses((status = 200, description = "Organization environments", body = Vec<EnvironmentWithProjectResponse>)),
+    tag = "environments",
+)]
 pub async fn list_organization_environments(
     AuthContext { tenant_db, .. }: AuthContext,
     Path(organization_id): Path<Uuid>,
@@ -395,6 +414,16 @@ pub async fn list_organization_environments(
     Ok(Json(responses))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/organization/{organization_id}/projects/{project_id}/environments",
+    params(
+        ("organization_id" = Uuid, Path, description = "Organization ID"),
+        ("project_id" = Uuid, Path, description = "Project ID"),
+    ),
+    responses((status = 200, description = "Project environments", body = Vec<EnvironmentResponse>)),
+    tag = "environments",
+)]
 pub async fn list_environments(
     AuthContext { tenant_db, .. }: AuthContext,
     Path((organization_id, project_id)): Path<(Uuid, Uuid)>,
@@ -561,6 +590,17 @@ pub async fn create_environment(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/organization/{organization_id}/projects/{project_id}/timelines",
+    params(
+        ("organization_id" = Uuid, Path, description = "Organization ID"),
+        ("project_id" = Uuid, Path, description = "Project ID"),
+        ("environment_id" = Option<Uuid>, Query, description = "Environment ID"),
+    ),
+    responses((status = 200, description = "Project timelines", body = Vec<TimelineResponse>)),
+    tag = "projects",
+)]
 pub async fn list_project_timelines(
     AuthContext { tenant_db, .. }: AuthContext,
     Path((organization_id, project_id)): Path<(Uuid, Uuid)>,
@@ -832,6 +872,20 @@ pub struct ResolvedTimelineResponse {
     pub created_at: String,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/organization/{organization_id}/projects/{project_id}/timelines/{timeline_id}",
+    params(
+        ("organization_id" = Uuid, Path, description = "Organization ID"),
+        ("project_id" = Uuid, Path, description = "Project ID"),
+        ("timeline_id" = Uuid, Path, description = "Timeline ID"),
+    ),
+    responses(
+        (status = 200, description = "Resolved timeline", body = ResolvedTimelineResponse),
+        (status = 404, description = "Not found"),
+    ),
+    tag = "projects",
+)]
 pub async fn get_timeline(
     AuthContext { tenant_db, .. }: AuthContext,
     Path((organization_id, project_id, timeline_id)): Path<(Uuid, Uuid, Uuid)>,

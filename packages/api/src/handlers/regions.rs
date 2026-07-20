@@ -1,6 +1,7 @@
 use axum::{Json, extract::Path};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
 use serde::Serialize;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
@@ -11,12 +12,19 @@ use crate::{
 
 use super::databases::verify_org_access;
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct RegionResponse {
     pub id: Uuid,
     pub display_name: String,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/organization/{organization_id}/regions",
+    params(("organization_id" = Uuid, Path, description = "Organization ID")),
+    responses((status = 200, description = "Available regions", body = Vec<RegionResponse>)),
+    tag = "regions",
+)]
 pub async fn list_regions(
     AuthContext { tenant_db, .. }: AuthContext,
     Path(organization_id): Path<Uuid>,

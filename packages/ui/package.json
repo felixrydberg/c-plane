@@ -22,6 +22,7 @@
     "@vue-flow/core": "^1.48.2",
     "better-auth": "^1.6.11",
     "drizzle-orm": "^0.45.1",
+    "h3": "1.15.11",
     "nuxt": "^4.5.0",
     "pinia": "^3.0.3",
     "postgres": "^3.4.9",

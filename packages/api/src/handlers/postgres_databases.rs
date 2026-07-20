@@ -121,6 +121,16 @@ pub async fn create_database(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/organization/{organization_id}/databases/postgres",
+    params(
+        ("organization_id" = Uuid, Path, description = "Organization ID"),
+        ("project_id" = Uuid, Query, description = "Project ID"),
+    ),
+    responses((status = 200, description = "Project databases", body = Vec<DatabaseResponse>)),
+    tag = "databases/postgres",
+)]
 pub async fn list_databases(
     AuthContext { tenant_db, .. }: AuthContext,
     Path(organization_id): Path<Uuid>,
@@ -145,6 +155,19 @@ pub async fn list_databases(
     Ok(Json(dbs.iter().map(db_to_response).collect()))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/organization/{organization_id}/databases/postgres/{database_id}",
+    params(
+        ("organization_id" = Uuid, Path, description = "Organization ID"),
+        ("database_id" = Uuid, Path, description = "Database ID"),
+    ),
+    responses(
+        (status = 200, description = "Database details", body = DatabaseResponse),
+        (status = 404, description = "Not found"),
+    ),
+    tag = "databases/postgres",
+)]
 pub async fn get_database(
     AuthContext { tenant_db, .. }: AuthContext,
     Path((organization_id, database_id)): Path<(Uuid, Uuid)>,
@@ -167,6 +190,20 @@ pub async fn get_database(
     Ok(Json(db_to_response(&db)))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/organization/{organization_id}/databases/postgres/{database_id}",
+    request_body = UpdateDatabaseRequest,
+    params(
+        ("organization_id" = Uuid, Path, description = "Organization ID"),
+        ("database_id" = Uuid, Path, description = "Database ID"),
+    ),
+    responses(
+        (status = 200, description = "Database updated", body = DatabaseResponse),
+        (status = 404, description = "Not found"),
+    ),
+    tag = "databases/postgres",
+)]
 pub async fn update_database(
     AuthContext { tenant_db, auth }: AuthContext,
     Path((organization_id, database_id)): Path<(Uuid, Uuid)>,
@@ -290,6 +327,21 @@ pub async fn list_database_branches(
     Ok(Json(branches.iter().map(branch_to_response).collect()))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/organization/{organization_id}/databases/postgres/{database_id}/branches/{branch_id}",
+    request_body = UpdateDatabaseBranchRequest,
+    params(
+        ("organization_id" = Uuid, Path, description = "Organization ID"),
+        ("database_id" = Uuid, Path, description = "Database ID"),
+        ("branch_id" = Uuid, Path, description = "Branch ID"),
+    ),
+    responses(
+        (status = 200, description = "Database branch updated", body = DatabaseBranchResponse),
+        (status = 404, description = "Not found"),
+    ),
+    tag = "databases/postgres",
+)]
 pub async fn update_database_branch(
     AuthContext { tenant_db, auth }: AuthContext,
     Path((organization_id, database_id, branch_id)): Path<(Uuid, Uuid, Uuid)>,
