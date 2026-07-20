@@ -1,17 +1,22 @@
 {
   "name": "cplane",
   "private": true,
-  "packageManager": "bun@1.2.9",
+  "engines": {
+    "deno": "2.9.3"
+  },
+  "overrides": {
+    "vue": "latest"
+  },
   "workspaces": [
     "packages/ui-shared",
     "packages/ui"
   ],
   "scripts": {
-    "build": "bun --cwd packages/ui run build && cargo build -p control-plane --features server",
+    "build": "deno task --cwd packages/ui build && cargo build -p control-plane --features server",
     "build:prod": "docker compose -f docker-compose.prod.yml build ui control-plane-ui",
-    "lint": "bun --cwd packages/ui run lint && cargo clippy -p control-plane --features server -- -D warnings",
-    "typecheck": "bun --cwd packages/ui run typecheck && cargo check -p control-plane --features server",
-    "dev:ui": "bun --cwd packages/ui run dev",
+    "lint": "deno task --cwd packages/ui lint && cargo clippy -p control-plane --features server -- -D warnings",
+    "typecheck": "deno task --cwd packages/ui typecheck && cargo check -p control-plane --features server",
+    "dev:ui": "deno task --cwd packages/ui dev",
     "dev:control-plane-ui": "cd packages/control-plane && dx serve --web --fullstack true"
   }
 }

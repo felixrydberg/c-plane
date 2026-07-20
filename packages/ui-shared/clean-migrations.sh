@@ -1,7 +1,7 @@
 #!/bin/bash
 
 rm -rf drizzle/
-npm run migrate:generate
+deno task migrate:generate
 
 initial_migration=$(ls drizzle/0000_*.sql 2>/dev/null | head -1)
 echo "Generated initial migration: $initial_migration"
@@ -24,7 +24,7 @@ for entry in "${ordered_migrations[@]}"; do
   IFS=: read -r migration_num name <<< "$entry"
   echo "Generating custom migration: $name"
 
-  npx drizzle-kit generate --custom --name="$name"
+  deno task --eval "drizzle-kit generate --custom --name=$name"
 
   if [ -f "custom-migrations/$name.sql" ]; then
     generated_file=$(ls drizzle/${migration_num}_*.sql 2>/dev/null | head -1)

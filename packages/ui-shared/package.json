@@ -18,11 +18,11 @@
     }
   },
   "scripts": {
-    "migrate:generate": "bunx drizzle-kit generate --config=drizzle.config.ts",
-    "migrate": "bunx drizzle-kit migrate --config=drizzle.config.ts",
-    "migrate:push": "bunx drizzle-kit push --config=drizzle.config.ts",
-    "better-auth:generate:ui": "bun --env-file=../ui/.env x better-auth generate --config ../ui/server/utils/auth.ts --y --output ./schema/tenants/studio.ts",
-    "better-auth:generate": "bun run better-auth:generate:ui"
+    "migrate:generate": "drizzle-kit generate --config=drizzle.config.ts",
+    "migrate": "drizzle-kit migrate --config=drizzle.config.ts",
+    "migrate:push": "drizzle-kit push --config=drizzle.config.ts",
+    "better-auth:generate:ui": "better-auth generate --config ../ui/server/utils/auth.ts --y --output ./schema/tenants/studio.ts",
+    "better-auth:generate": "deno task --env-file=../ui/.env better-auth:generate:ui"
   },
   "peerDependencies": {
     "better-auth": "^1.5.5",

@@ -24,3 +24,12 @@ docker compose -f docker-compose.dev.yml watch
 # Production
 docker compose -f docker-compose.prod.yml up
 ```
+
+## Frontend tooling
+
+The UI uses Deno 2.9.3. For direct UI work, run:
+
+```bash
+deno install
+deno task dev:ui
+```

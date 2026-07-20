@@ -48,7 +48,7 @@ services:
   ui:
     build:
       context: .
-      dockerfile: Dockerfile.bun
+      dockerfile: Dockerfile.deno
       args:
         PACKAGE: ui
       target: "development"
@@ -158,7 +158,7 @@ services:
   migrate:
     build:
       context: .
-      dockerfile: Dockerfile.bun
+      dockerfile: Dockerfile.deno
       args:
         PACKAGE: ui-shared
       target: migration

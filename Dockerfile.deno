@@ -1,15 +1,15 @@
 ARG PACKAGE=ui
 
-FROM oven/bun:1.3.13 AS base
+FROM denoland/deno:2.9.3 AS base
 ARG PACKAGE
 WORKDIR /usr/src/app
 
 COPY package.json ./package.json
-COPY bun.lock ./bun.lock
+COPY deno.lock ./deno.lock
 COPY packages/ui-shared/package.json ./packages/ui-shared/package.json
 COPY packages/ui/package.json ./packages/ui/package.json
 
-RUN bun install --frozen-lockfile --filter "./packages/${PACKAGE}"
+RUN deno ci
 
 COPY packages/ui-shared/schema ./packages/ui-shared/schema
 COPY packages/ui-shared/types ./packages/ui-shared/types
@@ -19,21 +19,23 @@ COPY packages/${PACKAGE} ./packages/${PACKAGE}
 WORKDIR /usr/src/app/packages/${PACKAGE}
 
 FROM base AS development
-WORKDIR /usr/src/app/packages/${PACKAGE}
 ENV CHOKIDAR_USEPOLLING=true
 ENV CHOKIDAR_INTERVAL=250
 ENV WATCHPACK_POLLING=true
-CMD ["bun", "--bun", "run", "dev"]
+CMD ["deno", "task", "dev"]
 
 FROM base AS migration
-CMD ["bun", "run", "migrate"]
+CMD ["deno", "task", "migrate"]
 
 FROM base AS production-prepack
-WORKDIR /usr/src/app/packages/${PACKAGE}
-RUN bun run --bun build
+RUN deno task build
 
-FROM oven/bun:1.3.13 AS production
-ARG PACKAGE
-WORKDIR /usr/src/app/packages/${PACKAGE}
-COPY --from=production-prepack /usr/src/app/packages/${PACKAGE}/.output ./.output
-CMD ["bun", "run", "./.output/server/index.mjs"]
+FROM production-prepack AS production-compile
+RUN mkdir /app && deno compile --no-check --allow-env --allow-net --allow-read --output /app/cplane-ui .output/server/index.mjs
+
+FROM gcr.io/distroless/cc-debian12:nonroot AS production
+WORKDIR /app
+COPY --from=production-compile /app/cplane-ui ./cplane-ui
+# Nitro resolves the compiled entry's sibling public directory as /tmp/public.
+COPY --from=production-prepack /usr/src/app/packages/ui/.output/public /tmp/public
+CMD ["./cplane-ui"]
