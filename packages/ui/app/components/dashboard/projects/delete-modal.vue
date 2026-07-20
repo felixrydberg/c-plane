@@ -15,10 +15,7 @@ async function handleDelete() {
   loading.value = true;
   error.value = '';
   try {
-    await $fetch(
-      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}`,
-      { method: 'DELETE' }
-    );
+    await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}` as const, { method: 'DELETE' });
     store.project = null;
     store.environment = null;
     store.environments = [];

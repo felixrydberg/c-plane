@@ -3,6 +3,7 @@ use crate::state::create_app_state;
 use tower_http::trace::TraceLayer;
 use tracing::Level;
 use tracing_subscriber::filter::EnvFilter;
+use utoipa::OpenApi;
 
 mod config;
 mod errors;
@@ -26,6 +27,17 @@ async fn main() -> Result<(), AppError> {
         )
         .with_target(false)
         .init();
+
+    let mut args = std::env::args().skip(1);
+    if args.next().as_deref() == Some("--openapi") {
+        let output_path = args
+            .next()
+            .ok_or_else(|| AppError::Internal("--openapi requires an output path".into()))?;
+        let document = serde_json::to_vec_pretty(&openapi::ApiDoc::openapi())
+            .map_err(|err| AppError::Internal(err.to_string()))?;
+        std::fs::write(output_path, document).map_err(|err| AppError::Internal(err.to_string()))?;
+        return Ok(());
+    }
 
     let config = create_app_state().await?.config;
 

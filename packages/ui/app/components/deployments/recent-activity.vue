@@ -8,18 +8,11 @@ const props = defineProps<{
   targetId: string
 }>()
 
-interface ActivityItem {
-  id: string
-  action: string
-  summary: string
-  created_at: string
-}
-
-const url = computed(() => props.organizationId && props.projectId
-  ? `/api/backend/organization/${props.organizationId}/events`
+const endpoint = computed(() => props.organizationId && props.projectId
+  ? `/api/cplane/organization/${props.organizationId as ':organization_id'}/events` as const
   : '')
 
-const { data: activity, status, refresh } = await useFetch<ActivityItem[]>(url, {
+const { data: activity, status, refresh } = await useFetch(endpoint, {
   query: computed(() => ({
     project_id: props.projectId,
     environment_id: props.environmentId || undefined,

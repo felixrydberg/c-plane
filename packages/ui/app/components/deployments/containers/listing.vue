@@ -1,13 +1,8 @@
 <script setup lang="ts">
-import type { ContainerRow, ContainerVersionRow } from '@cplane/ui-shared/types';
+import type { Container } from '@cplane/sdk'
 import { ICONS } from '~/utils/icons';
 
-interface Container extends ContainerRow {
-  current_version: ContainerVersionRow | null;
-  project_id: string | null;
-}
-
-export interface ContainerWithProject extends Container {
+type ContainerWithProject = Container & {
   _projectName?: string;
   _projectId?: string;
 }
@@ -30,8 +25,9 @@ async function confirmDelete() {
   if (!deleteTarget.value || !props.organizationId || !deleteTarget.value.id) return
   deleting.value = true
   try {
-    await $fetch(`/api/backend/organization/${props.organizationId}/containers/${deleteTarget.value.id}?environment_id=${props.environmentId ?? ''}`, {
+    await $fetch(`/api/cplane/organization/${props.organizationId as ':organization_id'}/containers/${deleteTarget.value.id as ':container_id'}` as const, {
       method: 'DELETE',
+      query: { environment_id: props.environmentId ?? undefined },
     });
     toast.add({ title: 'Container removed', color: 'success' });
     deleteTarget.value = null

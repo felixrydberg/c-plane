@@ -1,9 +1,6 @@
 <script setup lang="ts">
+import type { BucketPermission } from '@cplane/sdk'
 import { ICONS } from '~/utils/icons'
-
-interface Bucket { id: string; name: string }
-interface BucketPermission { bucket_id: string; can_read: boolean; can_write: boolean }
-interface AccessToken { name: string; access_key_id: string; bucket_permissions: BucketPermission[] }
 
 const store = useStore()
 const route = useRoute()
@@ -13,11 +10,15 @@ const projectId = computed(() => route.params.project_id?.toString() ?? '')
 const tokenId = computed(() => route.params.token_id?.toString() ?? '')
 const grants = ref<Record<string, BucketPermission>>({})
 const loading = ref(false)
-const bucketsUrl = computed(() => orgId.value && projectId.value ? `/api/backend/organization/${orgId.value}/storage/buckets?project_id=${projectId.value}` : '')
-const tokenUrl = computed(() => orgId.value && projectId.value && tokenId.value ? `/api/backend/organization/${orgId.value}/projects/${projectId.value}/storage/access-tokens/${tokenId.value}` : '')
+const bucketsUrl = computed(() => orgId.value && projectId.value
+  ? `/api/cplane/organization/${orgId.value as ':organization_id'}/storage/buckets` as const
+  : '')
+const tokenUrl = computed(() => orgId.value && projectId.value && tokenId.value
+  ? `/api/cplane/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/storage/access-tokens/${tokenId.value as ':token_id'}` as const
+  : '')
 const [{ data: buckets }, { data: token }] = await Promise.all([
-  useFetch<Bucket[]>(bucketsUrl, { default: () => [] }),
-  useFetch<AccessToken>(tokenUrl),
+  useFetch(bucketsUrl, { default: () => [], query: { project_id: projectId } }),
+  useFetch(tokenUrl),
 ])
 
 watch([buckets, token], ([items, accessToken]) => {

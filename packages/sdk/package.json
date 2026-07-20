@@ -1,0 +1,32 @@
+{
+  "name": "@cplane/sdk",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./nuxt": {
+      "types": "./src/nuxt.ts",
+      "default": "./src/nuxt.ts"
+    }
+  },
+  "scripts": {
+    "generate": "cargo run -p c-plane -- --openapi openapi.json && deno run -A npm:openapi-typescript openapi.json -o src/generated.ts && deno run -A scripts/generate-client.mjs",
+    "typecheck": "deno check src/index.ts src/nuxt.ts"
+  },
+  "dependencies": {
+    "openapi-fetch": "^0.15.0"
+  },
+  "peerDependencies": {
+    "@nuxt/kit": ">=4.0.0"
+  },
+  "devDependencies": {
+    "@nuxt/kit": "^4.5.0",
+    "openapi-typescript": "^7.9.1",
+    "typescript": "^5.9.3"
+  }
+}

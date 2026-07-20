@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { Region } from '@cplane/sdk'
 import { ICONS } from '~/utils/icons'
 import { COMPUTE_UNIT_ITEMS, computeUnitByLabel } from '~/utils/compute-units'
 
@@ -25,12 +26,12 @@ const state = reactive({
 
 const computeUnit = ref('0.5')
 
-const regions = ref<{ id: string; display_name: string }[]>([])
+const regions = ref<Region[]>([])
 const regionId = ref('')
 
 onMounted(async () => {
   if (!orgId.value) return
-  try { regions.value = await $fetch<{ id: string; display_name: string }[]>(`/api/backend/organization/${orgId.value}/regions`) } catch { regions.value = [] }
+  try { regions.value = await $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/regions` as const) } catch { regions.value = [] }
 })
 
 interface EnvRow { key: string; value: string }
@@ -55,7 +56,7 @@ async function handleCreate() {
     }
     if (Object.keys(envObj).length > 0) body.env = envObj
 
-    await $fetch(`/api/backend/organization/${orgId.value}/containers`, { method: 'POST', body })
+      await $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/containers` as const, { method: 'POST', body })
     toast.add({ title: 'Container created', color: 'success' })
     navigateTo(`/${route.params.organization_slug}/containers/${projectId.value}/${environmentId.value}`)
   } catch (e: unknown) {

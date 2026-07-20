@@ -1,12 +1,6 @@
 <script setup lang="ts">
+import type { Database } from '@cplane/sdk'
 import { ICONS } from '~/utils/icons'
-
-interface DatabaseRow {
-  id: string
-  project_id: string
-  name: string
-  default_branch_id: string | null
-}
 
 const store = useStore()
 const route = useRoute()
@@ -15,15 +9,15 @@ const orgId = computed(() => store.organization?.id ?? '')
 const projectId = computed(() => route.params.project_id?.toString() || null)
 const projectName = computed(() => store.projects.find(p => p.id === projectId.value)?.name ?? projectId.value ?? '')
 
-const databases = ref<DatabaseRow[]>([])
+const databases = ref<Database[]>([])
 const status = ref<'pending' | 'success' | 'error' | 'idle'>('pending')
 
 async function fetchAll() {
   if (!orgId.value || !projectId.value) return
   status.value = 'pending'
   try {
-    databases.value = await $fetch<DatabaseRow[]>(
-      `/api/backend/organization/${orgId.value}/databases/postgres`,
+    databases.value = await $fetch(
+      `/api/cplane/organization/${orgId.value as ':organization_id'}/databases/postgres` as const,
       { query: { project_id: projectId.value } }
     )
     status.value = databases.value.length > 0 ? 'success' : 'idle'

@@ -9,7 +9,8 @@
   },
   "workspaces": [
     "packages/ui-shared",
-    "packages/ui"
+    "packages/ui",
+    "packages/sdk"
   ],
   "scripts": {
     "build": "deno task --cwd packages/ui build && cargo build -p control-plane --features server",

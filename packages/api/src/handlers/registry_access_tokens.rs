@@ -63,6 +63,7 @@ pub struct RegistryAccessTokenDetailsResponse {
 
 #[utoipa::path(
     post,
+    operation_id = "registry_create_access_token",
     path = "/api/organization/{organization_id}/registry/access-tokens",
     request_body = CreateRegistryAccessTokenRequest,
     params(("organization_id" = Uuid, Path, description = "Organization ID")),
@@ -145,6 +146,7 @@ pub async fn create_access_token(
 
 #[utoipa::path(
     get,
+    operation_id = "registry_list_access_tokens",
     path = "/api/organization/{organization_id}/registry/access-tokens",
     params(("organization_id" = Uuid, Path, description = "Organization ID")),
     responses(
@@ -172,6 +174,7 @@ pub async fn list_access_tokens(
 
 #[utoipa::path(
     get,
+    operation_id = "registry_get_access_token",
     path = "/api/organization/{organization_id}/registry/access-tokens/{token_id}",
     params(
         ("organization_id" = Uuid, Path, description = "Organization ID"),
@@ -211,6 +214,7 @@ pub async fn get_access_token(
 
 #[utoipa::path(
     patch,
+    operation_id = "registry_update_access_token",
     path = "/api/organization/{organization_id}/registry/access-tokens/{token_id}",
     request_body = UpdateRegistryAccessTokenRequest,
     params(
@@ -260,6 +264,7 @@ pub async fn update_access_token(
 
 #[utoipa::path(
     delete,
+    operation_id = "registry_revoke_access_token",
     path = "/api/organization/{organization_id}/registry/access-tokens/{token_id}",
     params(
         ("organization_id" = Uuid, Path, description = "Organization ID"),

@@ -3,8 +3,6 @@ import { ICONS } from '~/utils/icons'
 
 defineOptions({ name: 'OrganizationRegistryPage' })
 
-interface Repository { id: string; name: string; created_at: string }
-
 const store = useStore()
 const route = useRoute()
 const config = useRuntimeConfig()
@@ -12,9 +10,9 @@ const organizationId = computed(() => store.organization?.id ?? '')
 const organizationSlug = computed(() => store.organization?.slug ?? '')
 const registryHost = computed(() => config.public.registryHost)
 const repositoriesUrl = computed(() => organizationId.value
-  ? `/api/backend/organization/${organizationId.value}/registry/repositories`
+  ? `/api/cplane/organization/${organizationId.value as ':organization_id'}/registry/repositories` as const
   : '')
-const { data: repositories } = await useFetch<Repository[]>(repositoriesUrl, { default: () => [] })
+const { data: repositories } = await useFetch(repositoriesUrl, { default: () => [] })
 </script>
 
 <template>

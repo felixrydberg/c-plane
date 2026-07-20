@@ -1,31 +1,9 @@
 <script setup lang="ts">
+import type { DatabaseBranch } from '@cplane/sdk'
 import { COMPUTE_UNIT_ITEMS, computeUnitByLabel, resolveComputeUnitLabel } from '~/utils/compute-units'
 import { ICONS } from '~/utils/icons'
 
 definePageMeta({ key: route => `database-workbench-${route.params.project_id}` })
-
-interface DatabaseBranchRow {
-  id: string
-  database_id: string
-  branch_id: string
-  backup_retention_days: number | null
-  cpu: string | null
-  ram: string | null
-  high_availability: boolean
-  read_replicas: number | null
-  autoscaling_enabled: boolean
-  autoscaling_min_cpu: string | null
-  autoscaling_max_cpu: string | null
-}
-
-interface DatabaseRow {
-  id: string
-  project_id: string
-  name: string
-  default_branch_id: string | null
-}
-
-type EnvironmentItem = { id: string; name: string; timeline: string; is_default: boolean }
 
 const store = useStore()
 const route = useRoute()
@@ -66,7 +44,7 @@ const retentionOptions = computed(() => [
   { label: '30 days', value: 30 },
 ])
 const defaultDatabaseBranchId = ref<string | null>(null)
-const databaseBranches = ref<(DatabaseBranchRow & { _name: string })[]>([])
+const databaseBranches = ref<(DatabaseBranch & { _name: string })[]>([])
 
 const loading = ref(true)
 const activityRefreshKey = ref(0)
@@ -86,9 +64,9 @@ async function fetchData() {
   loading.value = true
   try {
     const [db, branches, projectEnvironments] = await Promise.all([
-      $fetch<DatabaseRow>(`/api/backend/organization/${orgId.value}/databases/postgres/${databaseId.value}`),
-      $fetch<DatabaseBranchRow[]>(`/api/backend/organization/${orgId.value}/databases/postgres/${databaseId.value}/branches`),
-      $fetch<EnvironmentItem[]>(`/api/backend/organization/${orgId.value}/projects/${projectId.value}/environments`),
+        $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/databases/postgres/${databaseId.value as ':database_id'}` as const),
+        $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/databases/postgres/${databaseId.value as ':database_id'}/branches` as const),
+        $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/environments` as const),
     ])
 
     dbName.value = db.name
@@ -126,7 +104,7 @@ async function save() {
   const unit = computeUnitByLabel(computeUnit.value)
   try {
     await $fetch(
-      `/api/backend/organization/${orgId.value}/databases/postgres/${databaseId.value}/branches/${branchId.value}`,
+        `/api/cplane/organization/${orgId.value as ':organization_id'}/databases/postgres/${databaseId.value as ':database_id'}/branches/${branchId.value as ':branch_id'}` as const,
       {
         method: 'PATCH',
         body: {

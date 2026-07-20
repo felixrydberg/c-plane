@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
+import type { Environment, TimelineRevision } from '@cplane/sdk'
 
 const store = useStore();
 const toast = useToast();
@@ -8,16 +9,7 @@ const open = defineModel<boolean>('open', { required: true });
 const props = defineProps<{
   parentTimelineId?: string;
 }>();
-const emit = defineEmits<{ created: [{ id: string; name: string; timeline: string; is_default: boolean }] }>();
-
-interface TimelineRevision {
-  id: string
-  environment_id: string
-  timeline: number
-  parent_timeline_id: string | null
-  pins: Record<string, unknown>
-  created_at: string
-}
+const emit = defineEmits<{ created: [Environment] }>();
 
 const loading = ref(false);
 const error = ref('');
@@ -56,9 +48,7 @@ async function fetchTimelines() {
   if (!store.organization?.id || !store.project?.id) return;
   timelinesLoading.value = true;
   try {
-    timelines.value = await $fetch<TimelineRevision[]>(
-      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/timelines`
-    );
+    timelines.value = await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/timelines` as const);
   } catch {
     timelines.value = [];
   } finally {
@@ -90,8 +80,8 @@ async function handleCreate() {
       body.parent_timeline_id = selectedTimelineId.value;
     }
 
-    const created = await $fetch<{ id: string; name: string; timeline: string; is_default: boolean }>(
-      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/environments`,
+    const created = await $fetch(
+      `/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments` as const,
       { method: 'POST', body }
     );
 

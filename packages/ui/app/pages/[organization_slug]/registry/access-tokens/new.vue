@@ -1,9 +1,6 @@
 <script setup lang="ts">
+import type { CreatedRegistryAccessToken, RepositoryPermission } from '@cplane/sdk'
 import { ICONS } from '~/utils/icons'
-
-interface Repository { id: string; name: string }
-interface RepositoryPermission { repository_id: string; can_pull: boolean; can_push: boolean }
-interface AccessToken { name: string; token: string }
 
 const store = useStore()
 const route = useRoute()
@@ -16,11 +13,11 @@ const name = ref('')
 const grants = ref<Record<string, RepositoryPermission>>({})
 const loading = ref(false)
 const error = ref('')
-const created = ref<AccessToken | null>(null)
+const created = ref<CreatedRegistryAccessToken | null>(null)
 const repositoriesUrl = computed(() => organizationId.value
-  ? `/api/backend/organization/${organizationId.value}/registry/repositories`
+  ? `/api/cplane/organization/${organizationId.value as ':organization_id'}/registry/repositories` as const
   : '')
-const { data: repositories } = await useFetch<Repository[]>(repositoriesUrl, { default: () => [] })
+const { data: repositories } = await useFetch(repositoriesUrl, { default: () => [] })
 
 watch(repositories, (items) => {
   for (const repository of items) {
@@ -50,7 +47,7 @@ async function createToken() {
   loading.value = true
   error.value = ''
   try {
-    created.value = await $fetch<AccessToken>(`/api/backend/organization/${organizationId.value}/registry/access-tokens`, {
+    created.value = await $fetch(`/api/cplane/organization/${organizationId.value as ':organization_id'}/registry/access-tokens` as const, {
       method: 'POST',
       body: { name: name.value.trim(), repository_permissions: selectedPermissions.value },
     })

@@ -8,12 +8,14 @@ COPY package.json ./package.json
 COPY deno.lock ./deno.lock
 COPY packages/ui-shared/package.json ./packages/ui-shared/package.json
 COPY packages/ui/package.json ./packages/ui/package.json
+COPY packages/sdk/package.json ./packages/sdk/package.json
 
 RUN deno ci
 
 COPY packages/ui-shared/schema ./packages/ui-shared/schema
 COPY packages/ui-shared/types ./packages/ui-shared/types
 COPY packages/ui-shared/utils ./packages/ui-shared/utils
+COPY packages/sdk ./packages/sdk
 COPY packages/${PACKAGE} ./packages/${PACKAGE}
 
 WORKDIR /usr/src/app/packages/${PACKAGE}

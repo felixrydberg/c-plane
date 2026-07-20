@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
+import type { Environment } from '@cplane/sdk'
 import { loadProjectEnvironments } from '~/utils/auth'
 import { ICONS } from '~/utils/icons'
 
@@ -27,13 +28,9 @@ const environmentRoutesEnabled = computed(() => ENVIRONMENT_PAGES.includes(curre
 // Refresh only needed after create/delete.
 async function refreshProjects() {
   if (!store.organization?.id) return
-  const { data } = await $fetch<{ data: { id: string; organization_id: string; name: string; default_environment_id: string | null }[] }>(
-    `/api/backend/organization/${store.organization.id}/projects`
-  )
+  const { data } = await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects` as const)
   if (data) {
-    store.projects = data.map(p => ({
-      id: p.id, organization_id: p.organization_id, name: p.name, default_environment_id: p.default_environment_id,
-    }))
+    store.projects = data
   }
 }
 
@@ -43,8 +40,6 @@ watch([() => store.projects, routeProjectId], ([projList, pid]) => {
   const matched = projList.find(p => p.id === pid)
   if (matched) store.project = matched
 }, { immediate: true })
-
-type EnvironmentItem = { id: string; name: string; timeline: string; is_default: boolean; has_recent_undeployed_revision: boolean }
 
 const createProjectModal = ref(false)
 const deleteProjectModal = ref(false)
@@ -165,7 +160,7 @@ async function selectProject(projectId: string | null) {
   }
 }
 
-function selectEnvironment(b: EnvironmentItem) {
+function selectEnvironment(b: Environment) {
   store.environment = { id: b.id, name: b.name, timeline: b.timeline, is_default: b.is_default, has_recent_undeployed_revision: b.has_recent_undeployed_revision }
 
   const slug = store.organization?.slug
@@ -195,8 +190,8 @@ async function onRenameEnvironment() {
 
   renamingEnvironment.value = true
   try {
-    const updated = await $fetch<EnvironmentItem>(
-      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/environments/${store.environment.id}`,
+    const updated = await $fetch(
+      `/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${store.environment.id as ':environment_id'}` as const,
       { method: 'PATCH', body: { name: environmentName.value.trim() } },
     )
     store.environment = updated
@@ -214,10 +209,7 @@ async function onRenameEnvironment() {
 async function onConfirmDeleteEnvironment() {
   if (!store.organization?.id || !store.project?.id || !store.environment) return;
   try {
-    await $fetch(
-      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/environments/${store.environment.id}`,
-      { method: 'DELETE' }
-    );
+    await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${store.environment.id as ':environment_id'}` as const, { method: 'DELETE' });
     toast.add({ title: 'Environment removed', color: 'success' });
     deleteEnvironmentModal.value = false;
     store.environment = null;
