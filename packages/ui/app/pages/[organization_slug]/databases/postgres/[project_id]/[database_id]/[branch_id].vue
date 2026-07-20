@@ -69,7 +69,7 @@ const defaultDatabaseBranchId = ref<string | null>(null)
 const databaseBranches = ref<(DatabaseBranchRow & { _name: string })[]>([])
 
 const loading = ref(true)
-const recentActivity = useTemplateRef<{ refresh: () => Promise<void> }>('recentActivity')
+const activityRefreshKey = ref(0)
 const currentDatabaseBranch = computed(() => databaseBranches.value.find(branch => branch.branch_id === branchId.value))
 const currentDatabaseBranchId = computed(() => currentDatabaseBranch.value?.id ?? '')
 const replicas = computed(() => [
@@ -142,7 +142,7 @@ async function save() {
       }
     )
     toast.add({ title: 'Branch config saved', color: 'success' })
-    await recentActivity.value?.refresh().catch(() => undefined)
+    activityRefreshKey.value += 1
   } catch {
     toast.add({ title: 'Failed to save', color: 'error' })
   } finally {
@@ -217,7 +217,7 @@ const connectionString = computed(() => `postgresql://username:password@${dbName
           </Transition>
         </main>
 
-        <DeploymentsRecentActivity ref="recentActivity" v-if="orgId && projectId && currentDatabaseBranchId" :organization-id="orgId" :project-id="projectId" :branch-id="branchId" event-type-prefix="database" :target-id="currentDatabaseBranchId" />
+        <DeploymentsRecentActivity :key="activityRefreshKey" v-if="orgId && projectId && currentDatabaseBranchId" :organization-id="orgId" :project-id="projectId" :branch-id="branchId" event-type-prefix="database" :target-id="currentDatabaseBranchId" />
       </div>
     </div>
   </div>
