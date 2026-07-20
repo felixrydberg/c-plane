@@ -5,12 +5,15 @@ export default defineEventHandler(async (event) => {
   const { backendUrl = 'http://localhost:8080', apiKey, proxyPath = '/api/cplane' } =
     config.cplaneSdk ?? {}
 
-  const path = event.path.replace(new RegExp(`^${escapeRegex(proxyPath)}`), '')
-  const backendPath = path === '/health' ? path : `/api${path}`
+  const rawPath = event.path.startsWith(proxyPath as string)
+    ? event.path.slice((proxyPath as string).length)
+    : event.path
+
+  const backendPath = rawPath === '/health' ? rawPath : `/api${rawPath}`
 
   const [basePath, queryString] = backendPath.split('?')
   const cleanParams = new URLSearchParams(queryString ?? '')
-  for (const [key, value] of cleanParams.entries()) {
+  for (const [key, value] of [...cleanParams.entries()]) {
     if (!value) cleanParams.delete(key)
   }
   const query = cleanParams.toString()
@@ -21,7 +24,3 @@ export default defineEventHandler(async (event) => {
 
   return proxyRequest(event, `${backendUrl}${cleanPath}`, { headers })
 })
-
-function escapeRegex(s: string) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}

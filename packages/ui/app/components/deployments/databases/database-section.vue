@@ -24,7 +24,7 @@ const deleteModalOpen = ref(false)
 const linkBranchModalOpen = ref(false)
 const deleting = ref(false)
 const busy = ref(false)
-const unlinkTarget = ref<(BranchInfo & { _name: string }) | null>(null)
+const unlinkTarget = ref<(DatabaseBranch & { _name: string }) | null>(null)
 
 const unlinkModalOpen = computed({
   get: () => !!unlinkTarget.value,
