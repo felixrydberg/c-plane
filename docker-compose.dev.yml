@@ -16,6 +16,7 @@ services:
       CPLANE_SERVICE_TOKEN: ${CPLANE_SERVICE_TOKEN}
       STORAGE_ENDPOINT_URL: ${STORAGE_ENDPOINT_URL:-http://localhost:8081}
       REGISTRY_HOST: ${REGISTRY_HOST:-localhost:5000}
+      REGISTRY_INTERNAL_URL: ${REGISTRY_INTERNAL_URL:-http://registry:5000}
       REGISTRY_TOKEN_ISSUER: ${REGISTRY_TOKEN_ISSUER:-cplane-registry}
       REGISTRY_TOKEN_PRIVATE_KEY_PATH: /run/registry/registry-token-private.pem
       REGISTRY_TOKEN_CERTIFICATE_PATH: /run/registry/registry-token-public.pem

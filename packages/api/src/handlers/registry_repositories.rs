@@ -1,4 +1,5 @@
 use axum::{Json, extract::Path, http::StatusCode};
+use reqwest::{Client, Url};
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -9,7 +10,17 @@ use crate::{
     errors::AppError, middleware::auth::AuthContext, models::entities::registry_repository,
 };
 
-use super::{databases::verify_org_access, registry_access_tokens::record_event};
+use super::{
+    databases::verify_org_access, registry::sign_repository_token,
+    registry_access_tokens::record_event,
+};
+
+const MANIFEST_ACCEPT: &str = "application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json";
+
+#[derive(Deserialize)]
+struct TagsResponse {
+    tags: Option<Vec<String>>,
+}
 
 #[derive(Deserialize, ToSchema)]
 pub struct CreateRegistryRepositoryRequest {
@@ -105,6 +116,158 @@ pub async fn list_repositories(
         .await?;
     scoped.commit().await?;
     Ok(Json(repositories.iter().map(response).collect()))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/organization/{organization_id}/registry/repositories/{repository_id}",
+    params(
+        ("organization_id" = Uuid, Path, description = "Organization ID"),
+        ("repository_id" = Uuid, Path, description = "Registry repository ID"),
+    ),
+    responses(
+        (status = 204, description = "Registry repository deleted"),
+        (status = 403, description = "Organization access required"),
+        (status = 404, description = "Registry repository not found"),
+    ),
+    tag = "registry",
+)]
+pub async fn delete_repository(
+    AuthContext { tenant_db, auth }: AuthContext,
+    Path((organization_id, repository_id)): Path<(Uuid, Uuid)>,
+) -> Result<StatusCode, AppError> {
+    verify_org_access(&tenant_db, organization_id)?;
+    let scoped = tenant_db.begin_scoped_transaction().await?;
+    let tx = scoped.connection();
+    let repository = registry_repository::Entity::find_by_id(repository_id)
+        .filter(registry_repository::Column::OrganizationId.eq(organization_id))
+        .one(tx)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Registry repository not found".into()))?;
+    scoped.commit().await?;
+
+    delete_repository_images(&repository.name, organization_id).await?;
+
+    let scoped = tenant_db.begin_scoped_transaction().await?;
+    let tx = scoped.connection();
+    let repository = registry_repository::Entity::find_by_id(repository_id)
+        .filter(registry_repository::Column::OrganizationId.eq(organization_id))
+        .one(tx)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Registry repository not found".into()))?;
+
+    registry_repository::Entity::delete_by_id(repository.id)
+        .exec(tx)
+        .await?;
+    record_event(
+        tx,
+        organization_id,
+        auth.actor_id,
+        "registry-repository:deleted",
+        json!({ "summary": format!("Deleted registry repository '{}'", repository.name), "target_id": repository.id }),
+    )
+    .await?;
+    scoped.commit().await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn delete_repository_images(
+    repository_name: &str,
+    organization_id: Uuid,
+) -> Result<(), AppError> {
+    let base_url =
+        std::env::var("REGISTRY_INTERNAL_URL").unwrap_or_else(|_| "http://registry:5000".into());
+    let token =
+        sign_repository_token(organization_id, repository_name, &["pull", "delete"]).await?;
+    let client = Client::new();
+    let tags_url = registry_url(&base_url, repository_name, "tags/list")?;
+    let response = client
+        .get(tags_url)
+        .bearer_auth(&token)
+        .send()
+        .await
+        .map_err(|error| AppError::Internal(format!("Registry cleanup request failed: {error}")))?;
+    if response.status() == StatusCode::NOT_FOUND {
+        return Ok(());
+    }
+    if !response.status().is_success() {
+        return Err(AppError::Conflict(format!(
+            "Registry cleanup failed while listing tags: {}",
+            response.status()
+        )));
+    }
+    let tags = response
+        .json::<TagsResponse>()
+        .await
+        .map_err(|error| AppError::Internal(format!("Invalid registry tag response: {error}")))?
+        .tags
+        .unwrap_or_default();
+    let mut digests = std::collections::HashSet::new();
+    for tag in tags {
+        let manifest_url = registry_url(&base_url, repository_name, &format!("manifests/{tag}"))?;
+        let response = client
+            .head(manifest_url)
+            .header(reqwest::header::ACCEPT, MANIFEST_ACCEPT)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .map_err(|error| {
+                AppError::Internal(format!("Registry cleanup request failed: {error}"))
+            })?;
+        if response.status() == StatusCode::NOT_FOUND {
+            continue;
+        }
+        if !response.status().is_success() {
+            return Err(AppError::Conflict(format!(
+                "Registry cleanup failed while resolving tag '{tag}': {}",
+                response.status()
+            )));
+        }
+        let digest = response
+            .headers()
+            .get("Docker-Content-Digest")
+            .and_then(|value| value.to_str().ok())
+            .ok_or_else(|| {
+                AppError::Conflict(format!(
+                    "Registry cleanup failed while resolving tag '{tag}': missing digest"
+                ))
+            })?;
+        digests.insert(digest.to_owned());
+    }
+    for digest in digests {
+        let manifest_url =
+            registry_url(&base_url, repository_name, &format!("manifests/{digest}"))?;
+        let response = client
+            .delete(manifest_url)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .map_err(|error| {
+                AppError::Internal(format!("Registry cleanup request failed: {error}"))
+            })?;
+        if !response.status().is_success() && response.status() != StatusCode::NOT_FOUND {
+            return Err(AppError::Conflict(format!(
+                "Registry cleanup failed while deleting image: {}",
+                response.status()
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn registry_url(base_url: &str, repository_name: &str, suffix: &str) -> Result<Url, AppError> {
+    let mut url = Url::parse(base_url)
+        .map_err(|error| AppError::Internal(format!("Invalid registry URL: {error}")))?;
+    {
+        let mut segments = url
+            .path_segments_mut()
+            .map_err(|_| AppError::Internal("Registry URL cannot be a base URL".into()))?;
+        segments.push("v2");
+        segments.extend(repository_name.split('/'));
+        segments.extend(suffix.split('/'));
+    }
+    Ok(url)
 }
 
 fn response(repository: &registry_repository::Model) -> RegistryRepositoryResponse {
