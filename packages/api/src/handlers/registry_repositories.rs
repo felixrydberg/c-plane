@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use axum::{Json, extract::Path, http::StatusCode};
 use reqwest::{Client, Url};
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
@@ -129,6 +131,8 @@ pub async fn list_repositories(
         (status = 204, description = "Registry repository deleted"),
         (status = 403, description = "Organization access required"),
         (status = 404, description = "Registry repository not found"),
+        (status = 409, description = "Registry cleanup conflict"),
+        (status = 500, description = "Registry cleanup failed"),
     ),
     tag = "registry",
 )]
@@ -180,7 +184,12 @@ async fn delete_repository_images(
         std::env::var("REGISTRY_INTERNAL_URL").unwrap_or_else(|_| "http://registry:5000".into());
     let token =
         sign_repository_token(organization_id, repository_name, &["pull", "delete"]).await?;
-    let client = Client::new();
+    let client = Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|error| {
+            AppError::Internal(format!("Registry cleanup client setup failed: {error}"))
+        })?;
     let tags_url = registry_url(&base_url, repository_name, "tags/list")?;
     let response = client
         .get(tags_url)

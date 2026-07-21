@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Repository } from '@cplane/sdk'
+import { FetchError } from 'ofetch'
 import { ICONS } from '~/utils/icons'
 
 defineOptions({ name: 'OrganizationRegistryPage' })
@@ -33,8 +34,9 @@ async function deleteRepository() {
     deleteModalOpen.value = false
     selectedRepository.value = null
     await refreshRepositories()
-  } catch {
-    toast.add({ title: 'Failed to delete repository and images', color: 'error' })
+  } catch (error) {
+    const message = error instanceof FetchError ? error.data?.message : undefined
+    toast.add({ title: message || 'Failed to delete repository and images', color: 'error' })
   } finally {
     deleting.value = false
   }
