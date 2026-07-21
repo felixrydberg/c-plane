@@ -9,15 +9,15 @@ export default defineEventHandler(async (event) => {
     ? event.path.slice((proxyPath as string).length)
     : event.path
 
-  const backendPath = rawPath === '/health' ? rawPath : `/api${rawPath}`
+  const [rawBase, queryString] = rawPath.split('?')
+  const backendPath = rawBase === '/health' ? rawBase : `/api${rawBase}`
 
-  const [basePath, queryString] = backendPath.split('?')
   const cleanParams = new URLSearchParams(queryString ?? '')
   for (const [key, value] of [...cleanParams.entries()]) {
     if (!value) cleanParams.delete(key)
   }
   const query = cleanParams.toString()
-  const cleanPath = query ? `${basePath}?${query}` : basePath
+  const cleanPath = query ? `${backendPath}?${query}` : backendPath
 
   const headers: Record<string, string> = {}
   if (apiKey) headers['x-api-key'] = apiKey as string
