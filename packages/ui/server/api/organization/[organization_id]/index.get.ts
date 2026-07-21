@@ -1,6 +1,7 @@
 import { organization, organization_member } from "~~/server/schema";
 import { withTenantDb } from "~~/server/utils/db";
 import { eq, and } from "drizzle-orm";
+import type { Project } from '@cplane/sdk';
 
 export default defineEventHandler(async (event) => {
   const membership = await getOrganizationMembership(event);
@@ -38,7 +39,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  let projects: Array<{ id: string; organization_id: string; name: string; default_environment_id: string | null }> = [];
+  let projects: Project[] = [];
   try {
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:8080';
     const headers = getRequestHeaders(event);

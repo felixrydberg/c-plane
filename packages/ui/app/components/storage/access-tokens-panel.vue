@@ -1,23 +1,17 @@
 <script setup lang="ts">
 import { ICONS } from '~/utils/icons'
 
-interface Token {
-  id: string
-  name: string
-  access_key_id: string
-  created_at: string
-}
 const props = defineProps<{ organizationId: string; projectId: string }>()
 const route = useRoute()
 const toast = useToast()
-const url = computed(() => `/api/backend/organization/${props.organizationId}/projects/${props.projectId}/storage/access-tokens`)
-const { data: tokens, refresh } = await useFetch<Token[]>(url, { default: () => [] })
+const endpoint = computed(() => `/api/cplane/organization/${props.organizationId as ':organization_id'}/projects/${props.projectId as ':project_id'}/storage/access-tokens` as const)
+const { data: tokens, refresh } = await useFetch(endpoint, { default: () => [] })
 const revokingId = ref('')
 
-async function revoke(token: Token) {
+async function revoke(token: NonNullable<typeof tokens.value>[number]) {
   revokingId.value = token.id
   try {
-    await $fetch(`${url.value}/${token.id}`, { method: 'DELETE' })
+    await $fetch(`/api/cplane/organization/${props.organizationId as ':organization_id'}/projects/${props.projectId as ':project_id'}/storage/access-tokens/${token.id as ':token_id'}` as const, { method: 'DELETE' })
     await refresh()
   } catch { toast.add({ title: 'Could not revoke token', color: 'error' }) }
   finally { revokingId.value = '' }

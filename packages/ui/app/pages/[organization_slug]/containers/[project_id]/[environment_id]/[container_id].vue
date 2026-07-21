@@ -1,20 +1,8 @@
 <script setup lang="ts">
+import type { ContainerVersion } from '@cplane/sdk'
 import { ICONS } from '~/utils/icons'
 
 definePageMeta({ key: route => `container-workbench-${route.params.project_id}` })
-
-interface ContainerVersionRow {
-  id: string
-  version: number
-  image: string
-  public: boolean
-  replica_count: number
-  port: number | null
-  env: Record<string, string> | null
-  health_check: Record<string, unknown> | null
-  pull_secret_id: string | null
-  created_at: string
-}
 
 const store = useStore()
 const route = useRoute()
@@ -33,16 +21,10 @@ const tabs = [
   { label: 'Configuration', value: 'configuration', slot: 'configuration' },
 ]
 
-interface ContainerListItem {
-  id: string
-  name: string
-  current_version: ContainerVersionRow | null
-}
-
-const listUrl = computed(() => orgId.value && projectId.value && environmentId.value
-  ? `/api/backend/organization/${orgId.value}/containers`
-  : '')
-const { data: containerList } = await useFetch<ContainerListItem[]>(listUrl, {
+  const listUrl = computed(() => orgId.value && projectId.value && environmentId.value
+  ? `/api/cplane/organization/${orgId.value as ':organization_id'}/containers` as const
+    : '')
+const { data: containerList } = await useFetch(listUrl, {
   query: { project_id: projectId, environment_id: environmentId },
   immediate: !!listUrl.value,
 })
@@ -64,17 +46,16 @@ async function fetchContainer() {
   if (!orgId.value || !containerId.value) return
   loading.value = true
   try {
-    const c = await $fetch<{ name: string; current_version: ContainerVersionRow | null }>(
-      `/api/backend/organization/${orgId.value}/containers/${containerId.value}`
-    )
+      const c = await $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/containers/${containerId.value as ':container_id'}` as const)
     name.value = c.name
     if (c.current_version) {
       image.value = c.current_version.image
       port.value = c.current_version.port
       replicaCount.value = c.current_version.replica_count
       isPublic.value = c.current_version.public
-      const healthCheckPath = c.current_version.health_check?.path
-      healthCheckPath.value = typeof healthCheckPath === 'string' ? healthCheckPath : ''
+      const healthCheck = c.current_version.health_check
+      const healthCheckPathValue = healthCheck && typeof healthCheck === 'object' && 'path' in healthCheck ? healthCheck.path : undefined
+      healthCheckPath.value = typeof healthCheckPathValue === 'string' ? healthCheckPathValue : ''
       envRows.value = buildEnvRows(c.current_version.env)
     }
     hasChanges.value = false
@@ -88,8 +69,9 @@ async function fetchContainer() {
 
 watch(containerId, fetchContainer, { immediate: true })
 
-function buildEnvRows(env: Record<string, string> | null): { key: string; value: string }[] {
-  return Object.entries(env ?? {}).map(([key, value]) => ({ key, value }))
+function buildEnvRows(env: ContainerVersion['env']): { key: string; value: string }[] {
+  if (!env || typeof env !== 'object' || Array.isArray(env)) return []
+  return Object.entries(env).map(([key, value]) => ({ key, value: String(value) }))
 }
 
 function markChanged() { hasChanges.value = true }
@@ -107,10 +89,9 @@ async function save() {
       env[row.key] = row.value
     }
 
-    await $fetch(
-      `/api/backend/organization/${orgId.value}/containers/${containerId.value}?environment_id=${environmentId.value ?? ''}`,
-      {
-        method: 'PATCH',
+      await $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/containers/${containerId.value as ':container_id'}` as const, {
+          method: 'PATCH',
+          query: { environment_id: environmentId.value ?? undefined },
         body: {
           image: image.value,
           port: port.value,

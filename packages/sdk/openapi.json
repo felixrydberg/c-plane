@@ -1,0 +1,3452 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "c-plane API",
+    "description": "Control plane API for managing projects, environments, containers, and databases",
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/organization/{organization_id}/containers": {
+      "get": {
+        "tags": [
+          "containers"
+        ],
+        "operationId": "list_containers",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "description": "Filter by project",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "environment_id",
+            "in": "query",
+            "description": "Filter by environment",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of containers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ContainerResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "containers"
+        ],
+        "operationId": "create_container",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateContainerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Container created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContainerResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/organization/{organization_id}/containers/{container_id}": {
+      "get": {
+        "tags": [
+          "containers"
+        ],
+        "operationId": "get_container",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "container_id",
+            "in": "path",
+            "description": "Container ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Container details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContainerResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "containers"
+        ],
+        "operationId": "delete_container",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "container_id",
+            "in": "path",
+            "description": "Container ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "environment_id",
+            "in": "query",
+            "description": "Environment ID for the revision",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Container deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "containers"
+        ],
+        "operationId": "update_container",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "container_id",
+            "in": "path",
+            "description": "Container ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "environment_id",
+            "in": "query",
+            "description": "Environment ID for the revision",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateContainerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Container updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContainerResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/organization/{organization_id}/databases/postgres": {
+      "get": {
+        "tags": [
+          "databases/postgres"
+        ],
+        "operationId": "list_databases",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project databases",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DatabaseResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "databases/postgres"
+        ],
+        "operationId": "create_database",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDatabaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Database created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/organization/{organization_id}/databases/postgres/{database_id}": {
+      "get": {
+        "tags": [
+          "databases/postgres"
+        ],
+        "operationId": "get_database",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "database_id",
+            "in": "path",
+            "description": "Database ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Database details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "databases/postgres"
+        ],
+        "operationId": "delete_database",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "database_id",
+            "in": "path",
+            "description": "Database ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Database deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "databases/postgres"
+        ],
+        "operationId": "update_database",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "database_id",
+            "in": "path",
+            "description": "Database ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDatabaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Database updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/organization/{organization_id}/databases/postgres/{database_id}/branches": {
+      "get": {
+        "tags": [
+          "databases/postgres"
+        ],
+        "operationId": "list_database_branches",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "database_id",
+            "in": "path",
+            "description": "Database ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Database branch links",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DatabaseBranchResponse"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "databases/postgres"
+        ],
+        "operationId": "create_database_branch",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "database_id",
+            "in": "path",
+            "description": "Database ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDatabaseBranchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Link already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseBranchResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Database branch link created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseBranchResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/organization/{organization_id}/databases/postgres/{database_id}/branches/{branch_id}": {
+      "delete": {
+        "tags": [
+          "databases/postgres"
+        ],
+        "operationId": "delete_database_branch",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "database_id",
+            "in": "path",
+            "description": "Database ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "branch_id",
+            "in": "path",
+            "description": "Branch ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Database branch link deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "databases/postgres"
+        ],
+        "operationId": "update_database_branch",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "database_id",
+            "in": "path",
+            "description": "Database ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "branch_id",
+            "in": "path",
+            "description": "Branch ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDatabaseBranchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Database branch updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseBranchResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/organization/{organization_id}/environments": {
+      "get": {
+        "tags": [
+          "environments"
+        ],
+        "operationId": "list_organization_environments",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Organization environments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EnvironmentWithProjectResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organization/{organization_id}/events": {
+      "get": {
+        "tags": [
+          "events"
+        ],
+        "operationId": "list_events",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "event_type_prefix",
+            "in": "query",
+            "description": "Event type prefix filter (e.g. 'container' matches 'container:created')",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "environment_id",
+            "in": "query",
+            "description": "Environment filter (matched against payload->>'environment_id')",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "target_id",
+            "in": "query",
+            "description": "Resource ID filter (matched against payload->>'target_id')",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum events (default 10, max 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EventResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organization/{organization_id}/projects": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "operationId": "list_projects",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Project name search",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "description": "Items per page",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated projects",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse_ProjectResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "operationId": "create_project",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Project created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Organization not found"
+          }
+        }
+      }
+    },
+    "/api/organization/{organization_id}/projects/{project_id}": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "operationId": "get_project",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "projects"
+        ],
+        "operationId": "delete_project",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/organization/{organization_id}/projects/{project_id}/environments": {
+      "get": {
+        "tags": [
+          "environments"
+        ],
+        "operationId": "list_environments",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project environments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EnvironmentResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "environments"
+        ],
+        "operationId": "create_environment",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEnvironmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Environment created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Environment name already exists"
+          }
+        }
+      }
+    },
+    "/api/organization/{organization_id}/projects/{project_id}/environments/{environment_id}": {
+      "delete": {
+        "tags": [
+          "environments"
+        ],
+        "operationId": "delete_environment",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "environment_id",
+            "in": "path",
+            "description": "Environment ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Environment deleted"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Cannot delete default environment"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "environments"
+        ],
+        "operationId": "update_environment",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "environment_id",
+            "in": "path",
+            "description": "Environment ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEnvironmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Environment updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Name or timeline is required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Environment name already exists"
+          }
+        }
+      }
+    },
+    "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens": {
+      "get": {
+        "tags": [
+          "storage"
+        ],
+        "operationId": "storage_list_access_tokens",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of active access tokens",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AccessTokenResponse"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "storage"
+        ],
+        "operationId": "storage_create_access_token",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAccessTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Access token created; save the secret access key now",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedAccessTokenResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project or bucket not found"
+          },
+          "409": {
+            "description": "Invalid permissions or duplicate token name"
+          }
+        }
+      }
+    },
+    "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}": {
+      "get": {
+        "tags": [
+          "storage"
+        ],
+        "operationId": "storage_get_access_token",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "token_id",
+            "in": "path",
+            "description": "Access token ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Access token details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessTokenDetailsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project or access token not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "storage"
+        ],
+        "operationId": "storage_revoke_access_token",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "token_id",
+            "in": "path",
+            "description": "Access token ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Access token revoked"
+          },
+          "404": {
+            "description": "Project or access token not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "storage"
+        ],
+        "operationId": "storage_update_access_token",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "token_id",
+            "in": "path",
+            "description": "Access token ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAccessTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Access token permissions updated"
+          },
+          "404": {
+            "description": "Project, access token, or bucket not found"
+          },
+          "409": {
+            "description": "Invalid permissions"
+          }
+        }
+      }
+    },
+    "/api/organization/{organization_id}/projects/{project_id}/timelines": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "operationId": "list_project_timelines",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "environment_id",
+            "in": "query",
+            "description": "Environment ID",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project timelines",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TimelineResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organization/{organization_id}/projects/{project_id}/timelines/{timeline_id}": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "operationId": "get_timeline",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "timeline_id",
+            "in": "path",
+            "description": "Timeline ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resolved timeline",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolvedTimelineResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/organization/{organization_id}/regions": {
+      "get": {
+        "tags": [
+          "regions"
+        ],
+        "operationId": "list_regions",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Available regions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RegionResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organization/{organization_id}/registry/access-tokens": {
+      "get": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "registry_list_access_tokens",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of active registry access tokens",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RegistryAccessTokenResponse"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization access required"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "registry_create_access_token",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRegistryAccessTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Registry access token created; save it now",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedRegistryAccessTokenResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization access required"
+          },
+          "404": {
+            "description": "Repository not found"
+          },
+          "409": {
+            "description": "Invalid permissions or duplicate token name"
+          }
+        }
+      }
+    },
+    "/api/organization/{organization_id}/registry/access-tokens/{token_id}": {
+      "get": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "registry_get_access_token",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "token_id",
+            "in": "path",
+            "description": "Registry access token ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Registry access token details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryAccessTokenDetailsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Registry access token not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "registry_revoke_access_token",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "token_id",
+            "in": "path",
+            "description": "Registry access token ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Registry access token revoked"
+          },
+          "403": {
+            "description": "Organization access required"
+          },
+          "404": {
+            "description": "Registry access token not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "registry_update_access_token",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "token_id",
+            "in": "path",
+            "description": "Registry access token ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRegistryAccessTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Registry access token permissions updated"
+          },
+          "403": {
+            "description": "Organization access required"
+          },
+          "404": {
+            "description": "Registry access token or repository not found"
+          },
+          "409": {
+            "description": "Invalid permissions"
+          }
+        }
+      }
+    },
+    "/api/organization/{organization_id}/registry/repositories": {
+      "get": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "list_repositories",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Organization registry repositories",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RegistryRepositoryResponse"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization access required"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "create_repository",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRegistryRepositoryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Registry repository created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryRepositoryResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization access required"
+          },
+          "409": {
+            "description": "Invalid or duplicate repository name"
+          }
+        }
+      }
+    },
+    "/api/organization/{organization_id}/storage/buckets": {
+      "get": {
+        "tags": [
+          "storage"
+        ],
+        "operationId": "list_buckets",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of buckets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BucketResponse"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "storage"
+        ],
+        "operationId": "create_bucket",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBucketRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Bucket created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BucketResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project or active region not found"
+          },
+          "409": {
+            "description": "Bucket name is unavailable"
+          }
+        }
+      }
+    },
+    "/api/organization/{organization_id}/storage/buckets/{bucket_id}": {
+      "delete": {
+        "tags": [
+          "storage"
+        ],
+        "operationId": "delete_bucket",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "bucket_id",
+            "in": "path",
+            "description": "Bucket ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Bucket deleted"
+          },
+          "404": {
+            "description": "Bucket or region not found"
+          },
+          "409": {
+            "description": "Provider bucket could not be deleted"
+          }
+        }
+      }
+    },
+    "/api/registry/token": {
+      "get": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "issue_token",
+        "parameters": [
+          {
+            "name": "service",
+            "in": "query",
+            "description": "Distribution service name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "Requested repository scopes",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Short-lived Distribution access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryTokenResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid registry credentials"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "operationId": "health_check",
+        "responses": {
+          "200": {
+            "description": "API health status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AccessTokenDetailsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AccessTokenResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "bucket_permissions"
+            ],
+            "properties": {
+              "bucket_permissions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BucketPermissionRequest"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "AccessTokenResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "access_key_id",
+          "created_at"
+        ],
+        "properties": {
+          "access_key_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "BucketPermissionRequest": {
+        "type": "object",
+        "required": [
+          "bucket_id",
+          "can_read",
+          "can_write"
+        ],
+        "properties": {
+          "bucket_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "can_read": {
+            "type": "boolean"
+          },
+          "can_write": {
+            "type": "boolean"
+          }
+        }
+      },
+      "BucketResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "name",
+          "region"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "region": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "ContainerResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "organization_id",
+          "name",
+          "region_id",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "current_version": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ContainerVersionResponse"
+              }
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "region_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
+      "ContainerVersionResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "version",
+          "image",
+          "public",
+          "replica_count",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "env": {},
+          "health_check": {},
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "image": {
+            "type": "string"
+          },
+          "port": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "public": {
+            "type": "boolean"
+          },
+          "pull_secret_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "replica_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "resources": {},
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "CreateAccessTokenRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "bucket_permissions"
+        ],
+        "properties": {
+          "bucket_permissions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BucketPermissionRequest"
+            }
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateBucketRequest": {
+        "type": "object",
+        "required": [
+          "project_id",
+          "name",
+          "region"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "region": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "CreateContainerRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "image",
+          "project_id",
+          "environment_id",
+          "region_id"
+        ],
+        "properties": {
+          "auto_deploy": {
+            "type": "boolean"
+          },
+          "env": {},
+          "environment_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "health_check": {},
+          "image": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "port": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "public": {
+            "type": "boolean"
+          },
+          "pull_secret_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "region_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "replica_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "resources": {}
+        }
+      },
+      "CreateDatabaseBranchRequest": {
+        "type": "object",
+        "required": [
+          "branch_id"
+        ],
+        "properties": {
+          "autoscaling_enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "autoscaling_max_cpu": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "autoscaling_min_cpu": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "backup_retention_days": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "branch_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cpu": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "high_availability": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "ram": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "read_replicas": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "CreateDatabaseRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "project_id"
+        ],
+        "properties": {
+          "autoscaling_enabled": {
+            "type": "boolean"
+          },
+          "autoscaling_max_cpu": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "autoscaling_min_cpu": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "backup_retention_days": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "cpu": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "high_availability": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ram": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "read_replicas": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "CreateEnvironmentRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "parent_timeline_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "CreateProjectRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateRegistryAccessTokenRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "repository_permissions"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "repository_permissions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RepositoryPermissionRequest"
+            }
+          }
+        }
+      },
+      "CreateRegistryRepositoryRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "CreatedAccessTokenResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AccessTokenResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "secret_access_key",
+              "endpoint_url"
+            ],
+            "properties": {
+              "endpoint_url": {
+                "type": "string"
+              },
+              "secret_access_key": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
+      "CreatedRegistryAccessTokenResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/RegistryAccessTokenResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "token"
+            ],
+            "properties": {
+              "token": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
+      "DatabaseBranchResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "database_id",
+          "branch_id",
+          "organization_id",
+          "high_availability",
+          "autoscaling_enabled"
+        ],
+        "properties": {
+          "autoscaling_enabled": {
+            "type": "boolean"
+          },
+          "autoscaling_max_cpu": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "autoscaling_min_cpu": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "backup_retention_days": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "branch_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cpu": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "database_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "high_availability": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organization_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ram": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "read_replicas": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "DatabaseResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "name"
+        ],
+        "properties": {
+          "default_branch_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "EnvironmentResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "timeline",
+          "is_default",
+          "has_recent_undeployed_revision"
+        ],
+        "properties": {
+          "has_recent_undeployed_revision": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "is_default": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "timeline": {
+            "type": "string"
+          }
+        }
+      },
+      "EnvironmentWithProjectResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "timeline",
+          "is_default",
+          "project_id",
+          "project_name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "is_default": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_name": {
+            "type": "string"
+          },
+          "timeline": {
+            "type": "string"
+          }
+        }
+      },
+      "EventResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "action",
+          "summary",
+          "created_at"
+        ],
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "actor_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "summary": {
+            "type": "string"
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "PaginatedResponse_ProjectResponse": {
+        "type": "object",
+        "required": [
+          "data",
+          "pagination"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "organization_id",
+                "name",
+                "created_at",
+                "updated_at"
+              ],
+              "properties": {
+                "created_at": {
+                  "type": "string"
+                },
+                "default_environment_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uuid"
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "main_environment": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/EnvironmentResponse"
+                    }
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "organization_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "updated_at": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          }
+        }
+      },
+      "PaginationMeta": {
+        "type": "object",
+        "required": [
+          "total",
+          "page",
+          "per_page",
+          "total_pages",
+          "has_next",
+          "has_prev"
+        ],
+        "properties": {
+          "has_next": {
+            "type": "boolean"
+          },
+          "has_prev": {
+            "type": "boolean"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "per_page": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "total_pages": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "ProjectResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "organization_id",
+          "name",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "default_environment_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "main_environment": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EnvironmentResponse"
+              }
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
+      "RegionResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "display_name"
+        ],
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "RegistryAccessTokenDetailsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/RegistryAccessTokenResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "repository_permissions"
+            ],
+            "properties": {
+              "repository_permissions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/RepositoryPermissionRequest"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "RegistryAccessTokenResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "RegistryRepositoryResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "RegistryTokenResponse": {
+        "type": "object",
+        "required": [
+          "token",
+          "access_token",
+          "expires_in",
+          "issued_at"
+        ],
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "expires_in": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "issued_at": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "RepositoryPermissionRequest": {
+        "type": "object",
+        "required": [
+          "repository_id",
+          "can_pull",
+          "can_push"
+        ],
+        "properties": {
+          "can_pull": {
+            "type": "boolean"
+          },
+          "can_push": {
+            "type": "boolean"
+          },
+          "repository_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "ResolvedContainerPin": {
+        "type": "object",
+        "required": [
+          "container_id",
+          "container_name",
+          "version_id",
+          "version",
+          "image"
+        ],
+        "properties": {
+          "container_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "container_name": {
+            "type": "string"
+          },
+          "image": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "version_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "ResolvedTimelineResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "timeline",
+          "containers",
+          "created_at"
+        ],
+        "properties": {
+          "containers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResolvedContainerPin"
+            }
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "environment_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parent_timeline_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "timeline": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "TimelineResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "timeline",
+          "pins",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "environment_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parent_timeline_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "pins": {},
+          "timeline": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "UpdateAccessTokenRequest": {
+        "type": "object",
+        "required": [
+          "bucket_permissions"
+        ],
+        "properties": {
+          "bucket_permissions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BucketPermissionRequest"
+            }
+          }
+        }
+      },
+      "UpdateContainerRequest": {
+        "type": "object",
+        "properties": {
+          "auto_deploy": {
+            "type": "boolean"
+          },
+          "env": {},
+          "health_check": {},
+          "image": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "port": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "public": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "pull_secret_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "replica_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "resources": {}
+        }
+      },
+      "UpdateDatabaseBranchRequest": {
+        "type": "object",
+        "properties": {
+          "autoscaling_enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "autoscaling_max_cpu": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "autoscaling_min_cpu": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "backup_retention_days": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "cpu": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "high_availability": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "ram": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "read_replicas": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "UpdateDatabaseRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "UpdateEnvironmentRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timeline_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "UpdateRegistryAccessTokenRequest": {
+        "type": "object",
+        "required": [
+          "repository_permissions"
+        ],
+        "properties": {
+          "repository_permissions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RepositoryPermissionRequest"
+            }
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "projects",
+      "description": "Project management"
+    },
+    {
+      "name": "environments",
+      "description": "Environment management"
+    },
+    {
+      "name": "containers",
+      "description": "Container management"
+    },
+    {
+      "name": "events",
+      "description": "Organization activity"
+    },
+    {
+      "name": "databases/postgres",
+      "description": "Postgres database management"
+    },
+    {
+      "name": "storage",
+      "description": "S3 bucket and access token management"
+    },
+    {
+      "name": "registry",
+      "description": "OCI registry authentication"
+    }
+  ]
+}

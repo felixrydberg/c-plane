@@ -14,17 +14,12 @@ async function handleCreate() {
   error.value = '';
 
   try {
-    const response = await $fetch<any>(`/api/backend/organization/${store.organization.id}/projects`, {
+    const response = await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects` as const, {
       method: 'POST',
       body: { name: name.value.trim() },
     });
 
-    store.projects = [...store.projects, {
-      id: response.id,
-      organization_id: response.organization_id,
-      name: response.name,
-      default_environment_id: response.default_environment_id,
-    }];
+    store.projects = [...store.projects, response];
 
     name.value = '';
     open.value = false;

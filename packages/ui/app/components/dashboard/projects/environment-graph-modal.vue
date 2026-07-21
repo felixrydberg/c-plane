@@ -6,6 +6,7 @@ import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import { markRaw, computed } from 'vue'
+import type { Environment, ResolvedTimeline as SdkResolvedTimeline, TimelineRevision } from '@cplane/sdk'
 import DotNode from './environment-graph-dot-node.vue'
 import { ICONS } from '~/utils/icons'
 
@@ -18,39 +19,11 @@ const open = defineModel<boolean>('open', { required: true });
 
 const modalContentClass = 'max-w-7xl';
 
-interface EnvironmentRevision {
-  id: string
-  environment_id: string
-  timeline: number
-  name: string | null
-  parent_timeline_id: string | null
-  created_at: string
-}
-
-interface ResolvedContainer {
-  container_id: string
-  container_name: string
-  version_id: string
-  version: number
-  image: string
-}
-
 interface ResolvedSecret {
   secret_id: string
   secret_name: string
   version_id: string
   version: number
-}
-
-interface ResolvedTimeline {
-  id: string
-  environment_id: string | null
-  timeline: number
-  name: string | null
-  parent_timeline_id: string | null
-  containers: ResolvedContainer[]
-  secrets: ResolvedSecret[]
-  created_at: string
 }
 
 interface EnvironmentMeta {
@@ -76,7 +49,7 @@ const createEnvironmentFromRevisionId = ref('');
 const repointModalOpen = ref(false);
 const repointRevisionId = ref('');
 const repointEnvironmentId = ref('');
-const allEnvironments = ref<{ id: string; name: string }[]>([]);
+const allEnvironments = ref<Environment[]>([]);
 
 const removeEnvironmentId = ref('');
 const removeEnvironmentName = ref('');
@@ -88,7 +61,7 @@ const renamingEnvironment = ref(false);
 
 // --- Detail panel state ---
 const selectedRevisionId = ref<string | null>(null);
-const selectedTimelineData = ref<ResolvedTimeline | null>(null);
+const selectedTimelineData = ref<(SdkResolvedTimeline & { secrets: ResolvedSecret[] }) | null>(null);
 const detailLoading = ref(false);
 const detailError = ref('');
 
@@ -122,9 +95,7 @@ async function selectRevision(revisionId: string) {
   selectedTimelineData.value = null;
 
   try {
-    const data = await $fetch<any>(
-      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/timelines/${revisionId}`
-    );
+    const data = await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/timelines/${revisionId as ':timeline_id'}` as const);
     selectedTimelineData.value = {
       id: data.id,
       environment_id: data.environment_id ?? null,
@@ -132,7 +103,7 @@ async function selectRevision(revisionId: string) {
       name: data.name ?? null,
       parent_timeline_id: data.parent_timeline_id ?? null,
       containers: data.containers || [],
-      secrets: data.secrets || [],
+      secrets: [],
       created_at: data.created_at,
     };
   } catch {
@@ -180,8 +151,8 @@ async function onConfirmRenameEnvironment() {
 
   renamingEnvironment.value = true;
   try {
-    const updated = await $fetch<{ id: string; name: string; timeline: string; is_default: boolean; has_recent_undeployed_revision: boolean }>(
-      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/environments/${renameEnvironmentId.value}`,
+    const updated = await $fetch(
+      `/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${renameEnvironmentId.value as ':environment_id'}` as const,
       { method: 'PATCH', body: { name: renameEnvironmentName.value.trim() } }
     );
     if (store.environment?.id === updated.id) store.environment = updated;
@@ -199,10 +170,7 @@ async function onConfirmRenameEnvironment() {
 async function onConfirmRemoveEnvironment() {
   if (!store.organization?.id || !store.project?.id || !removeEnvironmentId.value) return;
   try {
-    await $fetch(
-      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/environments/${removeEnvironmentId.value}`,
-      { method: 'DELETE' }
-    );
+    await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${removeEnvironmentId.value as ':environment_id'}` as const, { method: 'DELETE' });
     toast.add({ title: 'Environment removed', color: 'success' });
     const deletedId = removeEnvironmentId.value;
     removeModalOpen.value = false;
@@ -247,9 +215,9 @@ async function onConfirmRemoveEnvironment() {
   }
 }
 
-function onEnvironmentCreated(environment: { id: string; name: string; timeline: string; is_default: boolean }) {
+function onEnvironmentCreated(environment: Environment) {
   // Add environment to local environment list
-  allEnvironments.value = [...allEnvironments.value, { id: environment.id, name: environment.name }];
+  allEnvironments.value = [...allEnvironments.value, environment];
 
   // Find the node this environment was forked from and update it
   nodes.value = nodes.value.map(n => {
@@ -289,10 +257,7 @@ function onEnvironmentCreated(environment: { id: string; name: string; timeline:
 async function onSelectRepointEnvironment() {
   if (!store.organization?.id || !store.project?.id || !repointEnvironmentId.value) return;
   try {
-    await $fetch(
-      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/environments/${repointEnvironmentId.value}`,
-      { method: 'PATCH', body: { timeline_id: repointRevisionId.value } }
-    );
+    await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${repointEnvironmentId.value as ':environment_id'}` as const, { method: 'PATCH', body: { timeline_id: repointRevisionId.value } });
     toast.add({ title: 'Environment repointed', color: 'success' });
     store.refreshKey++;
     repointModalOpen.value = false;
@@ -319,20 +284,16 @@ async function loadGraph(preserveSelection = false) {
   }
 
   try {
-    const environments = await $fetch<{ id: string; name: string; timeline: string; is_default: boolean }[]>(
-      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/environments`
-    );
+    const environments = await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments` as const);
 
-    allEnvironments.value = environments.map(b => ({ id: b.id, name: b.name }));
+    allEnvironments.value = environments;
 
     const isDefaultMap = new Map<string, boolean>();
     environments.forEach(b => isDefaultMap.set(b.id, b.is_default));
 
-    const allTimelines = await $fetch<EnvironmentRevision[]>(
-      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/timelines`
-    );
+    const allTimelines = await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/timelines` as const);
 
-    const environmentTimelines = new Map<string, EnvironmentRevision[]>();
+    const environmentTimelines = new Map<string, TimelineRevision[]>();
     for (const t of allTimelines) {
       if (!t.environment_id) continue;
       const list = environmentTimelines.get(t.environment_id) || [];
@@ -362,7 +323,7 @@ async function loadGraph(preserveSelection = false) {
       environmentHeadTimelineMap.set(environmentId, head.id);
     }
 
-    const allRevs: { environmentId: string; environmentName: string; rev: EnvironmentRevision }[] = [];
+    const allRevs: { environmentId: string; environmentName: string; rev: TimelineRevision }[] = [];
     for (const [environmentId, revs] of environmentTimelines) {
       const name = environmentNames.get(environmentId) || environmentId;
       for (const rev of revs) {
@@ -376,7 +337,7 @@ async function loadGraph(preserveSelection = false) {
     const mainEnvironment = environments.find(b => b.name === 'main') || environments[0];
     const mainRevs = allRevs.filter(r => r.environmentId === mainEnvironment.id).map(r => r.rev).sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
 
-    const childrenMap = new Map<string, EnvironmentRevision[]>();
+    const childrenMap = new Map<string, TimelineRevision[]>();
     for (const { rev } of allRevs) {
       if (rev.parent_timeline_id) {
         const list = childrenMap.get(rev.parent_timeline_id) || [];

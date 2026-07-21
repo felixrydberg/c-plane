@@ -2,6 +2,7 @@ import { createAuthClient } from "better-auth/vue"
 import { inferAdditionalFields, twoFactorClient, adminClient  } from "better-auth/client/plugins"
 import type { auth } from "~~/server/utils/auth"
 import { useStore } from "~/stores/store"
+import type { Project } from '@cplane/sdk'
 
 export const createClient = () => {
   const url = import.meta.server ? useRequestURL().origin : window.location.origin;
@@ -25,14 +26,6 @@ export const createClient = () => {
 export type ClientType = ReturnType<typeof createClient>
 type InternalFetch = <T = unknown>(url: string, options?: Record<string, unknown>) => Promise<T>;
 
-type Environment = {
-  id: string
-  name: string
-  timeline: string
-  is_default: boolean
-  has_recent_undeployed_revision: boolean
-}
-
 export async function loadProjectEnvironments(projectId: string, environmentId?: string) {
   const store = useStore()
   if (!store.organization?.id) return
@@ -40,11 +33,9 @@ export async function loadProjectEnvironments(projectId: string, environmentId?:
   const project = store.projects.find(project => project.id === projectId)
   if (!project) return
 
-  const requestFetch: InternalFetch = import.meta.server ? useRequestFetch() as InternalFetch : $fetch
-  const response = await requestFetch<Environment[] | { data: Environment[] }>(
-    `/api/backend/organization/${store.organization.id}/projects/${project.id}/environments`
-  )
-  const environments = Array.isArray(response) ? response : response.data
+  const requestFetch = import.meta.server ? useRequestFetch() : $fetch
+  const response = await requestFetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${project.id as ':project_id'}/environments` as const)
+  const environments = response
   const environment = environments.find(environment => environment.id === environmentId) ?? environments.find(environment => environment.is_default) ?? environments[0] ?? null
 
   store.project = project
@@ -148,7 +139,7 @@ export const setOrganization = async (id: string, redirect: string = '/') => {
     : null;
 
   try {
-    type OrgResponse = typeof store.organization & { projects?: Array<{ id: string; organization_id: string; name: string; default_environment_id: string | null }> };
+    type OrgResponse = typeof store.organization & { projects?: Project[] };
     const data = import.meta.server
       ? await requestFetch!<OrgResponse>(`/api/organization/${id as ':organization_id'}`)
       : await $fetch<OrgResponse>(`/api/organization/${id as ':organization_id'}`, {

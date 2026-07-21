@@ -1,20 +1,6 @@
 <script setup lang="ts">
+import type { DatabaseBranch, Environment } from '@cplane/sdk'
 import { ICONS } from '~/utils/icons'
-
-interface BranchInfo {
-  id: string
-  database_id: string
-  branch_id: string
-  cpu: string | null
-  ram: string | null
-  high_availability: boolean
-  read_replicas: number | null
-  autoscaling_enabled: boolean
-  autoscaling_min_cpu: string | null
-  autoscaling_max_cpu: string | null
-}
-
-type ProjectEnvironment = { id: string; name: string }
 
 const props = defineProps<{
   organizationId: string
@@ -30,15 +16,15 @@ const emit = defineEmits<{ deleted: [] }>()
 const toast = useToast()
 const route = useRoute()
 
-const branches = ref<(BranchInfo & { _name: string })[]>([])
-const projectEnvironments = ref<ProjectEnvironment[]>([])
+const branches = ref<(DatabaseBranch & { _name: string })[]>([])
+const projectEnvironments = ref<Environment[]>([])
 const branchesLoading = ref(false)
 
 const deleteModalOpen = ref(false)
 const linkBranchModalOpen = ref(false)
 const deleting = ref(false)
 const busy = ref(false)
-const unlinkTarget = ref<(BranchInfo & { _name: string }) | null>(null)
+const unlinkTarget = ref<(DatabaseBranch & { _name: string }) | null>(null)
 
 const unlinkModalOpen = computed({
   get: () => !!unlinkTarget.value,
@@ -57,12 +43,8 @@ async function fetchBranches() {
   branchesLoading.value = true
   try {
     const [data, projectEnvironmentsList] = await Promise.all([
-      $fetch<BranchInfo[]>(
-        `/api/backend/organization/${props.organizationId}/databases/postgres/${props.databaseId}/branches`
-      ),
-      $fetch<ProjectEnvironment[]>(
-        `/api/backend/organization/${props.organizationId}/projects/${props.projectId}/environments`
-      ),
+      $fetch(`/api/cplane/organization/${props.organizationId as ':organization_id'}/databases/postgres/${props.databaseId as ':database_id'}/branches` as const),
+      $fetch(`/api/cplane/organization/${props.organizationId as ':organization_id'}/projects/${props.projectId as ':project_id'}/environments` as const),
     ])
     projectEnvironments.value = projectEnvironmentsList
     branches.value = data.map(b => ({
@@ -76,12 +58,12 @@ async function fetchBranches() {
   }
 }
 
-async function linkBranch(pb: ProjectEnvironment) {
+async function linkBranch(pb: Environment) {
   linkBranchModalOpen.value = false
   busy.value = true
   try {
-    const created = await $fetch<BranchInfo>(
-      `/api/backend/organization/${props.organizationId}/databases/postgres/${props.databaseId}/branches`,
+    const created = await $fetch(
+      `/api/cplane/organization/${props.organizationId as ':organization_id'}/databases/postgres/${props.databaseId as ':database_id'}/branches` as const,
       { method: 'POST', body: { branch_id: pb.id } }
     )
     branches.value = [...branches.value, { ...created, _name: pb.name }]
@@ -95,13 +77,10 @@ async function linkBranch(pb: ProjectEnvironment) {
 
 onMounted(() => { fetchBranches() })
 
-async function unlinkBranch(b: BranchInfo & { _name: string }) {
+async function unlinkBranch(b: DatabaseBranch & { _name: string }) {
   busy.value = true
   try {
-    await $fetch(
-      `/api/backend/organization/${props.organizationId}/databases/postgres/${props.databaseId}/branches/${b.branch_id}`,
-      { method: 'DELETE' }
-    )
+    await $fetch(`/api/cplane/organization/${props.organizationId as ':organization_id'}/databases/postgres/${props.databaseId as ':database_id'}/branches/${b.branch_id as ':branch_id'}` as const, { method: 'DELETE' })
     branches.value = branches.value.filter(br => br.id !== b.id)
     toast.add({ title: `Deleted ${b._name}`, color: 'success' })
   } catch {
@@ -115,10 +94,7 @@ async function unlinkBranch(b: BranchInfo & { _name: string }) {
 async function handleDelete() {
   deleting.value = true
   try {
-    await $fetch(
-      `/api/backend/organization/${props.organizationId}/databases/postgres/${props.databaseId}`,
-      { method: 'DELETE' }
-    )
+    await $fetch(`/api/cplane/organization/${props.organizationId as ':organization_id'}/databases/postgres/${props.databaseId as ':database_id'}` as const, { method: 'DELETE' })
     deleteModalOpen.value = false
     emit('deleted')
   } catch {
@@ -139,7 +115,7 @@ function parseRamGib(ram: string | null): number {
 const hasHa = computed(() => branches.value.some(b => b.high_availability))
 const defaultBranchId = computed(() => props.defaultBranchId)
 
-function isDefaultBranch(b: BranchInfo): boolean {
+function isDefaultBranch(b: DatabaseBranch): boolean {
   return defaultBranchId.value !== null && b.id === defaultBranchId.value
 }
 

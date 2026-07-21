@@ -23,7 +23,7 @@ async function handleCreate() {
   loading.value = true; error.value = ''
   const unit = computeUnitByLabel(computeUnit.value)
   try {
-    await $fetch(`/api/backend/organization/${orgId.value}/databases/postgres`, {
+      await $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/databases/postgres` as const, {
       method: 'POST',
       body: {
         name: name.value.trim(), project_id: projectId.value,

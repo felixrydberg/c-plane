@@ -1,9 +1,6 @@
 <script setup lang="ts">
+import type { RepositoryPermission } from '@cplane/sdk'
 import { ICONS } from '~/utils/icons'
-
-interface Repository { id: string; name: string }
-interface RepositoryPermission { repository_id: string; can_pull: boolean; can_push: boolean }
-interface AccessToken { name: string; repository_permissions: RepositoryPermission[] }
 
 const store = useStore()
 const route = useRoute()
@@ -12,15 +9,15 @@ const organizationId = computed(() => store.organization?.id ?? '')
 const tokenId = computed(() => route.params.token_id?.toString() ?? '')
 const grants = ref<Record<string, RepositoryPermission>>({})
 const loading = ref(false)
-const repositoriesUrl = computed(() => organizationId.value
-  ? `/api/backend/organization/${organizationId.value}/registry/repositories`
-  : '')
-const tokenUrl = computed(() => organizationId.value && tokenId.value
-  ? `/api/backend/organization/${organizationId.value}/registry/access-tokens/${tokenId.value}`
-  : '')
-const [{ data: repositories }, { data: token }] = await Promise.all([
-  useFetch<Repository[]>(repositoriesUrl, { default: () => [] }),
-  useFetch<AccessToken>(tokenUrl),
+  const repositoriesUrl = computed(() => organizationId.value
+  ? `/api/cplane/organization/${organizationId.value as ':organization_id'}/registry/repositories` as const
+    : '')
+  const tokenUrl = computed(() => organizationId.value && tokenId.value
+  ? `/api/cplane/organization/${organizationId.value as ':organization_id'}/registry/access-tokens/${tokenId.value as ':token_id'}` as const
+    : '')
+  const [{ data: repositories }, { data: token }] = await Promise.all([
+  useFetch(repositoriesUrl, { default: () => [] }),
+  useFetch(tokenUrl),
 ])
 
 watch([repositories, token], ([items, accessToken]) => {

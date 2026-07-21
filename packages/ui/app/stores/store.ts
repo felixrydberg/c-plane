@@ -1,17 +1,4 @@
-type Project = {
-  id: string
-  organization_id: string
-  name: string
-  default_environment_id: string | null
-}
-
-type Environment = {
-  id: string
-  name: string
-  timeline: string
-  is_default: boolean
-  has_recent_undeployed_revision: boolean
-}
+import type { Environment, Project } from '@cplane/sdk'
 
 type State = {
   user: User | null

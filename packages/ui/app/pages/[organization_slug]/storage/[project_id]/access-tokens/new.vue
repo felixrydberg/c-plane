@@ -1,7 +1,5 @@
 <script setup lang="ts">
-interface AccessToken { name: string; access_key_id: string; secret_access_key: string; endpoint_url: string }
-interface Bucket { id: string; name: string }
-interface BucketPermission { bucket_id: string; can_read: boolean; can_write: boolean }
+import type { BucketPermission, CreatedStorageAccessToken } from '@cplane/sdk'
 
 const store = useStore()
 const route = useRoute()
@@ -13,9 +11,14 @@ const name = ref('')
 const grants = ref<Record<string, BucketPermission>>({})
 const loading = ref(false)
 const error = ref('')
-const created = ref<AccessToken | null>(null)
-const bucketsUrl = computed(() => orgId.value && projectId.value ? `/api/backend/organization/${orgId.value}/storage/buckets?project_id=${projectId.value}` : '')
-const { data: buckets } = await useFetch<Bucket[]>(bucketsUrl, { default: () => [] })
+const created = ref<CreatedStorageAccessToken | null>(null)
+const bucketsUrl = computed(() => orgId.value && projectId.value
+  ? `/api/cplane/organization/${orgId.value as ':organization_id'}/storage/buckets` as const
+  : '')
+const { data: buckets } = await useFetch(bucketsUrl, {
+  default: () => [],
+  query: { project_id: projectId },
+})
 
 watch(buckets, (items) => {
   for (const bucket of items) grants.value[bucket.id] ??= { bucket_id: bucket.id, can_read: false, can_write: false }
@@ -32,7 +35,7 @@ async function createToken() {
   loading.value = true
   error.value = ''
   try {
-    created.value = await $fetch<AccessToken>(`/api/backend/organization/${orgId.value}/projects/${projectId.value}/storage/access-tokens`, { method: 'POST', body: { name: name.value.trim(), bucket_permissions: selectedPermissions.value } })
+    created.value = await $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/storage/access-tokens` as const, { method: 'POST', body: { name: name.value.trim(), bucket_permissions: selectedPermissions.value } })
     toast.add({ title: 'Access token created', color: 'success' })
   } catch (cause: unknown) {
     error.value = cause instanceof Error ? cause.message : 'Failed to create access token'

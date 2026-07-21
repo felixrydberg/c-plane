@@ -62,6 +62,7 @@ pub struct AccessTokenDetailsResponse {
 
 #[utoipa::path(
     post,
+    operation_id = "storage_create_access_token",
     path = "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens",
     request_body = CreateAccessTokenRequest,
     params(
@@ -167,6 +168,7 @@ pub async fn create_access_token(
 
 #[utoipa::path(
     get,
+    operation_id = "storage_list_access_tokens",
     path = "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens",
     params(
         ("organization_id" = Uuid, Path, description = "Organization ID"),
@@ -198,6 +200,7 @@ pub async fn list_access_tokens(
 
 #[utoipa::path(
     get,
+    operation_id = "storage_get_access_token",
     path = "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}",
     params(
         ("organization_id" = Uuid, Path, description = "Organization ID"),
@@ -240,6 +243,7 @@ pub async fn get_access_token(
 
 #[utoipa::path(
     patch,
+    operation_id = "storage_update_access_token",
     path = "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}",
     request_body = UpdateAccessTokenRequest,
     params(
@@ -295,6 +299,7 @@ pub async fn update_access_token(
 
 #[utoipa::path(
     delete,
+    operation_id = "storage_revoke_access_token",
     path = "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}",
     params(
         ("organization_id" = Uuid, Path, description = "Organization ID"),

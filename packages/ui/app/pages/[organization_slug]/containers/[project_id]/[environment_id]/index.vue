@@ -1,13 +1,8 @@
 <script setup lang="ts">
-import type { ContainerRow, ContainerVersionRow } from '@cplane/ui-shared/types';
+import type { Container } from '@cplane/sdk'
 import { ICONS } from '~/utils/icons'
 
-interface Container extends ContainerRow {
-  current_version: ContainerVersionRow | null;
-  project_id: string | null;
-}
-
-interface ContainerWithProject extends Container {
+type ContainerWithProject = Container & {
   _projectName?: string;
   _projectId?: string;
 }
@@ -17,16 +12,14 @@ const route = useRoute()
 const projectId = computed(() => route.params.project_id?.toString() || null)
 const environmentId = computed(() => route.params.environment_id?.toString() || null)
 
-type EnvironmentItem = { id: string; name: string; timeline: string; is_default: boolean }
-
 const orgId = computed(() => store.organization?.id)
 
 const projectName = computed(() =>
   store.projects.find(p => p.id === projectId.value)?.name ?? projectId.value ?? ''
 )
 
-const { data: environmentList } = await useFetch<EnvironmentItem[]>(
-  () => orgId.value && projectId.value ? `/api/backend/organization/${orgId.value}/projects/${projectId.value}/environments` : '',
+const { data: environmentList } = await useFetch(
+  () => orgId.value && projectId.value ? `/api/cplane/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/environments` as const : '',
   { immediate: computed(() => !!(orgId.value && projectId.value)) },
 )
 
@@ -36,13 +29,13 @@ const environmentName = computed(() => {
   return list.find(b => b.id === environmentId.value)?.name ?? environmentId.value
 })
 
-const fetchUrl = computed(() => {
-  const orgId = store.organization?.id
-  if (!orgId || !projectId.value || !environmentId.value) return ''
-  return `/api/backend/organization/${orgId}/containers`
-})
+  const fetchUrl = computed(() => {
+    const orgId = store.organization?.id
+    if (!orgId || !projectId.value || !environmentId.value) return ''
+    return `/api/cplane/organization/${orgId as ':organization_id'}/containers` as const
+  })
 
-const { data, status, refresh: refreshData } = await useLazyFetch<Container[]>(
+  const { data, status, refresh: refreshData } = await useLazyFetch(
   fetchUrl,
   {
     key: 'project-resources',

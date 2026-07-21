@@ -1,6 +1,4 @@
 <script setup lang="ts">
-type TimelineRevision = { id: string }
-
 const store = useStore()
 const toast = useToast()
 const deploying = ref(false)
@@ -13,15 +11,15 @@ async function deployLatestRevision() {
   if (!store.organization?.id || !store.project?.id || !store.environment) return
   deploying.value = true
   try {
-    const revisions = await $fetch<TimelineRevision[]>(
-      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/timelines`,
+    const revisions = await $fetch(
+      `/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/timelines` as const,
       { query: { environment_id: store.environment.id } }
     )
     const latest = revisions[0]
     if (!latest) return
 
     await $fetch(
-      `/api/backend/organization/${store.organization.id}/projects/${store.project.id}/environments/${store.environment.id}`,
+      `/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${store.environment.id as ':environment_id'}` as const,
       { method: 'PATCH', body: { timeline_id: latest.id } }
     )
     store.environment.has_recent_undeployed_revision = false

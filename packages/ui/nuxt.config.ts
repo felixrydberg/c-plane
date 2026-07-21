@@ -12,6 +12,7 @@ export default defineNuxtConfig({
     host: '0.0.0.0'
   },
   modules: [
+    '@cplane/sdk/nuxt',
     '@nuxt/ui',
     '@nuxt/eslint',
     "@pinia/nuxt",

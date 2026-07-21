@@ -22,7 +22,7 @@ async function createRepository() {
   loading.value = true
   error.value = ''
   try {
-    await $fetch(`/api/backend/organization/${orgId.value}/registry/repositories`, {
+    await $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/registry/repositories` as const, {
       method: 'POST',
       body: { name: name.value.trim() },
     })
