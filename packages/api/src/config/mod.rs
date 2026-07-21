@@ -11,6 +11,7 @@ pub struct Config {
     pub control_plane_url: Option<String>,
     pub control_plane_service_token: Option<String>,
     pub storage_endpoint_url: String,
+    pub registry_token_ttl_seconds: u64,
 }
 
 pub fn load_config() -> Result<Config, AppError> {
@@ -38,6 +39,15 @@ pub fn load_config() -> Result<Config, AppError> {
         .filter(|v| !v.trim().is_empty());
     let storage_endpoint_url =
         env::var("STORAGE_ENDPOINT_URL").unwrap_or_else(|_| "http://localhost:8081".to_string());
+    let registry_token_ttl_seconds = env::var("REGISTRY_TOKEN_TTL_SECONDS")
+        .unwrap_or_else(|_| "60".to_string())
+        .parse()
+        .map_err(|_| AppError::Internal("REGISTRY_TOKEN_TTL_SECONDS must be a number".into()))?;
+    if registry_token_ttl_seconds < 60 {
+        return Err(AppError::Internal(
+            "REGISTRY_TOKEN_TTL_SECONDS must be at least 60".into(),
+        ));
+    }
 
     let server_host = env::var("SERVER_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
 
@@ -54,5 +64,6 @@ pub fn load_config() -> Result<Config, AppError> {
         control_plane_url,
         control_plane_service_token,
         storage_endpoint_url,
+        registry_token_ttl_seconds,
     })
 }

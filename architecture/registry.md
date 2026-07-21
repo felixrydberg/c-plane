@@ -78,9 +78,10 @@ than mutable tags.
 
 The API holds the registry token private key. Distribution receives the
 matching public certificate and a dedicated platform S3 service access-key
-pair for Storage. The singleton `registry_storage` row stores its ID,
-access-key ID, provider assignment, and logical/physical bucket names. OpenBao
-stores its secret access key at
+pair for Storage. A second access-key pair is reserved for garbage collection.
+The singleton `registry_storage` row stores the normal credential and bucket
+assignment. The disposable `registry_maintenance` row stores the GC credential
+ID and current maintenance state. OpenBao stores both secret access keys at
 `platform/s3/service-credentials/{registry_storage_id}`.
 
 The registry bucket has its own random 256-bit SSE-C key at
@@ -96,8 +97,11 @@ installation secrets provide the public hosts and Storage access-key pair.
 
 - Postgres owns repository identity and grants. Distribution owns manifests,
   tags, layers, and upload state.
-- Garbage collection and manifest deletion remain disabled until a safe
-  retention workflow exists.
+- Manifest deletion makes blobs eligible for collection. The control plane
+  queues a `registry_gc` job in Postgres; horizontally scalable workers claim
+  named queues with `FOR UPDATE SKIP LOCKED` and run Distribution's official
+  collector. API token grants and Storage permissions make the Registry
+  read-only while the shared maintenance state is active.
 - Provider mirroring is deferred to the generic Storage design; the registry
   initially uses one authoritative provider.
 - Quotas, organization deletion cleanup, and private external-registry

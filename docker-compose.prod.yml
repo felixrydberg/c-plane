@@ -18,6 +18,7 @@ services:
       REGISTRY_HOST: ${REGISTRY_HOST}
       REGISTRY_INTERNAL_URL: ${REGISTRY_INTERNAL_URL:-http://registry:5000}
       REGISTRY_TOKEN_ISSUER: ${REGISTRY_TOKEN_ISSUER:-cplane-registry}
+      REGISTRY_TOKEN_TTL_SECONDS: ${REGISTRY_TOKEN_TTL_SECONDS:-60}
       REGISTRY_TOKEN_PRIVATE_KEY_PATH: /run/registry/registry-token-private.pem
       REGISTRY_TOKEN_CERTIFICATE_PATH: /run/registry/registry-token-public.pem
     depends_on:
@@ -124,13 +125,49 @@ services:
       REGISTRY_STORAGE_S3_PHYSICAL_BUCKET: ${REGISTRY_STORAGE_S3_PHYSICAL_BUCKET:-}
       REGISTRY_STORAGE_S3_ACCESSKEY: ${REGISTRY_STORAGE_S3_ACCESSKEY}
       REGISTRY_STORAGE_S3_SECRETKEY: ${REGISTRY_STORAGE_S3_SECRETKEY}
+      REGISTRY_STORAGE_S3_GC_ACCESSKEY: ${REGISTRY_STORAGE_S3_GC_ACCESSKEY}
+      REGISTRY_STORAGE_S3_GC_SECRETKEY: ${REGISTRY_STORAGE_S3_GC_SECRETKEY}
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       openbao-init:
         condition: service_completed_successfully
       valkey:
         condition: service_started
     ports:
       - "127.0.0.1:3001:3001"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.rust
+      args:
+        PACKAGE: worker
+        BINARY: c-plane-worker
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://cplane_admin:${POSTGRES_ADMIN_PASSWORD}@postgresd:5432/cplane
+      REDIS_URL: redis://valkey:6379
+      WORKER_QUEUES: maintenance
+      WORKER_CONCURRENCY: 1
+      REGISTRY_TOKEN_TTL_SECONDS: ${REGISTRY_TOKEN_TTL_SECONDS:-60}
+      REGISTRY_STORAGE_S3_REGION: ${REGISTRY_STORAGE_S3_REGION}
+      REGISTRY_STORAGE_S3_REGIONENDPOINT: http://storage:8081
+      REGISTRY_STORAGE_S3_FORCEPATHSTYLE: "true"
+      REGISTRY_STORAGE_S3_SECURE: "false"
+      REGISTRY_STORAGE_S3_BUCKET: ${REGISTRY_STORAGE_S3_BUCKET}
+      REGISTRY_STORAGE_S3_ACCESSKEY: ${REGISTRY_STORAGE_S3_GC_ACCESSKEY}
+      REGISTRY_STORAGE_S3_SECRETKEY: ${REGISTRY_STORAGE_S3_GC_SECRETKEY}
+    volumes:
+      - ./packages/registry/config.yml:/etc/distribution/config.yml:ro
+      - ./.secrets/registry-token-public.pem:/run/registry/registry-token-public.pem:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      storage:
+        condition: service_started
+      valkey:
+        condition: service_started
 
   postgresd:
     image: postgres:18

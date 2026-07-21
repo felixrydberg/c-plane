@@ -117,10 +117,11 @@ Change the value-bearing columns as follows:
   contain secret values.
 - `bucket`: no encryption key column is needed. The bucket UUID derives the
   OpenBao path in `storage/sse-c/{bucket_id}`.
-- `registry_storage`: store the Distribution service name, access-key ID,
-  provider assignment, logical bucket name, and physical bucket name. Its UUID
-  is the stable OpenBao path component. The row has no organization or project
-  owner.
+- `registry_storage`: store the Distribution service name, normal access-key
+  ID, provider assignment, logical bucket name, and physical bucket name. The
+  separate `registry_maintenance` row stores the temporary garbage-collection
+  access-key ID and state. The storage UUID is the stable OpenBao path
+  component. Neither row has an organization or project owner.
 
 The database remains the source of truth for tenant authorization and
 resource relationships. OpenBao remains the source of truth for secret bytes.
@@ -204,6 +205,10 @@ Storage verifies the request's SigV4 signature. A different injected secret
 therefore fails authentication rather than selecting a fallback identity.
 Backing-provider credentials and the bucket encryption key are never injected
 into the client service.
+
+Distribution's service credential payload also contains a dedicated garbage-
+collection secret. Storage grants that credential write access only during the
+`collecting` phase; the normal credential can write only during `idle`.
 
 ### Platform SSE-C bucket key
 

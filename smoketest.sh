@@ -36,14 +36,22 @@ printf '%s' "$registry_password" | docker login "$registry_host" --username "$re
 docker pull "${SMOKE_IMAGE:-alpine:3.20}"
 docker tag "${SMOKE_IMAGE:-alpine:3.20}" "$image"
 docker push "$image"
-token_response="$(curl -fsS --user "$registry_username:$registry_password" --get "$token_url" \
+token_response="$(curl -sS --user "$registry_username:$registry_password" --get "$token_url" \
   --data-urlencode "service=$registry_host" \
   --data-urlencode "scope=repository:$registry_username/$registry_repository:pull,push,delete")"
 token="$(printf '%s' "$token_response" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')"
-[ -n "$token" ] || { echo 'Registry token request returned no token.' >&2; exit 1; }
-manifest_digest="$(curl -ksSI -H "Authorization: Bearer $token" "$registry_url/v2/$registry_username/$registry_repository/manifests/$image_tag" \
-  | tr -d '\r' | sed -n 's/^Docker-Content-Digest: //Ip' | head -n 1)"
-[ -n "$manifest_digest" ] || { echo 'Registry manifest did not return a digest.' >&2; exit 1; }
+[ -n "$token" ] || { echo "Registry cleanup token request failed: $token_response" >&2; exit 1; }
+manifest_headers="$(curl -ksSI \
+  -H "Authorization: Bearer $token" \
+  -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json' \
+  "$registry_url/v2/$registry_username/$registry_repository/manifests/$image_tag")"
+manifest_status="$(printf '%s' "$manifest_headers" | sed -n '1s/.* \([0-9][0-9][0-9]\).*/\1/p')"
+manifest_digest="$(printf '%s' "$manifest_headers" | tr -d '\r' \
+  | sed -n 's/^Docker-Content-Digest: //Ip' | head -n 1)"
+[ -n "$manifest_digest" ] || {
+  echo "Registry manifest HEAD returned ${manifest_status:-an unknown status} without a digest." >&2
+  exit 1
+}
 curl -kfsS -o /dev/null -X DELETE -H "Authorization: Bearer $token" \
   "$registry_url/v2/$registry_username/$registry_repository/manifests/$manifest_digest"
 docker image rm "$image" >/dev/null

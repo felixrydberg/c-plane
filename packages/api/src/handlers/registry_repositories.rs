@@ -129,6 +129,7 @@ pub async fn list_repositories(
         (status = 204, description = "Registry repository deleted"),
         (status = 403, description = "Organization access required"),
         (status = 404, description = "Registry repository not found"),
+        (status = 503, description = "Registry is read-only for maintenance"),
     ),
     tag = "registry",
 )]
