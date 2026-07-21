@@ -1949,6 +1949,47 @@
         }
       }
     },
+    "/api/organization/{organization_id}/registry/repositories/{repository_id}": {
+      "delete": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "delete_repository",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "repository_id",
+            "in": "path",
+            "description": "Registry repository ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Registry repository deleted"
+          },
+          "403": {
+            "description": "Organization access required"
+          },
+          "404": {
+            "description": "Registry repository not found"
+          }
+        }
+      }
+    },
     "/api/organization/{organization_id}/storage/buckets": {
       "get": {
         "tags": [

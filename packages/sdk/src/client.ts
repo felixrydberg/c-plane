@@ -55,6 +55,7 @@ export type Sdk = {
   registry: {
     create_access_token: Operation<"/api/organization/{organization_id}/registry/access-tokens", 'post'>
     create_repository: Operation<"/api/organization/{organization_id}/registry/repositories", 'post'>
+    delete_repository: Operation<"/api/organization/{organization_id}/registry/repositories/{repository_id}", 'delete'>
     get_access_token: Operation<"/api/organization/{organization_id}/registry/access-tokens/{token_id}", 'get'>
     issue_token: Operation<"/api/registry/token", 'get'>
     list_access_tokens: Operation<"/api/organization/{organization_id}/registry/access-tokens", 'get'>
@@ -124,6 +125,7 @@ export const createSdk = (options: SdkOptions = {}): Sdk => {
     registry: {
       create_access_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/access-tokens", 'post'>>) => client.POST("/api/organization/{organization_id}/registry/access-tokens", ...args),
       create_repository: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/repositories", 'post'>>) => client.POST("/api/organization/{organization_id}/registry/repositories", ...args),
+      delete_repository: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/repositories/{repository_id}", 'delete'>>) => client.DELETE("/api/organization/{organization_id}/registry/repositories/{repository_id}", ...args),
       get_access_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/access-tokens/{token_id}", 'get'>>) => client.GET("/api/organization/{organization_id}/registry/access-tokens/{token_id}", ...args),
       issue_token: (...args: Parameters<Operation<"/api/registry/token", 'get'>>) => client.GET("/api/registry/token", ...args),
       list_access_tokens: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/access-tokens", 'get'>>) => client.GET("/api/organization/{organization_id}/registry/access-tokens", ...args),

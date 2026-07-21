@@ -28,6 +28,10 @@ pub fn create_routes() -> Router {
                 .post(registry_repositories::create_repository),
         )
         .route(
+            "/api/organization/{organization_id}/registry/repositories/{repository_id}",
+            delete(registry_repositories::delete_repository),
+        )
+        .route(
             "/api/organization/{organization_id}/registry/access-tokens",
             get(registry_access_tokens::list_access_tokens)
                 .post(registry_access_tokens::create_access_token),

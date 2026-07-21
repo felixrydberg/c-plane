@@ -117,11 +117,7 @@ pub async fn issue_token(
         jti: Uuid::new_v4().to_string(),
         access,
     };
-    let signer = registry_signer()?;
-    let mut jwt_header = Header::new(Algorithm::RS256);
-    jwt_header.x5c = Some(vec![signer.certificate.clone()]);
-    let token = encode(&jwt_header, &claims, &signer.key)
-        .map_err(|error| AppError::Internal(format!("Failed to sign registry token: {error}")))?;
+    let token = sign_registry_claims(&claims)?;
 
     Ok(Json(RegistryTokenResponse {
         access_token: token.clone(),
@@ -129,6 +125,38 @@ pub async fn issue_token(
         expires_in: TOKEN_TTL_SECONDS,
         issued_at: now.to_rfc3339(),
     }))
+}
+
+pub(crate) async fn sign_repository_token(
+    organization_id: Uuid,
+    repository_name: &str,
+    actions: &[&str],
+) -> Result<String, AppError> {
+    let organization_slug = organization_slug(organization_id).await?;
+    let now = chrono::Utc::now();
+    let issued_at = now.timestamp() as u64;
+    sign_registry_claims(&RegistryClaims {
+        iss: env::var("REGISTRY_TOKEN_ISSUER").unwrap_or_else(|_| "cplane-registry".into()),
+        sub: "cplane-control-plane".into(),
+        aud: env::var("REGISTRY_HOST").unwrap_or_else(|_| "localhost:5000".into()),
+        exp: issued_at + TOKEN_TTL_SECONDS,
+        nbf: issued_at.saturating_sub(5),
+        iat: issued_at,
+        jti: Uuid::new_v4().to_string(),
+        access: vec![RegistryAccess {
+            resource_type: "repository",
+            name: format!("{organization_slug}/{repository_name}"),
+            actions: actions.iter().map(|action| (*action).into()).collect(),
+        }],
+    })
+}
+
+fn sign_registry_claims(claims: &RegistryClaims) -> Result<String, AppError> {
+    let signer = registry_signer()?;
+    let mut jwt_header = Header::new(Algorithm::RS256);
+    jwt_header.x5c = Some(vec![signer.certificate.clone()]);
+    encode(&jwt_header, claims, &signer.key)
+        .map_err(|error| AppError::Internal(format!("Failed to sign registry token: {error}")))
 }
 
 fn parse_registry_token_query(raw_query: Option<&str>) -> Result<RegistryTokenQuery, AppError> {

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { Repository } from '@cplane/sdk'
+import { FetchError } from 'ofetch'
 import { ICONS } from '~/utils/icons'
 
 defineOptions({ name: 'OrganizationRegistryPage' })
@@ -12,7 +14,33 @@ const registryHost = computed(() => config.public.registryHost)
 const repositoriesUrl = computed(() => organizationId.value
   ? `/api/cplane/organization/${organizationId.value as ':organization_id'}/registry/repositories` as const
   : '')
-const { data: repositories } = await useFetch(repositoriesUrl, { default: () => [] })
+const toast = useToast()
+const { data: repositories, refresh: refreshRepositories } = await useFetch(repositoriesUrl, { default: () => [] })
+const selectedRepository = ref<Repository | null>(null)
+const deleteModalOpen = ref(false)
+const deleting = ref(false)
+
+function confirmDelete(repository: Repository) {
+  selectedRepository.value = repository
+  deleteModalOpen.value = true
+}
+
+async function deleteRepository() {
+  if (!selectedRepository.value || !organizationId.value) return
+  deleting.value = true
+  try {
+    await $fetch(`/api/cplane/organization/${organizationId.value as ':organization_id'}/registry/repositories/${selectedRepository.value.id as ':repository_id'}` as const, { method: 'DELETE' })
+    toast.add({ title: 'Repository and images deleted', color: 'success' })
+    deleteModalOpen.value = false
+    selectedRepository.value = null
+    await refreshRepositories()
+  } catch (error) {
+    const message = error instanceof FetchError ? error.data?.message : undefined
+    toast.add({ title: message || 'Failed to delete repository and images', color: 'error' })
+  } finally {
+    deleting.value = false
+  }
+}
 </script>
 
 <template>
@@ -35,10 +63,25 @@ const { data: repositories } = await useFetch(repositoriesUrl, { default: () => 
     </div>
 
     <section v-for="repository in repositories" :key="repository.id" class="overflow-hidden rounded-lg border border-dashed border-default bg-transparent">
-      <div class="p-4">
-        <h2 class="font-semibold">{{ repository.name }}</h2>
-        <p class="mt-1 break-all font-mono text-xs text-muted">{{ registryHost }}/{{ organizationSlug }}/{{ repository.name }}</p>
+      <div class="flex items-center justify-between gap-3 border-b border-default p-4">
+        <div>
+          <h2 class="font-semibold">{{ repository.name }}</h2>
+          <p class="mt-1 break-all font-mono text-xs text-muted">{{ registryHost }}/{{ organizationSlug }}/{{ repository.name }}</p>
+        </div>
+        <UButton :icon="ICONS.trash" color="error" size="sm" @click="confirmDelete(repository)">Delete</UButton>
       </div>
     </section>
+
+    <UModal v-model:open="deleteModalOpen" title="Delete repository" description="This permanently deletes the repository images and access permissions.">
+      <template #body>
+        <div class="space-y-4">
+          <p class="text-sm">Are you sure you want to delete <strong>{{ selectedRepository?.name }}</strong>?</p>
+          <div class="flex justify-end gap-3 pt-2">
+            <UButton color="neutral" variant="ghost" :disabled="deleting" @click="deleteModalOpen = false">Cancel</UButton>
+            <UButton :icon="ICONS.trash" color="error" :loading="deleting" @click="deleteRepository">Delete</UButton>
+          </div>
+        </div>
+      </template>
+    </UModal>
   </div>
 </template>

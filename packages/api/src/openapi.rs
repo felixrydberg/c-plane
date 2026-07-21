@@ -52,6 +52,7 @@ use utoipa::OpenApi;
         crate::handlers::registry_access_tokens::update_access_token,
         crate::handlers::registry_repositories::create_repository,
         crate::handlers::registry_repositories::list_repositories,
+        crate::handlers::registry_repositories::delete_repository,
     ),
     components(
         schemas(
