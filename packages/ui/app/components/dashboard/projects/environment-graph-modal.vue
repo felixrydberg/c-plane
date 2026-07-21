@@ -218,6 +218,8 @@ async function onConfirmRemoveEnvironment() {
 function onEnvironmentCreated(environment: Environment) {
   // Add environment to local environment list
   allEnvironments.value = [...allEnvironments.value, environment];
+  store.environments = [...store.environments.filter(b => b.id !== environment.id), environment];
+  store.environments_project_id = store.project?.id ?? store.environments_project_id;
 
   // Find the node this environment was forked from and update it
   nodes.value = nodes.value.map(n => {
