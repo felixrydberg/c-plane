@@ -1,6 +1,7 @@
 use axum::{Json, http::StatusCode, response::IntoResponse};
 use serde::Serialize;
 use std::fmt;
+use utoipa::ToSchema;
 
 #[derive(Debug)]
 pub enum AppError {
@@ -9,11 +10,12 @@ pub enum AppError {
     Forbidden(String),
     NotFound(String),
     Conflict(String),
+    ServiceUnavailable(String),
 
     Internal(String),
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ErrorResponse {
     pub error: String,
     pub message: String,
@@ -37,6 +39,7 @@ impl fmt::Display for AppError {
             AppError::Forbidden(msg) => write!(f, "Forbidden: {}", msg),
             AppError::NotFound(msg) => write!(f, "Not found: {}", msg),
             AppError::Conflict(msg) => write!(f, "Conflict: {}", msg),
+            AppError::ServiceUnavailable(msg) => write!(f, "Service unavailable: {}", msg),
             AppError::Internal(msg) => write!(f, "Internal error: {}", msg),
         }
     }
@@ -94,6 +97,14 @@ impl IntoResponse for AppError {
                 StatusCode::CONFLICT,
                 ErrorResponse {
                     error: "conflict".to_string(),
+                    message: msg,
+                    details: None,
+                },
+            ),
+            AppError::ServiceUnavailable(msg) => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                ErrorResponse {
+                    error: "service_unavailable".to_string(),
                     message: msg,
                     details: None,
                 },

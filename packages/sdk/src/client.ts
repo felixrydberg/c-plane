@@ -60,6 +60,7 @@ export type Sdk = {
     issue_token: Operation<"/api/registry/token", 'get'>
     list_access_tokens: Operation<"/api/organization/{organization_id}/registry/access-tokens", 'get'>
     list_repositories: Operation<"/api/organization/{organization_id}/registry/repositories", 'get'>
+    maintenance_status: Operation<"/api/organization/{organization_id}/registry/maintenance", 'get'>
     revoke_access_token: Operation<"/api/organization/{organization_id}/registry/access-tokens/{token_id}", 'delete'>
     update_access_token: Operation<"/api/organization/{organization_id}/registry/access-tokens/{token_id}", 'patch'>
   }
@@ -130,6 +131,7 @@ export const createSdk = (options: SdkOptions = {}): Sdk => {
       issue_token: (...args: Parameters<Operation<"/api/registry/token", 'get'>>) => client.GET("/api/registry/token", ...args),
       list_access_tokens: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/access-tokens", 'get'>>) => client.GET("/api/organization/{organization_id}/registry/access-tokens", ...args),
       list_repositories: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/repositories", 'get'>>) => client.GET("/api/organization/{organization_id}/registry/repositories", ...args),
+      maintenance_status: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/maintenance", 'get'>>) => client.GET("/api/organization/{organization_id}/registry/maintenance", ...args),
       revoke_access_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/access-tokens/{token_id}", 'delete'>>) => client.DELETE("/api/organization/{organization_id}/registry/access-tokens/{token_id}", ...args),
       update_access_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/access-tokens/{token_id}", 'patch'>>) => client.PATCH("/api/organization/{organization_id}/registry/access-tokens/{token_id}", ...args)
     },

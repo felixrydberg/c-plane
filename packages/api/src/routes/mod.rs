@@ -23,6 +23,10 @@ pub fn create_routes() -> Router {
         .route("/health", get(health_check))
         .route("/api/registry/token", get(registry::issue_token))
         .route(
+            "/api/organization/{organization_id}/registry/maintenance",
+            get(registry::maintenance_status),
+        )
+        .route(
             "/api/organization/{organization_id}/registry/repositories",
             get(registry_repositories::list_repositories)
                 .post(registry_repositories::create_repository),

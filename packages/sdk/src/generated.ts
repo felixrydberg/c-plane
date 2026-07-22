@@ -308,6 +308,22 @@ export interface paths {
         patch: operations["registry_update_access_token"];
         trace?: never;
     };
+    "/api/organization/{organization_id}/registry/maintenance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["maintenance_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/organization/{organization_id}/registry/repositories": {
         parameters: {
             query?: never;
@@ -595,6 +611,11 @@ export interface components {
             project_name: string;
             timeline: string;
         };
+        ErrorResponse: {
+            details?: unknown;
+            error: string;
+            message: string;
+        };
         EventResponse: {
             action: string;
             /** Format: uuid */
@@ -659,6 +680,11 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
+        };
+        RegistryMaintenanceResponse: {
+            phase?: string | null;
+            read_only: boolean;
+            started_at?: string | null;
         };
         RegistryRepositoryResponse: {
             created_at: string;
@@ -2041,6 +2067,36 @@ export interface operations {
             };
         };
     };
+    maintenance_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Registry maintenance state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistryMaintenanceResponse"];
+                };
+            };
+            /** @description Organization access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_repositories: {
         parameters: {
             query?: never;
@@ -2146,6 +2202,29 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Registry cleanup conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Registry cleanup failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Registry is read-only for maintenance */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
         };
     };
@@ -2289,6 +2368,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Registry is read-only for maintenance */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
         };
     };

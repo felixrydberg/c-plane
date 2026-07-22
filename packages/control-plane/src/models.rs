@@ -72,6 +72,16 @@ pub struct AuditLog {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RegistryGcStatus {
+    pub phase: String,
+    pub active_job_id: Option<String>,
+    pub started_at: Option<String>,
+    pub finished_at: Option<String>,
+    pub last_result: Option<String>,
+    pub last_error: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct JoinCredential {
     pub token: String,
     pub expires_at: String,

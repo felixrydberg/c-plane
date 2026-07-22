@@ -45,6 +45,7 @@ use utoipa::OpenApi;
         crate::handlers::storage_access_tokens::revoke_access_token,
         crate::handlers::storage_access_tokens::update_access_token,
         crate::handlers::registry::issue_token,
+        crate::handlers::registry::maintenance_status,
         crate::handlers::registry_access_tokens::create_access_token,
         crate::handlers::registry_access_tokens::get_access_token,
         crate::handlers::registry_access_tokens::list_access_tokens,
@@ -56,6 +57,7 @@ use utoipa::OpenApi;
     ),
     components(
         schemas(
+            crate::errors::ErrorResponse,
             crate::handlers::projects::CreateProjectRequest,
             crate::handlers::projects::ProjectResponse,
             crate::handlers::projects::CreateEnvironmentRequest,
@@ -89,6 +91,7 @@ use utoipa::OpenApi;
             crate::handlers::storage_access_tokens::AccessTokenDetailsResponse,
             crate::handlers::storage_access_tokens::CreatedAccessTokenResponse,
             crate::handlers::registry::RegistryTokenResponse,
+            crate::handlers::registry::RegistryMaintenanceResponse,
             crate::handlers::registry_access_tokens::CreateRegistryAccessTokenRequest,
             crate::handlers::registry_access_tokens::UpdateRegistryAccessTokenRequest,
             crate::handlers::registry_access_tokens::RepositoryPermissionRequest,

@@ -186,6 +186,16 @@ pub async fn list_audit_logs() -> Result<Vec<AuditLog>> {
     server::list_audit_logs().await
 }
 
+#[get("/api/registry/garbage-collection")]
+pub async fn registry_gc_status() -> Result<RegistryGcStatus> {
+    server::registry_gc_status().await
+}
+
+#[post("/api/registry/garbage-collection", headers: dioxus::fullstack::HeaderMap)]
+pub async fn enqueue_registry_gc() -> Result<()> {
+    server::enqueue_registry_gc(&headers).await
+}
+
 #[cfg(feature = "server")]
 pub mod server {
     use super::*;
@@ -648,6 +658,13 @@ pub mod server {
         pub secret_access_key: String,
     }
 
+    #[derive(Clone, Deserialize, Serialize)]
+    struct RegistryServiceSecret {
+        secret_access_key: String,
+        #[serde(default)]
+        gc_secret_access_key: Option<String>,
+    }
+
     #[derive(Deserialize)]
     struct OpenBaoAccessTokenData {
         data: OpenBaoAccessTokenSecret,
@@ -656,6 +673,16 @@ pub mod server {
     #[derive(Deserialize)]
     struct OpenBaoAccessTokenSecret {
         data: S3AccessTokenSecret,
+    }
+
+    #[derive(Deserialize)]
+    struct OpenBaoRegistryServiceSecret {
+        data: RegistryServiceSecret,
+    }
+
+    #[derive(Deserialize)]
+    struct OpenBaoRegistryServiceData {
+        data: OpenBaoRegistryServiceSecret,
     }
 
     #[derive(Clone, Deserialize, Serialize)]
@@ -712,7 +739,7 @@ pub mod server {
             .map_err(CapturedError::from_display)
     }
 
-    async fn service_credential_secret_read(id: &str) -> Result<S3AccessTokenSecret> {
+    async fn service_credential_secret_read(id: &str) -> Result<RegistryServiceSecret> {
         let (address, token) = openbao_config()?;
         let response = Client::new()
             .get(format!(
@@ -729,7 +756,7 @@ pub mod server {
             )));
         }
         response
-            .json::<OpenBaoAccessTokenData>()
+            .json::<OpenBaoRegistryServiceData>()
             .await
             .map(|value| value.data.data)
             .map_err(CapturedError::from_display)
@@ -818,7 +845,10 @@ pub mod server {
         Ok(())
     }
 
-    async fn service_credential_secret_write(id: &str, secret: &S3AccessTokenSecret) -> Result<()> {
+    async fn service_credential_secret_write(
+        id: &str,
+        secret: &RegistryServiceSecret,
+    ) -> Result<()> {
         let (address, token) = openbao_config()?;
         let response = Client::new()
             .post(format!(
@@ -987,9 +1017,22 @@ pub mod server {
             env::var("REGISTRY_STORAGE_S3_SECRETKEY").map_err(CapturedError::from_display)?,
             "REGISTRY_STORAGE_S3_SECRETKEY",
         )?;
-        if secret_access_key.len() < 32 {
+        let gc_access_key_id = required(
+            env::var("REGISTRY_STORAGE_S3_GC_ACCESSKEY").map_err(CapturedError::from_display)?,
+            "REGISTRY_STORAGE_S3_GC_ACCESSKEY",
+        )?;
+        let gc_secret_access_key = required(
+            env::var("REGISTRY_STORAGE_S3_GC_SECRETKEY").map_err(CapturedError::from_display)?,
+            "REGISTRY_STORAGE_S3_GC_SECRETKEY",
+        )?;
+        if secret_access_key.len() < 32 || gc_secret_access_key.len() < 32 {
             return Err(CapturedError::msg(
-                "REGISTRY_STORAGE_S3_SECRETKEY must be at least 32 characters",
+                "registry storage secret keys must be at least 32 characters",
+            ));
+        }
+        if access_key_id == gc_access_key_id || secret_access_key == gc_secret_access_key {
+            return Err(CapturedError::msg(
+                "registry and garbage-collection credentials must differ",
             ));
         }
 
@@ -1009,8 +1052,8 @@ pub mod server {
         }
         if database
             .query_one(statement(
-                "SELECT id FROM storage_access_token WHERE access_key_id=$1 AND revoked_at IS NULL",
-                vec![access_key_id.clone().into()],
+                "SELECT id FROM storage_access_token WHERE access_key_id IN ($1, $2) AND revoked_at IS NULL",
+                vec![access_key_id.clone().into(), gc_access_key_id.clone().into()],
             ))
             .await
             .map_err(CapturedError::from_display)?
@@ -1036,9 +1079,22 @@ pub mod server {
             .map_err(CapturedError::from_display)?
             .ok_or_else(|| CapturedError::msg("registry storage bootstrap returned no row"))?;
         let id: Uuid = row.try_get("", "id").map_err(CapturedError::from_display)?;
-        let secret = S3AccessTokenSecret { secret_access_key };
+        database
+            .execute(statement(
+                "INSERT INTO registry_maintenance (service, gc_access_key_id) VALUES ('distribution', $1) ON CONFLICT (service) DO UPDATE SET gc_access_key_id=EXCLUDED.gc_access_key_id, updated_at=NOW()",
+                vec![gc_access_key_id.into()],
+            ))
+            .await
+            .map_err(CapturedError::from_display)?;
+        let secret = RegistryServiceSecret {
+            secret_access_key,
+            gc_secret_access_key: Some(gc_secret_access_key),
+        };
         let secret_changed = match service_credential_secret_read(&id.to_string()).await {
-            Ok(stored) => stored.secret_access_key != secret.secret_access_key,
+            Ok(stored) => {
+                stored.secret_access_key != secret.secret_access_key
+                    || stored.gc_secret_access_key != secret.gc_secret_access_key
+            }
             Err(_) => true,
         };
         if secret_changed {
@@ -1046,6 +1102,71 @@ pub mod server {
         }
         bucket_key(id).await?;
         invalidate_access_token_cache().await?;
+        Ok(())
+    }
+
+    pub async fn registry_gc_status() -> Result<RegistryGcStatus> {
+        let row = database()
+            .await?
+            .query_one(statement(
+                "SELECT phase, active_job_id::text, started_at::text, finished_at::text, last_result, last_error FROM registry_maintenance WHERE service='distribution'",
+                vec![],
+            ))
+            .await
+            .map_err(CapturedError::from_display)?
+            .ok_or_else(|| CapturedError::msg("registry maintenance is not configured"))?;
+        Ok(RegistryGcStatus {
+            phase: text(&row, "phase")?,
+            active_job_id: optional_text(&row, "active_job_id")?,
+            started_at: optional_text(&row, "started_at")?,
+            finished_at: optional_text(&row, "finished_at")?,
+            last_result: optional_text(&row, "last_result")?,
+            last_error: optional_text(&row, "last_error")?,
+        })
+    }
+
+    pub async fn enqueue_registry_gc(headers: &HeaderMap) -> Result<()> {
+        let job_id = Uuid::new_v4();
+        let transaction = database()
+            .await?
+            .begin()
+            .await
+            .map_err(CapturedError::from_display)?;
+        transaction
+            .execute(statement(
+                "INSERT INTO worker_job (id, queue_name, job_type, dedupe_key, payload) VALUES ($1::uuid, 'maintenance', 'registry_gc', 'registry_gc', '{}'::jsonb)",
+                vec![job_id.into()],
+            ))
+            .await
+            .map_err(|error| CapturedError::msg(format!("registry garbage collection is already queued: {error}")))?;
+        let updated = transaction
+            .execute(statement(
+                "UPDATE registry_maintenance SET phase='queued', active_job_id=$1::uuid, started_at=NOW(), finished_at=NULL, last_result=NULL, last_error=NULL, updated_at=NOW() WHERE service='distribution' AND phase='idle'",
+                vec![job_id.into()],
+            ))
+            .await
+            .map_err(CapturedError::from_display)?;
+        if updated.rows_affected() != 1 {
+            return Err(CapturedError::msg(
+                "registry garbage collection is already running",
+            ));
+        }
+        audit(
+            &transaction,
+            headers,
+            "enqueue",
+            "worker_job",
+            Some(&job_id.to_string()),
+            json!({"queue": "maintenance", "job_type": "registry_gc"}),
+        )
+        .await?;
+        transaction
+            .commit()
+            .await
+            .map_err(CapturedError::from_display)?;
+        if let Err(error) = invalidate_access_token_cache().await {
+            eprintln!("failed to invalidate registry permissions after enqueue: {error}");
+        }
         Ok(())
     }
 
@@ -1304,7 +1425,7 @@ pub mod server {
             .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
         let mut rows = database
             .query_all(statement(
-                "SELECT 'tenant'::text AS credential_kind, id, organization_id, project_id FROM storage_access_token WHERE access_key_id=$1 AND revoked_at IS NULL UNION ALL SELECT 'distribution'::text AS credential_kind, id, NULL::uuid AS organization_id, NULL::uuid AS project_id FROM registry_storage WHERE access_key_id=$1 AND service='distribution'",
+                "SELECT 'tenant'::text AS credential_kind, id, organization_id, project_id FROM storage_access_token WHERE access_key_id=$1 AND revoked_at IS NULL UNION ALL SELECT 'distribution'::text, id, NULL::uuid, NULL::uuid FROM registry_storage WHERE access_key_id=$1 AND service='distribution' UNION ALL SELECT 'distribution_gc'::text, storage.id, NULL::uuid, NULL::uuid FROM registry_maintenance maintenance JOIN registry_storage storage ON storage.service=maintenance.service WHERE maintenance.gc_access_key_id=$1 AND maintenance.service='distribution'",
                 vec![access_key.clone().into()],
             ))
             .await
@@ -1321,9 +1442,20 @@ pub mod server {
         let credential_id: Uuid = row
             .try_get("", "id")
             .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
-        let secret = match credential_kind.as_str() {
-            "tenant" => access_token_secret_read(&credential_id.to_string()).await,
-            "distribution" => service_credential_secret_read(&credential_id.to_string()).await,
+        let secret_access_key = match credential_kind.as_str() {
+            "tenant" => access_token_secret_read(&credential_id.to_string())
+                .await
+                .map(|secret| secret.secret_access_key),
+            "distribution" => service_credential_secret_read(&credential_id.to_string())
+                .await
+                .map(|secret| secret.secret_access_key),
+            "distribution_gc" => service_credential_secret_read(&credential_id.to_string())
+                .await
+                .and_then(|secret| {
+                    secret.gc_secret_access_key.ok_or_else(|| {
+                        CapturedError::msg("registry GC credential is not configured")
+                    })
+                }),
             _ => return Err(dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR),
         }
         .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -1345,10 +1477,10 @@ pub mod server {
                     ],
                 ))
                 .await,
-            "distribution" => database
+            "distribution" | "distribution_gc" => database
                 .query_all(statement(
-                    "SELECT storage.id AS bucket_id, true AS can_read, true AS can_write, storage.bucket_name, provider.provider_region AS region_slug, provider.id AS provider_id, storage.physical_bucket_name FROM registry_storage storage JOIN s3_providers provider ON provider.id=storage.provider_id WHERE storage.id=$1 AND storage.service='distribution' AND provider.is_active=true",
-                    vec![credential_id.into()],
+                    "SELECT storage.id AS bucket_id, true AS can_read, CASE WHEN $2='distribution_gc' THEN maintenance.phase='collecting' ELSE maintenance.phase IN ('idle', 'queued', 'draining') END AS can_write, storage.bucket_name, provider.provider_region AS region_slug, provider.id AS provider_id, storage.physical_bucket_name FROM registry_storage storage JOIN registry_maintenance maintenance ON maintenance.service=storage.service JOIN s3_providers provider ON provider.id=storage.provider_id WHERE storage.id=$1 AND storage.service='distribution' AND provider.is_active=true",
+                    vec![credential_id.into(), credential_kind.clone().into()],
                 ))
                 .await,
             _ => unreachable!(),
@@ -1390,7 +1522,7 @@ pub mod server {
             project_id,
             credential_id,
             bucket_permissions,
-            secret_access_key: secret.secret_access_key,
+            secret_access_key,
         };
         cache_access_token(&access_key, generation, &resolved)
             .await

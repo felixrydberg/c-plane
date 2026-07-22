@@ -11,6 +11,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY packages/api/Cargo.toml ./packages/api/Cargo.toml
 COPY packages/api/src/main.rs ./packages/api/src/main.rs
 COPY packages/storage ./packages/storage
+COPY packages/worker ./packages/worker
 COPY packages/control-plane ./packages/control-plane
 WORKDIR /usr/src/app/packages/control-plane
 RUN dx build --web --fullstack true --release

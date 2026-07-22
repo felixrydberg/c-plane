@@ -131,6 +131,7 @@ pub async fn list_repositories(
         (status = 204, description = "Registry repository deleted"),
         (status = 403, description = "Organization access required"),
         (status = 404, description = "Registry repository not found"),
+        (status = 503, description = "Registry is read-only for maintenance", body = crate::errors::ErrorResponse),
         (status = 409, description = "Registry cleanup conflict"),
         (status = 500, description = "Registry cleanup failed"),
     ),

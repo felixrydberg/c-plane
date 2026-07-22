@@ -2,6 +2,8 @@ ARG PACKAGE=api
 ARG BINARY=c-plane
 ARG RUST_VERSION=1.92.0
 
+FROM registry:3.1.1 AS distribution
+
 FROM rust:${RUST_VERSION} AS builder
 
 ARG PACKAGE
@@ -13,6 +15,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY packages/api ./packages/api
 COPY packages/control-plane ./packages/control-plane
 COPY packages/storage ./packages/storage
+COPY packages/worker ./packages/worker
 
 RUN cd packages/${PACKAGE} && \
     cargo build --release --target x86_64-unknown-linux-gnu
@@ -28,6 +31,8 @@ COPY --from=runtime-builder /usr/lib/x86_64-linux-gnu/libcrypto.so* /usr/lib/
 
 FROM runtime-default AS runtime-api
 FROM runtime-default AS runtime-storage
+FROM runtime-default AS runtime-worker
+COPY --from=distribution /bin/registry /usr/local/bin/registry
 
 FROM runtime-${PACKAGE}
 

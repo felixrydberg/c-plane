@@ -4,4 +4,5 @@ members = [
     "packages/api",
     "packages/control-plane",
     "packages/storage",
+    "packages/worker",
 ]

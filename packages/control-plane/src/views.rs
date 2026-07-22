@@ -3,6 +3,12 @@ use dioxus::prelude::*;
 
 #[component]
 fn Shell(title: &'static str, children: Element) -> Element {
+    let maintenance_version = use_context::<Signal<u64>>();
+    let maintenance = use_resource(move || {
+        let _ = maintenance_version();
+        registry_gc_status()
+    });
+    let maintenance_state = maintenance.read().clone();
     rsx! {
         div { class: "shell",
             aside {
@@ -24,6 +30,14 @@ fn Shell(title: &'static str, children: Element) -> Element {
                     h1 { "{title}" }
                     span { class: "private", "Loopback / private network" }
                 }
+                if let Some(Ok(status)) = maintenance_state {
+                    if status.phase != "idle" {
+                        div { class: "maintenance-banner", role: "alert",
+                            strong { "Registry maintenance in progress" }
+                            span { "New Registry writes are blocked while garbage collection is {status.phase}; in-flight writes may finish. The Registry is read-only during collecting; pulls remain available." }
+                        }
+                    }
+                }
                 {children}
             }
         }
@@ -38,12 +52,75 @@ pub fn Dashboard() -> Element {
                 h2 { "Rust control plane" }
                 p { "Infrastructure administration is served by one Dioxus application and audited by request identity and source IP." }
             }
+            RegistryGarbageCollection {}
             div { class: "cards",
                 SummaryCard { label: "Organizations", route: Route::Organizations {} }
                 SummaryCard { label: "Regions", route: Route::Regions {} }
                 SummaryCard { label: "Clusters", route: Route::Clusters {} }
                 SummaryCard { label: "S3 Providers", route: Route::S3Providers {} }
                 SummaryCard { label: "Audit Logs", route: Route::AuditLogs {} }
+            }
+        }
+    }
+}
+
+#[component]
+fn RegistryGarbageCollection() -> Element {
+    let mut status = use_resource(registry_gc_status);
+    let status_state = status.read().clone();
+    let mut maintenance_version = use_context::<Signal<u64>>();
+    let mut confirmed = use_signal(|| false);
+    let mut queueing = use_signal(|| false);
+    let mut message = use_signal(|| None::<String>);
+
+    rsx! {
+        section { class: "maintenance",
+            h2 { "Registry garbage collection" }
+            p { "Queue Distribution garbage collection. New Registry writes are blocked while queued and draining so in-flight writes may finish; the Registry is read-only during collecting, while pulls remain available." }
+            match status_state {
+                Some(Ok(current)) => rsx! {
+                    p { class: "maintenance-status",
+                        strong { "Status: " }
+                        "{current.phase}"
+                        if let Some(result) = current.last_result.as_deref() { " · Last run: {result}" }
+                    }
+                    if let Some(error) = current.last_error.as_deref() {
+                        p { class: "form-error", "{error}" }
+                    }
+                    if current.phase == "idle" {
+                        if confirmed() {
+                            p { class: "confirmation", "This queues a global maintenance job. New Registry writes will be blocked while queued and draining so in-flight writes may finish; the Registry will be read-only during collecting." }
+                            div { class: "actions",
+                                button {
+                                    class: "danger",
+                                    disabled: queueing(),
+                                    onclick: move |_| async move {
+                                        queueing.set(true);
+                                        match enqueue_registry_gc().await {
+                                            Ok(()) => {
+                                                confirmed.set(false);
+                                                message.set(None);
+                                                status.restart();
+                                                maintenance_version.set(maintenance_version().wrapping_add(1));
+                                            }
+                                            Err(error) => message.set(Some(error.to_string())),
+                                        }
+                                        queueing.set(false);
+                                    },
+                                    if queueing() { "↻ Queueing…" } else { "✓ Confirm garbage collection" }
+                                }
+                                button { disabled: queueing(), onclick: move |_| confirmed.set(false), "× Cancel" }
+                            }
+                        } else {
+                            button { class: "primary", onclick: move |_| confirmed.set(true), "↻ Queue garbage collection" }
+                        }
+                    } else {
+                        button { onclick: move |_| status.restart(), "↻ Refresh status" }
+                    }
+                    ErrorMessage { message }
+                },
+                Some(Err(error)) => rsx! { p { class: "state error", "{error}" } },
+                None => rsx! { p { class: "state", "Loading…" } },
             }
         }
     }

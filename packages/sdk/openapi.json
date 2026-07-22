@@ -1865,6 +1865,41 @@
         }
       }
     },
+    "/api/organization/{organization_id}/registry/maintenance": {
+      "get": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "maintenance_status",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Registry maintenance state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryMaintenanceResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization access required"
+          }
+        }
+      }
+    },
     "/api/organization/{organization_id}/registry/repositories": {
       "get": {
         "tags": [
@@ -1986,6 +2021,22 @@
           },
           "404": {
             "description": "Registry repository not found"
+          },
+          "409": {
+            "description": "Registry cleanup conflict"
+          },
+          "500": {
+            "description": "Registry cleanup failed"
+          },
+          "503": {
+            "description": "Registry is read-only for maintenance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -2167,6 +2218,16 @@
           },
           "401": {
             "description": "Invalid registry credentials"
+          },
+          "503": {
+            "description": "Registry is read-only for maintenance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -2865,6 +2926,22 @@
           }
         }
       },
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "error",
+          "message"
+        ],
+        "properties": {
+          "details": {},
+          "error": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
       "EventResponse": {
         "type": "object",
         "required": [
@@ -3107,6 +3184,29 @@
           },
           "name": {
             "type": "string"
+          }
+        }
+      },
+      "RegistryMaintenanceResponse": {
+        "type": "object",
+        "required": [
+          "read_only"
+        ],
+        "properties": {
+          "phase": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "read_only": {
+            "type": "boolean"
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
