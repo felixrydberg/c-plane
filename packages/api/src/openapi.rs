@@ -38,7 +38,7 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
         return;
     };
 
-    if let Some(scope) = required_scope(method, path) {
+    if let Some(scope) = required_scope(if method == "HEAD" { "GET" } else { method }, path) {
         operation.security = Some(vec![utoipa::openapi::security::SecurityRequirement::new(
             "apiKey",
             Vec::<String>::new(),
@@ -173,3 +173,24 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
     modifiers(&SecurityAddon),
 )]
 pub struct ApiDoc;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn head_reuses_get_scope() {
+        let mut operation = Operation::default();
+
+        document_scope(
+            "HEAD",
+            "/api/organization/{organization_id}/regions",
+            Some(&mut operation),
+        );
+
+        assert_eq!(
+            operation.extensions.unwrap().get("x-cplane-required-scope"),
+            Some(&serde_json::json!("region:read"))
+        );
+    }
+}

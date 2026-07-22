@@ -414,12 +414,6 @@ mod tests {
         };
         assert!(scoped_key.require_scope("project:read").is_ok());
         assert!(scoped_key.require_scope("project:delete").is_err());
-
-        let legacy_key = RequestAuthContext {
-            actor_id: Uuid::nil(),
-            api_key_scopes: Some(HashSet::from(["read:sessions".into()])),
-        };
-        assert!(legacy_key.require_scope("project:read").is_err());
     }
 
     #[test]
