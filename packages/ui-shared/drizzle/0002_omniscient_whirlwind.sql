@@ -1,1 +1,0 @@
-ALTER TABLE "bucket" DROP COLUMN "is_public";

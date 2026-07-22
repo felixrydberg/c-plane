@@ -61,7 +61,13 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "container:read"
       },
       "post": {
         "tags": [
@@ -104,7 +110,13 @@
           "404": {
             "description": "Not found"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "container:create"
       }
     },
     "/api/organization/{organization_id}/containers/{container_id}": {
@@ -149,7 +161,13 @@
           "404": {
             "description": "Not found"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "container:read"
       },
       "delete": {
         "tags": [
@@ -195,7 +213,13 @@
           "404": {
             "description": "Not found"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "container:delete"
       },
       "patch": {
         "tags": [
@@ -258,7 +282,13 @@
           "404": {
             "description": "Not found"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "container:update"
       }
     },
     "/api/organization/{organization_id}/databases/postgres": {
@@ -303,7 +333,13 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "database:postgres:read"
       },
       "post": {
         "tags": [
@@ -346,7 +382,13 @@
           "404": {
             "description": "Not found"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "database:postgres:create"
       }
     },
     "/api/organization/{organization_id}/databases/postgres/{database_id}": {
@@ -391,7 +433,13 @@
           "404": {
             "description": "Not found"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "database:postgres:read"
       },
       "delete": {
         "tags": [
@@ -427,7 +475,13 @@
           "404": {
             "description": "Not found"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "database:postgres:delete"
       },
       "patch": {
         "tags": [
@@ -480,7 +534,13 @@
           "404": {
             "description": "Not found"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "database:postgres:update"
       }
     },
     "/api/organization/{organization_id}/databases/postgres/{database_id}/branches": {
@@ -528,7 +588,13 @@
           "404": {
             "description": "Not found"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "database:postgres:read"
       },
       "post": {
         "tags": [
@@ -591,7 +657,13 @@
           "404": {
             "description": "Not found"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "database:postgres:manage"
       }
     },
     "/api/organization/{organization_id}/databases/postgres/{database_id}/branches/{branch_id}": {
@@ -639,7 +711,13 @@
           "404": {
             "description": "Not found"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "database:postgres:manage"
       },
       "patch": {
         "tags": [
@@ -702,7 +780,13 @@
           "404": {
             "description": "Not found"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "database:postgres:manage"
       }
     },
     "/api/organization/{organization_id}/environments": {
@@ -737,7 +821,13 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "project:read"
       }
     },
     "/api/organization/{organization_id}/events": {
@@ -760,8 +850,8 @@
           {
             "name": "project_id",
             "in": "query",
-            "description": "Project ID",
-            "required": true,
+            "description": "Optional project ID filter",
+            "required": false,
             "schema": {
               "type": "string",
               "format": "uuid"
@@ -822,7 +912,13 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "event:read"
       }
     },
     "/api/organization/{organization_id}/projects": {
@@ -885,7 +981,13 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "project:read"
       },
       "post": {
         "tags": [
@@ -928,7 +1030,13 @@
           "404": {
             "description": "Organization not found"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "project:create"
       }
     },
     "/api/organization/{organization_id}/projects/{project_id}": {
@@ -973,7 +1081,13 @@
           "404": {
             "description": "Not found"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "project:read"
       },
       "delete": {
         "tags": [
@@ -1009,7 +1123,13 @@
           "404": {
             "description": "Not found"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "project:delete"
       }
     },
     "/api/organization/{organization_id}/projects/{project_id}/environments": {
@@ -1054,7 +1174,13 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "project:read"
       },
       "post": {
         "tags": [
@@ -1110,7 +1236,13 @@
           "409": {
             "description": "Environment name already exists"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "project:manage"
       }
     },
     "/api/organization/{organization_id}/projects/{project_id}/environments/{environment_id}": {
@@ -1161,7 +1293,13 @@
           "409": {
             "description": "Cannot delete default environment"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "project:manage"
       },
       "patch": {
         "tags": [
@@ -1230,7 +1368,13 @@
           "409": {
             "description": "Environment name already exists"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "project:manage"
       }
     },
     "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens": {
@@ -1278,7 +1422,13 @@
           "404": {
             "description": "Project not found"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "access-token:read"
       },
       "post": {
         "tags": [
@@ -1334,7 +1484,13 @@
           "409": {
             "description": "Invalid permissions or duplicate token name"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "access-token:create"
       }
     },
     "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}": {
@@ -1389,7 +1545,13 @@
           "404": {
             "description": "Project or access token not found"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "access-token:read"
       },
       "delete": {
         "tags": [
@@ -1435,7 +1597,13 @@
           "404": {
             "description": "Project or access token not found"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "access-token:delete"
       },
       "patch": {
         "tags": [
@@ -1494,7 +1662,13 @@
           "409": {
             "description": "Invalid permissions"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "access-token:update"
       }
     },
     "/api/organization/{organization_id}/projects/{project_id}/timelines": {
@@ -1549,7 +1723,13 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "timeline:read"
       }
     },
     "/api/organization/{organization_id}/projects/{project_id}/timelines/{timeline_id}": {
@@ -1604,7 +1784,13 @@
           "404": {
             "description": "Not found"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "timeline:read"
       }
     },
     "/api/organization/{organization_id}/regions": {
@@ -1639,7 +1825,13 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "region:read"
       }
     },
     "/api/organization/{organization_id}/registry/access-tokens": {
@@ -1677,7 +1869,13 @@
           "403": {
             "description": "Organization access required"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "access-token:read"
       },
       "post": {
         "tags": [
@@ -1726,7 +1924,13 @@
           "409": {
             "description": "Invalid permissions or duplicate token name"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "access-token:create"
       }
     },
     "/api/organization/{organization_id}/registry/access-tokens/{token_id}": {
@@ -1771,7 +1975,13 @@
           "404": {
             "description": "Registry access token not found"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "access-token:read"
       },
       "delete": {
         "tags": [
@@ -1810,7 +2020,13 @@
           "404": {
             "description": "Registry access token not found"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "access-token:delete"
       },
       "patch": {
         "tags": [
@@ -1862,7 +2078,13 @@
           "409": {
             "description": "Invalid permissions"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "access-token:update"
       }
     },
     "/api/organization/{organization_id}/registry/maintenance": {
@@ -1893,9 +2115,6 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Organization access required"
           }
         }
       }
@@ -1935,7 +2154,13 @@
           "403": {
             "description": "Organization access required"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "registry:read"
       },
       "post": {
         "tags": [
@@ -1981,7 +2206,13 @@
           "409": {
             "description": "Invalid or duplicate repository name"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "registry:create"
       }
     },
     "/api/organization/{organization_id}/registry/repositories/{repository_id}": {
@@ -2038,7 +2269,13 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "registry:delete"
       }
     },
     "/api/organization/{organization_id}/storage/buckets": {
@@ -2086,7 +2323,13 @@
           "404": {
             "description": "Project not found"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "bucket:read"
       },
       "post": {
         "tags": [
@@ -2132,7 +2375,13 @@
           "409": {
             "description": "Bucket name is unavailable"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "bucket:create"
       }
     },
     "/api/organization/{organization_id}/storage/buckets/{bucket_id}": {
@@ -2173,7 +2422,13 @@
           "409": {
             "description": "Provider bucket could not be deleted"
           }
-        }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "bucket:delete"
       }
     },
     "/api/registry/token": {
@@ -2229,7 +2484,16 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "registryBasic": []
+          }
+        ],
+        "x-cplane-required-scope": [
+          "registry:pull",
+          "registry:push"
+        ]
       }
     },
     "/health": {
@@ -3557,6 +3821,18 @@
             }
           }
         }
+      }
+    },
+    "securitySchemes": {
+      "apiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-api-key",
+        "description": "API key with the operation's required scope."
+      },
+      "registryBasic": {
+        "type": "http",
+        "scheme": "basic"
       }
     }
   },

@@ -1287,9 +1287,9 @@ export interface operations {
     };
     list_events: {
         parameters: {
-            query: {
-                /** @description Project ID */
-                project_id: string;
+            query?: {
+                /** @description Optional project ID filter */
+                project_id?: string;
                 /** @description Event type prefix filter (e.g. 'container' matches 'container:created') */
                 event_type_prefix?: string;
                 /** @description Environment filter (matched against payload->>'environment_id') */
@@ -2087,13 +2087,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RegistryMaintenanceResponse"];
                 };
-            };
-            /** @description Organization access required */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
