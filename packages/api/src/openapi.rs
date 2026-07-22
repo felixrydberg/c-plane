@@ -57,6 +57,7 @@ use utoipa::OpenApi;
     ),
     components(
         schemas(
+            crate::errors::ErrorResponse,
             crate::handlers::projects::CreateProjectRequest,
             crate::handlers::projects::ProjectResponse,
             crate::handlers::projects::CreateEnvironmentRequest,

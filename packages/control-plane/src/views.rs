@@ -34,7 +34,7 @@ fn Shell(title: &'static str, children: Element) -> Element {
                     if status.phase != "idle" {
                         div { class: "maintenance-banner", role: "alert",
                             strong { "Registry maintenance in progress" }
-                            span { "The Registry is read-only while garbage collection is {status.phase}. Pulls remain available." }
+                            span { "New Registry writes are blocked while garbage collection is {status.phase}; in-flight writes may finish. The Registry is read-only during collecting; pulls remain available." }
                         }
                     }
                 }
@@ -76,7 +76,7 @@ fn RegistryGarbageCollection() -> Element {
     rsx! {
         section { class: "maintenance",
             h2 { "Registry garbage collection" }
-            p { "Queue Distribution garbage collection. Workers make the Registry read-only before reclaiming blobs; pulls remain available." }
+            p { "Queue Distribution garbage collection. New Registry writes are blocked while queued and draining so in-flight writes may finish; the Registry is read-only during collecting, while pulls remain available." }
             match status_state {
                 Some(Ok(current)) => rsx! {
                     p { class: "maintenance-status",
@@ -89,7 +89,7 @@ fn RegistryGarbageCollection() -> Element {
                     }
                     if current.phase == "idle" {
                         if confirmed() {
-                            p { class: "confirmation", "This queues a global maintenance job and disables Registry writes until it finishes." }
+                            p { class: "confirmation", "This queues a global maintenance job. New Registry writes will be blocked while queued and draining so in-flight writes may finish; the Registry will be read-only during collecting." }
                             div { class: "actions",
                                 button {
                                     class: "danger",

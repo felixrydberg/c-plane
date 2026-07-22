@@ -109,7 +109,7 @@ struct RegistryIdentity {
     responses(
         (status = 200, description = "Short-lived Distribution access token", body = RegistryTokenResponse),
         (status = 401, description = "Invalid registry credentials"),
-        (status = 503, description = "Registry is read-only for maintenance"),
+        (status = 503, description = "Registry is read-only for maintenance", body = crate::errors::ErrorResponse),
     ),
     tag = "registry",
 )]
@@ -159,7 +159,7 @@ pub async fn issue_token(
         iss: env::var("REGISTRY_TOKEN_ISSUER").unwrap_or_else(|_| "cplane-registry".into()),
         sub: identity.id.to_string(),
         aud: expected_service,
-        exp: issued_at + token_ttl_seconds,
+        exp: registry_token_exp(issued_at, token_ttl_seconds)?,
         nbf: issued_at.saturating_sub(5),
         iat: issued_at,
         jti: Uuid::new_v4().to_string(),
@@ -197,7 +197,7 @@ pub(crate) async fn sign_repository_token(
         iss: env::var("REGISTRY_TOKEN_ISSUER").unwrap_or_else(|_| "cplane-registry".into()),
         sub: "cplane-control-plane".into(),
         aud: env::var("REGISTRY_HOST").unwrap_or_else(|_| "localhost:5000".into()),
-        exp: issued_at + token_ttl_seconds,
+        exp: registry_token_exp(issued_at, token_ttl_seconds)?,
         nbf: issued_at.saturating_sub(5),
         iat: issued_at,
         jti: Uuid::new_v4().to_string(),
@@ -215,6 +215,12 @@ fn sign_registry_claims(claims: &RegistryClaims) -> Result<String, AppError> {
     jwt_header.x5c = Some(vec![signer.certificate.clone()]);
     encode(&jwt_header, claims, &signer.key)
         .map_err(|error| AppError::Internal(format!("Failed to sign registry token: {error}")))
+}
+
+fn registry_token_exp(issued_at: u64, token_ttl_seconds: u64) -> Result<u64, AppError> {
+    issued_at
+        .checked_add(token_ttl_seconds)
+        .ok_or_else(|| AppError::Internal("REGISTRY_TOKEN_TTL_SECONDS is too large".into()))
 }
 
 fn parse_registry_token_query(raw_query: Option<&str>) -> Result<RegistryTokenQuery, AppError> {
@@ -454,7 +460,8 @@ fn registry_signer() -> Result<&'static RegistrySigner, AppError> {
 #[cfg(test)]
 mod tests {
     use super::{
-        access_for_scope, apply_repository_grant, parse_registry_token_query, requests_write,
+        access_for_scope, apply_repository_grant, parse_registry_token_query, registry_token_exp,
+        requests_write,
     };
 
     #[test]
@@ -474,6 +481,12 @@ mod tests {
             &["repository:acme/api:pull".into()],
             "acme"
         ));
+    }
+
+    #[test]
+    fn rejects_token_expiration_overflow() {
+        assert_eq!(registry_token_exp(1, 60).unwrap(), 61);
+        assert!(registry_token_exp(u64::MAX, 1).is_err());
     }
 
     #[test]

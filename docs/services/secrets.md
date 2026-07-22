@@ -208,7 +208,8 @@ into the client service.
 
 Distribution's service credential payload also contains a dedicated garbage-
 collection secret. Storage grants that credential write access only during the
-`collecting` phase; the normal credential can write only during `idle`.
+`collecting` phase; the normal credential can write during `idle`, `queued`, and
+`draining`.
 
 ### Platform SSE-C bucket key
 

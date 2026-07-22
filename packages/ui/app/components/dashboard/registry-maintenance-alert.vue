@@ -20,7 +20,7 @@ onBeforeUnmount(() => clearInterval(refreshTimer))
       variant="subtle"
       icon="i-heroicons:exclamation-triangle"
       title="Registry maintenance in progress"
-      :description="`The Registry is read-only while garbage collection is ${maintenance.phase}. Pulls remain available.`"
+      :description="`New Registry writes are blocked while garbage collection is ${maintenance.phase}; in-flight writes may finish. The Registry is read-only during collecting; pulls remain available.`"
       class="border border-warning/40 bg-warning/15 text-warning-800 dark:border-warning-400/40 dark:bg-warning-950/40 dark:text-warning-200"
     />
   </div>

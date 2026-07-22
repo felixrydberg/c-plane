@@ -611,6 +611,11 @@ export interface components {
             project_name: string;
             timeline: string;
         };
+        ErrorResponse: {
+            details?: unknown;
+            error: string;
+            message: string;
+        };
         EventResponse: {
             action: string;
             /** Format: uuid */
@@ -2198,12 +2203,28 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Registry cleanup conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Registry cleanup failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Registry is read-only for maintenance */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
         };
     };
@@ -2353,7 +2374,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
         };
     };

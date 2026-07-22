@@ -41,7 +41,7 @@ token_response="$(curl -sS --user "$registry_username:$registry_password" --get 
   --data-urlencode "scope=repository:$registry_username/$registry_repository:pull,push,delete")"
 token="$(printf '%s' "$token_response" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')"
 [ -n "$token" ] || { echo "Registry cleanup token request failed: $token_response" >&2; exit 1; }
-manifest_headers="$(curl -ksSI \
+manifest_headers="$(curl -sSI \
   -H "Authorization: Bearer $token" \
   -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json' \
   "$registry_url/v2/$registry_username/$registry_repository/manifests/$image_tag")"
@@ -52,7 +52,7 @@ manifest_digest="$(printf '%s' "$manifest_headers" | tr -d '\r' \
   echo "Registry manifest HEAD returned ${manifest_status:-an unknown status} without a digest." >&2
   exit 1
 }
-curl -kfsS -o /dev/null -X DELETE -H "Authorization: Bearer $token" \
+curl -fsS -o /dev/null -X DELETE -H "Authorization: Bearer $token" \
   "$registry_url/v2/$registry_username/$registry_repository/manifests/$manifest_digest"
 docker image rm "$image" >/dev/null
 printf '%-14s OK (%s)\n' Remote-delete "$registry_username/$registry_repository@$manifest_digest"

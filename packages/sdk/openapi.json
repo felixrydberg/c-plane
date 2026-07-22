@@ -2022,8 +2022,21 @@
           "404": {
             "description": "Registry repository not found"
           },
+          "409": {
+            "description": "Registry cleanup conflict"
+          },
+          "500": {
+            "description": "Registry cleanup failed"
+          },
           "503": {
-            "description": "Registry is read-only for maintenance"
+            "description": "Registry is read-only for maintenance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -2207,7 +2220,14 @@
             "description": "Invalid registry credentials"
           },
           "503": {
-            "description": "Registry is read-only for maintenance"
+            "description": "Registry is read-only for maintenance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -2902,6 +2922,22 @@
             "type": "string"
           },
           "timeline": {
+            "type": "string"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "error",
+          "message"
+        ],
+        "properties": {
+          "details": {},
+          "error": {
+            "type": "string"
+          },
+          "message": {
             "type": "string"
           }
         }
