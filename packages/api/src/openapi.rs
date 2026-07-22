@@ -1,4 +1,63 @@
-use utoipa::OpenApi;
+use utoipa::openapi::{
+    extensions::Extensions,
+    path::Operation,
+    security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityScheme},
+};
+use utoipa::{Modify, OpenApi};
+
+use crate::middleware::auth::required_scope;
+
+struct SecurityAddon;
+
+impl Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        let components = openapi.components.get_or_insert_with(Default::default);
+        components.add_security_scheme(
+            "apiKey",
+            SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::with_description(
+                "x-api-key",
+                "API key with the operation's required scope.",
+            ))),
+        );
+        components.add_security_scheme(
+            "registryBasic",
+            SecurityScheme::Http(HttpBuilder::new().scheme(HttpAuthScheme::Basic).build()),
+        );
+
+        for (path, item) in &mut openapi.paths.paths {
+            document_scope("GET", path, item.get.as_mut());
+            document_scope("POST", path, item.post.as_mut());
+            document_scope("PATCH", path, item.patch.as_mut());
+            document_scope("DELETE", path, item.delete.as_mut());
+        }
+    }
+}
+
+fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
+    let Some(operation) = operation else {
+        return;
+    };
+
+    if let Some(scope) = required_scope(if method == "HEAD" { "GET" } else { method }, path) {
+        operation.security = Some(vec![utoipa::openapi::security::SecurityRequirement::new(
+            "apiKey",
+            Vec::<String>::new(),
+        )]);
+        operation
+            .extensions
+            .get_or_insert_with(Default::default)
+            .insert("x-cplane-required-scope".into(), serde_json::json!(scope));
+    } else if operation.operation_id.as_deref() == Some("issue_token") {
+        operation.security = Some(vec![utoipa::openapi::security::SecurityRequirement::new(
+            "registryBasic",
+            Vec::<String>::new(),
+        )]);
+        operation.extensions = Some(Extensions::from_iter([(
+            "x-cplane-required-scope",
+            serde_json::json!(["registry:pull", "registry:push"]),
+        )]));
+    }
+}
 
 #[derive(OpenApi)]
 #[openapi(
@@ -111,5 +170,27 @@ use utoipa::OpenApi;
         (name = "storage", description = "S3 bucket and access token management"),
         (name = "registry", description = "OCI registry authentication"),
     ),
+    modifiers(&SecurityAddon),
 )]
 pub struct ApiDoc;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn head_reuses_get_scope() {
+        let mut operation = Operation::default();
+
+        document_scope(
+            "HEAD",
+            "/api/organization/{organization_id}/regions",
+            Some(&mut operation),
+        );
+
+        assert_eq!(
+            operation.extensions.unwrap().get("x-cplane-required-scope"),
+            Some(&serde_json::json!("region:read"))
+        );
+    }
+}

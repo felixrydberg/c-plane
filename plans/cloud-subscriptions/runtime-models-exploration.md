@@ -33,7 +33,7 @@ The c-plane project currently defines organizational, user, and API management s
 3. **organization_invitation** - Invitation workflow (pending/accepted/declined/revoked)
 4. **active_organization** - User's active org tracking
 5. **api_keys** - API authentication (id, name, key_hash, expires_at, allowed_ips)
-6. **api_key_scopes** - Limited to: "read:sessions", "write:sessions"
+6. **api_key_scopes** - API key permission scopes
 7. **webhooks** - Webhook definitions (name, url, secret, enabled)
 8. **webhook_scopes** - Events: verification:created, completed, revoked
 9. **webhook_deliveries** - Event delivery tracking (payload, retry_count, completed)

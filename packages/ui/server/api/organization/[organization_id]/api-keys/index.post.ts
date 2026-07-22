@@ -2,6 +2,7 @@ import type { api_key_scopes_type } from "~~/server/schema";
 import { api_keys, api_key_scopes } from "~~/server/schema";
 import { uuidv7 } from "uuidv7";
 import { withTenantDb } from "~~/server/utils/db";
+import { API_KEY_SCOPE_VALUES } from "@cplane/ui-shared/utils";
 
 export default defineEventHandler(async (event) => {
   const membership = await getOrganizationMembership(event);
@@ -16,10 +17,10 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  if (Object.keys(scopes).length === 0) {
+  if (!scopes || typeof scopes !== "object" || Array.isArray(scopes)) {
     throw createError({
       statusCode: 400,
-      statusMessage: "At least one scope is required",
+      statusMessage: "Scopes must be an object with boolean values",
     });
   }
 
@@ -27,6 +28,16 @@ export default defineEventHandler(async (event) => {
     throw createError({
       statusCode: 400,
       statusMessage: "Scopes must be an object with boolean values",
+    });
+  }
+
+  const enabledScopeNames = Object.entries(scopes)
+    .filter(([, enabled]) => enabled)
+    .map(([scope]) => scope);
+  if (!enabledScopeNames.length || enabledScopeNames.some((scope) => !API_KEY_SCOPE_VALUES.includes(scope as typeof API_KEY_SCOPE_VALUES[number]))) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "Select at least one valid scope",
     });
   }
 
@@ -57,9 +68,7 @@ export default defineEventHandler(async (event) => {
       });
     }
 
-    const enabledScopes = Object.entries(scopes)
-      .filter(([, enabled]) => enabled)
-      .map(([scope]) => ({
+    const enabledScopes = enabledScopeNames.map((scope) => ({
         id: uuidv7(),
         api_key_id: keyId,
         scope: scope as typeof api_key_scopes_type.enumValues[number],
@@ -76,9 +85,7 @@ export default defineEventHandler(async (event) => {
       name: insertedKey.name,
       created_at: insertedKey.created_at,
       expires_at: insertedKey.expires_at ?? null,
-      scopes: Object.entries(scopes)
-        .filter(([, enabled]) => enabled)
-        .map(([scope]) => scope),
+      scopes: enabledScopeNames,
     }, false, {}, tx);
 
     return {
@@ -89,8 +96,6 @@ export default defineEventHandler(async (event) => {
 
   return {
     ...api_key,
-    scopes: Object.entries(scopes)
-      .filter(([, enabled]) => enabled)
-      .map(([scope]) => scope),
+    scopes: enabledScopeNames,
   };
 });

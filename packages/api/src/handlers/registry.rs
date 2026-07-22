@@ -12,9 +12,7 @@ use std::{env, fs, sync::OnceLock};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{errors::AppError, middleware::auth::AuthContext, state::get_app_state};
-
-use super::databases::verify_org_access;
+use crate::{errors::AppError, state::get_app_state};
 
 const REGISTRY_MAINTENANCE_MESSAGE: &str =
     "Registry is read-only for maintenance; retry after maintenance completes";
@@ -47,15 +45,12 @@ pub struct RegistryMaintenanceResponse {
     params(("organization_id" = Uuid, Path, description = "Organization ID")),
     responses(
         (status = 200, description = "Registry maintenance state", body = RegistryMaintenanceResponse),
-        (status = 403, description = "Organization access required"),
     ),
     tag = "registry",
 )]
 pub async fn maintenance_status(
-    AuthContext { tenant_db, .. }: AuthContext,
-    Path(organization_id): Path<Uuid>,
+    Path(_organization_id): Path<Uuid>,
 ) -> Result<Json<RegistryMaintenanceResponse>, AppError> {
-    verify_org_access(&tenant_db, organization_id)?;
     let row = registry_maintenance_row().await?;
     let phase: String = row.try_get("", "phase").map_err(maintenance_error)?;
     let started_at = row

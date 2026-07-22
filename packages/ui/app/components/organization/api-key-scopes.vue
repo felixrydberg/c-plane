@@ -1,15 +1,15 @@
 <script setup lang="ts">
-  const selectedScopes = defineModel<Record<string, boolean>>({
-    default: () => ({}),
-  });
-  const emits = defineEmits(['update'])
+  import { API_KEY_SCOPE_VALUES } from '@cplane/ui-shared/utils';
+
+  const selectedScopes = defineModel<Record<string, boolean>>({ default: () => ({}) });
+  const emits = defineEmits(['update']);
 </script>
 
 <template>
   <div class="space-y-1">
     <p class="text-sm text-muted">Select scopes for this API key:</p>
     <div class="space-y-1">
-      <div v-for="scope in AVAILABLE_API_SCOPES" :key="scope" class="text-sm">
+      <div v-for="scope in API_KEY_SCOPE_VALUES" :key="scope" class="text-sm">
         <UCheckbox
           v-model="selectedScopes[scope]"
           :label="scope"

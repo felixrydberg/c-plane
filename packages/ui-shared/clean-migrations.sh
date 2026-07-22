@@ -24,7 +24,7 @@ for entry in "${ordered_migrations[@]}"; do
   IFS=: read -r migration_num name <<< "$entry"
   echo "Generating custom migration: $name"
 
-  deno task --eval "drizzle-kit generate --custom --name=$name"
+  npx drizzle-kit generate --custom --name="$name"
 
   if [ -f "custom-migrations/$name.sql" ]; then
     generated_file=$(ls drizzle/${migration_num}_*.sql 2>/dev/null | head -1)
