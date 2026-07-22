@@ -33,8 +33,10 @@ const selectedApiKeyId = ref<string>(data.value?.data[0]?.id || "");
 
 const createModalOpen = ref(false);
 const createdKeyValue = ref<string | undefined>();
+const isCreating = ref(false);
 
 const deleteModalOpen = ref(false);
+const isDeleting = ref(false);
 const selectedKeyToDelete = ref<ApiKey | null>(null);
 const apiKeys = computed(() => data.value?.data ?? []);
 const total = computed(() => data.value?.pagination.total ?? 0);
@@ -116,6 +118,7 @@ const getContextMenuItems = (row: TableRow<ApiKey>) => [
 const onDeleteKey = async () => {
   if (!selectedKeyToDelete.value) return;
 
+  isDeleting.value = true;
   try {
     await $fetch(`/api/organization/${store.organization?.id as ':organization_id'}/api-keys/${selectedKeyToDelete.value.id as ':api_key_id'}`, {
       method: 'DELETE'
@@ -135,6 +138,8 @@ const onDeleteKey = async () => {
       description: 'Failed to delete API key.',
       color: 'error',
     });
+  } finally {
+    isDeleting.value = false;
   }
 };
 
@@ -155,6 +160,7 @@ const onCreateKey = async () => {
     toast.add({ title: 'Select at least one scope', color: 'error' });
     return;
   }
+  isCreating.value = true;
   try {
     const key = await $fetch<{ id: string; key: string }>(`/api/organization/${store.organization?.id as ':organization_id'}/api-keys`, {
       method: 'POST',
@@ -172,32 +178,42 @@ const onCreateKey = async () => {
       description: 'Failed to create API key.',
       color: 'error',
     });
+  } finally {
+    isCreating.value = false;
   }
 };
 </script>
 
 <template>
-  <div class="flex flex-col gap-6 w-full mx-auto max-w-6xl">
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-2xl font-semibold">Authentication</h1>
-        <p class="text-muted text-sm mt-1">Manage API keys for your organization.</p>
-      </div>
-      <UButton :icon="ICONS.plus" color="primary" @click="createModalOpen = true">
-        Create API Key
-      </UButton>
+  <div class="mx-auto flex w-full max-w-6xl flex-col gap-8">
+    <div class="border-b border-default pb-6">
+      <p class="font-space-mono text-[11px] uppercase tracking-[0.08em] text-muted">Organization settings</p>
+      <h1 class="mt-2 text-4xl font-normal tracking-[-0.04em]">Authentication</h1>
     </div>
 
-    <UiTable
-      v-model:offset="offset"
-      :status="status"
-      :items="apiKeys"
-      :columns="columns"
-      :pagination="true"
-      :total="total"
-      :limit="limit"
-      :get-context-menu-items="getContextMenuItems"
-    />
+    <OrganizationSettingsTabs />
+
+    <section class="border-b border-dashed border-default pb-10">
+      <div class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 class="text-xl font-normal tracking-[-0.02em]">API keys</h2>
+          <p class="mt-2 text-sm text-muted">Use scoped keys for services and automation.</p>
+        </div>
+        <UButton :icon="ICONS.plus" color="primary" @click="createModalOpen = true">Create API Key</UButton>
+      </div>
+      <div class="mt-8">
+        <UiTable
+          v-model:offset="offset"
+          :status="status"
+          :items="apiKeys"
+          :columns="columns"
+          :pagination="true"
+          :total="total"
+          :limit="limit"
+          :get-context-menu-items="getContextMenuItems"
+        />
+      </div>
+    </section>
 
     <UModal v-model:open="createModalOpen" title="Create API Key" description="Create a new API key for programmatic access">
       <template #body>
@@ -211,7 +227,7 @@ const onCreateKey = async () => {
           <OrganizationApiKeyScopes v-model="createScopes" />
           <div class="flex justify-end gap-3 pt-2">
             <UButton variant="ghost" color="neutral" type="button" @click="createModalOpen = false">Cancel</UButton>
-            <UButton :icon="ICONS.plus" color="primary" type="submit">Create</UButton>
+            <UButton :icon="ICONS.plus" color="primary" type="submit" :loading="isCreating">Create</UButton>
           </div>
         </UForm>
       </template>
@@ -232,7 +248,7 @@ const onCreateKey = async () => {
           <p class="text-sm">Are you sure you want to delete <strong>{{ selectedKeyToDelete?.name }}</strong>?</p>
           <div class="flex justify-end gap-3 pt-2">
             <UButton variant="ghost" color="neutral" @click="deleteModalOpen = false">Cancel</UButton>
-            <UButton :icon="ICONS.trash" color="error" @click="onDeleteKey">Delete</UButton>
+            <UButton :icon="ICONS.trash" color="error" :loading="isDeleting" @click="onDeleteKey">Delete</UButton>
           </div>
         </div>
       </template>

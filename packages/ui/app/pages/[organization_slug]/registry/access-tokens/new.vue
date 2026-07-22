@@ -112,7 +112,7 @@ async function createToken() {
             <div><dt class="text-xs text-muted">Repositories</dt><dd class="mt-1">{{ selectedPermissions.length }} granted</dd></div>
           </dl>
           <div class="mt-8 flex gap-3">
-            <UButton :icon="ICONS.xMark" color="neutral" variant="ghost" :to="backUrl()">Cancel</UButton>
+            <UButton color="neutral" variant="ghost" :to="backUrl()">Cancel</UButton>
             <UButton :icon="ICONS.plus" color="primary" :loading="loading" :disabled="!name.trim() || !selectedPermissions.length" @click="createToken">Create Access Token</UButton>
           </div>
         </div>

@@ -92,6 +92,12 @@ const items = computed<NavigationMenuItem[]>(() => [
         to: `/${store.organization?.slug}/settings/authentication`,
         exact: true,
       },
+      {
+        label: 'Audit Log',
+        icon: ICONS.logs,
+        to: `/${store.organization?.slug}/settings/audit-log`,
+        exact: true,
+      },
 ] satisfies NavigationMenuItem[]);
 </script>
 
