@@ -1,11 +1,11 @@
-use axum::extract::FromRequestParts;
+use axum::extract::{FromRequestParts, MatchedPath};
 use axum::http::request::Parts;
 use reqwest::Client;
 use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use std::sync::OnceLock;
 use std::time::Duration;
+use std::{collections::HashSet, sync::OnceLock};
 use uuid::Uuid;
 
 use crate::errors::AppError;
@@ -25,6 +25,144 @@ fn reqwest_client() -> &'static Client {
 #[derive(Clone, Debug)]
 pub struct RequestAuthContext {
     pub actor_id: Uuid,
+    api_key_scopes: Option<HashSet<String>>,
+}
+
+impl RequestAuthContext {
+    pub fn require_scope(&self, scope: &str) -> Result<(), AppError> {
+        if self
+            .api_key_scopes
+            .as_ref()
+            .is_none_or(|scopes| scopes.contains(scope))
+        {
+            return Ok(());
+        }
+
+        Err(AppError::Forbidden(format!(
+            "API key is missing required scope: {scope}"
+        )))
+    }
+}
+
+pub(crate) fn required_scope(method: &str, path: &str) -> Option<&'static str> {
+    Some(match (method, path) {
+        ("GET", "/api/organization/{organization_id}/regions") => "region:read",
+        ("GET", "/api/organization/{organization_id}/projects") => "project:read",
+        ("POST", "/api/organization/{organization_id}/projects") => "project:create",
+        ("GET", "/api/organization/{organization_id}/projects/{project_id}") => "project:read",
+        ("DELETE", "/api/organization/{organization_id}/projects/{project_id}") => "project:delete",
+        ("GET", "/api/organization/{organization_id}/environments") => "project:read",
+        ("GET", "/api/organization/{organization_id}/projects/{project_id}/environments") => {
+            "project:read"
+        }
+        ("POST", "/api/organization/{organization_id}/projects/{project_id}/environments") => {
+            "project:manage"
+        }
+        (
+            "PATCH",
+            "/api/organization/{organization_id}/projects/{project_id}/environments/{environment_id}",
+        ) => "project:manage",
+        (
+            "DELETE",
+            "/api/organization/{organization_id}/projects/{project_id}/environments/{environment_id}",
+        ) => "project:manage",
+        ("GET", "/api/organization/{organization_id}/projects/{project_id}/timelines") => {
+            "timeline:read"
+        }
+        (
+            "GET",
+            "/api/organization/{organization_id}/projects/{project_id}/timelines/{timeline_id}",
+        ) => "timeline:read",
+        ("GET", "/api/organization/{organization_id}/events") => "event:read",
+        ("GET", "/api/organization/{organization_id}/containers") => "container:read",
+        ("POST", "/api/organization/{organization_id}/containers") => "container:create",
+        ("GET", "/api/organization/{organization_id}/containers/{container_id}") => {
+            "container:read"
+        }
+        ("PATCH", "/api/organization/{organization_id}/containers/{container_id}") => {
+            "container:update"
+        }
+        ("DELETE", "/api/organization/{organization_id}/containers/{container_id}") => {
+            "container:delete"
+        }
+        ("GET", "/api/organization/{organization_id}/databases/postgres") => {
+            "database:postgres:read"
+        }
+        ("POST", "/api/organization/{organization_id}/databases/postgres") => {
+            "database:postgres:create"
+        }
+        ("GET", "/api/organization/{organization_id}/databases/postgres/{database_id}") => {
+            "database:postgres:read"
+        }
+        ("PATCH", "/api/organization/{organization_id}/databases/postgres/{database_id}") => {
+            "database:postgres:update"
+        }
+        ("DELETE", "/api/organization/{organization_id}/databases/postgres/{database_id}") => {
+            "database:postgres:delete"
+        }
+        (
+            "GET",
+            "/api/organization/{organization_id}/databases/postgres/{database_id}/branches",
+        ) => "database:postgres:read",
+        (
+            "POST",
+            "/api/organization/{organization_id}/databases/postgres/{database_id}/branches",
+        ) => "database:postgres:manage",
+        (
+            "PATCH",
+            "/api/organization/{organization_id}/databases/postgres/{database_id}/branches/{branch_id}",
+        ) => "database:postgres:manage",
+        (
+            "DELETE",
+            "/api/organization/{organization_id}/databases/postgres/{database_id}/branches/{branch_id}",
+        ) => "database:postgres:manage",
+        (
+            "GET",
+            "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens",
+        ) => "access-token:read",
+        (
+            "POST",
+            "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens",
+        ) => "access-token:create",
+        (
+            "GET",
+            "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}",
+        ) => "access-token:read",
+        (
+            "PATCH",
+            "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}",
+        ) => "access-token:update",
+        (
+            "DELETE",
+            "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}",
+        ) => "access-token:delete",
+        ("GET", "/api/organization/{organization_id}/storage/buckets") => "bucket:read",
+        ("POST", "/api/organization/{organization_id}/storage/buckets") => "bucket:create",
+        ("DELETE", "/api/organization/{organization_id}/storage/buckets/{bucket_id}") => {
+            "bucket:delete"
+        }
+        ("GET", "/api/organization/{organization_id}/registry/repositories") => "registry:read",
+        ("POST", "/api/organization/{organization_id}/registry/repositories") => "registry:create",
+        ("DELETE", "/api/organization/{organization_id}/registry/repositories/{repository_id}") => {
+            "registry:delete"
+        }
+        ("GET", "/api/organization/{organization_id}/registry/access-tokens") => {
+            "access-token:read"
+        }
+        ("POST", "/api/organization/{organization_id}/registry/access-tokens") => {
+            "access-token:create"
+        }
+        ("GET", "/api/organization/{organization_id}/registry/access-tokens/{token_id}") => {
+            "access-token:read"
+        }
+        ("PATCH", "/api/organization/{organization_id}/registry/access-tokens/{token_id}") => {
+            "access-token:update"
+        }
+        ("DELETE", "/api/organization/{organization_id}/registry/access-tokens/{token_id}") => {
+            "access-token:delete"
+        }
+        _ => return None,
+    })
 }
 
 pub struct AuthContext {
@@ -46,6 +184,7 @@ struct BetterAuthSession {
 struct ApiKeyLookup {
     id: Uuid,
     organization_id: Uuid,
+    scopes: HashSet<String>,
 }
 
 impl<S> FromRequestParts<S> for AuthContext
@@ -55,6 +194,10 @@ where
     type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let required_scope = parts
+            .extensions
+            .get::<MatchedPath>()
+            .and_then(|path| required_scope(parts.method.as_str(), path.as_str()));
         let state = get_app_state();
         let identity_db = state.identity_db;
         let tenant_db_conn = state.tenant_db;
@@ -71,6 +214,7 @@ where
                 },
                 RequestAuthContext {
                     actor_id: api_key.id,
+                    api_key_scopes: Some(api_key.scopes),
                 },
             )
         } else {
@@ -92,9 +236,16 @@ where
                 OrganizationContext {
                     allowed_organizations,
                 },
-                RequestAuthContext { actor_id },
+                RequestAuthContext {
+                    actor_id,
+                    api_key_scopes: None,
+                },
             )
         };
+
+        if let Some(scope) = required_scope {
+            request_auth.require_scope(scope)?;
+        }
 
         let tenant_db = TenantDatabase::new(tenant_db_conn, organization_context);
 
@@ -214,7 +365,7 @@ async fn resolve_api_key(
         .0
         .query_one(Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
-            "SELECT id, organization_id FROM api_keys WHERE key_hash = $1 AND (expires_at IS NULL OR expires_at = 0 OR created_at + make_interval(months => expires_at) > NOW()) LIMIT 1",
+            "SELECT api_keys.id, api_keys.organization_id, COALESCE(array_agg(api_key_scopes.scope::text) FILTER (WHERE api_key_scopes.scope IS NOT NULL), ARRAY[]::text[]) AS scopes FROM api_keys LEFT JOIN api_key_scopes ON api_key_scopes.api_key_id = api_keys.id WHERE api_keys.key_hash = $1 AND (api_keys.expires_at IS NULL OR api_keys.expires_at = 0 OR api_keys.created_at + make_interval(months => api_keys.expires_at) > NOW()) GROUP BY api_keys.id, api_keys.organization_id LIMIT 1",
             vec![key_hash.into()],
         ))
         .await
@@ -230,9 +381,284 @@ async fn resolve_api_key(
     let organization_id = row
         .try_get::<Uuid>("", "organization_id")
         .map_err(|err| AppError::Internal(err.to_string()))?;
+    let scopes = row
+        .try_get::<Vec<String>>("", "scopes")
+        .map_err(|err| AppError::Internal(err.to_string()))?
+        .into_iter()
+        .collect();
 
     Ok(Some(ApiKeyLookup {
         id: key_id,
         organization_id,
+        scopes,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RequestAuthContext;
+    use std::collections::HashSet;
+    use uuid::Uuid;
+
+    #[test]
+    fn api_key_scope_checks_fail_closed_while_sessions_bypass_them() {
+        let session = RequestAuthContext {
+            actor_id: Uuid::nil(),
+            api_key_scopes: None,
+        };
+        assert!(session.require_scope("project:delete").is_ok());
+
+        let scoped_key = RequestAuthContext {
+            actor_id: Uuid::nil(),
+            api_key_scopes: Some(HashSet::from(["project:read".into()])),
+        };
+        assert!(scoped_key.require_scope("project:read").is_ok());
+        assert!(scoped_key.require_scope("project:delete").is_err());
+
+        let legacy_key = RequestAuthContext {
+            actor_id: Uuid::nil(),
+            api_key_scopes: Some(HashSet::from(["read:sessions".into()])),
+        };
+        assert!(legacy_key.require_scope("project:read").is_err());
+    }
+
+    #[test]
+    fn every_protected_route_has_its_exact_scope() {
+        let expected = [
+            (
+                "GET",
+                "/api/organization/{organization_id}/regions",
+                "region:read",
+            ),
+            (
+                "GET",
+                "/api/organization/{organization_id}/projects",
+                "project:read",
+            ),
+            (
+                "POST",
+                "/api/organization/{organization_id}/projects",
+                "project:create",
+            ),
+            (
+                "GET",
+                "/api/organization/{organization_id}/projects/{project_id}",
+                "project:read",
+            ),
+            (
+                "DELETE",
+                "/api/organization/{organization_id}/projects/{project_id}",
+                "project:delete",
+            ),
+            (
+                "GET",
+                "/api/organization/{organization_id}/environments",
+                "project:read",
+            ),
+            (
+                "GET",
+                "/api/organization/{organization_id}/projects/{project_id}/environments",
+                "project:read",
+            ),
+            (
+                "POST",
+                "/api/organization/{organization_id}/projects/{project_id}/environments",
+                "project:manage",
+            ),
+            (
+                "PATCH",
+                "/api/organization/{organization_id}/projects/{project_id}/environments/{environment_id}",
+                "project:manage",
+            ),
+            (
+                "DELETE",
+                "/api/organization/{organization_id}/projects/{project_id}/environments/{environment_id}",
+                "project:manage",
+            ),
+            (
+                "GET",
+                "/api/organization/{organization_id}/projects/{project_id}/timelines",
+                "timeline:read",
+            ),
+            (
+                "GET",
+                "/api/organization/{organization_id}/projects/{project_id}/timelines/{timeline_id}",
+                "timeline:read",
+            ),
+            (
+                "GET",
+                "/api/organization/{organization_id}/events",
+                "event:read",
+            ),
+            (
+                "GET",
+                "/api/organization/{organization_id}/containers",
+                "container:read",
+            ),
+            (
+                "POST",
+                "/api/organization/{organization_id}/containers",
+                "container:create",
+            ),
+            (
+                "GET",
+                "/api/organization/{organization_id}/containers/{container_id}",
+                "container:read",
+            ),
+            (
+                "PATCH",
+                "/api/organization/{organization_id}/containers/{container_id}",
+                "container:update",
+            ),
+            (
+                "DELETE",
+                "/api/organization/{organization_id}/containers/{container_id}",
+                "container:delete",
+            ),
+            (
+                "GET",
+                "/api/organization/{organization_id}/databases/postgres",
+                "database:postgres:read",
+            ),
+            (
+                "POST",
+                "/api/organization/{organization_id}/databases/postgres",
+                "database:postgres:create",
+            ),
+            (
+                "GET",
+                "/api/organization/{organization_id}/databases/postgres/{database_id}",
+                "database:postgres:read",
+            ),
+            (
+                "PATCH",
+                "/api/organization/{organization_id}/databases/postgres/{database_id}",
+                "database:postgres:update",
+            ),
+            (
+                "DELETE",
+                "/api/organization/{organization_id}/databases/postgres/{database_id}",
+                "database:postgres:delete",
+            ),
+            (
+                "GET",
+                "/api/organization/{organization_id}/databases/postgres/{database_id}/branches",
+                "database:postgres:read",
+            ),
+            (
+                "POST",
+                "/api/organization/{organization_id}/databases/postgres/{database_id}/branches",
+                "database:postgres:manage",
+            ),
+            (
+                "PATCH",
+                "/api/organization/{organization_id}/databases/postgres/{database_id}/branches/{branch_id}",
+                "database:postgres:manage",
+            ),
+            (
+                "DELETE",
+                "/api/organization/{organization_id}/databases/postgres/{database_id}/branches/{branch_id}",
+                "database:postgres:manage",
+            ),
+            (
+                "GET",
+                "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens",
+                "access-token:read",
+            ),
+            (
+                "POST",
+                "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens",
+                "access-token:create",
+            ),
+            (
+                "GET",
+                "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}",
+                "access-token:read",
+            ),
+            (
+                "PATCH",
+                "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}",
+                "access-token:update",
+            ),
+            (
+                "DELETE",
+                "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}",
+                "access-token:delete",
+            ),
+            (
+                "GET",
+                "/api/organization/{organization_id}/storage/buckets",
+                "bucket:read",
+            ),
+            (
+                "POST",
+                "/api/organization/{organization_id}/storage/buckets",
+                "bucket:create",
+            ),
+            (
+                "DELETE",
+                "/api/organization/{organization_id}/storage/buckets/{bucket_id}",
+                "bucket:delete",
+            ),
+            (
+                "GET",
+                "/api/organization/{organization_id}/registry/repositories",
+                "registry:read",
+            ),
+            (
+                "POST",
+                "/api/organization/{organization_id}/registry/repositories",
+                "registry:create",
+            ),
+            (
+                "DELETE",
+                "/api/organization/{organization_id}/registry/repositories/{repository_id}",
+                "registry:delete",
+            ),
+            (
+                "GET",
+                "/api/organization/{organization_id}/registry/access-tokens",
+                "access-token:read",
+            ),
+            (
+                "POST",
+                "/api/organization/{organization_id}/registry/access-tokens",
+                "access-token:create",
+            ),
+            (
+                "GET",
+                "/api/organization/{organization_id}/registry/access-tokens/{token_id}",
+                "access-token:read",
+            ),
+            (
+                "PATCH",
+                "/api/organization/{organization_id}/registry/access-tokens/{token_id}",
+                "access-token:update",
+            ),
+            (
+                "DELETE",
+                "/api/organization/{organization_id}/registry/access-tokens/{token_id}",
+                "access-token:delete",
+            ),
+        ];
+
+        for (method, path, scope) in expected {
+            assert_eq!(
+                super::required_scope(method, path),
+                Some(scope),
+                "{method} {path}"
+            );
+        }
+
+        for (method, path) in [
+            ("GET", "/health"),
+            ("GET", "/api/registry/token"),
+            (
+                "GET",
+                "/api/organization/{organization_id}/registry/maintenance",
+            ),
+        ] {
+            assert_eq!(super::required_scope(method, path), None, "{method} {path}");
+        }
+    }
 }

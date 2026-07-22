@@ -1,0 +1,26 @@
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'region:read';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'project:read';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'project:create';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'project:delete';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'project:manage';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'access-token:read';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'access-token:create';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'access-token:update';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'access-token:delete';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'bucket:read';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'bucket:create';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'bucket:delete';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'timeline:read';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'event:read';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'container:read';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'container:create';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'container:update';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'container:delete';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'database:postgres:read';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'database:postgres:create';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'database:postgres:update';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'database:postgres:delete';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'database:postgres:manage';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'registry:read';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'registry:create';--> statement-breakpoint
+ALTER TYPE "public"."api_key_scopes_type" ADD VALUE IF NOT EXISTS 'registry:delete';

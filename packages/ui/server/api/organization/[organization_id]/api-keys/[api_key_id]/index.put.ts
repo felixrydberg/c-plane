@@ -4,6 +4,7 @@ import { api_keys, api_key_scopes } from "~~/server/schema";
 import { eq, and, notInArray } from "drizzle-orm";
 import { getOrganizationMembership } from "~~/server/utils/authorization";
 import { uuidv7 } from "uuidv7";
+import { API_KEY_SCOPE_VALUES } from "@cplane/ui-shared/utils";
 
 export default defineEventHandler(async (event) => {
   const params = getRouterParams(event);
@@ -15,17 +16,10 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event);
   const { name, scopes, allowed_ips } = body as { name: string; scopes: Record<string, boolean>; allowed_ips?: string | null };
 
-  if (!scopes || typeof scopes !== "object") {
+  if (!scopes || typeof scopes !== "object" || Array.isArray(scopes)) {
     throw createError({
       statusCode: 400,
       statusMessage: "Scopes must be an object",
-    });
-  }
-
-  if (Object.keys(scopes).length === 0) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: "At least one scope is required",
     });
   }
 
@@ -33,6 +27,16 @@ export default defineEventHandler(async (event) => {
     throw createError({
       statusCode: 400,
       statusMessage: "Scopes must be an object with boolean values",
+    });
+  }
+
+  const enabledScopeNames = Object.entries(scopes)
+    .filter(([, enabled]) => enabled)
+    .map(([scope]) => scope as typeof api_key_scopes_type.enumValues[number]);
+  if (!enabledScopeNames.length || enabledScopeNames.some((scope) => !API_KEY_SCOPE_VALUES.includes(scope))) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "Select at least one valid scope",
     });
   }
 
@@ -73,10 +77,6 @@ export default defineEventHandler(async (event) => {
       .where(eq(api_key_scopes.api_key_id, api_key_id));
 
     const currentScopeNames = currentScopes.map((s) => s.scope);
-    const enabledScopeNames = Object.entries(scopes)
-      .filter(([, enabled]) => enabled)
-      .map(([scope]) => scope as typeof api_key_scopes_type.enumValues[number]);
-
     const scopesToDelete = currentScopeNames.filter(
       (scope) => !enabledScopeNames.includes(scope as typeof api_key_scopes_type.enumValues[number])
     );

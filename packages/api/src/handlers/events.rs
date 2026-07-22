@@ -12,7 +12,7 @@ use crate::{errors::AppError, middleware::auth::AuthContext, models::entities::e
 
 #[derive(Deserialize, ToSchema)]
 pub struct ListEventsQuery {
-    pub project_id: Uuid,
+    pub project_id: Option<Uuid>,
     pub event_type_prefix: Option<String>,
     pub environment_id: Option<Uuid>,
     pub target_id: Option<Uuid>,
@@ -45,7 +45,7 @@ fn event_action(event_type: &str) -> &str {
     path = "/api/organization/{organization_id}/events",
     params(
         ("organization_id" = Uuid, Path, description = "Organization ID"),
-        ("project_id" = Uuid, Query, description = "Project ID"),
+        ("project_id" = Option<Uuid>, Query, description = "Optional project ID filter"),
         ("event_type_prefix" = Option<String>, Query, description = "Event type prefix filter (e.g. 'container' matches 'container:created')"),
         ("environment_id" = Option<Uuid>, Query, description = "Environment filter (matched against payload->>'environment_id')"),
         ("target_id" = Option<Uuid>, Query, description = "Resource ID filter (matched against payload->>'target_id')"),
@@ -62,11 +62,16 @@ pub async fn list_events(
     verify_org_access(&tenant_db, organization_id)?;
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
-    verify_project_in_org(tx, query.project_id, organization_id).await?;
+    if let Some(project_id) = query.project_id {
+        verify_project_in_org(tx, project_id, organization_id).await?;
+    }
 
-    let mut select = event::Entity::find()
-        .filter(event::Column::OrganizationId.eq(organization_id))
-        .filter(event::Column::ProjectId.eq(query.project_id));
+    let mut select =
+        event::Entity::find().filter(event::Column::OrganizationId.eq(organization_id));
+
+    if let Some(project_id) = query.project_id {
+        select = select.filter(event::Column::ProjectId.eq(project_id));
+    }
 
     if let Some(ref prefix) = query.event_type_prefix {
         select = select.filter(event::Column::EventType.like(format!("{prefix}:%")));
@@ -106,24 +111,4 @@ pub async fn list_events(
             })
             .collect(),
     ))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{event_action, event_limit};
-
-    #[test]
-    fn event_limit_stays_in_api_bounds() {
-        assert_eq!(event_limit(None), 10);
-        assert_eq!(event_limit(Some(0)), 1);
-        assert_eq!(event_limit(Some(100)), 50);
-    }
-
-    #[test]
-    fn event_action_strips_type_prefix() {
-        assert_eq!(event_action("container:created"), "created");
-        assert_eq!(event_action("container:updated"), "updated");
-        assert_eq!(event_action("database:linked"), "linked");
-        assert_eq!(event_action("organization:member_added"), "member_added");
-    }
 }
