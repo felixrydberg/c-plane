@@ -3,10 +3,6 @@ import useStore from "~/stores/store";
 export default defineNuxtRouteMiddleware(async (to, from) => {
   const store = useStore();
 
-  if (store.user && !store.user.name?.trim() && to.path !== '/onboarding/username') {
-    return navigateTo('/onboarding/username');
-  }
-
   const publicPages = ["/auth"];
   const isPublicPage = publicPages.some(page => {
     const matches = to.path.startsWith(page);
@@ -25,9 +21,14 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
         }
       }
     }
-  } else {
-    if (!store.session && !store.user) {
-      return navigateTo('/auth/signin?redirect=' + encodeURIComponent(to.fullPath));
-    }
+    return;
+  }
+
+  if (store.session && store.user && !store.user.name?.trim() && to.path !== '/onboarding/username') {
+    return navigateTo('/onboarding/username');
+  }
+
+  if (!store.session && !store.user) {
+    return navigateTo('/auth/signin?redirect=' + encodeURIComponent(to.fullPath));
   }
 });

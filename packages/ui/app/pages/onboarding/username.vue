@@ -7,6 +7,7 @@ import { ICONS } from '~/utils/icons'
 
 const store = useStore()
 const router = useRouter()
+const route = useRoute()
 const loading = ref(false)
 const schema = z.object({ name: z.string().trim().min(1, 'Username is required') })
 type Schema = z.output<typeof schema>
@@ -17,7 +18,8 @@ const onSubmit = async (event: FormSubmitEvent<Schema>) => {
   try {
     const user = await $fetch<{ name: string }>('/api/user/profile', { method: 'PATCH', body: { name: event.data.name } })
     if (store.user) store.user.name = user.name
-    await getSession(false)
+    const session = await getSession(false)
+    if (!session || !store.session || !store.user?.name?.trim() || route.path !== '/onboarding/username') return
     await router.push(store.organization?.slug ? `/${store.organization.slug}` : '/organization/create')
   } finally {
     loading.value = false
