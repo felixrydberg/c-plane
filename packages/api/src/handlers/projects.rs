@@ -14,6 +14,7 @@ use crate::middleware::auth::AuthContext;
 use crate::models::entities::{project, project_environment, project_timeline};
 use crate::models::pins::TimelinePins;
 use crate::services::agent;
+use crate::services::events;
 use crate::state::get_app_state;
 use crate::utils::pagination::{PaginatedResponse, PaginationQuery};
 
@@ -95,7 +96,7 @@ pub struct ListTimelinesQuery {
     tag = "projects",
 )]
 pub async fn create_project(
-    AuthContext { tenant_db, .. }: AuthContext,
+    AuthContext { tenant_db, auth }: AuthContext,
     Path(organization_id): Path<Uuid>,
     Json(body): Json<CreateProjectRequest>,
 ) -> Result<(axum::http::StatusCode, Json<ProjectResponse>), AppError> {
@@ -154,6 +155,19 @@ pub async fn create_project(
     project_active.default_environment_id = Set(Some(environment_id));
     project_active.updated_at = Set(Utc::now().fixed_offset());
     let updated_project: project::Model = project_active.update(tx).await?;
+
+    events::record(
+        tx,
+        organization_id,
+        project_id,
+        "project:created",
+        serde_json::json!({
+            "summary": format!("Created project '{}'", updated_project.name),
+            "target_id": project_id.to_string(),
+        }),
+        auth.actor_id,
+    )
+    .await?;
 
     scoped.commit().await?;
 
@@ -321,7 +335,7 @@ pub async fn get_project(
     tag = "projects",
 )]
 pub async fn delete_project(
-    AuthContext { tenant_db, .. }: AuthContext,
+    AuthContext { tenant_db, auth }: AuthContext,
     Path((organization_id, project_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
@@ -330,18 +344,26 @@ pub async fn delete_project(
     let tx = scoped.connection();
 
     use project::{Column, Entity};
-    let exists = Entity::find()
+    let project = Entity::find()
         .filter(Column::Id.eq(project_id))
         .filter(Column::OrganizationId.eq(organization_id))
         .one(tx)
         .await?
-        .is_some();
-
-    if !exists {
-        return Err(AppError::NotFound("Project not found".into()));
-    }
+        .ok_or_else(|| AppError::NotFound("Project not found".into()))?;
 
     Entity::delete_by_id(project_id).exec(tx).await?;
+    events::record(
+        tx,
+        organization_id,
+        project_id,
+        "project:deleted",
+        serde_json::json!({
+            "summary": format!("Deleted project '{}'", project.name),
+            "target_id": project_id.to_string(),
+        }),
+        auth.actor_id,
+    )
+    .await?;
     scoped.commit().await?;
     if let Some(s3_providers) = get_app_state().s3_providers {
         s3_providers.invalidate_access_token_cache().await?;
@@ -500,7 +522,7 @@ pub async fn list_environments(
     tag = "environments",
 )]
 pub async fn create_environment(
-    AuthContext { tenant_db, .. }: AuthContext,
+    AuthContext { tenant_db, auth }: AuthContext,
     Path((organization_id, project_id)): Path<(Uuid, Uuid)>,
     Json(body): Json<CreateEnvironmentRequest>,
 ) -> Result<(axum::http::StatusCode, Json<EnvironmentResponse>), AppError> {
@@ -574,6 +596,19 @@ pub async fn create_environment(
         updated_at: Set(Utc::now().fixed_offset()),
     }
     .insert(tx)
+    .await?;
+
+    events::record(
+        tx,
+        organization_id,
+        project_id,
+        "environment:created",
+        serde_json::json!({
+            "summary": format!("Created environment '{}'", environment.name),
+            "target_id": environment.id.to_string(),
+        }),
+        auth.actor_id,
+    )
     .await?;
 
     scoped.commit().await?;
@@ -691,7 +726,7 @@ mod update_environment_request_tests {
     tag = "environments",
 )]
 pub async fn update_environment(
-    AuthContext { tenant_db, .. }: AuthContext,
+    AuthContext { tenant_db, auth }: AuthContext,
     Path((organization_id, project_id, environment_id)): Path<(Uuid, Uuid, Uuid)>,
     Json(body): Json<UpdateEnvironmentRequest>,
 ) -> Result<Json<EnvironmentResponse>, AppError> {
@@ -754,6 +789,19 @@ pub async fn update_environment(
     active.updated_at = Set(Utc::now().fixed_offset());
     let updated = active.update(tx).await?;
 
+    events::record(
+        tx,
+        organization_id,
+        project_id,
+        "environment:updated",
+        serde_json::json!({
+            "summary": format!("Updated environment '{}'", updated.name),
+            "target_id": updated.id.to_string(),
+        }),
+        auth.actor_id,
+    )
+    .await?;
+
     scoped.commit().await?;
     if let Some(timeline_id) = body.timeline_id {
         agent::emit_compute(project.id, organization_id, environment_id, timeline_id).await?;
@@ -784,7 +832,7 @@ pub async fn update_environment(
     tag = "environments",
 )]
 pub async fn delete_environment(
-    AuthContext { tenant_db, .. }: AuthContext,
+    AuthContext { tenant_db, auth }: AuthContext,
     Path((organization_id, project_id, environment_id)): Path<(Uuid, Uuid, Uuid)>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
@@ -846,6 +894,19 @@ pub async fn delete_environment(
             .exec(tx)
             .await?;
     }
+
+    events::record(
+        tx,
+        organization_id,
+        project_id,
+        "environment:deleted",
+        serde_json::json!({
+            "summary": format!("Deleted environment '{}'", environment.name),
+            "target_id": environment.id.to_string(),
+        }),
+        auth.actor_id,
+    )
+    .await?;
 
     scoped.commit().await?;
 

@@ -2,13 +2,19 @@ use axum::{
     Json,
     extract::{Path, Query},
 };
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
+use sea_orm::{
+    ColumnTrait, ConnectionTrait, DatabaseBackend, EntityTrait, QueryFilter, QueryOrder,
+    QuerySelect, Statement,
+};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use super::databases::{verify_org_access, verify_project_in_org};
-use crate::{errors::AppError, middleware::auth::AuthContext, models::entities::event};
+use crate::{
+    errors::AppError, middleware::auth::AuthContext, models::entities::event, state::get_app_state,
+};
 
 #[derive(Deserialize, ToSchema)]
 pub struct ListEventsQuery {
@@ -25,6 +31,7 @@ pub struct EventResponse {
     pub action: String,
     pub summary: String,
     pub actor_id: Option<Uuid>,
+    pub actor_name: Option<String>,
     pub created_at: String,
 }
 
@@ -94,6 +101,43 @@ pub async fn list_events(
         .await?;
     scoped.commit().await?;
 
+    let actor_names = get_app_state()
+        .identity_db
+        .connection()
+        .query_all(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            r#"SELECT users.id, users.name, 'user' AS actor_kind
+               FROM "user" users
+               INNER JOIN organization_member members ON members.user_id = users.id
+               WHERE members.organization_id = $1
+               UNION ALL
+               SELECT id, name, 'api_key' AS actor_kind
+               FROM api_keys
+               WHERE organization_id = $1"#,
+            vec![organization_id.into()],
+        ))
+        .await
+        .map_err(|error| AppError::Internal(format!("Failed to resolve event actors: {error}")))?
+        .into_iter()
+        .map(|row| {
+            let id = row
+                .try_get::<Uuid>("", "id")
+                .map_err(|error| AppError::Internal(format!("Invalid event actor ID: {error}")))?;
+            let name = row.try_get::<String>("", "name").map_err(|error| {
+                AppError::Internal(format!("Invalid event actor name: {error}"))
+            })?;
+            let actor_kind = row.try_get::<String>("", "actor_kind").map_err(|error| {
+                AppError::Internal(format!("Invalid event actor type: {error}"))
+            })?;
+            let label = if actor_kind == "api_key" {
+                format!("API key: {name}")
+            } else {
+                name
+            };
+            Ok::<_, AppError>((id, label))
+        })
+        .collect::<Result<HashMap<_, _>, _>>()?;
+
     Ok(Json(
         events
             .into_iter()
@@ -107,6 +151,7 @@ pub async fn list_events(
                     .unwrap_or("Resource updated")
                     .into(),
                 actor_id: event.actor_id,
+                actor_name: event.actor_id.and_then(|id| actor_names.get(&id).cloned()),
                 created_at: event.created_at.to_string(),
             })
             .collect(),

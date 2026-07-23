@@ -1,6 +1,7 @@
 import { withTenantDb } from "~~/server/utils/db";
 import { organization, organization_member } from "~~/server/schema";
 import { eq, and } from "drizzle-orm";
+import { logEvent } from "~~/server/utils/events";
 
 export default defineEventHandler(async (event) => {
   const membership = await getOrganizationMembership(event);
@@ -22,6 +23,18 @@ export default defineEventHandler(async (event) => {
       .update(organization)
       .set({ name: name.trim() })
       .where(eq(organization.id, membership.organization_id));
+
+    await logEvent(
+      organizationId,
+      "organization:updated",
+      {
+        summary: `Updated organization name to '${name.trim()}'`,
+        target_id: organizationId,
+      },
+      false,
+      { actor_id: membership.user_id },
+      tx,
+    );
 
     const result = await tx.select({
       id: organization.id,

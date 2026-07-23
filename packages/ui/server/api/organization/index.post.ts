@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import z from "zod";
 import { getIdentityDb, withTenantDb } from "~~/server/utils/db";
+import { logEvent } from "~~/server/utils/events";
 
 const createOrganizationSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
@@ -72,6 +73,18 @@ export default defineEventHandler(async (event) => {
       user_id: session.user.id,
       role: "owner",
     });
+
+    await logEvent(
+      organizationId,
+      "organization:created",
+      {
+        summary: `Created organization '${name}'`,
+        target_id: organizationId,
+      },
+      false,
+      { actor_id: session.user.id },
+      tx,
+    );
 
     await tx
       .insert(active_organization)
