@@ -64,8 +64,23 @@ export const getSession = async (cache: boolean = true) => {
     }
 
     const { session, user } = data;
+    const currentUser = !user.name?.trim() && store.user?.id === user.id && store.user.name?.trim()
+      ? { ...user, name: store.user.name.trim() }
+      : user
     store.session = session
-    store.user = user
+    store.user = currentUser
+
+    if (!currentUser.name?.trim()) {
+      if (route.path !== '/onboarding/username') {
+        if (import.meta.server) {
+          return await nuxtApp.runWithContext(() => navigateTo('/onboarding/username'));
+        }
+
+        await router.push('/onboarding/username');
+      }
+
+      return data
+    }
 
     if (user) {
       try {
