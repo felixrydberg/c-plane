@@ -7,6 +7,7 @@ interface AuditEvent {
   action: string
   summary: string
   actor_id: string | null
+  actor_name: string | null
   created_at: string
 }
 
@@ -33,7 +34,7 @@ const columns: TableColumn<AuditEvent>[] = [
   {
     accessorKey: 'actor_id',
     header: 'Actor',
-    cell: (item) => h('span', { class: 'font-mono text-xs text-muted' }, item.row.original.actor_id ?? 'System'),
+    cell: (item) => h('span', { class: 'text-xs text-muted' }, item.row.original.actor_name ?? (item.row.original.actor_id ? 'Unknown actor' : 'System')),
   },
   {
     accessorKey: 'created_at',
@@ -51,16 +52,21 @@ const columns: TableColumn<AuditEvent>[] = [
 </script>
 
 <template>
-  <div class="flex w-full max-w-6xl flex-col gap-6 mx-auto">
-    <div>
-      <h1 class="text-2xl font-semibold">Audit Log</h1>
-      <p class="mt-1 text-sm text-muted">Recent events across this organization.</p>
-    </div>
+  <OrganizationSettingsPage title="Audit log">
 
-    <UiTable :status="status" :items="events" :columns="columns" disable-header>
-      <template #empty>
-        <p class="py-8 text-sm text-muted">No events recorded yet.</p>
-      </template>
-    </UiTable>
-  </div>
+    <section class="border-b border-dashed border-default pb-10">
+      <div>
+        <h2 class="text-xl font-normal tracking-[-0.02em]">Recent activity</h2>
+        <p class="mt-2 text-sm text-muted">Recent events across this organization.</p>
+      </div>
+
+      <div class="mt-8">
+        <UiTable :status="status" :items="events" :columns="columns" disable-header>
+          <template #empty>
+            <p class="py-12 text-sm text-muted">No events recorded yet.</p>
+          </template>
+        </UiTable>
+      </div>
+    </section>
+  </OrganizationSettingsPage>
 </template>

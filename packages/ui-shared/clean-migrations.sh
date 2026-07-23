@@ -1,7 +1,7 @@
 #!/bin/bash
 
 rm -rf drizzle/
-deno task migrate:generate
+npm run migrate:generate
 
 initial_migration=$(ls drizzle/0000_*.sql 2>/dev/null | head -1)
 echo "Generated initial migration: $initial_migration"

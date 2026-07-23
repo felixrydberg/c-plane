@@ -1,6 +1,6 @@
 {
-  "id": "57c31524-1941-4b98-9798-ef0aaac6e1b2",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "e44f890a-ef5e-4dd7-a697-bc3f7794fe5e",
+  "prevId": "5c665d6c-5901-4824-beeb-6aa1dce8aea4",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2198,7 +2198,7 @@
         }
       },
       "checkConstraints": {},
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
     "public.project_container_version": {
       "name": "project_container_version",
@@ -2388,7 +2388,7 @@
         }
       },
       "checkConstraints": {},
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
     "public.postgres_database": {
       "name": "postgres_database",

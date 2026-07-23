@@ -2,6 +2,7 @@
 import { h } from 'vue';
 import type { TableColumn, TableRow } from '@nuxt/ui';
 import * as z from 'zod';
+import { ICONS } from '~/utils/icons'
 
 const store = useStore();
 
@@ -29,7 +30,9 @@ const { data, status, refresh } = await useFetch(
 type Member = NonNullable<typeof data.value>['data'][number];
 
 const addModalOpen = ref(false);
+const isAdding = ref(false);
 const deleteModalOpen = ref(false);
+const isRemoving = ref(false);
 const selectedMemberToDelete = ref<Member | null>(null);
 
 const members = computed(() => data.value?.data ?? []);
@@ -83,6 +86,7 @@ const getContextMenuItems = (row: TableRow<Member>) => [
 ];
 
 const onDeleteMember = async () => {
+  isRemoving.value = true;
   try {
     if (!selectedMemberToDelete.value) return;
 
@@ -109,6 +113,8 @@ const onDeleteMember = async () => {
         error instanceof Error ? error.message : 'Failed to remove member',
       color: 'error' as const,
     });
+  } finally {
+    isRemoving.value = false;
   }
 };
 
@@ -123,6 +129,7 @@ const addMemberState = reactive<Partial<AddMemberSchema>>({
 });
 
 const onAddMember = async () => {
+  isAdding.value = true;
   try {
     await $fetch(`/api/organization/${store.organization?.id as ':organization_id'}/members`, {
       method: 'POST',
@@ -147,36 +154,40 @@ const onAddMember = async () => {
         error instanceof Error ? error.message : 'Failed to add member',
       color: 'error' as const,
     });
+  } finally {
+    isAdding.value = false;
   }
 };
 </script>
 
 <template>
-  <div class="flex flex-col gap-6 w-full mx-auto max-w-6xl">
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-2xl font-semibold">Members</h1>
-        <p class="text-muted text-sm mt-1">Manage organization members.</p>
-      </div>
-      <UButton leading-icon="i-heroicons:plus" @click="addModalOpen = true">
-        Add Member
-      </UButton>
-    </div>
+  <OrganizationSettingsPage title="Members">
 
-    <UiTable
-      v-model:offset="offset"
-      :status="status"
-      :items="members"
-      :columns="columns"
-      :pagination="true"
-      :total="total"
-      :limit="limit"
-      :get-context-menu-items="getContextMenuItems"
-    >
-      <template #filters>
-        <UInput v-model="search" placeholder="Search members..." icon="i-heroicons:magnifying-glass" />
-      </template>
-    </UiTable>
+    <section class="border-b border-dashed border-default pb-10">
+      <div class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 class="text-xl font-normal tracking-[-0.02em]">Organization members</h2>
+          <p class="mt-2 text-sm text-muted">Search and manage member access.</p>
+        </div>
+        <UButton :icon="ICONS.plus" color="primary" @click="addModalOpen = true">Add Member</UButton>
+      </div>
+      <div class="mt-8">
+        <UiTable
+          v-model:offset="offset"
+          :status="status"
+          :items="members"
+          :columns="columns"
+          :pagination="true"
+          :total="total"
+          :limit="limit"
+          :get-context-menu-items="getContextMenuItems"
+        >
+          <template #filters>
+            <UInput v-model="search" placeholder="Search members..." icon="i-heroicons:magnifying-glass" />
+          </template>
+        </UiTable>
+      </div>
+    </section>
 
     <UModal v-model:open="addModalOpen" title="Add Member" description="Invite a new member to your organization">
       <template #body>
@@ -186,7 +197,7 @@ const onAddMember = async () => {
           </UFormField>
           <div class="flex justify-end gap-3 pt-2">
             <UButton type="button" variant="ghost" color="neutral" @click="addModalOpen = false">Cancel</UButton>
-            <UButton type="submit">Add Member</UButton>
+            <UButton :icon="ICONS.plus" color="primary" type="submit" :loading="isAdding">Add Member</UButton>
           </div>
         </UForm>
       </template>
@@ -200,10 +211,10 @@ const onAddMember = async () => {
           </p>
           <div class="flex justify-end gap-3 pt-2">
             <UButton variant="ghost" color="neutral" @click="deleteModalOpen = false">Cancel</UButton>
-            <UButton color="error" @click="onDeleteMember">Remove</UButton>
+            <UButton :icon="ICONS.trash" color="error" :loading="isRemoving" @click="onDeleteMember">Remove</UButton>
           </div>
         </div>
       </template>
     </UModal>
-  </div>
+  </OrganizationSettingsPage>
 </template>

@@ -12,6 +12,7 @@ use crate::{
     errors::AppError,
     middleware::auth::AuthContext,
     models::entities::{bucket, storage_access_token, storage_access_token_bucket},
+    services::events,
     state::get_app_state,
 };
 
@@ -77,7 +78,7 @@ pub struct AccessTokenDetailsResponse {
     tag = "storage",
 )]
 pub async fn create_access_token(
-    AuthContext { tenant_db, .. }: AuthContext,
+    AuthContext { tenant_db, auth }: AuthContext,
     Path((organization_id, project_id)): Path<(Uuid, Uuid)>,
     Json(body): Json<CreateAccessTokenRequest>,
 ) -> Result<(axum::http::StatusCode, Json<CreatedAccessTokenResponse>), AppError> {
@@ -151,6 +152,23 @@ pub async fn create_access_token(
             return Err(error.into());
         }
     };
+    if let Err(error) = events::record(
+        tx,
+        organization_id,
+        project_id,
+        "storage-access-token:created",
+        serde_json::json!({
+            "summary": format!("Created storage access token '{name}'"),
+            "target_id": id.to_string(),
+            "bucket_ids": body.bucket_permissions.iter().map(|permission| permission.bucket_id).collect::<Vec<_>>(),
+        }),
+        auth.actor_id,
+    )
+    .await
+    {
+        let _ = secrets.delete_access_token_secret(id).await;
+        return Err(error);
+    }
     if let Err(error) = scoped.commit().await {
         let _ = secrets.delete_access_token_secret(id).await;
         return Err(error);
@@ -259,7 +277,7 @@ pub async fn get_access_token(
     tag = "storage",
 )]
 pub async fn update_access_token(
-    AuthContext { tenant_db, .. }: AuthContext,
+    AuthContext { tenant_db, auth }: AuthContext,
     Path((organization_id, project_id, token_id)): Path<(Uuid, Uuid, Uuid)>,
     Json(body): Json<UpdateAccessTokenRequest>,
 ) -> Result<axum::http::StatusCode, AppError> {
@@ -280,6 +298,11 @@ pub async fn update_access_token(
         .filter(storage_access_token_bucket::Column::AccessTokenId.eq(token_id))
         .exec(tx)
         .await?;
+    let bucket_ids = body
+        .bucket_permissions
+        .iter()
+        .map(|permission| permission.bucket_id)
+        .collect::<Vec<_>>();
     for permission in body.bucket_permissions {
         storage_access_token_bucket::ActiveModel {
             access_token_id: Set(token_id),
@@ -291,6 +314,19 @@ pub async fn update_access_token(
         .insert(tx)
         .await?;
     }
+    events::record(
+        tx,
+        organization_id,
+        project_id,
+        "storage-access-token:updated",
+        serde_json::json!({
+            "summary": "Updated storage access token permissions",
+            "target_id": token_id.to_string(),
+            "bucket_ids": bucket_ids,
+        }),
+        auth.actor_id,
+    )
+    .await?;
     scoped.commit().await?;
     secrets.invalidate_access_token_cache().await?;
 
@@ -313,7 +349,7 @@ pub async fn update_access_token(
     tag = "storage",
 )]
 pub async fn revoke_access_token(
-    AuthContext { tenant_db, .. }: AuthContext,
+    AuthContext { tenant_db, auth }: AuthContext,
     Path((organization_id, project_id, token_id)): Path<(Uuid, Uuid, Uuid)>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
@@ -321,9 +357,22 @@ pub async fn revoke_access_token(
     let tx = scoped.connection();
     verify_project_in_org(tx, project_id, organization_id).await?;
     let token = active_token(tx, organization_id, project_id, token_id).await?;
+    let token_name = token.name.clone();
     let mut token = token.into_active_model();
     token.revoked_at = Set(Some(chrono::Utc::now().fixed_offset()));
     token.update(tx).await?;
+    events::record(
+        tx,
+        organization_id,
+        project_id,
+        "storage-access-token:revoked",
+        serde_json::json!({
+            "summary": format!("Revoked storage access token '{token_name}'"),
+            "target_id": token_id.to_string(),
+        }),
+        auth.actor_id,
+    )
+    .await?;
     scoped.commit().await?;
 
     if let Some(secrets) = get_app_state().s3_providers

@@ -54,7 +54,7 @@ Use these icon keys from `~/utils/icons`:
 | `plus` | `i-heroicons:plus` | Create / Add |
 | `trash` | `i-heroicons:trash` | Delete / Remove |
 | `pencil` | `i-heroicons:pencil-square` | Edit |
-| `xMark` | `i-heroicons:x-mark` | Cancel / Close |
+| `xMark` | `i-heroicons:x-mark` | Close / Dismiss |
 | `check` | `i-heroicons:check` | Confirm / Save |
 
 Add new keys to `packages/ui/app/utils/icons.ts` and register them here.

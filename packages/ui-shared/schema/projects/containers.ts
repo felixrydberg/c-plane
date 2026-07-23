@@ -28,7 +28,7 @@ export const container = pgTable('project_container', {
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
-]);
+]).enableRLS();
 
 export const container_version = pgTable('project_container_version', {
   id: uuid("id").primaryKey(),
@@ -61,4 +61,4 @@ export const container_version = pgTable('project_container_version', {
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
-]);
+]).enableRLS();
