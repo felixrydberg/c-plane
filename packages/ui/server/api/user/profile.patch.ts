@@ -6,9 +6,9 @@ export default defineEventHandler(async (event) => {
   const session = await requireSession(event);
   const body = await readBody(event);
 
-  if (body.name !== undefined) {
+  if (typeof body.name === "string" && body.name.trim()) {
     const updated = await getAuthDb().update(user)
-      .set({ name: body.name })
+      .set({ name: body.name.trim() })
       .where(eq(user.id, session.user.id))
       .returning();
 
@@ -22,8 +22,5 @@ export default defineEventHandler(async (event) => {
     return updated[0];
   }
 
-  throw createError({
-    statusCode: 400,
-    message: "No fields to update"
-  });
+  throw createError({ statusCode: 400, message: "Name is required" });
 });

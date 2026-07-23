@@ -40,6 +40,15 @@ export const auth = betterAuth({
     provider: "pg",
     schema,
   }),
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user) => ({
+          data: { ...user, name: typeof user.name === "string" ? user.name.trim() : "" },
+        }),
+      },
+    },
+  },
   advanced: {
     database: {
       generateId: "uuid",
