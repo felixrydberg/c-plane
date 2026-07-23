@@ -7,7 +7,7 @@ use sea_orm::{
     QuerySelect, Statement,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -101,42 +101,56 @@ pub async fn list_events(
         .await?;
     scoped.commit().await?;
 
-    let actor_names = get_app_state()
-        .identity_db
-        .connection()
-        .query_all(Statement::from_sql_and_values(
-            DatabaseBackend::Postgres,
-            r#"SELECT users.id, users.name, 'user' AS actor_kind
-               FROM "user" users
-               INNER JOIN organization_member members ON members.user_id = users.id
-               WHERE members.organization_id = $1
-               UNION ALL
-               SELECT id, name, 'api_key' AS actor_kind
-               FROM api_keys
-               WHERE organization_id = $1"#,
-            vec![organization_id.into()],
-        ))
-        .await
-        .map_err(|error| AppError::Internal(format!("Failed to resolve event actors: {error}")))?
+    let actor_ids: Vec<_> = events
+        .iter()
+        .filter_map(|event| event.actor_id)
+        .collect::<HashSet<_>>()
         .into_iter()
-        .map(|row| {
-            let id = row
-                .try_get::<Uuid>("", "id")
-                .map_err(|error| AppError::Internal(format!("Invalid event actor ID: {error}")))?;
-            let name = row.try_get::<String>("", "name").map_err(|error| {
-                AppError::Internal(format!("Invalid event actor name: {error}"))
-            })?;
-            let actor_kind = row.try_get::<String>("", "actor_kind").map_err(|error| {
-                AppError::Internal(format!("Invalid event actor type: {error}"))
-            })?;
-            let label = if actor_kind == "api_key" {
-                format!("API key: {name}")
-            } else {
-                name
-            };
-            Ok::<_, AppError>((id, label))
-        })
-        .collect::<Result<HashMap<_, _>, _>>()?;
+        .collect();
+    let actor_names = if actor_ids.is_empty() {
+        HashMap::new()
+    } else {
+        let placeholders = (1..=actor_ids.len())
+            .map(|index| format!("${index}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        get_app_state()
+            .identity_db
+            .connection()
+            .query_all(Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
+                format!(
+                    r#"SELECT id, name, 'user' AS actor_kind FROM "user" WHERE id IN ({placeholders})
+                       UNION ALL
+                       SELECT id, name, 'api_key' AS actor_kind FROM api_keys WHERE id IN ({placeholders})"#
+                ),
+                actor_ids
+                    .into_iter()
+                    .map(sea_orm::Value::from)
+                    .collect::<Vec<_>>(),
+            ))
+            .await
+            .map_err(|error| AppError::Internal(format!("Failed to resolve event actors: {error}")))?
+            .into_iter()
+            .map(|row| {
+                let id = row
+                    .try_get::<Uuid>("", "id")
+                    .map_err(|error| AppError::Internal(format!("Invalid event actor ID: {error}")))?;
+                let name = row.try_get::<String>("", "name").map_err(|error| {
+                    AppError::Internal(format!("Invalid event actor name: {error}"))
+                })?;
+                let actor_kind = row.try_get::<String>("", "actor_kind").map_err(|error| {
+                    AppError::Internal(format!("Invalid event actor type: {error}"))
+                })?;
+                let label = if actor_kind == "api_key" {
+                    format!("API key: {name}")
+                } else {
+                    name
+                };
+                Ok::<_, AppError>((id, label))
+            })
+            .collect::<Result<HashMap<_, _>, _>>()?
+    };
 
     Ok(Json(
         events

@@ -2,33 +2,38 @@ import { withTenantDb } from "~~/server/utils/db";
 import { organization, organization_member } from "~~/server/schema";
 import { eq, and } from "drizzle-orm";
 import { logEvent } from "~~/server/utils/events";
+import z from "zod";
+
+const renameOrganizationSchema = z.object({
+  name: z.string().trim().min(1, "Organization name is required"),
+});
 
 export default defineEventHandler(async (event) => {
   const membership = await getOrganizationMembership(event);
 
   const body = await readBody(event);
-  const name = body.name as string | undefined;
-
-  if (!name || name.trim() === "") {
+  const parsed = renameOrganizationSchema.safeParse(body);
+  if (!parsed.success) {
     throw createError({
       statusCode: 400,
-      statusMessage: "Organization name is required",
+      statusMessage: parsed.error.issues[0]?.message || "Invalid request body",
     });
   }
+  const { name } = parsed.data;
 
   const organizationId = membership.organization_id;
 
   const _organization = await withTenantDb([organizationId], async (tx) => {
     await tx
       .update(organization)
-      .set({ name: name.trim() })
+      .set({ name })
       .where(eq(organization.id, membership.organization_id));
 
     await logEvent(
       organizationId,
       "organization:updated",
       {
-        summary: `Updated organization name to '${name.trim()}'`,
+        summary: `Updated organization name to '${name}'`,
         target_id: organizationId,
       },
       false,

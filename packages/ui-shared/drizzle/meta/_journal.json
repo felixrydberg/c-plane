@@ -15,6 +15,13 @@
       "when": 1784757149199,
       "tag": "0001_seed-base-data",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784832780423,
+      "tag": "0002_third_hellcat",
+      "breakpoints": true
     }
   ]
 }

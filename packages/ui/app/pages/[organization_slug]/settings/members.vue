@@ -161,13 +161,7 @@ const onAddMember = async () => {
 </script>
 
 <template>
-  <div class="mx-auto flex w-full max-w-6xl flex-col gap-8">
-    <div class="border-b border-default pb-6">
-      <p class="font-space-mono text-[11px] uppercase tracking-[0.08em] text-muted">Organization settings</p>
-      <h1 class="mt-2 text-4xl font-normal tracking-[-0.04em]">Members</h1>
-    </div>
-
-    <OrganizationSettingsTabs />
+  <OrganizationSettingsPage title="Members">
 
     <section class="border-b border-dashed border-default pb-10">
       <div class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
@@ -222,5 +216,5 @@ const onAddMember = async () => {
         </div>
       </template>
     </UModal>
-  </div>
+  </OrganizationSettingsPage>
 </template>
