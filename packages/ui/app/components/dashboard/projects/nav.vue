@@ -177,7 +177,14 @@ function selectEnvironment(b: Environment) {
 }
 
 async function onProjectCreated() { await refreshProjects() }
-async function onProjectDeleted() { await refreshProjects(); selectProject(null) }
+async function onProjectDeleted() {
+  await refreshProjects()
+  if (!store.projects.length && store.organization?.slug) {
+    await router.push(`/${store.organization.slug}/onboarding`)
+    return
+  }
+  await selectProject(null)
+}
 async function refreshEnvironments() {
   if (!store.project) return
   await loadProjectEnvironments(store.project.id, routeEnvironmentId.value)
