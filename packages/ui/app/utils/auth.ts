@@ -1,5 +1,6 @@
 import { createAuthClient } from "better-auth/vue"
-import { inferAdditionalFields, twoFactorClient, adminClient  } from "better-auth/client/plugins"
+import { inferAdditionalFields, twoFactorClient, adminClient, lastLoginMethodClient } from "better-auth/client/plugins"
+import { passkeyClient } from "@better-auth/passkey/client"
 import type { auth } from "~~/server/utils/auth"
 import { useStore } from "~/stores/store"
 import type { Project } from '@cplane/sdk'
@@ -19,6 +20,8 @@ export const createClient = () => {
       inferAdditionalFields<typeof auth>(),
       twoFactorClient(),
       adminClient(),
+      passkeyClient(),
+      lastLoginMethodClient(),
     ]
   })
 }

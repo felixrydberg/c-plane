@@ -4,7 +4,6 @@ import { ICONS } from '~/utils/icons'
 const store = useStore();
 
 const selectedProject = computed(() => store.project);
-const showOnboarding = computed(() => store.projects.length === 0);
 const currentEnvironment = computed(() =>
   store.environment?.name
   ?? store.environments.find(environment => environment.id === selectedProject.value?.default_environment_id)?.name
@@ -13,9 +12,7 @@ const currentEnvironment = computed(() =>
 </script>
 
 <template>
-  <DashboardProjectsOnboarding v-if="showOnboarding" />
-
-  <DashboardProjectsSelectPrompt v-else-if="!selectedProject" />
+  <DashboardProjectsSelectPrompt v-if="!selectedProject" />
 
   <div v-else class="mx-auto flex w-full max-w-6xl flex-col gap-8">
     <div class="flex flex-col gap-5 border-b border-default pb-6 sm:flex-row sm:items-end sm:justify-between">

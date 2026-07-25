@@ -3,7 +3,6 @@ import * as z from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
 import useStore from '~/stores/store'
 import { getSession } from '~/utils/auth'
-import { ICONS } from '~/utils/icons'
 
 const store = useStore()
 const router = useRouter()
@@ -40,7 +39,7 @@ const onSubmit = async (event: FormSubmitEvent<Schema>) => {
         <UInput v-model="state.name" autofocus autocomplete="username" :disabled="loading" class="w-full" />
       </UFormField>
 
-      <UButton type="submit" :icon="ICONS.check" :loading="loading" block class="justify-center">
+      <UButton type="submit" :loading="loading" block class="justify-center">
         Continue
       </UButton>
     </UForm>

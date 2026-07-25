@@ -1,8 +1,10 @@
 import { drizzle } from "drizzle-orm/postgres-js"
 import { betterAuth } from "better-auth/minimal"
-import { admin, twoFactor, haveIBeenPwned } from "better-auth/plugins"
+import { admin, twoFactor, haveIBeenPwned, lastLoginMethod } from "better-auth/plugins"
+import { passkey } from "@better-auth/passkey"
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createClient } from "redis"
+import * as z from "zod"
 import * as schema from "../schema";
 import { and, eq } from "drizzle-orm";
 import { getIdentityDb } from "./db";
@@ -28,6 +30,20 @@ await redis.connect()
 
 const db = drizzle(NUXT_DATABASE_URL, { schema })
 export const getAuthDb = () => db
+
+const passkeyRegistrationContextSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  email: z.string().trim().toLowerCase().email(),
+})
+
+function parsePasskeyRegistrationContext(context: string | null | undefined) {
+  try {
+    return passkeyRegistrationContextSchema.parse(JSON.parse(context ?? ""))
+  } catch {
+    throw new Error("A username and valid email are required to create a passkey account")
+  }
+}
+
 export const auth = betterAuth({
   appName: "C-Plane",
   baseURL: NUXT_AUTH_BASE_URL || "http://localhost:3000",
@@ -112,6 +128,51 @@ export const auth = betterAuth({
   plugins: [
     admin(),
     twoFactor(),
+    passkey({
+      registration: {
+        requireSession: false,
+        resolveUser: async ({ context }) => {
+          const { name, email } = parsePasskeyRegistrationContext(context)
+          const existingUser = await db
+            .select({ id: schema.user.id })
+            .from(schema.user)
+            .where(eq(schema.user.email, email))
+            .limit(1)
+          if (existingUser.length > 0) throw new Error("An account already exists for this email")
+
+          const id = crypto.randomUUID()
+          return { id, name }
+        },
+        afterVerification: async ({ ctx, user, context }) => {
+          const existingUser = await ctx.context.internalAdapter.findUserById(user.id)
+          if (!existingUser) {
+            const { email } = parsePasskeyRegistrationContext(context)
+            await db.insert(schema.user).values({
+              id: user.id,
+              name: user.name,
+              email,
+              emailVerified: false,
+            })
+          }
+
+          const session = await ctx.context.internalAdapter.createSession(user.id)
+          const authUser = await ctx.context.internalAdapter.findUserById(user.id)
+          if (!session || !authUser) throw new Error("Could not create passkey session")
+
+          await ctx.setSignedCookie(
+            ctx.context.authCookies.sessionToken.name,
+            session.token,
+            ctx.context.secret,
+            {
+              ...ctx.context.authCookies.sessionToken.attributes,
+              maxAge: ctx.context.sessionConfig.expiresIn,
+            },
+          )
+          ctx.context.setNewSession({ session, user: authUser })
+        },
+      },
+    }),
+    lastLoginMethod(),
     haveIBeenPwned({
       customPasswordCompromisedMessage: "This password has been compromised in a data breach, please choose a different one.",
     })

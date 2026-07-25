@@ -1,6 +1,10 @@
 <script setup lang="ts">
 definePageMeta({
   layout: 'auth',
+  layoutTransition: {
+    name: 'auth-to-dashboard',
+    mode: 'out-in',
+  },
 });
 
 const store = useStore();

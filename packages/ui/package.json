@@ -13,6 +13,7 @@
     "lint:fix": "eslint --fix ."
   },
   "dependencies": {
+    "@better-auth/passkey": "1.6.23",
     "@cplane/sdk": "workspace:*",
     "@cplane/ui-shared": "workspace:*",
     "@iconify-json/lucide": "1.2.97",

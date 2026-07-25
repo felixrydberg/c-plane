@@ -28,6 +28,18 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
     return navigateTo('/onboarding/username');
   }
 
+  const organization = store.organization;
+  const organizationOnboardingPath = organization?.slug && `/${organization.slug}/onboarding`;
+  if (store.session && store.user && organization && organizationOnboardingPath && !store.projects.length && to.path !== organizationOnboardingPath) {
+    const requestFetch = import.meta.server ? useRequestFetch() : $fetch;
+    const { data } = await requestFetch(`/api/cplane/organization/${organization.id as ':organization_id'}/projects` as const);
+    store.projects = data ?? [];
+
+    if (!store.projects.length) {
+      return navigateTo(organizationOnboardingPath);
+    }
+  }
+
   if (!store.session && !store.user) {
     return navigateTo('/auth/signin?redirect=' + encodeURIComponent(to.fullPath));
   }
