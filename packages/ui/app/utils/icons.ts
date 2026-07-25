@@ -14,8 +14,8 @@ export const ICONS = {
   plus: 'i-heroicons:plus',
   trash: 'i-heroicons:trash',
   pencil: 'i-heroicons:pencil-square',
-  xMark: 'i-heroicons:x-mark',
   check: 'i-heroicons:check',
+  refresh: 'i-heroicons:arrow-path',
   link: 'i-heroicons:link',
   arrowTopRight: 'i-heroicons:arrow-top-right-on-square',
   chevronUpDown: 'i-heroicons:chevron-up-down',
@@ -25,4 +25,5 @@ export const ICONS = {
   sidebarCloseLeft: 'i-heroicons:arrow-left-end-on-rectangle',
   sidebarCloseLft: 'i-heroicons:arrow-left-end-on-rectangle',
   graph: 'i-material-symbols:graph-1',
+  passkey: 'i-heroicons:lock-closed',
 } as const

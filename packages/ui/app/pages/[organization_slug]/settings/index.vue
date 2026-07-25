@@ -36,7 +36,7 @@ const onSettingsSubmit = async (event: FormSubmitEvent<SettingsSchema>) => {
       throw new Error('Failed to update organization')
     }
 
-    store.organization = updated
+    store.setOrganization(updated)
     toast.add({
       title: 'Success',
       description: 'Organization name updated.',

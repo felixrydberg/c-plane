@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import type { Project } from '@cplane/sdk'
+
 const store = useStore();
 const open = defineModel<boolean>('open', { required: true });
-const emit = defineEmits<{ created: [] }>();
+const emit = defineEmits<{ created: [project: Project] }>();
 
 const name = ref('');
 const loading = ref(false);
@@ -14,7 +16,7 @@ async function handleCreate() {
   error.value = '';
 
   try {
-    const response = await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects` as const, {
+    const response = await $fetch<Project>(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects` as const, {
       method: 'POST',
       body: { name: name.value.trim() },
     });
@@ -23,9 +25,10 @@ async function handleCreate() {
 
     name.value = '';
     open.value = false;
-    emit('created');
-  } catch (e: any) {
-    error.value = e?.data?.message || e?.message || 'Failed to create project';
+    emit('created', response);
+  } catch (cause: unknown) {
+    const errorCause = cause as { data?: { message?: string }, message?: string }
+    error.value = errorCause.data?.message ?? errorCause.message ?? 'Failed to create project';
   } finally {
     loading.value = false;
   }

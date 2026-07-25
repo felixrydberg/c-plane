@@ -2,17 +2,18 @@
 
 ## Rules
 
-1. **Solid colors only** — no ghost, outline, or soft variants. Every button has visual weight.
-2. **Text + icon** — every button includes both an icon and a label. No icon-only or text-only buttons.
-3. **Nuxt UI `<UButton>`** — always use the built-in component.
+1. **Solid colors only** - major action buttons use solid variants.
+2. **Text + icon** - action buttons include both an icon and a label. Continue and Next are text-only flow-navigation exceptions, along with Cancel and Back.
+3. **No X marks** - never use an X mark for Cancel, Back, Close, or Dismiss.
+4. **Nuxt UI `<UButton>`** - always use the built-in component.
 
 ## Variants
 
-Not every button should be primary. `color` communicates **severity**, not importance — match it to what happens when clicked.
+Not every button should be primary. `color` communicates **severity**, not importance - match it to what happens when clicked.
 
 ### Primary
 
-For the single most important action on a page: Create, Save, Deploy. Use sparingly — one per view.
+For the single most important action on a page: Create, Save, Deploy. Use sparingly - one per view.
 
 ```vue
 <UButton :icon="ICONS.plus" color="primary">New Container</UButton>
@@ -26,7 +27,6 @@ For actions without destructive or primary weight: Edit, Settings, Link, Manage,
 ```vue
 <UButton :icon="ICONS.general" variant="solid" color="neutral" @click="openSettings">Settings</UButton>
 <UButton :icon="ICONS.plus" variant="solid" color="neutral" @click="addEnvRow">Add</UButton>
-<UButton :icon="ICONS.xMark" variant="solid" color="neutral" @click="deselectRevision">Hide</UButton>
 ```
 
 ### Destructive
@@ -37,12 +37,20 @@ For irreversible actions: Delete, Remove.
 <UButton :icon="ICONS.trash" color="error" @click="handleDelete">Delete</UButton>
 ```
 
-### Dismissal / Cancel
+### Cancellation / Back
 
-For backing out of a modal or cancelling an in-flight operation. Use `variant="ghost"` to keep visual weight on the primary action.
+For backing out of a modal or returning to the previous step, use a text-only `variant="ghost"` button. Do not use an X mark.
 
 ```vue
 <UButton color="neutral" variant="ghost" @click="modalOpen = false">Cancel</UButton>
+```
+
+### Flow navigation
+
+Continue and Next advance a flow without confirming or saving. Keep them text-only; do not add a checkmark or other status icon.
+
+```vue
+<UButton type="submit">Continue</UButton>
 ```
 
 ## Icon catalog
@@ -54,8 +62,8 @@ Use these icon keys from `~/utils/icons`:
 | `plus` | `i-heroicons:plus` | Create / Add |
 | `trash` | `i-heroicons:trash` | Delete / Remove |
 | `pencil` | `i-heroicons:pencil-square` | Edit |
-| `xMark` | `i-heroicons:x-mark` | Close / Dismiss |
 | `check` | `i-heroicons:check` | Confirm / Save |
+| `refresh` | `i-heroicons:arrow-path` | Retry / Refresh |
 
 Add new keys to `packages/ui/app/utils/icons.ts` and register them here.
 
@@ -72,19 +80,11 @@ Every async action gets a loading state:
 <UButton :icon="ICONS.trash" color="error" :loading="deleting" @click="handleDelete">Delete</UButton>
 ```
 
-The `loading` prop disables the button and shows a spinner — no need for a separate `:disabled` binding.
-
-## Icon-only (exception)
-
-Permitted for **chrome actions** — dismissive or navigational controls adjacent to content where text would be redundant: closing a panel, toggling sidebar, dismissing a toast. Always paired with `aria-label`. Use `variant="ghost"` to keep visual weight low.
-
-```vue
-<UButton variant="ghost" size="xs" color="neutral" :icon="ICONS.xMark" aria-label="Hide sidebar" @click="closePanel" />
-```
+The `loading` prop disables the button and shows a spinner - no separate `:disabled` binding is needed.
 
 ## Do not
 
-- `variant="ghost"` or `variant="soft"` on major actions
-- Icon-only buttons without `aria-label`
-- Text-only buttons that hide the affordance
-- `color="neutral"` with no variant — invisible on the page
+- Use `variant="ghost"` or `variant="soft"` on major actions
+- Use an X mark for Cancel, Back, Close, or Dismiss
+- Use icon-only buttons for actions
+- Use `color="neutral"` with no variant - it is invisible on the page

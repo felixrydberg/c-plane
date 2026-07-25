@@ -168,7 +168,7 @@ const onCreateOrganization = async () => {
       return;
     }
 
-    store.organization = data;
+    store.setOrganization(data);
     await router.push(`/${data.slug}`);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   } catch (error) {

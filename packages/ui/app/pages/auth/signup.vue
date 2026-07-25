@@ -5,19 +5,21 @@
   import { createClient } from '~/utils/auth'
   import { passwordConfirmationSchema } from '~/utils/validation'
   import { getQueryValue, useAuthSwitchQuery } from '~/utils/query'
+  import { ICONS } from '~/utils/icons'
 
   const store = useStore();
   const route = useRoute();
   const router = useRouter();
   const loading = ref(false);
+  const passkeyLoading = ref(false)
+  const signupStep = ref<'identity' | 'password'>('identity')
 
   const toast = useToast();
-  const schema = z.object({
-    name: z.string().min(1, 'Name is required'),
-    email: z.string().email('Invalid email'),
-  }).merge(passwordConfirmationSchema)
-
-  type Schema = z.output<typeof schema>
+  const identitySchema = z.object({
+    name: z.string().trim().min(1, 'Username is required').max(100, 'Username is too long'),
+    email: z.string().trim().pipe(z.email('Enter a valid email address')),
+  })
+  type IdentitySchema = z.output<typeof identitySchema>
 
   const state = reactive({
     email: '',
@@ -33,48 +35,7 @@
 
   const authSwitchQuery = useAuthSwitchQuery()
 
-  const onSubmit = async (payload: FormSubmitEvent<Schema>) => {
-    const client = createClient();
-    const { email, password, name } = payload.data;
-    if (loading.value) {
-      return
-    }
-    loading.value = true
-    const { error } = await client.signUp.email({
-      email: email,
-      password: password,
-      name: name,
-    })
-    
-    if (error) {
-      console.error("Sign up error:", error)
-      switch (error.code) {
-        case "USER_ALREADY_EXISTS":
-          toast.add({
-            title: 'Email already in use!',
-            color: 'error',
-            icon: 'i-heroicons:x-mark'
-          })
-          break
-        case "PASSWORD_TOO_SHORT":
-          toast.add({
-            title: 'Password too short!',
-            color: 'error',
-            icon: 'i-heroicons:x-mark'
-          })
-          break
-        case "PASSWORD_COMPROMISED":
-          toast.add({
-            title: 'Password compromised!',
-            description: error.message || 'This password has been compromised in a data breach, please choose a different one.',
-            color: 'error',
-            icon: 'i-heroicons:x-mark'
-          })
-      }
-      loading.value = false;
-      return
-    }
-
+  const onUserSignedUp = async () => {
     await getSession(false);
 
     if (store.session && store.user) {
@@ -95,9 +56,106 @@
       }
 
       await router.push(path)
+      return
     }
 
+    toast.add({
+      title: 'Account created',
+      description: 'Sign in to continue.',
+      color: 'warning',
+      icon: 'i-heroicons:exclamation-circle',
+    })
+    await router.push(`/auth/signin?email=${encodeURIComponent(state.email)}`)
+  }
+
+  const onSubmit = async () => {
+    const client = createClient();
+    if (loading.value) {
+      return
+    }
+    loading.value = true
+    const { error } = await client.signUp.email({
+      email: state.email,
+      password: state.password,
+      name: state.name,
+    })
+    
+    if (error) {
+      console.error("Sign up error:", error)
+      switch (error.code) {
+        case "USER_ALREADY_EXISTS":
+          toast.add({
+            title: 'Email already in use!',
+            color: 'error',
+            icon: 'i-heroicons:exclamation-circle'
+          })
+          break
+        case "PASSWORD_TOO_SHORT":
+          toast.add({
+            title: 'Password too short!',
+            color: 'error',
+            icon: 'i-heroicons:exclamation-circle'
+          })
+          break
+        case "PASSWORD_COMPROMISED":
+          toast.add({
+            title: 'Password compromised!',
+            description: error.message || 'This password has been compromised in a data breach, please choose a different one.',
+          color: 'error',
+          icon: 'i-heroicons:exclamation-circle'
+          })
+          break
+        default:
+          toast.add({
+            title: 'Could not create account',
+            description: error.message || 'Please try again.',
+            color: 'error',
+            icon: 'i-heroicons:exclamation-circle',
+          })
+      }
+      loading.value = false;
+      return
+    }
+
+    await onUserSignedUp()
+
     loading.value = false
+  }
+
+  const onIdentitySubmit = (payload: FormSubmitEvent<IdentitySchema>) => {
+    state.name = payload.data.name
+    state.email = payload.data.email
+    signupStep.value = 'password'
+  }
+
+  const onPasskeySignUp = async () => {
+    if (passkeyLoading.value) return
+
+    passkeyLoading.value = true
+    try {
+      const { context } = await $fetch<{ context: string }>('/api/passkey/registration-context', {
+        method: 'POST',
+        body: { name: state.name, email: state.email },
+      })
+      const { error } = await createClient().passkey.addPasskey({
+        context,
+      })
+
+      if (error) {
+        toast.add({ title: 'Could not create passkey', description: error.message, color: 'error' })
+        return
+      }
+
+      await onUserSignedUp()
+    } catch (error) {
+      toast.add({
+        title: 'Could not create passkey',
+        description: error instanceof Error ? error.message : 'Please try again.',
+        color: 'error',
+      })
+    } finally {
+      passkeyLoading.value = false
+    }
   }
 </script>
 
@@ -108,67 +166,68 @@
 
       <div class="space-y-2">
         <h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">Sign up</h1>
-        <p class="text-base text-muted">Enter your credentials to create a new account.</p>
+        <p class="text-base text-muted">Create your account with a username and email.</p>
       </div>
     </div>
 
-    <UForm :schema="schema" :state="state" class="space-y-5" @submit.prevent="onSubmit">
-      <UFormField label="Work email" name="email" required>
-        <UInput
-          v-model="state.email"
-          type="text"
-          placeholder="sarah@company.com"
-          :disabled="loading"
-          size="lg"
-          class="w-full"
-        />
-      </UFormField>
+    <UiContentTransition>
+      <div v-if="signupStep === 'identity'" key="identity" class="space-y-5">
+        <UForm :schema="identitySchema" :state="state" class="space-y-5" @submit.prevent="onIdentitySubmit">
+          <UFormField label="Email" name="email" required>
+            <UInput
+              v-model="state.email"
+              type="email"
+              placeholder="you@company.com"
+              :disabled="loading"
+              size="lg"
+              class="w-full"
+            />
+          </UFormField>
 
-      <UFormField label="Full name" name="name" required>
-        <UInput
-          v-model="state.name"
-          type="text"
-          placeholder="Enter your name"
-          :disabled="loading"
-          size="lg"
-          class="w-full"
-        />
-      </UFormField>
+          <UFormField label="Username" name="name" required>
+            <UInput
+              v-model="state.name"
+              type="text"
+              placeholder="Choose a username"
+              :disabled="loading"
+              size="lg"
+              class="w-full"
+            />
+          </UFormField>
 
-      <UFormField label="Password" name="password" required>
-        <UInput
-          v-model="state.password"
-          type="password"
-          placeholder="Enter your password"
-          :disabled="loading"
-          size="lg"
-          class="w-full"
-        />
-      </UFormField>
+          <UButton type="submit" block :loading="loading" size="lg" class="justify-center">
+            Continue
+          </UButton>
+        </UForm>
 
-      <UFormField label="Confirm password" name="confirmPassword" required>
-        <UInput
-          v-model="state.confirmPassword"
-          type="password"
-          placeholder="Confirm your password"
-          :disabled="loading"
-          size="lg"
-          class="w-full"
-        />
-      </UFormField>
+        <div class="mt-4 flex justify-center text-center text-sm text-muted">
+          <p>
+            Already have an account?
+            <ULink :to="`/auth/signin${authSwitchQuery}`" as="span" class="ml-1 underline text-primary">
+              Sign in here
+            </ULink>
+          </p>
+        </div>
+      </div>
 
-      <UButton type="submit" block :loading="loading" size="lg" class="justify-center">
-        Sign up
-      </UButton>
-    </UForm>
+      <UForm v-else key="password" :schema="passwordConfirmationSchema" :state="state" class="space-y-5" @submit.prevent="onSubmit">
+        <UFormField label="Password" name="password" required>
+          <UInput v-model="state.password" type="password" placeholder="Enter your password" :disabled="loading || passkeyLoading" size="lg" class="w-full" />
+        </UFormField>
+        <UFormField label="Confirm password" name="confirmPassword" required>
+          <UInput v-model="state.confirmPassword" type="password" placeholder="Confirm your password" :disabled="loading || passkeyLoading" size="lg" class="w-full" />
+        </UFormField>
 
-    <div class="mt-4 flex justify-center text-center text-sm text-muted">
-      <p>
-        Already have an account?
-        <ULink :to="`/auth/signin${authSwitchQuery}`" as="span" class="ml-1 underline text-primary">
-          Sign in here
-        </ULink>
-      </p>
-    </div>
+        <UButton type="submit" block :loading="loading" :disabled="passkeyLoading" size="lg" class="justify-center">
+          Sign up
+        </UButton>
+        <UButton type="button" :icon="ICONS.passkey" color="neutral" variant="solid" block :loading="passkeyLoading" :disabled="loading" size="lg" class="justify-center" @click="onPasskeySignUp">
+          Save a passkey instead
+        </UButton>
+        <UButton type="button" color="neutral" variant="ghost" block :disabled="loading || passkeyLoading" size="lg" class="justify-center" @click="signupStep = 'identity'">
+          Back
+        </UButton>
+      </UForm>
+    </UiContentTransition>
   </div>
 </template>

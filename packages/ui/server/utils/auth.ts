@@ -1,11 +1,13 @@
 import { drizzle } from "drizzle-orm/postgres-js"
 import { betterAuth } from "better-auth/minimal"
-import { admin, twoFactor, haveIBeenPwned } from "better-auth/plugins"
+import { admin, twoFactor, haveIBeenPwned, lastLoginMethod } from "better-auth/plugins"
+import { passkey } from "@better-auth/passkey"
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createClient } from "redis"
 import * as schema from "../schema";
 import { and, eq } from "drizzle-orm";
 import { getIdentityDb } from "./db";
+import { getPasskeyRegistrationContextSecret, parsePasskeyRegistrationContext } from "./passkey-registration-context";
 
 const { NUXT_REDIS_URL, NUXT_DATABASE_URL, NUXT_AUTH_BASE_URL } = process.env;
 if (!NUXT_DATABASE_URL) {
@@ -14,6 +16,11 @@ if (!NUXT_DATABASE_URL) {
 
 if (!NUXT_REDIS_URL) {
   throw new Error("Redis connection string is not defined")
+}
+
+const authBaseURL = NUXT_AUTH_BASE_URL ?? "http://localhost:3000"
+if (process.env.NODE_ENV === "production" && (!NUXT_AUTH_BASE_URL || new URL(authBaseURL).protocol !== "https:")) {
+  throw new Error("NUXT_AUTH_BASE_URL must be set to a public HTTPS origin in production")
 }
 
 export const redis = createClient({
@@ -28,14 +35,14 @@ await redis.connect()
 
 const db = drizzle(NUXT_DATABASE_URL, { schema })
 export const getAuthDb = () => db
+
+const passkeyRegistrationContextSecret = getPasskeyRegistrationContextSecret()
+
 export const auth = betterAuth({
   appName: "C-Plane",
-  baseURL: NUXT_AUTH_BASE_URL || "http://localhost:3000",
-  trustedOrigins: [
-    "http://localhost:3000",
-    "http://ui:3000",
-    "https://cplane.240284308.xyz"
-  ],
+  baseURL: authBaseURL,
+  secret: passkeyRegistrationContextSecret,
+  trustedOrigins: process.env.NODE_ENV === "production" ? [authBaseURL] : [authBaseURL, "http://ui:3000"],
   database: drizzleAdapter(db, {
     provider: "pg",
     schema,
@@ -112,6 +119,47 @@ export const auth = betterAuth({
   plugins: [
     admin(),
     twoFactor(),
+    passkey({
+      registration: {
+        requireSession: false,
+        resolveUser: async ({ ctx, context }) => {
+          const { name, email } = await parsePasskeyRegistrationContext(context, ctx.context.secret)
+          if (await ctx.context.internalAdapter.findUserByEmail(email)) {
+            throw new Error("An account already exists for this email")
+          }
+
+          const id = crypto.randomUUID()
+          return { id, name }
+        },
+        afterVerification: async ({ ctx, user, context }) => {
+          const { name, email } = await parsePasskeyRegistrationContext(context, ctx.context.secret)
+          if (await ctx.context.internalAdapter.findUserByEmail(email)) {
+            throw new Error("An account already exists for this email")
+          }
+
+          const authUser = await ctx.context.internalAdapter.createUser({
+            id: user.id,
+            name,
+            email,
+            emailVerified: false,
+          })
+          const session = await ctx.context.internalAdapter.createSession(user.id)
+          if (!session || !authUser) throw new Error("Could not create passkey session")
+
+          await ctx.setSignedCookie(
+            ctx.context.authCookies.sessionToken.name,
+            session.token,
+            ctx.context.secret,
+            {
+              ...ctx.context.authCookies.sessionToken.attributes,
+              maxAge: ctx.context.sessionConfig.expiresIn,
+            },
+          )
+          ctx.context.setNewSession({ session, user: authUser })
+        },
+      },
+    }),
+    lastLoginMethod(),
     haveIBeenPwned({
       customPasswordCompromisedMessage: "This password has been compromised in a data breach, please choose a different one.",
     })

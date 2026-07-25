@@ -5,6 +5,7 @@ import useStore from '~/stores/store'
 import { createAuthError, createClient } from '~/utils/auth'
 import { passwordSchema } from '~/utils/validation'
 import { getQueryValue, useAuthSwitchQuery } from '~/utils/query'
+import { ICONS } from '~/utils/icons'
 
 const store = useStore();
 const router = useRouter();
@@ -14,6 +15,8 @@ const resetLoading = ref(false);
 const resetModalOpen = ref(false);
 const showTwoFactor = ref(false);
 const useBackupCode = ref(false);
+const passkeyLoading = ref(false);
+const lastLoginMethod = ref<string | null>(null);
 
 const toast = useToast();
 const schema = z.object({
@@ -34,6 +37,10 @@ if (emailFromQuery) {
 
 const authSwitchQuery = useAuthSwitchQuery();
 const passwordError = ref<string>();
+
+onMounted(() => {
+  lastLoginMethod.value = createClient().getLastUsedLoginMethod();
+});
 
 const resetPasswordSchema = z.object({
   email: z.email('Invalid email')
@@ -89,6 +96,30 @@ const onSubmit = async (payload: FormSubmitEvent<Schema>) => {
     }
   } else {
     await onUserAuthenticated();
+  }
+}
+
+const onPasskeySignIn = async () => {
+  if (passkeyLoading.value) return;
+
+  passkeyLoading.value = true;
+  try {
+    const { error } = await createClient().signIn.passkey();
+
+    if (error) {
+      createAuthError(error);
+      return;
+    }
+
+    await onUserAuthenticated();
+  } catch (error) {
+    createAuthError({
+      message: error instanceof Error ? error.message : 'Unable to use this passkey.',
+      status: 0,
+      statusText: 'Passkey sign-in failed',
+    })
+  } finally {
+    passkeyLoading.value = false;
   }
 }
 
@@ -254,9 +285,14 @@ const TOTPForm = useTemplateRef("TOTPForm");
         />
       </UFormField>
 
-      <UButton type="submit" block :loading="loading" size="lg" class="justify-center">
-        Sign in
-      </UButton>
+      <div class="relative isolate">
+        <UButton type="submit" block :loading="loading" size="lg" class="justify-center">
+          Sign in
+        </UButton>
+        <div v-if="lastLoginMethod === 'email'" class="pointer-events-none absolute top-0 right-0 z-20 translate-x-1/2 -translate-y-1/2">
+          <UBadge color="primary" variant="solid" size="sm" class="ring-2 ring-default shadow-sm">Last used</UBadge>
+        </div>
+      </div>
     </UForm>
 
     <UForm
@@ -362,10 +398,27 @@ const TOTPForm = useTemplateRef("TOTPForm");
       </div>
     </UForm>
 
-    <div class="flex gap-4">
+    <div v-if="!showTwoFactor" class="flex gap-4">
       <USeparator class="shrink" />
-      <p class="grow whitespace-nowrap text-sm text-muted">Or Continue With</p>
+      <p class="grow whitespace-nowrap text-sm text-muted">Other sign-in options</p>
       <USeparator class="shrink" />
+    </div>
+    <div v-if="!showTwoFactor" class="relative isolate">
+      <UButton
+        :icon="ICONS.passkey"
+        color="neutral"
+        variant="solid"
+        block
+        size="lg"
+        :loading="passkeyLoading"
+        class="justify-center"
+        @click="onPasskeySignIn"
+      >
+        Sign in with a passkey
+      </UButton>
+      <div v-if="lastLoginMethod === 'passkey'" class="pointer-events-none absolute top-0 right-0 z-20 translate-x-1/2 -translate-y-1/2">
+        <UBadge color="primary" variant="solid" size="sm" class="ring-2 ring-default shadow-sm">Last used</UBadge>
+      </div>
     </div>
     <div class="space-y-4">
       <div class="flex items-center justify-between text-sm text-muted">

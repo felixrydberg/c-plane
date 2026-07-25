@@ -3,7 +3,6 @@
   
   const store = useStore();
   const toast = useToast();
-  const router = useRouter();
   const query = ref("");
   const queryDebounced = refDebounced(query, 200);
   const limit = ref(50);
@@ -18,7 +17,6 @@
     },
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const emits = defineEmits(['accepted', 'declined']);
   type Invitation = NonNullable<typeof data.value>['data'][number];
   interface AcceptInvitationResponse {
@@ -46,9 +44,8 @@
         store.organizations.push(organization);
       }
 
-      store.organization = organization;
       emits('accepted', invitation);
-      router.push(`/${organization.slug}`);
+      await setOrganization(organization.id, `/${organization.slug}`);
     } catch (error) {
       toast.add({
         title: "Error accepting invitation",

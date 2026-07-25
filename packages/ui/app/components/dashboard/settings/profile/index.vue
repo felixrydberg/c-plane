@@ -3,7 +3,8 @@ import * as z from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
 import useStore from '~/stores/store'
 import { createClient } from '~/utils/auth'
-import { changePasswordSchema } from '~/utils/validation'
+import { changePasswordSchema, passwordConfirmationSchema } from '~/utils/validation'
+import { ICONS } from '~/utils/icons'
 
 const store = useStore();
 const toast = useToast();
@@ -76,6 +77,19 @@ const onProfileSubmit = async (event: FormSubmitEvent<ProfileSchema>) => {
 }
 
 const isPasswordLoading = ref(false)
+const isPasskeyLoading = ref(false)
+type PasskeySummary = { id: string; name: string | null; createdAt: string }
+type PasskeyResponse = { passkeys: PasskeySummary[]; hasAlternativeAuth: boolean; hasPassword: boolean }
+const { data: passkeyResources, refresh: refreshPasskeys } = await useFetch<PasskeyResponse>('/api/user/passkeys', {
+  default: () => ({ passkeys: [], hasAlternativeAuth: false, hasPassword: false }),
+})
+const passkeys = computed(() => passkeyResources.value?.passkeys ?? [])
+const passkeyCount = computed(() => passkeys.value?.length ?? 0)
+const hasAlternativeAuth = computed(() => passkeyResources.value?.hasAlternativeAuth ?? false)
+const hasPassword = computed(() => passkeyResources.value?.hasPassword ?? false)
+const passkeyToRemove = ref<PasskeySummary | null>(null)
+const removePasskeyModal = ref(false)
+const deletingPasskeyId = ref<string>()
 const passwordSchema = changePasswordSchema
 
 type PasswordSchema = z.output<typeof passwordSchema>
@@ -119,6 +133,106 @@ const onChangePassword = async () => {
     passwordError.value = error instanceof Error ? error.message : 'Failed to change password'
   } finally {
     isPasswordLoading.value = false
+  }
+}
+
+const setPasswordSchema = passwordConfirmationSchema
+type SetPasswordSchema = z.output<typeof setPasswordSchema>
+const setPasswordError = ref<string>()
+const setPasswordState = reactive<SetPasswordSchema>({
+  password: '',
+  confirmPassword: '',
+})
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  const responseError = error as { data?: { message?: string; statusMessage?: string }; message?: string }
+  return responseError.data?.message || responseError.data?.statusMessage || responseError.message || fallback
+}
+
+const onSetPassword = async () => {
+  try {
+    setPasswordError.value = undefined
+    isPasswordLoading.value = true
+
+    await $fetch('/api/user/password', {
+      method: 'POST',
+      body: { newPassword: setPasswordState.password },
+    })
+
+    toast.add({
+      title: 'Password added',
+      description: 'You can now sign in with your email and password.',
+      icon: 'i-lucide-check',
+      color: 'success',
+    })
+    setPasswordState.password = ''
+    setPasswordState.confirmPassword = ''
+    await refreshPasskeys()
+  } catch (error) {
+    setPasswordError.value = getErrorMessage(error, 'Failed to set password')
+  } finally {
+    isPasswordLoading.value = false
+  }
+}
+
+const onAddPasskey = async () => {
+  isPasskeyLoading.value = true
+  try {
+    const { error } = await client.passkey.addPasskey()
+
+    if (error) {
+      toast.add({
+        title: 'Could not add passkey',
+        description: getErrorMessage(error, 'Please try again.'),
+        color: 'error'
+      })
+    } else {
+      await refreshPasskeys()
+      toast.add({
+        title: 'Passkey added',
+        description: 'You can now use it to sign in.',
+        color: 'success'
+      })
+    }
+  } catch (error) {
+    toast.add({
+      title: 'Could not add passkey',
+      description: getErrorMessage(error, 'Please try again.'),
+      color: 'error'
+    })
+  } finally {
+    isPasskeyLoading.value = false
+  }
+}
+
+const requestRemovePasskey = (passkey: PasskeySummary) => {
+  passkeyToRemove.value = passkey
+  removePasskeyModal.value = true
+}
+
+const onRemovePasskey = async () => {
+  const passkey = passkeyToRemove.value
+  if (!passkey || deletingPasskeyId.value) return
+
+  deletingPasskeyId.value = passkey.id
+  try {
+    await $fetch(`/api/user/passkeys/${passkey.id}`, { method: 'DELETE' })
+    await refreshPasskeys()
+    removePasskeyModal.value = false
+    passkeyToRemove.value = null
+    toast.add({
+      title: 'Passkey removed',
+      description: 'It can no longer be used to sign in.',
+      color: 'success',
+    })
+  } catch (error) {
+    toast.add({
+      title: 'Could not remove passkey',
+      description: getErrorMessage(error, 'Please try again.'),
+      color: 'error',
+    })
+  } finally {
+    deletingPasskeyId.value = undefined
   }
 }
 
@@ -209,7 +323,7 @@ const onDeleteAccountSubmit = async () => {
     </div>
   </UForm>
 
-  <UForm :schema="passwordSchema" :state="passwordState" @submit.prevent="onChangePassword">
+  <UForm v-if="hasPassword" :schema="passwordSchema" :state="passwordState" @submit.prevent="onChangePassword">
     <div class="w-full border border-default rounded-lg p-6 space-y-6">
       <div class="flex items-center justify-between">
         <div>
@@ -264,7 +378,130 @@ const onDeleteAccountSubmit = async () => {
     </div>
   </UForm>
 
+  <UForm v-else :schema="setPasswordSchema" :state="setPasswordState" @submit.prevent="onSetPassword">
+    <div class="w-full border border-default rounded-lg p-6 space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="font-semibold">Set a password</p>
+          <p class="text-sm text-muted">Add email and password as another sign-in method</p>
+        </div>
+        <UButton
+          label="Set password"
+          type="submit"
+          :loading="isPasswordLoading"
+          :disabled="isPasswordLoading"
+          size="sm"
+        />
+      </div>
+
+      <div class="flex flex-col gap-4">
+        <UFormField name="password" label="New Password" :error="setPasswordError" required>
+          <UInput
+            v-model="setPasswordState.password"
+            type="password"
+            autocomplete="new-password"
+            placeholder="Enter a password"
+            class="w-full"
+          />
+        </UFormField>
+        <USeparator />
+        <UFormField name="confirmPassword" label="Confirm Password" required>
+          <UInput
+            v-model="setPasswordState.confirmPassword"
+            type="password"
+            autocomplete="new-password"
+            placeholder="Confirm your password"
+            class="w-full"
+          />
+        </UFormField>
+      </div>
+    </div>
+  </UForm>
+
   <dashboard-settings-profile-2FA />
+
+  <div class="w-full border border-default rounded-lg p-6 space-y-6">
+    <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex min-w-0 items-start gap-4">
+        <div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <UIcon :name="ICONS.passkey" class="size-5" aria-hidden="true" />
+        </div>
+        <div class="min-w-0">
+        <p class="font-semibold">Passkey sign-in</p>
+          <p class="mt-1 max-w-xl text-sm leading-relaxed text-muted">Use your device or security key to sign in without a password.</p>
+          <p class="mt-3 flex items-center gap-2 text-xs text-muted" aria-live="polite">
+            <span class="size-1.5 rounded-full" :class="passkeyCount > 0 ? 'bg-success' : 'bg-muted'" aria-hidden="true" />
+            {{ passkeyCount > 0 ? `${passkeyCount} passkey${passkeyCount === 1 ? '' : 's'} linked` : 'No passkey linked yet' }}
+          </p>
+        </div>
+      </div>
+      <UButton
+        :icon="ICONS.passkey"
+        color="neutral"
+        variant="solid"
+        size="sm"
+        class="shrink-0 self-start sm:self-auto"
+        :loading="isPasskeyLoading"
+        @click="onAddPasskey"
+      >
+        {{ passkeyCount > 0 ? 'Add another' : 'Link passkey' }}
+      </UButton>
+    </div>
+
+    <div v-if="passkeyCount > 0" class="space-y-2 border-t border-default pt-4">
+      <p class="text-xs font-medium uppercase tracking-[0.08em] text-muted">Linked passkeys</p>
+      <div
+        v-for="passkey in passkeys"
+        :key="passkey.id"
+        class="flex items-center justify-between gap-4 rounded-md border border-default px-3 py-2.5"
+      >
+        <div class="flex min-w-0 items-center gap-3">
+          <UIcon :name="ICONS.passkey" class="size-4 shrink-0 text-muted" aria-hidden="true" />
+          <span class="truncate text-sm">{{ passkey.name || 'Passkey' }}</span>
+        </div>
+        <UButton
+          :icon="ICONS.trash"
+          color="error"
+          size="xs"
+          :disabled="Boolean(deletingPasskeyId) || (passkeyCount === 1 && !hasAlternativeAuth)"
+          @click="requestRemovePasskey(passkey)"
+        >
+          Remove
+        </UButton>
+      </div>
+      <p v-if="passkeyCount === 1 && !hasAlternativeAuth" class="text-xs text-warning">
+        Add another sign-in method before removing this passkey.
+      </p>
+    </div>
+
+    <UModal
+      v-model:open="removePasskeyModal"
+      title="Remove passkey"
+      description="This passkey will no longer be able to sign in."
+    >
+      <template #body>
+        <div class="space-y-4">
+          <p class="text-sm text-muted">
+            Remove <span class="font-medium text-default">{{ passkeyToRemove?.name || 'this passkey' }}</span> from your account?
+          </p>
+          <p v-if="passkeyCount === 1 && !hasAlternativeAuth" class="text-sm text-warning">
+            Make sure you have another sign-in method before removing your last passkey.
+          </p>
+          <div class="flex justify-end gap-3 pt-2">
+            <UButton color="neutral" variant="ghost" type="button" @click="removePasskeyModal = false">Cancel</UButton>
+            <UButton
+              :icon="ICONS.trash"
+              color="error"
+              :loading="Boolean(deletingPasskeyId)"
+              @click="onRemovePasskey"
+            >
+              Remove passkey
+            </UButton>
+          </div>
+        </div>
+      </template>
+    </UModal>
+  </div>
 
   <div class="w-full border border-default rounded-lg p-6 space-y-6">
     <div class="flex items-center justify-between">

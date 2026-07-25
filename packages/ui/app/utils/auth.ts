@@ -1,5 +1,6 @@
 import { createAuthClient } from "better-auth/vue"
-import { inferAdditionalFields, twoFactorClient, adminClient  } from "better-auth/client/plugins"
+import { inferAdditionalFields, twoFactorClient, adminClient, lastLoginMethodClient } from "better-auth/client/plugins"
+import { passkeyClient } from "@better-auth/passkey/client"
 import type { auth } from "~~/server/utils/auth"
 import { useStore } from "~/stores/store"
 import type { Project } from '@cplane/sdk'
@@ -19,6 +20,8 @@ export const createClient = () => {
       inferAdditionalFields<typeof auth>(),
       twoFactorClient(),
       adminClient(),
+      passkeyClient(),
+      lastLoginMethodClient(),
     ]
   })
 }
@@ -92,7 +95,7 @@ export const getSession = async (cache: boolean = true) => {
             method: "GET",
             credentials: "include"
           });
-        store.organization = orgResponse || null;
+        store.setOrganization(orgResponse || null)
         const organizations = import.meta.server
           ? await requestFetch!<{ data?: typeof store.organizations }>("/api/organization", {
             method: "GET"
@@ -181,12 +184,8 @@ export const setOrganization = async (id: string, redirect: string = '/') => {
       });
     }
     
-    store.organization = data || null;
-    store.project = null;
+    store.setOrganization(data || null)
     store.projects = data?.projects ?? [];
-    store.environment = null;
-    store.environments = [];
-    store.environments_project_id = null;
     await router.push(redirect);
   } catch {
     throw new Error("Organization not found");
