@@ -9,9 +9,22 @@ const router = useRouter()
 const name = ref('')
 const loading = ref(false)
 const error = ref('')
+const createdProject = ref<Project>()
+
+async function loadCreatedProject() {
+  if (!createdProject.value) return
+
+  try {
+    await loadProjectEnvironments(createdProject.value.id)
+    createdProject.value = undefined
+    await router.push(`/${route.params.organization_slug}`)
+  } catch {
+    error.value = 'Project created, but its environments could not be loaded. Retry loading them.'
+  }
+}
 
 async function createProject() {
-  if (!name.value.trim() || !store.organization?.id || loading.value) return
+  if (!name.value.trim() || !store.organization?.id || loading.value || createdProject.value) return
 
   loading.value = true
   error.value = ''
@@ -23,11 +36,23 @@ async function createProject() {
     })
 
     store.projects = [...store.projects, project]
-    await loadProjectEnvironments(project.id)
-    await router.push(`/${route.params.organization_slug}`)
+    createdProject.value = project
+    await loadCreatedProject()
   } catch (cause: unknown) {
     const errorCause = cause as { data?: { message?: string }, message?: string }
     error.value = errorCause.data?.message ?? errorCause.message ?? 'Failed to create project'
+  } finally {
+    loading.value = false
+  }
+}
+
+async function retryLoadProjectEnvironments() {
+  if (loading.value || !createdProject.value) return
+
+  loading.value = true
+  error.value = ''
+  try {
+    await loadCreatedProject()
   } finally {
     loading.value = false
   }
@@ -49,21 +74,24 @@ async function createProject() {
 
       <form class="organization-onboarding__form grid gap-4 px-6 py-6 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:px-8" @submit.prevent="createProject">
         <UFormField label="Project name" required class="w-full">
-          <UInput
-            v-model="name"
-            placeholder="my-awesome-project"
-            :disabled="loading"
-            autofocus
-            class="w-full"
-          />
+          <div class="flex gap-3">
+            <UInput
+              v-model="name"
+              placeholder="my-awesome-project"
+              :disabled="loading"
+              autofocus
+              class="w-full"
+            />
+            <UButton class="whitespace-nowrap" type="submit" :icon="ICONS.plus" :loading="loading" :disabled="!name.trim() || Boolean(createdProject)">
+              Create project
+            </UButton>
+          </div>
           <p class="pt-2 text-xs text-muted">Choose a name that describes what this project does.</p>
         </UFormField>
-
-        <UButton type="submit" :icon="ICONS.plus" :loading="loading" :disabled="!name.trim()">
-          Create project
-        </UButton>
-
-        <p v-if="error" class="text-sm text-error sm:col-span-2" role="alert">{{ error }}</p>
+        <div v-if="error" class="flex items-center gap-3 text-sm text-error sm:col-span-2" role="alert">
+          <span>{{ error }}</span>
+          <UButton v-if="createdProject" type="button" :icon="ICONS.refresh" color="error" size="sm" :loading="loading" @click="retryLoadProjectEnvironments">Retry</UButton>
+        </div>
       </form>
 
     </section>

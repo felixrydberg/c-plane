@@ -144,6 +144,11 @@ const setPasswordState = reactive<SetPasswordSchema>({
   confirmPassword: '',
 })
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+  const responseError = error as { data?: { message?: string; statusMessage?: string }; message?: string }
+  return responseError.data?.message || responseError.data?.statusMessage || responseError.message || fallback
+}
+
 const onSetPassword = async () => {
   try {
     setPasswordError.value = undefined
@@ -164,8 +169,7 @@ const onSetPassword = async () => {
     setPasswordState.confirmPassword = ''
     await refreshPasskeys()
   } catch (error) {
-    const responseError = error as { data?: { message?: string; statusMessage?: string }; message?: string }
-    setPasswordError.value = responseError.data?.message || responseError.data?.statusMessage || responseError.message || 'Failed to set password'
+    setPasswordError.value = getErrorMessage(error, 'Failed to set password')
   } finally {
     isPasswordLoading.value = false
   }
@@ -179,7 +183,7 @@ const onAddPasskey = async () => {
     if (error) {
       toast.add({
         title: 'Could not add passkey',
-        description: error.message,
+        description: getErrorMessage(error, 'Please try again.'),
         color: 'error'
       })
     } else {
@@ -193,7 +197,7 @@ const onAddPasskey = async () => {
   } catch (error) {
     toast.add({
       title: 'Could not add passkey',
-      description: error instanceof Error ? error.message : 'Please try again.',
+      description: getErrorMessage(error, 'Please try again.'),
       color: 'error'
     })
   } finally {
@@ -224,7 +228,7 @@ const onRemovePasskey = async () => {
   } catch (error) {
     toast.add({
       title: 'Could not remove passkey',
-      description: error instanceof Error ? error.message : 'Please try again.',
+      description: getErrorMessage(error, 'Please try again.'),
       color: 'error',
     })
   } finally {

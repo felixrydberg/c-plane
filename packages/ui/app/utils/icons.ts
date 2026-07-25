@@ -15,6 +15,7 @@ export const ICONS = {
   trash: 'i-heroicons:trash',
   pencil: 'i-heroicons:pencil-square',
   check: 'i-heroicons:check',
+  refresh: 'i-heroicons:arrow-path',
   link: 'i-heroicons:link',
   arrowTopRight: 'i-heroicons:arrow-top-right-on-square',
   chevronUpDown: 'i-heroicons:chevron-up-down',

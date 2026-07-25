@@ -12,7 +12,8 @@ const transitionHeight = (element: Element) => {
 
   // ponytail: animates height only during rare step changes; use FLIP if this becomes high-frequency content.
   requestAnimationFrame(() => {
-    container.value!.style.height = `${element.offsetHeight}px`
+    if (!container.value) return
+    container.value.style.height = `${element.offsetHeight}px`
   })
 }
 

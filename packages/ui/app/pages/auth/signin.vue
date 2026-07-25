@@ -112,6 +112,12 @@ const onPasskeySignIn = async () => {
     }
 
     await onUserAuthenticated();
+  } catch (error) {
+    createAuthError({
+      message: error instanceof Error ? error.message : 'Unable to use this passkey.',
+      status: 0,
+      statusText: 'Passkey sign-in failed',
+    })
   } finally {
     passkeyLoading.value = false;
   }

@@ -95,7 +95,7 @@ export const getSession = async (cache: boolean = true) => {
             method: "GET",
             credentials: "include"
           });
-        store.organization = orgResponse || null;
+        store.setOrganization(orgResponse || null)
         const organizations = import.meta.server
           ? await requestFetch!<{ data?: typeof store.organizations }>("/api/organization", {
             method: "GET"
@@ -184,12 +184,8 @@ export const setOrganization = async (id: string, redirect: string = '/') => {
       });
     }
     
-    store.organization = data || null;
-    store.project = null;
+    store.setOrganization(data || null)
     store.projects = data?.projects ?? [];
-    store.environment = null;
-    store.environments = [];
-    store.environments_project_id = null;
     await router.push(redirect);
   } catch {
     throw new Error("Organization not found");

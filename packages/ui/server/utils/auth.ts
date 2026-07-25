@@ -18,6 +18,11 @@ if (!NUXT_REDIS_URL) {
   throw new Error("Redis connection string is not defined")
 }
 
+const authBaseURL = NUXT_AUTH_BASE_URL ?? "http://localhost:3000"
+if (process.env.NODE_ENV === "production" && (!NUXT_AUTH_BASE_URL || new URL(authBaseURL).protocol !== "https:")) {
+  throw new Error("NUXT_AUTH_BASE_URL must be set to a public HTTPS origin in production")
+}
+
 export const redis = createClient({
   url: NUXT_REDIS_URL
 })
@@ -46,12 +51,8 @@ function parsePasskeyRegistrationContext(context: string | null | undefined) {
 
 export const auth = betterAuth({
   appName: "C-Plane",
-  baseURL: NUXT_AUTH_BASE_URL || "http://localhost:3000",
-  trustedOrigins: [
-    "http://localhost:3000",
-    "http://ui:3000",
-    "https://cplane.240284308.xyz"
-  ],
+  baseURL: authBaseURL,
+  trustedOrigins: process.env.NODE_ENV === "production" ? [authBaseURL] : [authBaseURL, "http://ui:3000"],
   database: drizzleAdapter(db, {
     provider: "pg",
     schema,

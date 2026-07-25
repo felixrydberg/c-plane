@@ -4,17 +4,18 @@ import { ICONS } from '~/utils/icons'
 
 const store = useStore()
 const selectingProjectId = ref<string>()
+const error = ref('')
 
 async function selectProject(projectId: string) {
   if (selectingProjectId.value) return
 
   selectingProjectId.value = projectId
-  store.environments = []
-  store.environments_project_id = null
-  store.project = store.projects.find(project => project.id === projectId) ?? null
+  error.value = ''
 
   try {
     await loadProjectEnvironments(projectId)
+  } catch {
+    error.value = 'Could not load this project’s environments. Select it again to retry.'
   } finally {
     selectingProjectId.value = undefined
   }
@@ -51,6 +52,7 @@ async function selectProject(projectId: string) {
             {{ project.name }}
           </UButton>
         </div>
+        <p v-if="error" class="mt-3 text-sm text-error" role="alert">{{ error }}</p>
       </div>
     </section>
   </div>

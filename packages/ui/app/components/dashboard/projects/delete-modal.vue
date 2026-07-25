@@ -26,10 +26,13 @@ async function handleDelete() {
   loading.value = true;
   error.value = '';
   try {
-    await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}` as const, { method: 'DELETE' });
+    const projectId = store.project.id
+    await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${projectId as ':project_id'}` as const, { method: 'DELETE' });
+    store.projects = store.projects.filter(project => project.id !== projectId)
     store.project = null;
     store.environment = null;
     store.environments = [];
+    store.environments_project_id = null;
     toast.add({ title: 'Project deleted', color: 'success' });
     open.value = false;
     emit('deleted');

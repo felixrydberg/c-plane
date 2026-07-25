@@ -46,7 +46,7 @@
         store.organizations.push(organization);
       }
 
-      store.organization = organization;
+      store.setOrganization(organization);
       emits('accepted', invitation);
       router.push(`/${organization.slug}`);
     } catch (error) {

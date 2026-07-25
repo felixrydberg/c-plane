@@ -30,7 +30,18 @@ export const useStore = defineStore("auth", {
     refreshKey: 0,
   }),
 
-  actions: {}
+  actions: {
+    setOrganization(organization: Organization | null) {
+      if (this.organization?.id !== organization?.id) {
+        this.project = null
+        this.projects = []
+        this.environment = null
+        this.environments = []
+        this.environments_project_id = null
+      }
+      this.organization = organization
+    },
+  }
 })
 
 export default useStore

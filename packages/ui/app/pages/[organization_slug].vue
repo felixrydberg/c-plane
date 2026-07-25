@@ -22,11 +22,9 @@ if (!route.params.organization_slug) {
     }
 
     const store = useStore();
-    store.organization = data;
-    store.project = null;
-    store.projects = [];
+    store.setOrganization(data);
     await router.push(`/${data.slug}`);
-  } catch (error) {
+  } catch {
     throw createError({ statusCode: 404, statusMessage: "Organization not found" });
   }
 } else {
@@ -43,16 +41,16 @@ if (!route.params.organization_slug) {
 
     if (!store.organization || store.organization.slug !== slug) {
       const url = String(import.meta.server ? useRequestURL().origin : window.location.origin);
-      const orgsResponse = await $fetch<{ data: Array<{ id: string; name: string; slug: string }> }>(
+      const orgsResponse = await $fetch<{ data: Organization[] }>(
         `${url}/api/organization`,
         { query: { search: slug } },
       );
-      const matchedOrg = orgsResponse?.data?.find((o: any) => o.slug === slug);
+      const matchedOrg = orgsResponse?.data?.find(organization => organization.slug === slug);
       if (matchedOrg) {
-        store.organization = matchedOrg as any;
+        store.setOrganization(matchedOrg);
       }
     }
-  } catch (error) {
+  } catch {
     throw createError({ statusCode: 404, statusMessage: "Organization not found" });
   }
 }

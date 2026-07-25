@@ -63,6 +63,7 @@ Use these icon keys from `~/utils/icons`:
 | `trash` | `i-heroicons:trash` | Delete / Remove |
 | `pencil` | `i-heroicons:pencil-square` | Edit |
 | `check` | `i-heroicons:check` | Confirm / Save |
+| `refresh` | `i-heroicons:arrow-path` | Retry / Refresh |
 
 Add new keys to `packages/ui/app/utils/icons.ts` and register them here.
 

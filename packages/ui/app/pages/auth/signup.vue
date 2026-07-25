@@ -17,7 +17,7 @@
   const toast = useToast();
   const identitySchema = z.object({
     name: z.string().trim().min(1, 'Username is required').max(100, 'Username is too long'),
-    email: z.string().trim().email('Enter a valid email address'),
+    email: z.string().trim().pipe(z.email('Enter a valid email address')),
   })
   type IdentitySchema = z.output<typeof identitySchema>
 
@@ -56,7 +56,16 @@
       }
 
       await router.push(path)
+      return
     }
+
+    toast.add({
+      title: 'Account created',
+      description: 'Sign in to continue.',
+      color: 'warning',
+      icon: 'i-heroicons:exclamation-circle',
+    })
+    await router.push(`/auth/signin?email=${encodeURIComponent(state.email)}`)
   }
 
   const onSubmit = async () => {
@@ -92,8 +101,16 @@
           toast.add({
             title: 'Password compromised!',
             description: error.message || 'This password has been compromised in a data breach, please choose a different one.',
+          color: 'error',
+          icon: 'i-heroicons:exclamation-circle'
+          })
+          break
+        default:
+          toast.add({
+            title: 'Could not create account',
+            description: error.message || 'Please try again.',
             color: 'error',
-            icon: 'i-heroicons:exclamation-circle'
+            icon: 'i-heroicons:exclamation-circle',
           })
       }
       loading.value = false;
