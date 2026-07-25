@@ -7,6 +7,7 @@ const registrationContextSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
   scope: z.literal("passkey-registration"),
 })
+export const passkeyRegistrationIdentitySchema = registrationContextSchema.omit({ scope: true })
 
 export function getPasskeyRegistrationContextSecret() {
   const secret = process.env.BETTER_AUTH_SECRET
@@ -17,7 +18,7 @@ export function getPasskeyRegistrationContextSecret() {
 export async function createPasskeyRegistrationContext(identity: unknown) {
   const secret = getPasskeyRegistrationContextSecret()
   try {
-    const { name, email } = registrationContextSchema.omit({ scope: true }).parse(identity)
+    const { name, email } = passkeyRegistrationIdentitySchema.parse(identity)
     return await signJWT({ name, email, scope: "passkey-registration" }, secret, 300)
   } catch {
     throw new Error(invalidRegistrationContext)

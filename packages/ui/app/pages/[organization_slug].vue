@@ -40,15 +40,17 @@ if (!route.params.organization_slug) {
     }
 
     if (!store.organization || store.organization.slug !== slug) {
-      const url = String(import.meta.server ? useRequestURL().origin : window.location.origin);
-      const orgsResponse = await $fetch<{ data: Organization[] }>(
-        `${url}/api/organization`,
+      const { data: orgsResponse } = await useFetch<{ data: Organization[] }>(
+        "/api/organization",
         { query: { search: slug } },
       );
-      const matchedOrg = orgsResponse?.data?.find(organization => organization.slug === slug);
-      if (matchedOrg) {
-        store.setOrganization(matchedOrg);
+      const matchedOrg = orgsResponse.value?.data?.find(organization => organization.slug === slug);
+      if (!matchedOrg) {
+        store.setOrganization(null);
+        throw createError({ statusCode: 404, statusMessage: "Organization not found" });
       }
+
+      await setOrganization(matchedOrg.id, route.fullPath);
     }
   } catch {
     throw createError({ statusCode: 404, statusMessage: "Organization not found" });

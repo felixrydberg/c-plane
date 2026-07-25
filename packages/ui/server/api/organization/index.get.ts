@@ -1,6 +1,6 @@
 import { organization, organization_member } from "~~/server/schema";
 import { getIdentityDb } from "~~/server/utils/db";
-import { ilike, count, eq, and } from "drizzle-orm";
+import { ilike, count, eq, and, or } from "drizzle-orm";
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event);
@@ -43,10 +43,10 @@ export default defineEventHandler(async (event) => {
     
   if (search) {
     countQuery.where(
-      ilike(organization.name, `%${search}%`)
+      or(ilike(organization.name, `%${search}%`), ilike(organization.slug, `%${search}%`))
     );
     organizationsQuery.where(
-      ilike(organization.name, `%${search}%`)
+      or(ilike(organization.name, `%${search}%`), ilike(organization.slug, `%${search}%`))
     );
   }
 
