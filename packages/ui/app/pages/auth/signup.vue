@@ -133,8 +133,12 @@
 
     passkeyLoading.value = true
     try {
+      const { context } = await $fetch<{ context: string }>('/api/passkey/registration-context', {
+        method: 'POST',
+        body: { name: state.name, email: state.email },
+      })
       const { error } = await createClient().passkey.addPasskey({
-        context: JSON.stringify({ name: state.name, email: state.email }),
+        context,
       })
 
       if (error) {

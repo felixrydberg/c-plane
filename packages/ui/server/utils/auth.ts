@@ -4,10 +4,10 @@ import { admin, twoFactor, haveIBeenPwned, lastLoginMethod } from "better-auth/p
 import { passkey } from "@better-auth/passkey"
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createClient } from "redis"
-import * as z from "zod"
 import * as schema from "../schema";
 import { and, eq } from "drizzle-orm";
 import { getIdentityDb } from "./db";
+import { getPasskeyRegistrationContextSecret, parsePasskeyRegistrationContext } from "./passkey-registration-context";
 
 const { NUXT_REDIS_URL, NUXT_DATABASE_URL, NUXT_AUTH_BASE_URL } = process.env;
 if (!NUXT_DATABASE_URL) {
@@ -36,22 +36,12 @@ await redis.connect()
 const db = drizzle(NUXT_DATABASE_URL, { schema })
 export const getAuthDb = () => db
 
-const passkeyRegistrationContextSchema = z.object({
-  name: z.string().trim().min(1).max(100),
-  email: z.string().trim().toLowerCase().email(),
-})
-
-function parsePasskeyRegistrationContext(context: string | null | undefined) {
-  try {
-    return passkeyRegistrationContextSchema.parse(JSON.parse(context ?? ""))
-  } catch {
-    throw new Error("A username and valid email are required to create a passkey account")
-  }
-}
+const passkeyRegistrationContextSecret = getPasskeyRegistrationContextSecret()
 
 export const auth = betterAuth({
   appName: "C-Plane",
   baseURL: authBaseURL,
+  secret: passkeyRegistrationContextSecret,
   trustedOrigins: process.env.NODE_ENV === "production" ? [authBaseURL] : [authBaseURL, "http://ui:3000"],
   database: drizzleAdapter(db, {
     provider: "pg",
@@ -132,32 +122,28 @@ export const auth = betterAuth({
     passkey({
       registration: {
         requireSession: false,
-        resolveUser: async ({ context }) => {
-          const { name, email } = parsePasskeyRegistrationContext(context)
-          const existingUser = await db
-            .select({ id: schema.user.id })
-            .from(schema.user)
-            .where(eq(schema.user.email, email))
-            .limit(1)
-          if (existingUser.length > 0) throw new Error("An account already exists for this email")
+        resolveUser: async ({ ctx, context }) => {
+          const { name, email } = await parsePasskeyRegistrationContext(context, ctx.context.secret)
+          if (await ctx.context.internalAdapter.findUserByEmail(email)) {
+            throw new Error("An account already exists for this email")
+          }
 
           const id = crypto.randomUUID()
           return { id, name }
         },
         afterVerification: async ({ ctx, user, context }) => {
-          const existingUser = await ctx.context.internalAdapter.findUserById(user.id)
-          if (!existingUser) {
-            const { email } = parsePasskeyRegistrationContext(context)
-            await db.insert(schema.user).values({
-              id: user.id,
-              name: user.name,
-              email,
-              emailVerified: false,
-            })
+          const { name, email } = await parsePasskeyRegistrationContext(context, ctx.context.secret)
+          if (await ctx.context.internalAdapter.findUserByEmail(email)) {
+            throw new Error("An account already exists for this email")
           }
 
+          const authUser = await ctx.context.internalAdapter.createUser({
+            id: user.id,
+            name,
+            email,
+            emailVerified: false,
+          })
           const session = await ctx.context.internalAdapter.createSession(user.id)
-          const authUser = await ctx.context.internalAdapter.findUserById(user.id)
           if (!session || !authUser) throw new Error("Could not create passkey session")
 
           await ctx.setSignedCookie(
