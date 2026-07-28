@@ -1,4 +1,4 @@
-import { pgTable, text, uuid, timestamp, integer, jsonb, index, uniqueIndex, unique, pgPolicy, foreignKey } from 'drizzle-orm/pg-core';
+import { pgTable, text, uuid, timestamp, integer, jsonb, boolean, index, uniqueIndex, unique, pgPolicy, foreignKey } from 'drizzle-orm/pg-core';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { organization } from '../tenants/organization';
 import { app_tenant, orgAllowed } from '../rls';
@@ -39,7 +39,9 @@ export const project_environment = pgTable('project_environment', {
     .notNull()
     .references(() => organization.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
-  timeline: uuid("timeline").notNull().references(() => project_timeline.id, { onDelete: "restrict" }),
+  is_preview: boolean("is_preview").notNull().default(true),
+  draft_timeline: uuid("draft_timeline").notNull().references(() => project_timeline.id, { onDelete: "restrict" }),
+  deployed_timeline: uuid("deployed_timeline").notNull().references(() => project_timeline.id, { onDelete: "restrict" }),
   created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
   updated_at: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 }, (table) => [

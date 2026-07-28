@@ -2,7 +2,7 @@ import { active_organization, organization, organization_member } from "~~/serve
 import { eq } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import z from "zod";
-import { getIdentityDb, withTenantDb } from "~~/server/utils/db";
+import { activeOrganizationScope, getIdentityDb, withTenantDb } from "~~/server/utils/db";
 import { logEvent } from "~~/server/utils/events";
 
 const createOrganizationSchema = z.object({
@@ -53,7 +53,8 @@ export default defineEventHandler(async (event) => {
   const organizationId = uuidv7();
   const organizationMemberId = uuidv7();
 
-  const createdOrganization = await withTenantDb([organizationId], async (tx) => {
+  const organizationScope = await activeOrganizationScope(session.user.id, organizationId);
+  const createdOrganization = await withTenantDb(organizationScope, async (tx) => {
     const [created] = await tx.insert(organization).values({
       id: organizationId,
       name,

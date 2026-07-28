@@ -23,6 +23,12 @@ const currentSection = computed(() => {
 })
 const projectRoutesEnabled = computed(() => PROJECT_PAGES.includes(currentSection.value))
 const environmentRoutesEnabled = computed(() => ENVIRONMENT_PAGES.includes(currentSection.value))
+const isViewingDeployed = computed(() =>
+  !route.query.revision || route.query.revision === store.environment?.deployed_timeline
+)
+const hasDraftRevision = computed(() =>
+  !!store.environment && store.environment.draft_timeline !== store.environment.deployed_timeline
+)
 
 // Projects are loaded by the auth plugin on every request.
 // Refresh only needed after create/delete.
@@ -88,8 +94,11 @@ const environmentItems = computed<DropdownMenuItem[][]>(() => {
   ]]
 
   const list: DropdownMenuItem[] = store.environments.map(b => ({
-    label: b.name + (b.is_default ? ' (default)' : ''),
-    icon: ICONS.folder,
+    label: b.name,
+    badges: [
+      ...(b.is_default ? ['Default'] : []),
+      ...(b.is_preview ? ['Preview'] : []),
+    ],
     onSelect() { selectEnvironment(b) },
   }))
   const actions: DropdownMenuItem[] = [
@@ -161,7 +170,7 @@ async function selectProject(projectId: string | null) {
 }
 
 function selectEnvironment(b: Environment) {
-  store.environment = { id: b.id, name: b.name, timeline: b.timeline, is_default: b.is_default, has_recent_undeployed_revision: b.has_recent_undeployed_revision }
+  store.environment = b
 
   const slug = store.organization?.slug
   const pid = routeProjectId.value
@@ -173,7 +182,15 @@ function selectEnvironment(b: Environment) {
   const url = environmentRoutesEnabled.value
     ? `/${slug}/${baseSection}/${pid}/${b.id}`
     : `/${slug}/${baseSection}/${pid}`
-  router.push(url)
+  router.push(`${url}${isViewingDeployed.value ? '' : `?revision=${b.draft_timeline}`}`)
+}
+
+function setRevisionView(viewingDeployed: boolean) {
+  if (!store.environment || !hasDraftRevision.value) return
+  const query = { ...route.query }
+  if (viewingDeployed) delete query.revision
+  else query.revision = store.environment.draft_timeline
+  router.push({ query })
 }
 
 async function onProjectCreated() { await refreshProjects() }
@@ -225,7 +242,7 @@ async function onConfirmDeleteEnvironment() {
     const list = store.environments
     const target = list.find(b => b.id === routeEnvironmentId.value) ?? list.find(b => b.is_default) ?? list[0] ?? null
     if (target) {
-      store.environment = { id: target.id, name: target.name, timeline: target.timeline, is_default: target.is_default, has_recent_undeployed_revision: target.has_recent_undeployed_revision }
+      store.environment = target
       const slug = store.organization?.slug
       const pid = routeProjectId.value
       if (pid && slug && projectRoutesEnabled.value) {
@@ -254,9 +271,23 @@ const graphModalOpen = ref(false)
     <USeparator orientation="vertical" class="h-6 shrink-0" />
 
     <UDropdownMenu size="sm" :items="environmentItems" :content="{ align: 'start', collisionPadding: 12 }" :ui="{ content: 'w-64' }" class="shrink-0">
+      <template #item-trailing="{ item }">
+        <div v-if="item.badges?.length" class="ml-auto flex items-center gap-1">
+          <UBadge v-for="badge in item.badges" :key="badge" :color="badge === 'Preview' ? 'primary' : 'neutral'" variant="soft" size="sm">
+            {{ badge }}
+          </UBadge>
+        </div>
+      </template>
       <UButton :label="environmentLabel" :trailing-icon="ICONS.chevronUpDown" size="sm" color="neutral" variant="soft" :disabled="!routeProjectId && !store.project" class="data-[state=open]:bg-elevated" :ui="{ trailingIcon: 'text-dimmed' }" />
     </UDropdownMenu>
-    <UButton v-if="store.project" :icon="ICONS.graph" variant="ghost" color="neutral" size="sm" class="shrink-0 rotate-180" aria-label="Environment graph" @click="graphModalOpen = true" />
+    <template v-if="store.project">
+      <UButton :icon="ICONS.graph" variant="ghost" color="neutral" size="sm" class="shrink-0 rotate-180" aria-label="Environment graph" @click="graphModalOpen = true" />
+      <div class="flex items-center gap-2 text-xs">
+        <span :class="isViewingDeployed ? 'text-muted' : 'font-medium text-default'">Draft</span>
+        <USwitch :model-value="isViewingDeployed" :disabled="!hasDraftRevision" aria-label="View deployed revision" @update:model-value="setRevisionView(Boolean($event))" />
+        <span :class="isViewingDeployed ? 'font-medium text-default' : 'text-muted'">Deployed</span>
+      </div>
+    </template>
 
     <DashboardProjectsCreateModal v-model:open="createProjectModal" @created="onProjectCreated" />
     <DashboardProjectsDeleteModal v-model:open="deleteProjectModal" @deleted="onProjectDeleted" />
@@ -280,7 +311,7 @@ const graphModalOpen = ref(false)
     <UModal v-model:open="deleteEnvironmentModal" title="Delete Environment" :ui="{ content: 'max-w-sm' }">
       <template #body>
         <p class="text-sm">
-          Are you sure you want to delete the environment <strong class="capitalize">{{ store.environment?.name }}</strong>? Timeline revisions will be preserved and can be repointed to.
+          Are you sure you want to delete the environment <strong class="capitalize">{{ store.environment?.name }}</strong>? {{ store.environment?.is_preview ? 'Its timeline revisions will be deleted.' : 'Timeline revisions will be preserved and can be repointed to.' }}
         </p>
         <div class="flex justify-end gap-3 pt-4">
           <UButton variant="ghost" color="neutral" @click="deleteEnvironmentModal = false">Cancel</UButton>

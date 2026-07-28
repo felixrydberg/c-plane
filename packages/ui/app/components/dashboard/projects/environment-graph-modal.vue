@@ -1,14 +1,13 @@
 <script setup lang="ts">
-import { VueFlow } from '@vue-flow/core'
+import { VueFlow, type VueFlowStore } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
-import { Controls } from '@vue-flow/controls'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
-import '@vue-flow/controls/dist/style.css'
-import { markRaw, computed } from 'vue'
+import { markRaw, computed, nextTick } from 'vue'
 import type { Environment, ResolvedTimeline as SdkResolvedTimeline, TimelineRevision } from '@cplane/sdk'
 import DotNode from './environment-graph-dot-node.vue'
 import { ICONS } from '~/utils/icons'
+import { loadProjectEnvironments } from '~/utils/auth'
 
 const dotNodeType = markRaw(DotNode)
 
@@ -31,6 +30,8 @@ interface EnvironmentMeta {
   name: string
   isDefault: boolean
   exists: boolean
+  isDraft: boolean
+  isDeployed: boolean
 }
 
 interface NodeMeta {
@@ -54,6 +55,7 @@ const allEnvironments = ref<Environment[]>([]);
 const removeEnvironmentId = ref('');
 const removeEnvironmentName = ref('');
 const removeModalOpen = ref(false);
+const removeEnvironmentIsPreview = computed(() => allEnvironments.value.find(b => b.id === removeEnvironmentId.value)?.is_preview ?? false);
 const renameEnvironmentId = ref('');
 const renameEnvironmentName = ref('');
 const renameModalOpen = ref(false);
@@ -71,6 +73,23 @@ const selectedNodeMeta = computed<NodeMeta | null>(() => {
   if (!selectedRevisionId.value) return null;
   return nodeMetaMap.value.get(selectedRevisionId.value) ?? null;
 });
+
+const graph = ref<VueFlowStore | null>(null);
+
+async function focusSelectedRevision() {
+  if (!selectedRevisionId.value || !graph.value) return;
+  await graph.value.fitView({
+    nodes: [selectedRevisionId.value],
+    minZoom: 1,
+    maxZoom: 1,
+    duration: 0,
+  });
+}
+
+function onPaneReady(instance: VueFlowStore) {
+  graph.value = instance;
+  void focusSelectedRevision();
+}
 
 function onNodeClick({ node }: { node: { id: string } }) {
   if (selectedRevisionId.value === node.id) {
@@ -176,90 +195,26 @@ async function onConfirmRemoveEnvironment() {
     removeModalOpen.value = false;
     removeEnvironmentId.value = '';
     removeEnvironmentName.value = '';
-
-    // Remove from environment list
-    allEnvironments.value = allEnvironments.value.filter(b => b.id !== deletedId);
-
-    // Update nodes that had this environment pointing at them
-    nodes.value = nodes.value.map(n => {
-      const nodeEnvironments: EnvironmentMeta[] = n.data.environments || [];
-      const filtered = nodeEnvironments.filter((b: EnvironmentMeta) => b.id !== deletedId);
-      if (filtered.length === nodeEnvironments.length) return n;
-      return {
-        ...n,
-        data: {
-          ...n.data,
-          environments: filtered,
-          environmentLabels: filtered.filter((b: EnvironmentMeta) => b.exists).map((b: EnvironmentMeta) => b.name),
-          isHead: filtered.some((b: EnvironmentMeta) => b.exists),
-        },
-      };
-    });
-
-    // Update nodeMeta cache
-    const updatedMeta = new Map(nodeMetaMap.value);
-    for (const [id, meta] of updatedMeta) {
-      const filtered = meta.environments.filter(b => b.id !== deletedId);
-      if (filtered.length !== meta.environments.length) {
-        updatedMeta.set(id, { ...meta, environments: filtered });
-      }
-    }
-    nodeMetaMap.value = updatedMeta;
-
-    // Refresh the sidebar data for the currently selected revision
-    if (selectedRevisionId.value) {
-      selectRevision(selectedRevisionId.value);
-    }
+    await loadProjectEnvironments(
+      store.project.id,
+      store.environment?.id === deletedId ? undefined : store.environment?.id,
+    );
+    await loadGraph(false);
   } catch {
     toast.add({ title: 'Failed to remove environment', color: 'error' });
   }
 }
 
-function onEnvironmentCreated(environment: Environment) {
-  // Add environment to local environment list
-  allEnvironments.value = [...allEnvironments.value, environment];
+async function onEnvironmentCreated(environment: Environment) {
   store.environments = [...store.environments.filter(b => b.id !== environment.id), environment];
   store.environments_project_id = store.project?.id ?? store.environments_project_id;
-
-  // Find the node this environment was forked from and update it
-  nodes.value = nodes.value.map(n => {
-    if (n.id !== createEnvironmentFromRevisionId.value) return n;
-    const nodeEnvironments: EnvironmentMeta[] = n.data.environments || [];
-    const newEnvironment: EnvironmentMeta = { id: environment.id, name: environment.name, isDefault: environment.is_default, exists: true };
-    const updated = [...nodeEnvironments.filter(b => b.id !== environment.id), newEnvironment];
-    return {
-      ...n,
-      data: {
-        ...n.data,
-        environments: updated,
-        environmentLabels: updated.filter(b => b.exists).map(b => b.name),
-        isHead: updated.some(b => b.exists),
-      },
-    };
-  });
-
-  // Update nodeMeta cache
-  const updatedMeta = new Map(nodeMetaMap.value);
-  const meta = updatedMeta.get(createEnvironmentFromRevisionId.value);
-  if (meta) {
-    const newEnvironment: EnvironmentMeta = { id: environment.id, name: environment.name, isDefault: environment.is_default, exists: true };
-    updatedMeta.set(createEnvironmentFromRevisionId.value, {
-      ...meta,
-      environments: [...meta.environments.filter(b => b.id !== environment.id), newEnvironment],
-    });
-  }
-  nodeMetaMap.value = updatedMeta;
-
-  // Refresh sidebar data
-  if (selectedRevisionId.value) {
-    selectRevision(selectedRevisionId.value);
-  }
+  await loadGraph(true);
 }
 
 async function onSelectRepointEnvironment() {
   if (!store.organization?.id || !store.project?.id || !repointEnvironmentId.value) return;
   try {
-    await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${repointEnvironmentId.value as ':environment_id'}` as const, { method: 'PATCH', body: { timeline_id: repointRevisionId.value } });
+    await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${repointEnvironmentId.value as ':environment_id'}` as const, { method: 'PATCH', body: { draft_timeline_id: repointRevisionId.value, deployed_timeline_id: repointRevisionId.value } });
     toast.add({ title: 'Environment repointed', color: 'success' });
     store.refreshKey++;
     repointModalOpen.value = false;
@@ -303,15 +258,17 @@ async function loadGraph(preserveSelection = false) {
       environmentTimelines.set(t.environment_id, list);
     }
 
-    const environmentHeadTimelineMap = new Map<string, string>();
+    const environmentDraftTimelineMap = new Map<string, string>();
+    const environmentDeployedTimelineMap = new Map<string, string>();
     const colorMap = new Map<string, string>();
     const environmentNames = new Map<string, string>();
     const environmentExists = new Map<string, boolean>();
 
     environments.forEach((b, i) => {
-      environmentHeadTimelineMap.set(b.id, b.timeline);
+      environmentDraftTimelineMap.set(b.id, b.draft_timeline);
+      environmentDeployedTimelineMap.set(b.id, b.deployed_timeline);
       colorMap.set(b.id, environmentColors[i % environmentColors.length]);
-      environmentNames.set(b.id, b.name);
+      environmentNames.set(b.id, `${b.name} (${b.is_preview ? 'Preview' : 'Stable'})`);
       environmentExists.set(b.id, true);
     });
 
@@ -322,7 +279,8 @@ async function loadGraph(preserveSelection = false) {
       environmentExists.set(environmentId, false);
       const revs = environmentTimelines.get(environmentId)!;
       const head = revs.reduce((a, b) => a.timeline > b.timeline ? a : b);
-      environmentHeadTimelineMap.set(environmentId, head.id);
+      environmentDraftTimelineMap.set(environmentId, head.id);
+      environmentDeployedTimelineMap.set(environmentId, head.id);
     }
 
     const allRevs: { environmentId: string; environmentName: string; rev: TimelineRevision }[] = [];
@@ -337,7 +295,15 @@ async function loadGraph(preserveSelection = false) {
     const X_SPACING = 360;
 
     const mainEnvironment = environments.find(b => b.name === 'main') || environments[0];
-    const mainRevs = allRevs.filter(r => r.environmentId === mainEnvironment.id).map(r => r.rev).sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+    const revisionsById = new Map(allRevs.map(({ rev }) => [rev.id, rev]));
+    const mainRevs: TimelineRevision[] = [];
+    let currentMainRevision = mainEnvironment ? revisionsById.get(mainEnvironment.draft_timeline) : undefined;
+    while (currentMainRevision) {
+      mainRevs.unshift(currentMainRevision);
+      currentMainRevision = currentMainRevision.parent_timeline_id
+        ? revisionsById.get(currentMainRevision.parent_timeline_id)
+        : undefined;
+    }
 
     const childrenMap = new Map<string, TimelineRevision[]>();
     for (const { rev } of allRevs) {
@@ -360,9 +326,9 @@ async function loadGraph(preserveSelection = false) {
     let nextUpLane = -1;
     for (const mainRev of mainRevs) {
       const forked = childrenMap.get(mainRev.id)?.filter(c => !mainRevs.some(mr => mr.id === c.id)) || [];
-      let useDown = true;
+      let useUp = true;
       for (const f of forked) {
-        const lane = useDown ? nextDownLane++ : nextUpLane--;
+        const lane = useUp ? nextUpLane-- : nextDownLane++;
         const baseX = xPosMap.get(mainRev.id)! + X_SPACING;
         let current = f;
         let depth = 0;
@@ -373,7 +339,7 @@ async function loadGraph(preserveSelection = false) {
           const next = childrenMap.get(current.id)?.[0];
           current = next || null;
         }
-        useDown = !useDown;
+        useUp = !useUp;
       }
     }
 
@@ -399,16 +365,20 @@ async function loadGraph(preserveSelection = false) {
       const environmentLabels: string[] = [];
       const pointingEnvironments: EnvironmentMeta[] = [];
       for (const [id, name] of environmentNames) {
-        if (environmentHeadTimelineMap.get(id) !== rev.id) continue;
+        const isDraft = environmentDraftTimelineMap.get(id) === rev.id;
+        const isDeployed = environmentDeployedTimelineMap.get(id) === rev.id;
+        if (!isDraft && !isDeployed) continue;
         const exists = environmentExists.get(id) ?? false;
         if (exists) {
-          environmentLabels.push(name);
+          environmentLabels.push(isDraft === isDeployed ? name : `${name} (${isDraft ? 'Draft' : 'Deployed'})`);
         }
         pointingEnvironments.push({
           id,
           name: exists ? name : 'Deleted Environment',
           isDefault: isDefaultMap.get(id) || false,
           exists,
+          isDraft,
+          isDeployed,
         });
       }
 
@@ -453,17 +423,23 @@ async function loadGraph(preserveSelection = false) {
     nodes.value = newNodes;
     edges.value = newEdges;
 
-    // Re-select the preserved revision after graph reload
-    if (savedRevisionId) {
-      if (savedRevisionId !== selectedRevisionId.value) {
-        selectedRevisionId.value = savedRevisionId;
+    const revisionToSelect = preserveSelection
+      ? savedRevisionId
+      : store.environment?.draft_timeline ?? null;
+    if (revisionToSelect && newNodes.some(node => node.id === revisionToSelect)) {
+      if (revisionToSelect !== selectedRevisionId.value) {
+        selectedRevisionId.value = revisionToSelect;
       }
-      selectRevision(savedRevisionId);
+      selectRevision(revisionToSelect);
     }
   } catch {
     error.value = 'Failed to load graph';
   } finally {
     loading.value = false;
+    if (!preserveSelection) {
+      await nextTick();
+      await focusSelectedRevision();
+    }
   }
 }
 
@@ -496,15 +472,14 @@ watch(open, (isOpen) => {
               :default-viewport="{ x: 0, y: 0, zoom: 1 }"
               :min-zoom="0.1"
               :max-zoom="4"
-              fit-view-on-init
               :nodes-draggable="false"
               :nodes-connectable="false"
               :edges-updatable="false"
               :node-types="{ dot: dotNodeType }"
               @node-click="onNodeClick"
+              @pane-ready="onPaneReady"
             >
               <Background :gap="20" :size="1" />
-              <Controls />
             </VueFlow>
           </div>
 
@@ -570,6 +545,8 @@ watch(open, (isOpen) => {
                         </div>
                         <span class="text-sm capitalize flex-1 truncate">{{ b.name }}</span>
                         <span v-if="b.isDefault" class="text-[10px] text-muted">default</span>
+                        <span v-if="b.isDraft && !b.isDeployed" class="text-[10px] text-warning">Draft</span>
+                        <span v-else-if="b.isDeployed && !b.isDraft" class="text-[10px] text-muted">Deployed</span>
                         <UIcon v-if="b.exists" name="i-heroicons:chevron-right" class="size-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                         <UButton
                           v-if="b.exists"
@@ -604,7 +581,7 @@ watch(open, (isOpen) => {
                         :key="c.container_id"
                         :disabled="!selectedTimelineData.environment_id"
                         class="group w-full text-left flex items-center gap-3 px-4 py-2.5 hover:bg-elevated/50 transition-colors border-b border-default/10 last:border-b-0 disabled:opacity-50"
-                        @click="selectedTimelineData.environment_id ? navigateAndClose(`/${store.organization?.slug}/containers/${store.project?.id}/${selectedTimelineData.environment_id}/${c.container_id}`) : undefined"
+                        @click="selectedTimelineData.environment_id ? navigateAndClose(`/${store.organization?.slug}/containers/${store.project?.id}/${selectedTimelineData.environment_id}/${c.container_id}?revision=${selectedTimelineData.id}`) : undefined"
                       >
                         <div class="min-w-0 flex-1">
                           <span class="text-sm font-medium truncate block">{{ c.container_name }}</span>
@@ -692,7 +669,7 @@ watch(open, (isOpen) => {
             <p class="text-sm text-muted mb-4">Choose a environment to repoint to this revision.</p>
             <div class="border border-default/40 rounded-lg overflow-hidden max-h-48 overflow-y-auto">
               <button
-                v-for="b in allEnvironments"
+                v-for="b in allEnvironments.filter(b => !b.is_preview)"
                 :key="b.id"
                 class="group w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-elevated/50 transition-colors border-b border-default/10 last:border-b-0"
                 @click="repointEnvironmentId = b.id; onSelectRepointEnvironment()"
@@ -700,10 +677,10 @@ watch(open, (isOpen) => {
                 <div class="size-7 shrink-0 rounded-md bg-elevated flex items-center justify-center">
                   <UIcon name="i-heroicons:folder" class="size-3.5 text-muted" />
                 </div>
-                <span class="text-sm capitalize flex-1">{{ b.name }}</span>
+                <span class="text-sm capitalize flex-1">{{ b.name }} (Stable)</span>
                 <UIcon name="i-heroicons:chevron-right" class="size-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
               </button>
-              <p v-if="allEnvironments.length === 0" class="text-sm text-muted px-4 py-3">No environments available.</p>
+              <p v-if="!allEnvironments.some(b => !b.is_preview)" class="text-sm text-muted px-4 py-3">No non-preview environments available.</p>
             </div>
             <div class="flex justify-end gap-3 pt-3">
               <UButton variant="ghost" color="neutral" @click="repointModalOpen = false; repointEnvironmentId = ''">Cancel</UButton>
@@ -714,7 +691,7 @@ watch(open, (isOpen) => {
         <UModal v-model:open="removeModalOpen" title="Remove Environment" :ui="{ content: 'max-w-sm' }">
           <template #body>
             <p class="text-sm">
-              Are you sure you want to remove the environment <strong class="capitalize">{{ removeEnvironmentName }}</strong>? Timeline revisions will be preserved and can be repointed to.
+              Are you sure you want to remove the environment <strong class="capitalize">{{ removeEnvironmentName }}</strong>? {{ removeEnvironmentIsPreview ? 'Its timeline revisions will be deleted.' : 'Timeline revisions will be preserved and can be repointed to.' }}
             </p>
             <div class="flex justify-end gap-3 pt-4">
               <UButton variant="ghost" color="neutral" @click="removeModalOpen = false">Cancel</UButton>

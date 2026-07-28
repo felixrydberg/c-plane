@@ -1,5 +1,5 @@
 import { active_organization, organization, organization_member } from "~~/server/schema";
-import { getIdentityDb, withTenantDb } from "~~/server/utils/db";
+import { activeOrganizationScope, getIdentityDb, withTenantDb } from "~~/server/utils/db";
 import { eq, and } from "drizzle-orm";
 
 export default defineEventHandler(async (event) => {
@@ -30,7 +30,8 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const [updated, org] = await withTenantDb([organizationId], async (tx) => {
+  const organizationScope = await activeOrganizationScope(session.user.id, organizationId);
+  const [updated, org] = await withTenantDb(organizationScope, async (tx) => {
     const upserted = await tx
       .insert(active_organization)
       .values({

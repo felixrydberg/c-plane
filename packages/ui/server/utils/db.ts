@@ -35,6 +35,15 @@ const toPgUuidArrayLiteral = (organizationIds: string[]) => {
 export const getIdentityDb = () => identityDb;
 export const getTenantDb = () => tenantDb;
 
+export async function activeOrganizationScope(userId: string, nextOrganizationId: string) {
+  const current = await identityDb.query.active_organization.findFirst({
+    where: (table, { eq }) => eq(table.user_id, userId),
+    columns: { organization_id: true },
+  });
+
+  return [...new Set([nextOrganizationId, current?.organization_id].filter(Boolean))] as string[];
+}
+
 export async function withTenantDb<T>(
   allowedOrganizations: string[],
   fn: (tx: TenantTransaction) => Promise<T>,

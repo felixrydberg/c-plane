@@ -12,6 +12,7 @@ const props = defineProps<{
   organizationId: string
   projectId: string | null
   environmentId: string | null
+  revisionId: string
   status: string
 }>();
 
@@ -70,7 +71,7 @@ const deleteModalOpen = computed({
       <NuxtLink
         v-for="c in containers"
         :key="c.id"
-        :to="`/${$route.params.organization_slug}/containers/${projectId}/${environmentId}/${c.id}`"
+        :to="{ path: `/${$route.params.organization_slug}/containers/${projectId}/${environmentId}/${c.id}`, query: { revision: revisionId } }"
         class="group grid w-full gap-3 border-b border-default/30 px-5 py-4 transition-colors hover:bg-elevated/50 last:border-b-0 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_90px_90px_100px_110px_auto] lg:items-center lg:gap-4"
       >
         <div class="min-w-0 flex-1">

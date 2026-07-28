@@ -6,7 +6,7 @@ import {
   organization_invitation,
   organization_member,
 } from "~~/server/schema";
-import { getIdentityDb, withTenantDb } from "~~/server/utils/db";
+import { activeOrganizationScope, getIdentityDb, withTenantDb } from "~~/server/utils/db";
 import { logEvent } from "~~/server/utils/events";
 
 export const acceptInvitationAndActivateOrganization = async (
@@ -64,8 +64,10 @@ export const acceptInvitationAndActivateOrganization = async (
     });
   }
 
+  const organizationScope = await activeOrganizationScope(session.user.id, invitation.organization_id);
+
   if (invitation.status === "accepted") {
-    await withTenantDb([invitation.organization_id], async (tx) => {
+    await withTenantDb(organizationScope, async (tx) => {
       await tx
         .insert(active_organization)
         .values({
@@ -86,7 +88,7 @@ export const acceptInvitationAndActivateOrganization = async (
     };
   }
 
-  const [updatedInvitation] = await withTenantDb([invitation.organization_id], async (tx) => {
+  const [updatedInvitation] = await withTenantDb(organizationScope, async (tx) => {
     const [updated] = await tx
       .update(organization_invitation)
       .set({ status: "accepted" })

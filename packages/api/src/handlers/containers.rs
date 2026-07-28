@@ -63,6 +63,19 @@ pub struct ContainerActionQuery {
 pub struct ListContainersQuery {
     pub project_id: Option<Uuid>,
     pub environment_id: Option<Uuid>,
+    pub timeline_id: Option<Uuid>,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct ContainerDetailQuery {
+    pub environment_id: Option<Uuid>,
+    pub timeline_id: Option<Uuid>,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct UpdateContainerQuery {
+    pub environment_id: Uuid,
+    pub timeline_id: Uuid,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -141,11 +154,26 @@ async fn get_environment_timeline_pins(
     tx: &impl sea_orm::ConnectionTrait,
     environment: &project_environment::Model,
 ) -> Result<TimelinePins, AppError> {
-    let head = project_timeline::Entity::find_by_id(environment.timeline)
+    let head = project_timeline::Entity::find_by_id(environment.draft_timeline)
         .one(tx)
         .await?
         .ok_or_else(|| AppError::NotFound("Environment timeline not found".into()))?;
     Ok(TimelinePins::from_json_value(&head.pins))
+}
+
+async fn get_project_revision_pins(
+    tx: &impl sea_orm::ConnectionTrait,
+    project_id: Uuid,
+    timeline_id: Uuid,
+) -> Result<TimelinePins, AppError> {
+    let timeline = project_timeline::Entity::find()
+        .filter(project_timeline::Column::Id.eq(timeline_id))
+        .filter(project_timeline::Column::ProjectId.eq(project_id))
+        .one(tx)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Timeline revision is not in this project".into()))?;
+
+    Ok(TimelinePins::from_json_value(&timeline.pins))
 }
 
 fn build_response(
@@ -276,6 +304,7 @@ pub async fn create_container(
         ("organization_id" = Uuid, Path, description = "Organization ID"),
         ("project_id" = Option<Uuid>, Query, description = "Filter by project"),
         ("environment_id" = Option<Uuid>, Query, description = "Filter by environment"),
+        ("timeline_id" = Option<Uuid>, Query, description = "Revision whose pinned containers to return"),
     ),
     responses(
         (status = 200, description = "List of containers", body = Vec<ContainerResponse>),
@@ -301,7 +330,11 @@ pub async fn list_containers(
     };
 
     if let Some(environment) = environment {
-        let pins = get_environment_timeline_pins(tx, &environment).await?;
+        let pins = if let Some(timeline_id) = query.timeline_id {
+            get_project_revision_pins(tx, environment.project_id, timeline_id).await?
+        } else {
+            get_environment_timeline_pins(tx, &environment).await?
+        };
 
         if pins.container.is_empty() {
             scoped.commit().await?;
@@ -393,6 +426,8 @@ async fn find_main_environment_containers(
     params(
         ("organization_id" = Uuid, Path, description = "Organization ID"),
         ("container_id" = Uuid, Path, description = "Container ID"),
+        ("environment_id" = Option<Uuid>, Query, description = "Environment that owns the revision history"),
+        ("timeline_id" = Option<Uuid>, Query, description = "Revision whose pinned container version to return"),
     ),
     responses(
         (status = 200, description = "Container details", body = ContainerResponse),
@@ -403,6 +438,7 @@ async fn find_main_environment_containers(
 pub async fn get_container(
     AuthContext { tenant_db, .. }: AuthContext,
     Path((organization_id, container_id)): Path<(Uuid, Uuid)>,
+    axum::extract::Query(query): axum::extract::Query<ContainerDetailQuery>,
 ) -> Result<Json<ContainerResponse>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
 
@@ -416,11 +452,29 @@ pub async fn get_container(
         .await?
         .ok_or_else(|| AppError::NotFound("Container not found".into()))?;
 
-    let latest = container_version::Entity::find()
-        .filter(container_version::Column::ContainerId.eq(c.id))
-        .order_by_desc(container_version::Column::Version)
-        .one(tx)
-        .await?;
+    let version = if let Some(timeline_id) = query.timeline_id {
+        let environment_id = query.environment_id.ok_or_else(|| {
+            AppError::BadRequest("environment_id is required with timeline_id".into())
+        })?;
+        let environment =
+            get_environment(tx, environment_id, organization_id, Some(c.project_id)).await?;
+        let pins = get_project_revision_pins(tx, environment.project_id, timeline_id).await?;
+        let version_id = pins.container.get(&c.id).ok_or_else(|| {
+            AppError::NotFound("Container not present in timeline revision".into())
+        })?;
+        container_version::Entity::find_by_id(*version_id)
+            .filter(container_version::Column::ContainerId.eq(c.id))
+            .one(tx)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Container version not found".into()))?
+    } else {
+        container_version::Entity::find()
+            .filter(container_version::Column::ContainerId.eq(c.id))
+            .order_by_desc(container_version::Column::Version)
+            .one(tx)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Container version not found".into()))?
+    };
 
     scoped.commit().await?;
 
@@ -428,7 +482,7 @@ pub async fn get_container(
         id: c.id,
         organization_id: c.organization_id,
         name: c.name,
-        current_version: latest.map(|v| resolve_latest_version(&v)),
+        current_version: Some(resolve_latest_version(&version)),
         project_id: Some(c.project_id),
         region_id: c.region_id,
         created_at: c.created_at.to_string(),
@@ -444,6 +498,7 @@ pub async fn get_container(
         ("organization_id" = Uuid, Path, description = "Organization ID"),
         ("container_id" = Uuid, Path, description = "Container ID"),
         ("environment_id" = Uuid, Query, description = "Environment ID for the revision"),
+        ("timeline_id" = Uuid, Query, description = "Revision that supplies the container update base"),
     ),
     responses(
         (status = 200, description = "Container updated", body = ContainerResponse),
@@ -454,7 +509,7 @@ pub async fn get_container(
 pub async fn update_container(
     AuthContext { tenant_db, auth }: AuthContext,
     Path((organization_id, container_id)): Path<(Uuid, Uuid)>,
-    axum::extract::Query(action): axum::extract::Query<ContainerActionQuery>,
+    axum::extract::Query(action): axum::extract::Query<UpdateContainerQuery>,
     Json(body): Json<UpdateContainerRequest>,
 ) -> Result<Json<ContainerResponse>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
@@ -477,6 +532,12 @@ pub async fn update_container(
     )
     .await?;
 
+    if action.timeline_id != environment.draft_timeline {
+        return Err(AppError::Conflict(
+            "Fork this revision before changing its configuration".into(),
+        ));
+    }
+
     if let Some(ref new_name) = body.name {
         let trimmed = new_name.trim().to_string();
         if !trimmed.is_empty() {
@@ -491,14 +552,24 @@ pub async fn update_container(
     let mut compute_revision = None;
 
     if has_config_change(&body) {
-        let latest = container_version::Entity::find()
+        let pins =
+            get_project_revision_pins(tx, environment.project_id, action.timeline_id).await?;
+        let base_version_id = pins.container.get(&container_id).ok_or_else(|| {
+            AppError::NotFound("Container not present in timeline revision".into())
+        })?;
+        let base = container_version::Entity::find_by_id(*base_version_id)
+            .filter(container_version::Column::ContainerId.eq(container_id))
+            .one(tx)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Container version not found".into()))?;
+        let latest_version_number = container_version::Entity::find()
             .filter(container_version::Column::ContainerId.eq(container_id))
             .order_by_desc(container_version::Column::Version)
             .one(tx)
             .await?
             .ok_or_else(|| AppError::NotFound("Container version not found".into()))?;
 
-        let next_ver = latest.version + 1;
+        let next_ver = latest_version_number.version + 1;
         let version_id = Uuid::new_v4();
 
         let cv = container_version::ActiveModel {
@@ -506,14 +577,14 @@ pub async fn update_container(
             container_id: Set(container_id),
             organization_id: Set(organization_id),
             version: Set(next_ver),
-            image: Set(body.image.unwrap_or_else(|| latest.image.clone())),
-            public: Set(body.public.unwrap_or(latest.public)),
-            replica_count: Set(body.replica_count.unwrap_or(latest.replica_count)),
-            port: Set(body.port.or(latest.port)),
-            env: Set(body.env.clone().or(latest.env.clone())),
-            resources: Set(body.resources.clone().or(latest.resources.clone())),
-            pull_secret_id: Set(body.pull_secret_id.or(latest.pull_secret_id)),
-            health_check: Set(body.health_check.clone().or(latest.health_check.clone())),
+            image: Set(body.image.unwrap_or_else(|| base.image.clone())),
+            public: Set(body.public.unwrap_or(base.public)),
+            replica_count: Set(body.replica_count.unwrap_or(base.replica_count)),
+            port: Set(body.port.or(base.port)),
+            env: Set(body.env.clone().or(base.env.clone())),
+            resources: Set(body.resources.clone().or(base.resources.clone())),
+            pull_secret_id: Set(body.pull_secret_id.or(base.pull_secret_id)),
+            health_check: Set(body.health_check.clone().or(base.health_check.clone())),
             created_at: Set(Utc::now().fixed_offset()),
         };
 

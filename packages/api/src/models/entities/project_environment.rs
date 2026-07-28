@@ -9,7 +9,9 @@ pub struct Model {
     pub project_id: Uuid,
     pub organization_id: Uuid,
     pub name: String,
-    pub timeline: Uuid,
+    pub is_preview: bool,
+    pub draft_timeline: Uuid,
+    pub deployed_timeline: Uuid,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
 }
@@ -26,10 +28,16 @@ pub enum Relation {
     Project,
     #[sea_orm(
         belongs_to = "super::project_timeline::Entity",
-        from = "Column::Timeline",
+        from = "Column::DraftTimeline",
         to = "super::project_timeline::Column::Id"
     )]
-    HeadTimeline,
+    DraftTimeline,
+    #[sea_orm(
+        belongs_to = "super::project_timeline::Entity",
+        from = "Column::DeployedTimeline",
+        to = "super::project_timeline::Column::Id"
+    )]
+    DeployedTimeline,
 }
 
 impl Related<super::project::Entity> for Entity {
