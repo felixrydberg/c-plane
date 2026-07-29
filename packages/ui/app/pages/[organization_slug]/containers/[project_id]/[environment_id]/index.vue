@@ -33,7 +33,7 @@ const environment = computed(() =>
 )
 const revisionId = computed(() => {
   const revision = route.query.revision
-  return typeof revision === 'string' ? revision : environment.value?.deployed_timeline ?? ''
+  return typeof revision === 'string' ? revision : environment.value?.deployed_timeline
 })
 const isViewingDeployed = computed(() => revisionId.value === environment.value?.deployed_timeline)
 

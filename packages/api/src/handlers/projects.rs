@@ -906,6 +906,17 @@ pub async fn delete_environment(
             .map(|t| t.id)
             .collect()
     } else {
+        let mut retained_revisions = project_timeline::Entity::find()
+            .filter(project_timeline::Column::ProjectId.eq(project_id))
+            .filter(project_timeline::Column::EnvironmentId.eq(environment_id))
+            .all(tx)
+            .await?;
+
+        for revision in &mut retained_revisions {
+            let mut active: project_timeline::ActiveModel = revision.clone().into();
+            active.environment_id = Set(None);
+            active.update(tx).await?;
+        }
         Vec::new()
     };
 

@@ -170,6 +170,7 @@ async function selectProject(projectId: string | null) {
 }
 
 function selectEnvironment(b: Environment) {
+  const wasViewingDeployed = isViewingDeployed.value
   store.environment = b
 
   const slug = store.organization?.slug
@@ -182,7 +183,7 @@ function selectEnvironment(b: Environment) {
   const url = environmentRoutesEnabled.value
     ? `/${slug}/${baseSection}/${pid}/${b.id}`
     : `/${slug}/${baseSection}/${pid}`
-  router.push(`${url}${isViewingDeployed.value ? '' : `?revision=${b.draft_timeline}`}`)
+  router.push(`${url}${wasViewingDeployed ? '' : `?revision=${b.draft_timeline}`}`)
 }
 
 function setRevisionView(viewingDeployed: boolean) {

@@ -12,7 +12,7 @@ const props = defineProps<{
   organizationId: string
   projectId: string | null
   environmentId: string | null
-  revisionId: string
+  revisionId?: string
   status: string
 }>();
 

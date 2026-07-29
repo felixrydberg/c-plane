@@ -1,18 +1,23 @@
 import { active_organization, organization, organization_member } from "~~/server/schema";
 import { activeOrganizationScope, getIdentityDb, withTenantDb } from "~~/server/utils/db";
 import { eq, and } from "drizzle-orm";
+import z from "zod";
+
+const activeOrganizationSchema = z.object({
+  organization_id: z.string().uuid("Organization ID must be a valid UUID"),
+});
 
 export default defineEventHandler(async (event) => {
   const session = await requireSession(event);
-  const body = await readBody<{ organization_id?: string }>(event);
+  const body = activeOrganizationSchema.safeParse(await readBody(event));
 
-  const organizationId = body.organization_id;
-  if (!organizationId) {
+  if (!body.success) {
     throw createError({
       statusCode: 400,
-      statusMessage: "Organization ID is required",
+      statusMessage: body.error.issues[0]?.message || "A valid organization ID is required",
     });
   }
+  const { organization_id: organizationId } = body.data;
 
   const membership = await getIdentityDb().select().from(organization_member)
     .where(

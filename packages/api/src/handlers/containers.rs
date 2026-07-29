@@ -552,7 +552,7 @@ pub async fn update_container(
     let mut compute_revision = None;
 
     if has_config_change(&body) {
-        let pins =
+        let mut pins =
             get_project_revision_pins(tx, environment.project_id, action.timeline_id).await?;
         let base_version_id = pins.container.get(&container_id).ok_or_else(|| {
             AppError::NotFound("Container not present in timeline revision".into())
@@ -590,7 +590,6 @@ pub async fn update_container(
 
         new_version = Some(cv.insert(tx).await?);
 
-        let mut pins = get_environment_timeline_pins(tx, &environment).await?;
         pins.set_container(container_id, version_id);
         let revision = revisions::create_revision(
             tx,

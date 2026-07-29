@@ -27,7 +27,7 @@ const environment = computed(() =>
 )
 const selectedTimelineId = computed(() => {
   const revision = route.query.revision
-  return typeof revision === 'string' ? revision : environment.value?.deployed_timeline ?? ''
+  return typeof revision === 'string' ? revision : environment.value?.deployed_timeline
 })
 const revisionView = computed<'synced' | 'deployed' | 'draft' | 'historical'>(() => {
   if (
@@ -69,7 +69,10 @@ const deployingRevision = ref(false)
 const recentActivity = ref<{ refresh: () => Promise<void> } | null>(null)
 
 async function fetchContainer() {
-  if (!orgId.value || !containerId.value || !environmentId.value || !selectedTimelineId.value) return
+  if (!orgId.value || !containerId.value || !environmentId.value || !selectedTimelineId.value) {
+    loading.value = false
+    return
+  }
   loading.value = true
   loadError.value = ''
   try {
@@ -161,7 +164,7 @@ async function forkRevision() {
     )
     await loadProjectEnvironments(projectId.value, environmentId.value)
     await refreshEnvironmentList()
-    await router.replace({ query: Object.fromEntries(Object.entries(route.query).filter(([key]) => key !== 'revision')) })
+    await router.replace({ query: { ...route.query, revision: selectedTimelineId.value } })
     toast.add({ title: 'Revision is now the draft', color: 'success' })
   } catch {
     toast.add({ title: 'Failed to fork revision', color: 'error' })

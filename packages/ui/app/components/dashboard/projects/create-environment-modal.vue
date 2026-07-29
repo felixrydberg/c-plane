@@ -45,6 +45,7 @@ async function fetchTimelines() {
     timelines.value = await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/timelines` as const);
   } catch {
     timelines.value = [];
+    error.value = 'Unable to load revisions. Close and reopen this dialog to retry.';
   } finally {
     timelinesLoading.value = false;
   }
@@ -57,9 +58,16 @@ watch(open, async (isOpen) => {
     selectedTimelineId.value = props.parentTimelineId ?? '';
     error.value = '';
     await fetchTimelines();
-    selectedTimelineId.value = props.parentTimelineId && timelines.value.some(t => t.id === props.parentTimelineId)
-      ? props.parentTimelineId
-      : timelines.value[0]?.id ?? '';
+    if (props.parentTimelineId) {
+      if (!timelines.value.some(t => t.id === props.parentTimelineId)) {
+        error.value ||= 'The selected parent revision is no longer available.';
+      }
+      return;
+    }
+    selectedTimelineId.value = timelines.value[0]?.id ?? '';
+    if (!selectedTimelineId.value && !error.value) {
+      error.value = 'No revisions are available to base this environment on.';
+    }
   }
 });
 

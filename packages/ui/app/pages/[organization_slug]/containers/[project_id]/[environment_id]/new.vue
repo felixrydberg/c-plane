@@ -62,7 +62,10 @@ async function handleCreate() {
     await $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/containers` as const, { method: 'POST', body })
     await loadProjectEnvironments(projectId.value, environmentId.value)
     toast.add({ title: createAsDraft.value ? 'Container draft created' : 'Container created and deployed', color: 'success' })
-    navigateTo(`/${route.params.organization_slug}/containers/${projectId.value}/${environmentId.value}`)
+    const path = `/${route.params.organization_slug}/containers/${projectId.value}/${environmentId.value}`
+    navigateTo(createAsDraft.value && store.environment?.draft_timeline
+      ? { path, query: { revision: store.environment.draft_timeline } }
+      : path)
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Failed to create container'
     toast.add({ title: 'Failed to create container', color: 'error' })
