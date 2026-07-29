@@ -11,6 +11,12 @@ const open = ref(true);
 const routeProjectId = computed(() => route.params.project_id as string | undefined)
 const routeEnvironmentId = computed(() => route.params.environment_id as string | undefined)
 const navProjectId = computed(() => routeProjectId.value ?? store.project?.id)
+const draftRevisionQuery = computed(() => {
+  const draftTimeline = store.environment?.draft_timeline
+  return draftTimeline !== undefined && route.query.revision === draftTimeline
+    ? `?revision=${draftTimeline}`
+    : ''
+})
 
 const items = computed<NavigationMenuItem[]>(() => [
   {
@@ -26,7 +32,7 @@ const items = computed<NavigationMenuItem[]>(() => [
   {
     label: 'Containers',
     icon: ICONS.containers,
-    to: `/${store.organization?.slug}/containers${navProjectId.value ? `/${navProjectId.value}${routeEnvironmentId.value ? `/${routeEnvironmentId.value}` : ''}` : ''}`,
+    to: `/${store.organization?.slug}/containers${navProjectId.value ? `/${navProjectId.value}${routeEnvironmentId.value ? `/${routeEnvironmentId.value}` : ''}` : ''}${draftRevisionQuery.value}`,
   },
   {
     label: 'Databases',

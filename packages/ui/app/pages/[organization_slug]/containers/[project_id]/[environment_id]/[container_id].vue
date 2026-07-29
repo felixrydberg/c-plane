@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import type { ContainerVersion } from '@cplane/sdk'
 import { ICONS } from '~/utils/icons'
+import { loadProjectEnvironments } from '~/utils/auth'
 
 definePageMeta({ key: route => `container-workbench-${route.params.project_id}` })
 
 const store = useStore()
 const route = useRoute()
+const router = useRouter()
 const toast = useToast()
 
 const orgId = computed(() => store.organization?.id ?? '')
@@ -14,6 +16,28 @@ const environmentId = computed(() => route.params.environment_id?.toString() || 
 const containerId = computed(() => route.params.container_id?.toString() || null)
 
 const projectName = computed(() => store.projects.find(p => p.id === projectId.value)?.name ?? projectId.value ?? '')
+const environmentsUrl = computed(() => orgId.value && projectId.value
+  ? `/api/cplane/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/environments` as const
+  : '')
+const { data: environmentList, refresh: refreshEnvironmentList } = await useFetch(environmentsUrl, {
+  immediate: computed(() => !!environmentsUrl.value),
+})
+const environment = computed(() =>
+  environmentList.value?.find(item => item.id === environmentId.value) ?? null
+)
+const selectedTimelineId = computed(() => {
+  const revision = route.query.revision
+  return typeof revision === 'string' ? revision : environment.value?.deployed_timeline
+})
+const revisionView = computed<'synced' | 'deployed' | 'draft' | 'historical'>(() => {
+  if (
+    selectedTimelineId.value === environment.value?.deployed_timeline
+    && environment.value?.deployed_timeline === environment.value?.draft_timeline
+  ) return 'synced'
+  if (selectedTimelineId.value === environment.value?.deployed_timeline) return 'deployed'
+  if (selectedTimelineId.value === environment.value?.draft_timeline) return 'draft'
+  return 'historical'
+})
 
 const activeTab = ref('overview')
 const tabs = [
@@ -25,7 +49,7 @@ const tabs = [
   ? `/api/cplane/organization/${orgId.value as ':organization_id'}/containers` as const
     : '')
 const { data: containerList } = await useFetch(listUrl, {
-  query: { project_id: projectId, environment_id: environmentId },
+  query: { project_id: projectId, environment_id: environmentId, timeline_id: selectedTimelineId },
   immediate: !!listUrl.value,
 })
 
@@ -38,15 +62,22 @@ const healthCheckPath = ref('')
 const envRows = ref<{ key: string; value: string }[]>([])
 const hasChanges = ref(false)
 const saving = ref(false)
-const autoDeploy = ref(false)
 const loading = ref(true)
+const loadError = ref('')
+const forking = ref(false)
+const deployingRevision = ref(false)
 const recentActivity = ref<{ refresh: () => Promise<void> } | null>(null)
 
 async function fetchContainer() {
-  if (!orgId.value || !containerId.value) return
+  if (!orgId.value || !containerId.value || !environmentId.value || !selectedTimelineId.value) {
+    loading.value = false
+    return
+  }
   loading.value = true
+  loadError.value = ''
   try {
-      const c = await $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/containers/${containerId.value as ':container_id'}` as const)
+    const url = `/api/cplane/organization/${orgId.value as ':organization_id'}/containers/${containerId.value as ':container_id'}` as const
+    const c = await $fetch(url, { query: { environment_id: environmentId.value, timeline_id: selectedTimelineId.value } })
     name.value = c.name
     if (c.current_version) {
       image.value = c.current_version.image
@@ -61,13 +92,13 @@ async function fetchContainer() {
     hasChanges.value = false
 
   } catch {
-    toast.add({ title: 'Failed to load container', color: 'error' })
+    loadError.value = 'This container is not present in the selected revision.'
   } finally {
     loading.value = false
   }
 }
 
-watch(containerId, fetchContainer, { immediate: true })
+watch([containerId, selectedTimelineId], fetchContainer, { immediate: true })
 
 function buildEnvRows(env: ContainerVersion['env']): { key: string; value: string }[] {
   if (!env || typeof env !== 'object' || Array.isArray(env)) return []
@@ -79,8 +110,8 @@ function markChanged() { hasChanges.value = true }
 function addEnvRow() { envRows.value.push({ key: '', value: '' }); markChanged() }
 function removeEnvRow(i: number) { envRows.value.splice(i, 1); markChanged() }
 
-async function save() {
-  if (!orgId.value || !containerId.value) return
+async function save(autoDeploy: boolean) {
+  if (!orgId.value || !containerId.value || !environmentId.value || !selectedTimelineId.value) return
   saving.value = true
   try {
     const env: Record<string, string> = {}
@@ -89,9 +120,9 @@ async function save() {
       env[row.key] = row.value
     }
 
-      await $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/containers/${containerId.value as ':container_id'}` as const, {
+    await $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/containers/${containerId.value as ':container_id'}` as const, {
           method: 'PATCH',
-          query: { environment_id: environmentId.value ?? undefined },
+          query: { environment_id: environmentId.value, timeline_id: selectedTimelineId.value },
         body: {
           image: image.value,
           port: port.value,
@@ -99,15 +130,22 @@ async function save() {
           public: isPublic.value,
           env: Object.keys(env).length > 0 ? env : null,
           health_check: healthCheckPath.value ? { path: healthCheckPath.value } : null,
-          auto_deploy: autoDeploy.value,
+          auto_deploy: autoDeploy,
         },
       }
     )
-    toast.add({ title: 'Container updated', color: 'success' })
+    if (projectId.value && environmentId.value) {
+      await loadProjectEnvironments(projectId.value, environmentId.value)
+      await refreshEnvironmentList()
+    }
+    const draftTimelineId = environment.value?.draft_timeline
+    await router.replace({
+      query: !autoDeploy && draftTimelineId
+        ? { ...route.query, revision: draftTimelineId }
+        : Object.fromEntries(Object.entries(route.query).filter(([key]) => key !== 'revision')),
+    })
+    toast.add({ title: autoDeploy ? 'Container updated and deployed' : 'Container draft saved', color: 'success' })
     hasChanges.value = false
-    const environment = store.environments.find(environment => environment.id === environmentId.value)
-    if (environment) environment.has_recent_undeployed_revision = !autoDeploy.value
-    autoDeploy.value = false
     await recentActivity.value?.refresh()
   } catch {
     toast.add({ title: 'Failed to save', color: 'error' })
@@ -116,9 +154,48 @@ async function save() {
   }
 }
 
+async function forkRevision() {
+  if (!orgId.value || !projectId.value || !environment.value || !selectedTimelineId.value) return
+  forking.value = true
+  try {
+    await $fetch(
+      `/api/cplane/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/environments/${environment.value.id as ':environment_id'}` as const,
+      { method: 'PATCH', body: { draft_timeline_id: selectedTimelineId.value } },
+    )
+    await loadProjectEnvironments(projectId.value, environmentId.value)
+    await refreshEnvironmentList()
+    await router.replace({ query: { ...route.query, revision: selectedTimelineId.value } })
+    toast.add({ title: 'Revision is now the draft', color: 'success' })
+  } catch {
+    toast.add({ title: 'Failed to fork revision', color: 'error' })
+  } finally {
+    forking.value = false
+  }
+}
+
+async function deployRevision() {
+  if (!orgId.value || !projectId.value || !environment.value || !selectedTimelineId.value) return
+  deployingRevision.value = true
+  try {
+    await $fetch(
+      `/api/cplane/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/environments/${environment.value.id as ':environment_id'}` as const,
+      { method: 'PATCH', body: { deployed_timeline_id: selectedTimelineId.value } },
+    )
+    await loadProjectEnvironments(projectId.value, environmentId.value)
+    await refreshEnvironmentList()
+    toast.add({ title: 'Revision deployed', color: 'success' })
+  } catch {
+    toast.add({ title: 'Failed to deploy revision', color: 'error' })
+  } finally {
+    deployingRevision.value = false
+  }
+}
+
 function backUrl() {
   const orgSlug = route.params.organization_slug?.toString() ?? ''
-  return `/${orgSlug}/containers/${projectId.value}/${environmentId.value}`
+  const path = `/${orgSlug}/containers/${projectId.value}/${environmentId.value}`
+  const revision = route.query.revision
+  return typeof revision === 'string' ? `${path}?revision=${encodeURIComponent(revision)}` : path
 }
 
 const yamlPreview = computed(() => [
@@ -138,6 +215,12 @@ watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged(
   <div class="w-full max-w-[1500px] mx-auto">
     <div v-if="loading && !name" class="flex justify-center py-20">
       <UIcon name="i-lucide-loader-circle" class="size-5 animate-spin text-muted" />
+    </div>
+
+    <div v-else-if="loadError" class="rounded-lg border border-default/60 bg-default p-8 text-center">
+      <p class="text-sm font-medium">Container unavailable</p>
+      <p class="mt-1 text-sm text-muted">{{ loadError }}</p>
+      <UButton class="mt-5" color="neutral" variant="solid" :to="backUrl()">Back to containers</UButton>
     </div>
 
     <div v-else class="overflow-hidden rounded-lg border border-default/60 bg-default">
@@ -162,7 +245,7 @@ watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged(
             <NuxtLink
               v-for="container in containerList"
               :key="container.id"
-              :to="`/${route.params.organization_slug}/containers/${projectId}/${environmentId}/${container.id}`"
+              :to="{ path: `/${route.params.organization_slug}/containers/${projectId}/${environmentId}/${container.id}`, query: { revision: selectedTimelineId } }"
               class="block rounded-md px-3 py-3 transition-colors"
               :class="{'bg-elevated text-highlighted': container.id === containerId}"
             >
@@ -173,9 +256,7 @@ watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged(
         </aside>
 
         <main class="min-w-0 px-5 py-4">
-          <Transition mode="out-in" enter-active-class="transition-opacity duration-150 ease-out" enter-from-class="opacity-0" leave-active-class="transition-opacity duration-100 ease-in" leave-to-class="opacity-0">
-            <div v-if="loading" key="loading" class="flex min-h-64 items-center justify-center"><UIcon name="i-lucide-loader-circle" class="size-5 animate-spin text-muted" /></div>
-            <UTabs v-else key="content" v-model="activeTab" :items="tabs">
+          <UTabs v-model="activeTab" :items="tabs">
             <template #overview>
               <div class="space-y-6 pt-4">
                 <div>
@@ -183,6 +264,12 @@ watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged(
                   <p class="mt-1 text-sm text-muted">Runtime usage for this container.</p>
                 </div>
 
+                <div v-if="revisionView === 'draft' || revisionView === 'historical'" class="rounded-md border border-dashed border-default p-5">
+                  <p class="text-sm font-medium">This container version is not deployed</p>
+                  <p class="mt-1 text-sm text-muted">Metrics are available only for the version running in this environment. Use the project revision switch to view it.</p>
+                </div>
+
+                <template v-else>
                 <section v-for="metric in ['CPU Usage', 'RAM Usage']" :key="metric" class="border-b border-default/60 pb-6">
                   <div class="flex items-center justify-between gap-4">
                     <h3 class="text-sm font-semibold">{{ metric }}</h3>
@@ -198,7 +285,7 @@ watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged(
                 <dl class="grid gap-px overflow-hidden rounded-md bg-default/60 sm:grid-cols-2 lg:grid-cols-4">
                   <div
                     v-for="stat in [
-                    ['Replicas', replicaCount, `Desired: ${replicaCount}`],
+                    ['Replicas', replicaCount, `Current revision: ${replicaCount}`],
                     ['Restart Count', '—', 'Metrics unavailable'],
                     ['CPU (Current)', '—', 'Metrics unavailable'],
                     ['RAM (Current)', '—', 'Metrics unavailable'],
@@ -208,6 +295,7 @@ watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged(
                     <p class="mt-1 text-[11px] text-muted">{{ stat[2] }}</p>
                   </div>
                 </dl>
+                </template>
               </div>
             </template>
 
@@ -215,30 +303,30 @@ watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged(
               <div class="divide-y divide-default/60 pt-4">
                 <section class="grid gap-4 py-6 first:pt-2 lg:grid-cols-[180px_minmax(0,1fr)]">
                   <div><h3 class="text-sm font-semibold">Image</h3><p class="mt-1 text-xs text-muted">Container identity and image.</p></div>
-                  <div class="space-y-3"><UInput v-model="name" disabled /><UInput v-model="image" placeholder="nginx:latest" @input="markChanged" /></div>
+                  <div class="space-y-3"><UInput v-model="name" disabled /><UInput v-model="image" placeholder="nginx:latest" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @input="markChanged" /></div>
                 </section>
                 <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
                   <div><h3 class="text-sm font-semibold">Compute</h3><p class="mt-1 text-xs text-muted">Network port and scale.</p></div>
-                  <div class="grid gap-3 sm:grid-cols-2"><UFormField label="Port"><UInput v-model.number="port" type="number" class="w-full" @input="markChanged" /></UFormField><UFormField label="Replicas"><UInput v-model.number="replicaCount" type="number" :min="0" class="w-full" @input="markChanged" /></UFormField></div>
+                  <div class="grid gap-3 sm:grid-cols-2"><UFormField label="Port"><UInput v-model.number="port" type="number" class="w-full" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @input="markChanged" /></UFormField><UFormField label="Replicas"><UInput v-model.number="replicaCount" type="number" :min="0" class="w-full" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @input="markChanged" /></UFormField></div>
                 </section>
                 <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
                   <div><h3 class="text-sm font-semibold">Visibility</h3><p class="mt-1 text-xs text-muted">Control service access.</p></div>
-                  <UCheckbox v-model="isPublic" label="Publicly accessible" @change="markChanged" />
+                  <UCheckbox v-model="isPublic" label="Publicly accessible" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @change="markChanged" />
                 </section>
                 <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
                   <div><h3 class="text-sm font-semibold">Health Check</h3><p class="mt-1 text-xs text-muted">Availability endpoint.</p></div>
-                  <UInput v-model="healthCheckPath" placeholder="/health" @input="markChanged" />
+                  <UInput v-model="healthCheckPath" placeholder="/health" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @input="markChanged" />
                 </section>
                 <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
                   <div><h3 class="text-sm font-semibold">Environment</h3><p class="mt-1 text-xs text-muted">Custom environment variables.</p></div>
                   <div class="space-y-3">
                     <div v-for="(row, i) in envRows" :key="i" class="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)_auto]">
-                      <UInput v-model="row.key" placeholder="KEY" @input="markChanged" />
-                      <UInput v-model="row.value" placeholder="value" type="password" @input="markChanged" />
-                      <UButton size="xs" color="error" :icon="ICONS.trash" @click="removeEnvRow(i)">Remove</UButton>
+                      <UInput v-model="row.key" placeholder="KEY" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @input="markChanged" />
+                      <UInput v-model="row.value" placeholder="value" type="password" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @input="markChanged" />
+                      <UButton size="xs" color="error" :icon="ICONS.trash" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @click="removeEnvRow(i)">Remove</UButton>
                     </div>
                     <p v-if="envRows.length === 0" class="text-sm text-muted">No environment variables configured.</p>
-                    <UButton size="sm" variant="solid" color="neutral" :icon="ICONS.plus" @click="addEnvRow">Add Variable</UButton>
+                    <UButton size="sm" variant="solid" color="neutral" :icon="ICONS.plus" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @click="addEnvRow">Add Variable</UButton>
                   </div>
                 </section>
                 <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
@@ -246,14 +334,20 @@ watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged(
                   <pre class="overflow-x-auto rounded-md bg-elevated/40 p-4 font-mono text-xs text-muted">{{ yamlPreview }}</pre>
                 </section>
                 <div class="flex justify-end gap-3 py-5">
-                  <UCheckbox v-model="autoDeploy" label="Deploy this revision" description="Make this revision active in the environment." class="mr-auto" />
-                  <UButton variant="ghost" color="neutral" :to="backUrl()">Cancel</UButton>
-                  <UButton :icon="ICONS.check" :loading="saving" :disabled="!hasChanges" @click="save">Save Changes</UButton>
+                  <template v-if="revisionView === 'draft' || revisionView === 'synced'">
+                    <UButton variant="ghost" color="neutral" :to="backUrl()">Cancel</UButton>
+                    <UButton :icon="ICONS.pencil" color="neutral" variant="solid" :loading="saving" :disabled="!hasChanges" @click="save(false)">Save as draft</UButton>
+                    <UButton :icon="ICONS.check" :loading="saving" :disabled="!hasChanges" @click="save(true)">Save &amp; deploy</UButton>
+                  </template>
+                  <template v-else>
+                    <p class="mr-auto text-sm text-muted">Fork this revision to edit it.</p>
+                    <UButton :icon="ICONS.pencil" color="neutral" variant="solid" :loading="forking" @click="forkRevision">Fork revision</UButton>
+                    <UButton v-if="revisionView === 'historical'" :icon="ICONS.check" :loading="deployingRevision" @click="deployRevision">Deploy revision</UButton>
+                  </template>
                 </div>
               </div>
             </template>
-            </UTabs>
-          </Transition>
+          </UTabs>
         </main>
 
         <DeploymentsRecentActivity v-if="orgId && projectId && containerId" ref="recentActivity" :organization-id="orgId" :project-id="projectId" :environment-id="environmentId" event-type-prefix="container" :target-id="containerId" />

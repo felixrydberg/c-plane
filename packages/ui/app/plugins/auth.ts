@@ -8,9 +8,7 @@ async function fetchProjects() {
   const requestFetch = import.meta.server ? useRequestFetch() : $fetch
 
   const { data } = await requestFetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects` as const)
-  if (data?.length) {
-    store.projects = data
-  }
+  store.projects = data ?? []
 }
 
 async function syncCurrentProjectEnvironments() {

@@ -1,0 +1,1 @@
+ALTER TABLE "project_environment" ADD COLUMN "is_preview" boolean DEFAULT false NOT NULL;

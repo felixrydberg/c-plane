@@ -35,7 +35,7 @@ async function createProject() {
       body: { name: name.value.trim() },
     })
 
-    store.projects = [...store.projects, project]
+    store.projects = [...(Array.isArray(store.projects) ? store.projects : []), project]
     createdProject.value = project
     await loadCreatedProject()
   } catch (cause: unknown) {

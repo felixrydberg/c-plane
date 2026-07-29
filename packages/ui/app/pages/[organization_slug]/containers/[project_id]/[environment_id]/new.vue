@@ -2,6 +2,7 @@
 import type { Region } from '@cplane/sdk'
 import { ICONS } from '~/utils/icons'
 import { COMPUTE_UNIT_ITEMS, computeUnitByLabel } from '~/utils/compute-units'
+import { loadProjectEnvironments } from '~/utils/auth'
 
 const store = useStore()
 const route = useRoute()
@@ -25,6 +26,7 @@ const state = reactive({
 })
 
 const computeUnit = ref('0.5')
+const createAsDraft = ref(false)
 
 const regions = ref<Region[]>([])
 const regionId = ref('')
@@ -53,12 +55,17 @@ async function handleCreate() {
       port: state.port, replica_count: state.replicas, public: state.isPublic,
       health_check: { path: state.healthCheckPath }, region_id: regionId.value,
       resources: { cpu: { min: unit.cpu, max: unit.cpu }, memory: { min: `${Math.round(unit.ramGib * 1024)}Mi`, max: `${Math.round(unit.ramGib * 1024)}Mi` } },
+      auto_deploy: !createAsDraft.value,
     }
     if (Object.keys(envObj).length > 0) body.env = envObj
 
-      await $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/containers` as const, { method: 'POST', body })
-    toast.add({ title: 'Container created', color: 'success' })
-    navigateTo(`/${route.params.organization_slug}/containers/${projectId.value}/${environmentId.value}`)
+    await $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/containers` as const, { method: 'POST', body })
+    await loadProjectEnvironments(projectId.value, environmentId.value)
+    toast.add({ title: createAsDraft.value ? 'Container draft created' : 'Container created and deployed', color: 'success' })
+    const path = `/${route.params.organization_slug}/containers/${projectId.value}/${environmentId.value}`
+    navigateTo(createAsDraft.value && store.environment?.draft_timeline
+      ? { path, query: { revision: store.environment.draft_timeline } }
+      : path)
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Failed to create container'
     toast.add({ title: 'Failed to create container', color: 'error' })
@@ -114,9 +121,10 @@ function backUrl() { return `/${route.params.organization_slug}/containers/${pro
             <div><dt class="text-xs text-muted">Compute</dt><dd class="mt-1">{{ computeUnit }}</dd></div>
             <div><dt class="text-xs text-muted">Exposure</dt><dd class="mt-1">{{ state.isPublic ? 'Public' : 'Private' }}</dd></div>
           </dl>
-          <div class="mt-8 flex gap-3">
+          <UCheckbox v-model="createAsDraft" class="mt-8" label="Create as draft" description="Save this container without deploying it." />
+          <div class="mt-5 flex gap-3">
             <UButton variant="ghost" color="neutral" :to="backUrl()">Cancel</UButton>
-            <UButton :loading="loading" :disabled="!state.name.trim() || !state.image.trim() || !regionId" @click="handleCreate">Create Container</UButton>
+            <UButton :icon="ICONS.check" :loading="loading" :disabled="!state.name.trim() || !state.image.trim() || !regionId" @click="handleCreate">Continue</UButton>
           </div>
         </div>
       </aside>

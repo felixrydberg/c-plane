@@ -18,28 +18,22 @@ const timelines = ref<TimelineRevision[]>([]);
 const timelinesLoading = ref(false);
 const selectedTimelineId = ref<string>('');
 const isDropdownOpen = ref(false);
+const isPreview = ref(true);
 
 const selectedTimelineLabel = computed(() => {
-  if (!selectedTimelineId.value) return 'Latest revision';
   const t = timelines.value.find(t => t.id === selectedTimelineId.value);
-  return t ? `Revision ${t.timeline} — ${new Date(t.created_at).toLocaleDateString()}` : 'Latest revision';
+  return t ? `Revision ${t.timeline} — ${new Date(t.created_at).toLocaleDateString()}` : 'Select a revision';
 });
 
 const timelineMenuItems = computed<DropdownMenuItem[][]>(() => {
-  const list: DropdownMenuItem[] = [{
-    label: 'Latest revision',
-    icon: 'i-heroicons:star',
-    onSelect() { selectedTimelineId.value = ''; },
-  }];
-
-  for (const t of timelines.value) {
+  const list: DropdownMenuItem[] = timelines.value.map(t => {
     const date = new Date(t.created_at).toLocaleDateString();
-    list.push({
+    return {
       label: `Revision ${t.timeline} — ${date}`,
       icon: 'i-heroicons:clock',
       onSelect() { selectedTimelineId.value = t.id; },
-    });
-  }
+    };
+  });
 
   return [list];
 });
@@ -51,6 +45,7 @@ async function fetchTimelines() {
     timelines.value = await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/timelines` as const);
   } catch {
     timelines.value = [];
+    error.value = 'Unable to load revisions. Close and reopen this dialog to retry.';
   } finally {
     timelinesLoading.value = false;
   }
@@ -59,23 +54,31 @@ async function fetchTimelines() {
 watch(open, async (isOpen) => {
   if (isOpen) {
     name.value = '';
+    isPreview.value = true;
     selectedTimelineId.value = props.parentTimelineId ?? '';
     error.value = '';
     await fetchTimelines();
-    if (props.parentTimelineId && !timelines.value.find(t => t.id === props.parentTimelineId)) {
-      selectedTimelineId.value = '';
+    if (props.parentTimelineId) {
+      if (!timelines.value.some(t => t.id === props.parentTimelineId)) {
+        error.value ||= 'The selected parent revision is no longer available.';
+      }
+      return;
+    }
+    selectedTimelineId.value = timelines.value[0]?.id ?? '';
+    if (!selectedTimelineId.value && !error.value) {
+      error.value = 'No revisions are available to base this environment on.';
     }
   }
 });
 
 async function handleCreate() {
-  if (!store.organization?.id || !store.project?.id || !name.value.trim()) return;
+  if (!store.organization?.id || !store.project?.id || !name.value.trim() || !selectedTimelineId.value) return;
 
   loading.value = true;
   error.value = '';
 
   try {
-    const body: Record<string, unknown> = { name: name.value.trim() };
+    const body: Record<string, unknown> = { name: name.value.trim(), is_preview: isPreview.value };
     if (selectedTimelineId.value) {
       body.parent_timeline_id = selectedTimelineId.value;
     }
@@ -87,6 +90,7 @@ async function handleCreate() {
 
     toast.add({ title: 'Environment created', color: 'success' });
     name.value = '';
+    isPreview.value = true;
     selectedTimelineId.value = '';
     open.value = false;
     emit('created', created);
@@ -133,13 +137,15 @@ async function handleCreate() {
             </UDropdownMenu>
           </UFormField>
 
+          <UCheckbox v-model="isPreview" label="Preview environment (delete its revisions when removed)" :disabled="loading" />
+
           <p v-if="error" class="text-sm text-red-500">{{ error }}</p>
 
           <div class="flex justify-end gap-3 pt-2">
             <UButton variant="ghost" color="neutral" :disabled="loading" @click="open = false">
               Cancel
             </UButton>
-            <UButton type="submit" :loading="loading" :disabled="!name.trim()">
+            <UButton type="submit" :loading="loading" :disabled="!name.trim() || !selectedTimelineId">
               Create Environment
             </UButton>
           </div>

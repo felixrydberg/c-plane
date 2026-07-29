@@ -28,6 +28,14 @@ const environmentName = computed(() => {
   const list = environmentList.value ?? store.environments
   return list.find(b => b.id === environmentId.value)?.name ?? environmentId.value
 })
+const environment = computed(() =>
+  environmentList.value?.find(item => item.id === environmentId.value) ?? null
+)
+const revisionId = computed(() => {
+  const revision = route.query.revision
+  return typeof revision === 'string' ? revision : environment.value?.deployed_timeline
+})
+const isViewingDeployed = computed(() => revisionId.value === environment.value?.deployed_timeline)
 
   const fetchUrl = computed(() => {
     const orgId = store.organization?.id
@@ -42,6 +50,7 @@ const environmentName = computed(() => {
     query: {
       project_id: projectId,
       environment_id: environmentId,
+      timeline_id: revisionId,
     },
     immediate: computed(() => !!(store.organization?.id && projectId.value && environmentId.value)),
   },
@@ -66,7 +75,7 @@ watch(() => store.refreshKey, () => { refreshData() })
       <div class="min-w-0">
         <p class="mb-2 truncate text-sm text-muted">{{ projectName }} <span class="mx-1 text-default/30">/</span> {{ environmentName }}</p>
         <h1 class="text-2xl font-semibold">Containers</h1>
-        <p class="mt-1 text-sm text-muted">Runtime services deployed to this environment.</p>
+        <p class="mt-1 text-sm text-muted">Runtime services in the {{ isViewingDeployed ? 'deployed' : 'draft' }} revision.</p>
       </div>
       <UButton class="shrink-0" :icon="ICONS.plus" :to="`/${route.params.organization_slug}/containers/${projectId}/${environmentId}/new`">New Container</UButton>
     </div>
@@ -74,7 +83,7 @@ watch(() => store.refreshKey, () => { refreshData() })
     <div class="grid overflow-hidden rounded-md border border-dashed border-default bg-transparent sm:grid-cols-3">
       <div class="px-4 py-3"><p class="text-xs text-muted">Environment</p><p class="mt-1 text-sm font-medium">{{ environmentName }}</p></div>
       <div class="px-4 py-3"><p class="text-xs text-muted">Containers</p><p class="mt-1 font-mono text-sm">{{ containers.length }}</p></div>
-      <div class="px-4 py-3"><p class="text-xs text-muted">Desired replicas</p><p class="mt-1 font-mono text-sm">{{ containers.reduce((total, container) => total + (container.current_version?.replica_count ?? 0), 0) }}</p></div>
+      <div class="px-4 py-3"><p class="text-xs text-muted">{{ isViewingDeployed ? 'Deployed' : 'Draft' }} replicas</p><p class="mt-1 font-mono text-sm">{{ containers.reduce((total, container) => total + (container.current_version?.replica_count ?? 0), 0) }}</p></div>
     </div>
 
     <DeploymentsContainersListing
@@ -83,6 +92,7 @@ watch(() => store.refreshKey, () => { refreshData() })
       :organization-id="store.organization.id"
       :project-id="projectId"
       :environment-id="environmentId"
+      :revision-id="revisionId"
       :status="status"
       @refresh="refresh"
     />

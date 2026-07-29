@@ -45,6 +45,16 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "timeline_id",
+            "in": "query",
+            "description": "Revision whose pinned containers to return",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -141,6 +151,26 @@
             "in": "path",
             "description": "Container ID",
             "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "environment_id",
+            "in": "query",
+            "description": "Environment that owns the revision history",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "timeline_id",
+            "in": "query",
+            "description": "Revision whose pinned container version to return",
+            "required": false,
             "schema": {
               "type": "string",
               "format": "uuid"
@@ -251,6 +281,16 @@
             "name": "environment_id",
             "in": "query",
             "description": "Environment ID for the revision",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "timeline_id",
+            "in": "query",
+            "description": "Revision that supplies the container update base",
             "required": true,
             "schema": {
               "type": "string",
@@ -1360,7 +1400,7 @@
             }
           },
           "400": {
-            "description": "Name or timeline is required"
+            "description": "Name or revision is required"
           },
           "404": {
             "description": "Not found"
@@ -2936,6 +2976,9 @@
           "name"
         ],
         "properties": {
+          "is_preview": {
+            "type": "boolean"
+          },
           "name": {
             "type": "string"
           },
@@ -3134,13 +3177,17 @@
         "required": [
           "id",
           "name",
-          "timeline",
-          "is_default",
-          "has_recent_undeployed_revision"
+          "is_preview",
+          "draft_timeline",
+          "deployed_timeline",
+          "is_default"
         ],
         "properties": {
-          "has_recent_undeployed_revision": {
-            "type": "boolean"
+          "deployed_timeline": {
+            "type": "string"
+          },
+          "draft_timeline": {
+            "type": "string"
           },
           "id": {
             "type": "string",
@@ -3149,10 +3196,10 @@
           "is_default": {
             "type": "boolean"
           },
-          "name": {
-            "type": "string"
+          "is_preview": {
+            "type": "boolean"
           },
-          "timeline": {
+          "name": {
             "type": "string"
           }
         }
@@ -3162,17 +3209,28 @@
         "required": [
           "id",
           "name",
-          "timeline",
+          "is_preview",
+          "draft_timeline",
+          "deployed_timeline",
           "is_default",
           "project_id",
           "project_name"
         ],
         "properties": {
+          "deployed_timeline": {
+            "type": "string"
+          },
+          "draft_timeline": {
+            "type": "string"
+          },
           "id": {
             "type": "string",
             "format": "uuid"
           },
           "is_default": {
+            "type": "boolean"
+          },
+          "is_preview": {
             "type": "boolean"
           },
           "name": {
@@ -3183,9 +3241,6 @@
             "format": "uuid"
           },
           "project_name": {
-            "type": "string"
-          },
-          "timeline": {
             "type": "string"
           }
         }
@@ -3224,6 +3279,12 @@
               "null"
             ],
             "format": "uuid"
+          },
+          "actor_name": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "created_at": {
             "type": "string"
@@ -3793,18 +3854,25 @@
       "UpdateEnvironmentRequest": {
         "type": "object",
         "properties": {
-          "name": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "timeline_id": {
+          "deployed_timeline_id": {
             "type": [
               "string",
               "null"
             ],
             "format": "uuid"
+          },
+          "draft_timeline_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },

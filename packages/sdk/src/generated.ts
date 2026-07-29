@@ -543,6 +543,7 @@ export interface components {
             read_replicas?: number | null;
         };
         CreateEnvironmentRequest: {
+            is_preview?: boolean;
             name: string;
             /** Format: uuid */
             parent_timeline_id?: string | null;
@@ -594,22 +595,25 @@ export interface components {
             project_id: string;
         };
         EnvironmentResponse: {
-            has_recent_undeployed_revision: boolean;
+            deployed_timeline: string;
+            draft_timeline: string;
             /** Format: uuid */
             id: string;
             is_default: boolean;
+            is_preview: boolean;
             name: string;
-            timeline: string;
         };
         EnvironmentWithProjectResponse: {
+            deployed_timeline: string;
+            draft_timeline: string;
             /** Format: uuid */
             id: string;
             is_default: boolean;
+            is_preview: boolean;
             name: string;
             /** Format: uuid */
             project_id: string;
             project_name: string;
-            timeline: string;
         };
         ErrorResponse: {
             details?: unknown;
@@ -620,6 +624,7 @@ export interface components {
             action: string;
             /** Format: uuid */
             actor_id?: string | null;
+            actor_name?: string | null;
             created_at: string;
             /** Format: uuid */
             id: string;
@@ -775,9 +780,11 @@ export interface components {
             name?: string | null;
         };
         UpdateEnvironmentRequest: {
-            name?: string | null;
             /** Format: uuid */
-            timeline_id?: string | null;
+            deployed_timeline_id?: string | null;
+            /** Format: uuid */
+            draft_timeline_id?: string | null;
+            name?: string | null;
         };
         UpdateRegistryAccessTokenRequest: {
             repository_permissions: components["schemas"]["RepositoryPermissionRequest"][];
@@ -798,6 +805,8 @@ export interface operations {
                 project_id?: string;
                 /** @description Filter by environment */
                 environment_id?: string;
+                /** @description Revision whose pinned containers to return */
+                timeline_id?: string;
             };
             header?: never;
             path: {
@@ -855,7 +864,12 @@ export interface operations {
     };
     get_container: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Environment that owns the revision history */
+                environment_id?: string;
+                /** @description Revision whose pinned container version to return */
+                timeline_id?: string;
+            };
             header?: never;
             path: {
                 /** @description Organization ID */
@@ -923,6 +937,8 @@ export interface operations {
             query: {
                 /** @description Environment ID for the revision */
                 environment_id: string;
+                /** @description Revision that supplies the container update base */
+                timeline_id: string;
             };
             header?: never;
             path: {
@@ -1580,7 +1596,7 @@ export interface operations {
                     "application/json": components["schemas"]["EnvironmentResponse"];
                 };
             };
-            /** @description Name or timeline is required */
+            /** @description Name or revision is required */
             400: {
                 headers: {
                     [name: string]: unknown;

@@ -11,11 +11,11 @@ pub async fn create_revision(
     environment: &project_environment::Model,
     updated_pins: &TimelinePins,
     name: Option<String>,
-    update_environment: bool,
+    deploy: bool,
 ) -> Result<project_timeline::Model, AppError> {
     use project_timeline::{ActiveModel, Entity};
 
-    let head = Entity::find_by_id(environment.timeline)
+    let head = Entity::find_by_id(environment.draft_timeline)
         .one(tx)
         .await?
         .ok_or_else(|| AppError::NotFound("Environment timeline not found".into()))?;
@@ -34,12 +34,13 @@ pub async fn create_revision(
 
     let inserted = new_entry.insert(tx).await?;
 
-    if update_environment {
-        let mut environment_active: project_environment::ActiveModel = environment.clone().into();
-        environment_active.timeline = Set(inserted.id);
-        environment_active.updated_at = Set(Utc::now().fixed_offset());
-        environment_active.update(tx).await?;
+    let mut environment_active: project_environment::ActiveModel = environment.clone().into();
+    environment_active.draft_timeline = Set(inserted.id);
+    if deploy {
+        environment_active.deployed_timeline = Set(inserted.id);
     }
+    environment_active.updated_at = Set(Utc::now().fixed_offset());
+    environment_active.update(tx).await?;
 
     Ok(inserted)
 }

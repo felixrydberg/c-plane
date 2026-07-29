@@ -1,10 +1,10 @@
 use axum::{Json, extract::Path};
-use chrono::{Duration, Utc};
+use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, Set,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -27,6 +27,12 @@ pub struct CreateProjectRequest {
 pub struct CreateEnvironmentRequest {
     pub name: String,
     pub parent_timeline_id: Option<Uuid>,
+    #[serde(default = "default_preview")]
+    pub is_preview: bool,
+}
+
+fn default_preview() -> bool {
+    true
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -51,16 +57,19 @@ pub struct ProjectResponse {
 pub struct EnvironmentResponse {
     pub id: Uuid,
     pub name: String,
-    pub timeline: String,
+    pub is_preview: bool,
+    pub draft_timeline: String,
+    pub deployed_timeline: String,
     pub is_default: bool,
-    pub has_recent_undeployed_revision: bool,
 }
 
 #[derive(Serialize, ToSchema)]
 pub struct EnvironmentWithProjectResponse {
     pub id: Uuid,
     pub name: String,
-    pub timeline: String,
+    pub is_preview: bool,
+    pub draft_timeline: String,
+    pub deployed_timeline: String,
     pub is_default: bool,
     pub project_id: Uuid,
     pub project_name: String,
@@ -144,7 +153,9 @@ pub async fn create_project(
         project_id: Set(project_id),
         organization_id: Set(organization_id),
         name: Set("main".into()),
-        timeline: Set(timeline_id),
+        is_preview: Set(false),
+        draft_timeline: Set(timeline_id),
+        deployed_timeline: Set(timeline_id),
         created_at: Set(Utc::now().fixed_offset()),
         updated_at: Set(Utc::now().fixed_offset()),
     }
@@ -181,9 +192,10 @@ pub async fn create_project(
             main_environment: Some(EnvironmentResponse {
                 id: main_environment.id,
                 name: main_environment.name,
-                timeline: main_environment.timeline.to_string(),
+                is_preview: main_environment.is_preview,
+                draft_timeline: main_environment.draft_timeline.to_string(),
+                deployed_timeline: main_environment.deployed_timeline.to_string(),
                 is_default: true,
-                has_recent_undeployed_revision: false,
             }),
             created_at: updated_project.created_at.to_string(),
             updated_at: updated_project.updated_at.to_string(),
@@ -251,9 +263,10 @@ pub async fn list_projects(
             main_environment: environment.map(|b| EnvironmentResponse {
                 id: b.id,
                 name: b.name,
-                timeline: b.timeline.to_string(),
+                is_preview: b.is_preview,
+                draft_timeline: b.draft_timeline.to_string(),
+                deployed_timeline: b.deployed_timeline.to_string(),
                 is_default: p.default_environment_id == Some(b.id),
-                has_recent_undeployed_revision: false,
             }),
             created_at: p.created_at.to_string(),
             updated_at: p.updated_at.to_string(),
@@ -300,9 +313,10 @@ pub async fn get_project(
             .map(|b| EnvironmentResponse {
                 id: b.id,
                 name: b.name,
-                timeline: b.timeline.to_string(),
+                is_preview: b.is_preview,
+                draft_timeline: b.draft_timeline.to_string(),
+                deployed_timeline: b.deployed_timeline.to_string(),
                 is_default: p.default_environment_id == Some(b.id),
-                has_recent_undeployed_revision: false,
             })
     } else {
         None
@@ -422,7 +436,9 @@ pub async fn list_organization_environments(
             EnvironmentWithProjectResponse {
                 id: b.id,
                 name: b.name,
-                timeline: b.timeline.to_string(),
+                is_preview: b.is_preview,
+                draft_timeline: b.draft_timeline.to_string(),
+                deployed_timeline: b.deployed_timeline.to_string(),
                 is_default,
                 project_id: b.project_id,
                 project_name: project_names
@@ -469,27 +485,6 @@ pub async fn list_environments(
         .all(tx)
         .await?;
 
-    let environment_updated_at: HashMap<Uuid, _> = environments
-        .iter()
-        .map(|environment| (environment.id, environment.updated_at))
-        .collect();
-    let undeployed_environment_ids: HashSet<Uuid> = project_timeline::Entity::find()
-        .filter(project_timeline::Column::ProjectId.eq(project_id))
-        .filter(
-            project_timeline::Column::CreatedAt.gte(Utc::now().fixed_offset() - Duration::hours(1)),
-        )
-        .all(tx)
-        .await?
-        .into_iter()
-        .filter_map(|revision| {
-            let environment_id = revision.environment_id?;
-            environment_updated_at
-                .get(&environment_id)
-                .is_some_and(|updated_at| revision.created_at > *updated_at)
-                .then_some(environment_id)
-        })
-        .collect();
-
     scoped.commit().await?;
 
     let responses = environments
@@ -497,9 +492,10 @@ pub async fn list_environments(
         .map(|b| EnvironmentResponse {
             id: b.id,
             name: b.name,
-            timeline: b.timeline.to_string(),
+            is_preview: b.is_preview,
+            draft_timeline: b.draft_timeline.to_string(),
+            deployed_timeline: b.deployed_timeline.to_string(),
             is_default: project.default_environment_id == Some(b.id),
-            has_recent_undeployed_revision: undeployed_environment_ids.contains(&b.id),
         })
         .collect();
 
@@ -591,7 +587,9 @@ pub async fn create_environment(
         project_id: Set(project_id),
         organization_id: Set(organization_id),
         name: Set(name),
-        timeline: Set(timeline_id),
+        is_preview: Set(body.is_preview),
+        draft_timeline: Set(timeline_id),
+        deployed_timeline: Set(timeline_id),
         created_at: Set(Utc::now().fixed_offset()),
         updated_at: Set(Utc::now().fixed_offset()),
     }
@@ -618,9 +616,10 @@ pub async fn create_environment(
         Json(EnvironmentResponse {
             id: environment.id,
             name: environment.name,
-            timeline: environment.timeline.to_string(),
+            is_preview: environment.is_preview,
+            draft_timeline: environment.draft_timeline.to_string(),
+            deployed_timeline: environment.deployed_timeline.to_string(),
             is_default: project.default_environment_id == Some(environment.id),
-            has_recent_undeployed_revision: false,
         }),
     ))
 }
@@ -691,12 +690,13 @@ pub async fn list_project_timelines(
 #[derive(Deserialize, ToSchema)]
 pub struct UpdateEnvironmentRequest {
     pub name: Option<String>,
-    pub timeline_id: Option<Uuid>,
+    pub draft_timeline_id: Option<Uuid>,
+    pub deployed_timeline_id: Option<Uuid>,
 }
 
 #[cfg(test)]
 mod update_environment_request_tests {
-    use super::UpdateEnvironmentRequest;
+    use super::{CreateEnvironmentRequest, UpdateEnvironmentRequest};
 
     #[test]
     fn accepts_a_rename_without_a_timeline_change() {
@@ -704,7 +704,16 @@ mod update_environment_request_tests {
             serde_json::from_str(r#"{"name":"staging"}"#).unwrap();
 
         assert_eq!(request.name.as_deref(), Some("staging"));
-        assert_eq!(request.timeline_id, None);
+        assert_eq!(request.draft_timeline_id, None);
+        assert_eq!(request.deployed_timeline_id, None);
+    }
+
+    #[test]
+    fn creates_preview_environments_by_default() {
+        let request: CreateEnvironmentRequest =
+            serde_json::from_str(r#"{"name":"staging"}"#).unwrap();
+
+        assert!(request.is_preview);
     }
 }
 
@@ -719,7 +728,7 @@ mod update_environment_request_tests {
     ),
     responses(
         (status = 200, description = "Environment updated", body = EnvironmentResponse),
-        (status = 400, description = "Name or timeline is required"),
+        (status = 400, description = "Name or revision is required"),
         (status = 404, description = "Not found"),
         (status = 409, description = "Environment name already exists"),
     ),
@@ -736,8 +745,8 @@ pub async fn update_environment(
     if name.as_ref().is_some_and(String::is_empty) {
         return Err(AppError::BadRequest("Name is required".into()));
     }
-    if name.is_none() && body.timeline_id.is_none() {
-        return Err(AppError::BadRequest("Name or timeline is required".into()));
+    if name.is_none() && body.draft_timeline_id.is_none() && body.deployed_timeline_id.is_none() {
+        return Err(AppError::BadRequest("Name or revision is required".into()));
     }
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
@@ -750,13 +759,29 @@ pub async fn update_environment(
         .await?
         .ok_or_else(|| AppError::NotFound("Project not found".into()))?;
 
-    if let Some(timeline_id) = body.timeline_id {
-        project_timeline::Entity::find()
+    for timeline_id in [body.draft_timeline_id, body.deployed_timeline_id]
+        .into_iter()
+        .flatten()
+    {
+        let timeline = project_timeline::Entity::find()
             .filter(project_timeline::Column::Id.eq(timeline_id))
             .filter(project_timeline::Column::ProjectId.eq(project_id))
             .one(tx)
             .await?
             .ok_or_else(|| AppError::NotFound("Timeline revision not found".into()))?;
+
+        if let Some(source_environment_id) = timeline.environment_id
+            && project_environment::Entity::find_by_id(source_environment_id)
+                .filter(project_environment::Column::ProjectId.eq(project_id))
+                .filter(project_environment::Column::IsPreview.eq(true))
+                .one(tx)
+                .await?
+                .is_some()
+        {
+            return Err(AppError::Conflict(
+                "Preview revisions cannot be repointed".into(),
+            ));
+        }
     }
 
     let environment = project_environment::Entity::find_by_id(environment_id)
@@ -764,6 +789,14 @@ pub async fn update_environment(
         .one(tx)
         .await?
         .ok_or_else(|| AppError::NotFound("Environment not found".into()))?;
+
+    if environment.is_preview
+        && (body.draft_timeline_id.is_some() || body.deployed_timeline_id.is_some())
+    {
+        return Err(AppError::Conflict(
+            "Preview environments cannot be repointed".into(),
+        ));
+    }
 
     if let Some(ref name) = name
         && name != &environment.name
@@ -783,8 +816,11 @@ pub async fn update_environment(
     if let Some(name) = name {
         active.name = Set(name);
     }
-    if let Some(timeline_id) = body.timeline_id {
-        active.timeline = Set(timeline_id);
+    if let Some(timeline_id) = body.draft_timeline_id {
+        active.draft_timeline = Set(timeline_id);
+    }
+    if let Some(timeline_id) = body.deployed_timeline_id {
+        active.deployed_timeline = Set(timeline_id);
     }
     active.updated_at = Set(Utc::now().fixed_offset());
     let updated = active.update(tx).await?;
@@ -803,16 +839,17 @@ pub async fn update_environment(
     .await?;
 
     scoped.commit().await?;
-    if let Some(timeline_id) = body.timeline_id {
+    if let Some(timeline_id) = body.deployed_timeline_id {
         agent::emit_compute(project.id, organization_id, environment_id, timeline_id).await?;
     }
 
     Ok(Json(EnvironmentResponse {
         id: updated.id,
         name: updated.name,
-        timeline: updated.timeline.to_string(),
+        is_preview: updated.is_preview,
+        draft_timeline: updated.draft_timeline.to_string(),
+        deployed_timeline: updated.deployed_timeline.to_string(),
         is_default: project.default_environment_id == Some(updated.id),
-        has_recent_undeployed_revision: false,
     }))
 }
 
@@ -859,15 +896,29 @@ pub async fn delete_environment(
         .await?
         .ok_or_else(|| AppError::NotFound("Environment not found".into()))?;
 
-    // Delete timeline revisions belonging to this environment
-    let deleted_timeline_ids: Vec<Uuid> = project_timeline::Entity::find()
-        .filter(project_timeline::Column::ProjectId.eq(project_id))
-        .filter(project_timeline::Column::EnvironmentId.eq(environment_id))
-        .all(tx)
-        .await?
-        .into_iter()
-        .map(|t| t.id)
-        .collect();
+    let deleted_timeline_ids: Vec<Uuid> = if environment.is_preview {
+        project_timeline::Entity::find()
+            .filter(project_timeline::Column::ProjectId.eq(project_id))
+            .filter(project_timeline::Column::EnvironmentId.eq(environment_id))
+            .all(tx)
+            .await?
+            .into_iter()
+            .map(|t| t.id)
+            .collect()
+    } else {
+        let mut retained_revisions = project_timeline::Entity::find()
+            .filter(project_timeline::Column::ProjectId.eq(project_id))
+            .filter(project_timeline::Column::EnvironmentId.eq(environment_id))
+            .all(tx)
+            .await?;
+
+        for revision in &mut retained_revisions {
+            let mut active: project_timeline::ActiveModel = revision.clone().into();
+            active.environment_id = Set(None);
+            active.update(tx).await?;
+        }
+        Vec::new()
+    };
 
     if !deleted_timeline_ids.is_empty() {
         // Clear parent references on other revisions that pointed to deleted timelines
