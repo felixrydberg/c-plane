@@ -6,9 +6,10 @@ publish = false
 
 [dependencies]
 redis = { version = "0.32", features = ["tokio-comp"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 sea-orm = { version = "1.1.15", features = ["sqlx-postgres", "runtime-tokio-rustls", "with-uuid"] }
 serde_json = "1"
 tokio = { version = "1", features = ["macros", "process", "rt-multi-thread", "signal", "time"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-uuid = { version = "1", features = ["v4"] }
+uuid = { version = "1", features = ["serde", "v4"] }

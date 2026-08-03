@@ -971,6 +971,7 @@ pub struct ResolvedContainerPin {
     pub version_id: Uuid,
     pub version: i32,
     pub image: String,
+    pub external_registry_id: Option<Uuid>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -1051,6 +1052,7 @@ pub async fn get_timeline(
                     version_id: *version_id,
                     version: version.version,
                     image: version.image.clone(),
+                    external_registry_id: version.external_registry_id,
                 });
             }
         }

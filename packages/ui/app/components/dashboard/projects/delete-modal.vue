@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ICONS } from '~/utils/icons'
+import { getErrorMessage } from '~/utils/errors'
 
 const store = useStore();
 const toast = useToast();
@@ -37,7 +38,7 @@ async function handleDelete() {
     open.value = false;
     emit('deleted');
   } catch (e: unknown) {
-    error.value = (e as { data?: { message?: string } })?.data?.message || 'Failed to delete project';
+    error.value = getErrorMessage(e, 'Failed to delete project');
   } finally {
     loading.value = false;
   }

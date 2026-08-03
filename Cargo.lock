@@ -846,6 +846,7 @@ name = "c-plane-worker"
 version = "0.1.0"
 dependencies = [
  "redis",
+ "reqwest",
  "sea-orm",
  "serde_json",
  "tokio",

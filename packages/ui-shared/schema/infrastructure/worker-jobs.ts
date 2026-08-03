@@ -1,8 +1,11 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { check, index, integer, jsonb, pgPolicy, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { organization } from "../tenants/organization";
+import { app_tenant, orgAllowed } from "../rls";
 
 export const worker_job = pgTable("worker_job", {
   id: uuid("id").primaryKey(),
+  organization_id: uuid("organization_id").references(() => organization.id, { onDelete: "cascade" }),
   queue_name: text("queue_name").notNull(),
   job_type: text("job_type").notNull(),
   payload: jsonb("payload").notNull().default({}),
@@ -26,6 +29,12 @@ export const worker_job = pgTable("worker_job", {
   uniqueIndex("worker_job_active_dedupe_uidx")
     .on(table.queue_name, table.dedupe_key)
     .where(sql`${table.dedupe_key} is not null and ${table.status} in ('queued', 'running')`),
+  pgPolicy("worker_job_external_registry_cleanup_insert_rls", {
+    as: "permissive",
+    for: "insert",
+    to: app_tenant,
+    withCheck: sql`${orgAllowed(table.organization_id)} and ${table.queue_name} = 'secrets' and ${table.job_type} = 'external_registry_secret_cleanup'`,
+  }),
 ]).enableRLS();
 
 export const registry_maintenance = pgTable("registry_maintenance", {

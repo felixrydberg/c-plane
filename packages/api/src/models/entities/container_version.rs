@@ -15,7 +15,7 @@ pub struct Model {
     pub port: Option<i32>,
     pub env: Option<serde_json::Value>,
     pub resources: Option<serde_json::Value>,
-    pub pull_secret_id: Option<Uuid>,
+    pub external_registry_id: Option<Uuid>,
     pub health_check: Option<serde_json::Value>,
     pub created_at: DateTimeWithTimeZone,
 }
@@ -30,11 +30,25 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Container,
+    #[sea_orm(
+        belongs_to = "super::external_registry::Entity",
+        from = "Column::ExternalRegistryId",
+        to = "super::external_registry::Column::Id",
+        on_update = "Cascade",
+        on_delete = "Restrict"
+    )]
+    ExternalRegistry,
 }
 
 impl Related<super::container::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Container.def()
+    }
+}
+
+impl Related<super::external_registry::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ExternalRegistry.def()
     }
 }
 

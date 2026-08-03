@@ -1,12 +1,15 @@
 use axum::{Json, extract::Path};
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use super::databases::verify_org_access;
+use super::{
+    databases::verify_org_access,
+    external_registries::{find_registry, image_registry_host},
+};
 use crate::errors::AppError;
 use crate::middleware::auth::AuthContext;
 use crate::models::entities::{
@@ -28,7 +31,7 @@ pub struct CreateContainerRequest {
     pub port: Option<i32>,
     pub env: Option<serde_json::Value>,
     pub resources: Option<serde_json::Value>,
-    pub pull_secret_id: Option<Uuid>,
+    pub external_registry_id: Option<Uuid>,
     pub health_check: Option<serde_json::Value>,
     #[serde(default)]
     pub auto_deploy: bool,
@@ -37,6 +40,14 @@ pub struct CreateContainerRequest {
 
 fn default_replica_count() -> i32 {
     1
+}
+
+fn deserialize_present_nullable<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(Some)
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -48,7 +59,8 @@ pub struct UpdateContainerRequest {
     pub port: Option<i32>,
     pub env: Option<serde_json::Value>,
     pub resources: Option<serde_json::Value>,
-    pub pull_secret_id: Option<Uuid>,
+    #[serde(default, deserialize_with = "deserialize_present_nullable")]
+    pub external_registry_id: Option<Option<Uuid>>,
     pub health_check: Option<serde_json::Value>,
     #[serde(default)]
     pub auto_deploy: bool,
@@ -57,6 +69,9 @@ pub struct UpdateContainerRequest {
 #[derive(Deserialize, ToSchema)]
 pub struct ContainerActionQuery {
     pub environment_id: Uuid,
+    pub timeline_id: Uuid,
+    #[serde(default)]
+    pub deploy: bool,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -100,7 +115,7 @@ pub struct ContainerVersionResponse {
     pub port: Option<i32>,
     pub env: Option<serde_json::Value>,
     pub resources: Option<serde_json::Value>,
-    pub pull_secret_id: Option<Uuid>,
+    pub external_registry_id: Option<Uuid>,
     pub health_check: Option<serde_json::Value>,
     pub created_at: String,
 }
@@ -115,7 +130,7 @@ fn resolve_latest_version(version: &container_version::Model) -> ContainerVersio
         port: version.port,
         env: version.env.clone(),
         resources: version.resources.clone(),
-        pull_secret_id: version.pull_secret_id,
+        external_registry_id: version.external_registry_id,
         health_check: version.health_check.clone(),
         created_at: version.created_at.to_string(),
     }
@@ -128,8 +143,28 @@ fn has_config_change(req: &UpdateContainerRequest) -> bool {
         || req.port.is_some()
         || req.env.is_some()
         || req.resources.is_some()
-        || req.pull_secret_id.is_some()
+        || req.external_registry_id.is_some()
         || req.health_check.is_some()
+}
+
+async fn validate_external_registry(
+    tx: &impl sea_orm::ConnectionTrait,
+    organization_id: Uuid,
+    registry_id: Option<Uuid>,
+    image: &str,
+) -> Result<(), AppError> {
+    let Some(registry_id) = registry_id else {
+        return Ok(());
+    };
+    let registry = find_registry(tx, organization_id, registry_id).await?;
+    let image_host = image_registry_host(image)?;
+    if image_host != registry.host {
+        return Err(AppError::BadRequest(format!(
+            "Selected registry host '{}' does not match image host '{}'. Choose a matching registry or clear the registry selection.",
+            registry.host, image_host
+        )));
+    }
+    Ok(())
 }
 
 async fn get_environment(
@@ -237,6 +272,7 @@ pub async fn create_container(
         Some(body.project_id),
     )
     .await?;
+    validate_external_registry(tx, organization_id, body.external_registry_id, &image).await?;
 
     let created_container: container::Model = container::ActiveModel {
         id: Set(container_id),
@@ -261,7 +297,7 @@ pub async fn create_container(
         port: Set(body.port),
         env: Set(body.env.clone()),
         resources: Set(body.resources.clone()),
-        pull_secret_id: Set(body.pull_secret_id),
+        external_registry_id: Set(body.external_registry_id),
         health_check: Set(body.health_check.clone()),
         created_at: Set(Utc::now().fixed_offset()),
     }
@@ -569,6 +605,20 @@ pub async fn update_container(
             .await?
             .ok_or_else(|| AppError::NotFound("Container version not found".into()))?;
 
+        let next_image = body
+            .image
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or(&base.image)
+            .to_string();
+        if next_image.is_empty() {
+            return Err(AppError::BadRequest("Image is required".into()));
+        }
+        let next_registry_id = body
+            .external_registry_id
+            .unwrap_or(base.external_registry_id);
+        validate_external_registry(tx, organization_id, next_registry_id, &next_image).await?;
+
         let next_ver = latest_version_number.version + 1;
         let version_id = Uuid::new_v4();
 
@@ -577,13 +627,13 @@ pub async fn update_container(
             container_id: Set(container_id),
             organization_id: Set(organization_id),
             version: Set(next_ver),
-            image: Set(body.image.unwrap_or_else(|| base.image.clone())),
+            image: Set(next_image),
             public: Set(body.public.unwrap_or(base.public)),
             replica_count: Set(body.replica_count.unwrap_or(base.replica_count)),
             port: Set(body.port.or(base.port)),
             env: Set(body.env.clone().or(base.env.clone())),
             resources: Set(body.resources.clone().or(base.resources.clone())),
-            pull_secret_id: Set(body.pull_secret_id.or(base.pull_secret_id)),
+            external_registry_id: Set(next_registry_id),
             health_check: Set(body.health_check.clone().or(base.health_check.clone())),
             created_at: Set(Utc::now().fixed_offset()),
         };
@@ -656,6 +706,8 @@ pub async fn update_container(
         ("organization_id" = Uuid, Path, description = "Organization ID"),
         ("container_id" = Uuid, Path, description = "Container ID"),
         ("environment_id" = Uuid, Query, description = "Environment ID for the revision"),
+        ("timeline_id" = Uuid, Query, description = "Draft revision to remove the container from"),
+        ("deploy" = Option<bool>, Query, description = "Deploy the removal immediately"),
     ),
     responses(
         (status = 200, description = "Container deleted"),
@@ -688,26 +740,35 @@ pub async fn delete_container(
     )
     .await?;
 
-    let mut pins = get_environment_timeline_pins(tx, &environment).await?;
+    if action.timeline_id != environment.draft_timeline {
+        return Err(AppError::Conflict(
+            "Switch to the draft revision before removing a container".into(),
+        ));
+    }
+
+    let mut pins =
+        get_project_revision_pins(tx, environment.project_id, action.timeline_id).await?;
     pins.remove_container(&container_id);
     let revision = revisions::create_revision(
         tx,
         &environment,
         &pins,
         Some(format!("Removed container '{}'", c.name)),
-        true,
+        action.deploy,
     )
     .await?;
     events::record(tx, organization_id, c.project_id, "container:removed", serde_json::json!({"summary": format!("Removed container '{}'", c.name), "target_id": container_id.to_string(), "environment_id": environment.id.to_string()}), auth.actor_id).await?;
 
     scoped.commit().await?;
-    agent::emit_compute(
-        environment.project_id,
-        organization_id,
-        environment.id,
-        revision.id,
-    )
-    .await?;
+    if action.deploy {
+        agent::emit_compute(
+            environment.project_id,
+            organization_id,
+            environment.id,
+            revision.id,
+        )
+        .await?;
+    }
 
     Ok(Json(serde_json::json!({ "success": true })))
 }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ICONS } from '~/utils/icons'
+import { getErrorMessage } from '~/utils/errors'
 
 defineOptions({ name: 'NewRegistryRepositoryPage' })
 
@@ -29,7 +30,7 @@ async function createRepository() {
     toast.add({ title: 'Repository created', color: 'success' })
     await navigateTo(backUrl())
   } catch (cause: unknown) {
-    error.value = cause instanceof Error ? cause.message : 'Failed to create repository'
+    error.value = getErrorMessage(cause, 'Failed to create repository')
     toast.add({ title: 'Failed to create repository', color: 'error' })
   } finally { loading.value = false }
 }

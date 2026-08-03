@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { BucketPermission, CreatedStorageAccessToken } from '@cplane/sdk'
+import { getErrorMessage } from '~/utils/errors'
 
 const store = useStore()
 const route = useRoute()
@@ -38,7 +39,7 @@ async function createToken() {
     created.value = await $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/storage/access-tokens` as const, { method: 'POST', body: { name: name.value.trim(), bucket_permissions: selectedPermissions.value } })
     toast.add({ title: 'Access token created', color: 'success' })
   } catch (cause: unknown) {
-    error.value = cause instanceof Error ? cause.message : 'Failed to create access token'
+    error.value = getErrorMessage(cause, 'Failed to create access token')
     toast.add({ title: 'Failed to create access token', color: 'error' })
   } finally { loading.value = false }
 }

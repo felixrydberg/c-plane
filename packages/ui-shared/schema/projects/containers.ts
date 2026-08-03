@@ -1,8 +1,9 @@
-import { pgTable, text, uuid, timestamp, integer, boolean, index, uniqueIndex, jsonb, pgPolicy } from 'drizzle-orm/pg-core';
+import { pgTable, text, uuid, timestamp, integer, boolean, index, uniqueIndex, jsonb, pgPolicy, foreignKey } from 'drizzle-orm/pg-core';
 import { project } from '.';
 import { organization } from '../tenants/organization';
 import { region } from '../infrastructure/regions';
 import { app_tenant, orgAllowed } from '../rls';
+import { external_registry } from '../tenants/registry';
 
 export const container = pgTable('project_container', {
   id: uuid("id").primaryKey(),
@@ -46,7 +47,7 @@ export const container_version = pgTable('project_container_version', {
   env: jsonb("env"),
   env_secret_refs: jsonb("env_secret_refs"),
   resources: jsonb("resources"),
-  pull_secret_id: uuid("pull_secret_id"),
+  external_registry_id: uuid("external_registry_id"),
   health_check: jsonb("health_check"),
   created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 }, (table) => [
@@ -54,6 +55,12 @@ export const container_version = pgTable('project_container_version', {
     .on(table.container_id, table.version),
   index("project_container_version_container_id_idx").on(table.container_id),
   index("project_container_version_organization_id_idx").on(table.organization_id),
+  index("project_container_version_external_registry_id_idx").on(table.external_registry_id),
+  foreignKey({
+    columns: [table.external_registry_id, table.organization_id],
+    foreignColumns: [external_registry.id, external_registry.organization_id],
+    name: "project_container_version_external_registry_fk",
+  }).onDelete("restrict"),
   pgPolicy("project_container_version_tenant_rls", {
     as: "permissive",
     for: "all",

@@ -1,6 +1,7 @@
 pub mod containers;
 pub mod databases;
 pub mod events;
+pub mod external_registries;
 pub mod health;
 pub mod postgres_databases;
 pub mod projects;

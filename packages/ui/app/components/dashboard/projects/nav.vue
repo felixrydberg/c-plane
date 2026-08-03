@@ -40,13 +40,6 @@ async function refreshProjects() {
   }
 }
 
-watch([() => store.projects, routeProjectId], ([projList, pid]) => {
-  if (!pid) return
-  if (store.project && store.project.id === pid) return
-  const matched = projList.find(p => p.id === pid)
-  if (matched) store.project = matched
-}, { immediate: true })
-
 const createProjectModal = ref(false)
 const deleteProjectModal = ref(false)
 const createEnvironmentModal = ref(false)
@@ -135,14 +128,10 @@ async function selectProject(projectId: string | null) {
   if (projectId === current) return
 
   if (!projectRoutesEnabled.value) {
-    store.environments = []
-    store.environments_project_id = null
     if (projectId) {
-      store.project = store.projects.find(p => p.id === projectId) ?? null
       await loadProjectEnvironments(projectId)
     } else {
-      store.project = null
-      store.environment = null
+      store.$patch({ project: null, environment: null, environments: [], environments_project_id: null })
     }
     return
   }
@@ -155,28 +144,21 @@ async function selectProject(projectId: string | null) {
   if (!baseSection) return
 
   if (projectId) {
-    store.project = store.projects.find(p => p.id === projectId) ?? null
-    store.environment = null
-    store.environments = []
-    store.environments_project_id = null
     router.push(`/${slug}/${baseSection}/${projectId}`)
   } else {
-    store.project = null
-    store.environment = null
-    store.environments = []
-    store.environments_project_id = null
+    store.$patch({ project: null, environment: null, environments: [], environments_project_id: null })
     router.push(`/${slug}`)
   }
 }
 
 function selectEnvironment(b: Environment) {
   const wasViewingDeployed = isViewingDeployed.value
-  store.environment = b
-
   const slug = store.organization?.slug
   const pid = routeProjectId.value
-  if (!pid || !slug || !projectRoutesEnabled.value) return
-  if (b.id === routeEnvironmentId.value) return
+  if (!pid || !slug || !projectRoutesEnabled.value || !environmentRoutesEnabled.value || b.id === routeEnvironmentId.value) {
+    store.environment = b
+    return
+  }
 
   const pathAfterSlug = route.path.slice(slug.length + 1)
   const baseSection = pathAfterSlug.slice(0, pathAfterSlug.indexOf(pid) - 1).replace(/^\/+|\/+$/g, '')
@@ -265,13 +247,13 @@ const graphModalOpen = ref(false)
 
 <template>
   <div class="flex min-w-0 items-center gap-2">
-    <UDropdownMenu size="sm" :items="projectItems" :content="{ align: 'start', collisionPadding: 12 }" :ui="{ content: 'w-64' }" class="shrink-0">
-      <UButton :label="projectLabel" :trailing-icon="ICONS.chevronUpDown" size="sm" color="neutral" variant="soft" class="data-[state=open]:bg-elevated" :ui="{ trailingIcon: 'text-dimmed' }" />
+    <UDropdownMenu size="sm" :items="projectItems" :content="{ align: 'start', collisionPadding: 12 }" :ui="{ content: 'w-(--reka-dropdown-menu-trigger-width)' }" class="shrink-0">
+      <UButton :label="projectLabel" :trailing-icon="ICONS.chevronUpDown" size="sm" color="neutral" variant="soft" class="w-48 justify-between data-[state=open]:bg-elevated" :ui="{ trailingIcon: 'text-dimmed' }" />
     </UDropdownMenu>
 
     <USeparator orientation="vertical" class="h-6 shrink-0" />
 
-    <UDropdownMenu size="sm" :items="environmentItems" :content="{ align: 'start', collisionPadding: 12 }" :ui="{ content: 'w-64' }" class="shrink-0">
+    <UDropdownMenu size="sm" :items="environmentItems" :content="{ align: 'start', collisionPadding: 12 }" :ui="{ content: 'w-(--reka-dropdown-menu-trigger-width)', itemWrapper: 'self-center' }" class="shrink-0">
       <template #item-trailing="{ item }">
         <div v-if="item.badges?.length" class="ml-auto flex items-center gap-1">
           <UBadge v-for="badge in item.badges" :key="badge" :color="badge === 'Preview' ? 'primary' : 'neutral'" variant="soft" size="sm">
@@ -279,7 +261,7 @@ const graphModalOpen = ref(false)
           </UBadge>
         </div>
       </template>
-      <UButton :label="environmentLabel" :trailing-icon="ICONS.chevronUpDown" size="sm" color="neutral" variant="soft" :disabled="!routeProjectId && !store.project" class="data-[state=open]:bg-elevated" :ui="{ trailingIcon: 'text-dimmed' }" />
+      <UButton :label="environmentLabel" :trailing-icon="ICONS.chevronUpDown" size="sm" color="neutral" variant="soft" :disabled="!routeProjectId && !store.project" class="w-48 justify-between data-[state=open]:bg-elevated" :ui="{ trailingIcon: 'text-dimmed' }" />
     </UDropdownMenu>
     <template v-if="store.project">
       <UButton :icon="ICONS.graph" variant="ghost" color="neutral" size="sm" class="shrink-0 rotate-180" aria-label="Environment graph" @click="graphModalOpen = true" />

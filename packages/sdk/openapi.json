@@ -234,6 +234,25 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "timeline_id",
+            "in": "query",
+            "description": "Draft revision to remove the container from",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "deploy",
+            "in": "query",
+            "description": "Deploy the removal immediately",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -2127,6 +2146,274 @@
         "x-cplane-required-scope": "access-token:update"
       }
     },
+    "/api/organization/{organization_id}/registry/external-registries": {
+      "get": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "list_external_registries",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ExternalRegistryResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "registry:read"
+      },
+      "post": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "create_external_registry",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExternalRegistryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalRegistryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "registry:create"
+      }
+    },
+    "/api/organization/{organization_id}/registry/external-registries/{registry_id}": {
+      "delete": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "delete_external_registry",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "registry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "registry:delete"
+      },
+      "patch": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "rename_external_registry",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "registry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameExternalRegistryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalRegistryResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "registry:update"
+      }
+    },
+    "/api/organization/{organization_id}/registry/external-registries/{registry_id}/rotate-token": {
+      "post": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "rotate_external_registry_token",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "registry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RotateExternalRegistryTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "registry:update"
+      }
+    },
     "/api/organization/{organization_id}/registry/maintenance": {
       "get": {
         "tags": [
@@ -2716,6 +3003,13 @@
             "type": "string"
           },
           "env": {},
+          "external_registry_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
           "health_check": {},
           "id": {
             "type": "string",
@@ -2733,13 +3027,6 @@
           },
           "public": {
             "type": "boolean"
-          },
-          "pull_secret_id": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "uuid"
           },
           "replica_count": {
             "type": "integer",
@@ -2809,6 +3096,13 @@
             "type": "string",
             "format": "uuid"
           },
+          "external_registry_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
           "health_check": {},
           "image": {
             "type": "string"
@@ -2829,13 +3123,6 @@
           },
           "public": {
             "type": "boolean"
-          },
-          "pull_secret_id": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "uuid"
           },
           "region_id": {
             "type": "string",
@@ -2988,6 +3275,29 @@
               "null"
             ],
             "format": "uuid"
+          }
+        }
+      },
+      "CreateExternalRegistryRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "host",
+          "username",
+          "token"
+        ],
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
           }
         }
       },
@@ -3298,6 +3608,43 @@
           }
         }
       },
+      "ExternalRegistryResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "organization_id",
+          "name",
+          "host",
+          "username",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        }
+      },
       "HealthResponse": {
         "type": "object",
         "required": [
@@ -3580,6 +3927,17 @@
           }
         }
       },
+      "RenameExternalRegistryRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      },
       "RepositoryPermissionRequest": {
         "type": "object",
         "required": [
@@ -3616,6 +3974,13 @@
           },
           "container_name": {
             "type": "string"
+          },
+          "external_registry_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
           },
           "image": {
             "type": "string"
@@ -3675,6 +4040,17 @@
           "timeline": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "RotateExternalRegistryTokenRequest": {
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "properties": {
+          "token": {
+            "type": "string"
           }
         }
       },
@@ -3742,6 +4118,13 @@
             "type": "boolean"
           },
           "env": {},
+          "external_registry_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
           "health_check": {},
           "image": {
             "type": [
@@ -3767,13 +4150,6 @@
               "boolean",
               "null"
             ]
-          },
-          "pull_secret_id": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "uuid"
           },
           "replica_count": {
             "type": [

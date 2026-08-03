@@ -1,5 +1,6 @@
 use crate::config::{Config, load_config};
 use crate::errors::AppError;
+use crate::services::external_registry_tokens::ExternalRegistryTokenClient;
 use crate::services::s3_providers::S3ProviderClient;
 use sea_orm::{
     ConnectOptions, ConnectionTrait, Database, DatabaseBackend, DatabaseConnection,
@@ -93,6 +94,7 @@ pub struct State {
     pub tenant_db: DatabaseConnection,
     pub config: Config,
     pub s3_providers: Option<S3ProviderClient>,
+    pub external_registry_tokens: Option<ExternalRegistryTokenClient>,
 }
 
 static STATE: OnceLock<State> = OnceLock::new();
@@ -102,18 +104,24 @@ pub async fn create_app_state() -> Result<State, AppError> {
     let identity_db = connect_database(&config.identity_database_url, "app_identity").await?;
     let tenant_db = connect_database(&config.tenant_database_url, "app_tenant").await?;
 
-    let s3_providers = match (
+    let control_plane = match (
         config.control_plane_url.clone(),
         config.control_plane_service_token.clone(),
     ) {
-        (Some(url), Some(token)) => Some(S3ProviderClient::new(url, token)),
+        (Some(url), Some(token)) => Some((url, token)),
         _ => None,
     };
+    let s3_providers = control_plane
+        .clone()
+        .map(|(url, token)| S3ProviderClient::new(url, token));
+    let external_registry_tokens =
+        control_plane.map(|(url, token)| ExternalRegistryTokenClient::new(url, token));
     let state = State {
         identity_db: AppDatabase(identity_db),
         tenant_db,
         config,
         s3_providers,
+        external_registry_tokens,
     };
     STATE
         .set(state)

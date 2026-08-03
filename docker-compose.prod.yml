@@ -24,7 +24,6 @@ services:
     depends_on:
       - postgresd
       - ui
-      - control-plane
     ports:
       - 8080:8080
     volumes:
@@ -148,7 +147,9 @@ services:
     environment:
       DATABASE_URL: postgresql://cplane_admin:${POSTGRES_ADMIN_PASSWORD}@postgresd:5432/cplane
       REDIS_URL: redis://valkey:6379
-      WORKER_QUEUES: maintenance
+      WORKER_QUEUES: maintenance,secrets
+      CONTROL_PLANE_URL: http://control-plane:3001
+      CPLANE_SERVICE_TOKEN: ${CPLANE_SERVICE_TOKEN}
       WORKER_CONCURRENCY: 1
       REGISTRY_TOKEN_TTL_SECONDS: ${REGISTRY_TOKEN_TTL_SECONDS:-60}
       REGISTRY_STORAGE_S3_REGION: ${REGISTRY_STORAGE_S3_REGION}
@@ -167,6 +168,8 @@ services:
       storage:
         condition: service_started
       valkey:
+        condition: service_started
+      control-plane:
         condition: service_started
 
   postgresd:

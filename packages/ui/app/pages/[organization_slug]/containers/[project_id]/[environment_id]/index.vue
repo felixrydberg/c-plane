@@ -18,7 +18,7 @@ const projectName = computed(() =>
   store.projects.find(p => p.id === projectId.value)?.name ?? projectId.value ?? ''
 )
 
-const { data: environmentList } = await useFetch(
+const { data: environmentList, refresh: refreshEnvironments } = await useFetch(
   () => orgId.value && projectId.value ? `/api/cplane/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/environments` as const : '',
   { immediate: computed(() => !!(orgId.value && projectId.value)) },
 )
@@ -28,14 +28,18 @@ const environmentName = computed(() => {
   const list = environmentList.value ?? store.environments
   return list.find(b => b.id === environmentId.value)?.name ?? environmentId.value
 })
-const environment = computed(() =>
+const fetchedEnvironment = computed(() =>
   environmentList.value?.find(item => item.id === environmentId.value) ?? null
+)
+const environment = computed(() =>
+  store.environment?.id === environmentId.value ? store.environment : fetchedEnvironment.value
 )
 const revisionId = computed(() => {
   const revision = route.query.revision
   return typeof revision === 'string' ? revision : environment.value?.deployed_timeline
 })
 const isViewingDeployed = computed(() => revisionId.value === environment.value?.deployed_timeline)
+const isViewingDraft = computed(() => revisionId.value === environment.value?.draft_timeline)
 
   const fetchUrl = computed(() => {
     const orgId = store.organization?.id
@@ -64,7 +68,23 @@ const containers = computed<ContainerWithProject[]>(() => {
   }))
 })
 
-function refresh() { refreshData() }
+async function refresh(view: 'draft' | 'deployed') {
+  await refreshEnvironments()
+  const updated = fetchedEnvironment.value
+  if (updated && store.environment?.id === updated.id) {
+    store.environment = updated
+    const index = store.environments.findIndex(item => item.id === updated.id)
+    if (index !== -1) store.environments[index] = updated
+  }
+  if (updated && view === 'draft') {
+    await navigateTo({ query: { ...route.query, revision: updated.draft_timeline } })
+  }
+  if (view === 'deployed') {
+    const { revision, ...query } = route.query
+    await navigateTo({ query })
+  }
+  await refreshData()
+}
 
 watch(() => store.refreshKey, () => { refreshData() })
 </script>
@@ -93,6 +113,8 @@ watch(() => store.refreshKey, () => { refreshData() })
       :project-id="projectId"
       :environment-id="environmentId"
       :revision-id="revisionId"
+      :draft-revision-id="environment?.draft_timeline"
+      :can-remove="isViewingDraft || isViewingDeployed"
       :status="status"
       @refresh="refresh"
     />

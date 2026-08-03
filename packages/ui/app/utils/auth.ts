@@ -41,10 +41,12 @@ export async function loadProjectEnvironments(projectId: string, environmentId?:
   const environments = response
   const environment = environments.find(environment => environment.id === environmentId) ?? environments.find(environment => environment.is_default) ?? environments[0] ?? null
 
-  store.project = project
-  store.environments = environments
-  store.environments_project_id = project.id
-  store.environment = environment
+  store.$patch({
+    project,
+    environments,
+    environments_project_id: project.id,
+    environment,
+  })
 }
 
 export const getSession = async (cache: boolean = true) => {

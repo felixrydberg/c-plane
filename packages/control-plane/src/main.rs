@@ -31,6 +31,13 @@ fn main() {
                 .delete(backend::server::delete_access_token_secret_handler),
             )
             .route(
+                "/internal/organizations/{organization_id}/external-registries/{registry_id}/secret",
+                dioxus::server::axum::routing::put(
+                    backend::server::store_external_registry_secret_handler,
+                )
+                .delete(backend::server::delete_external_registry_secret_handler),
+            )
+            .route(
                 "/internal/s3-access-tokens/resolve/{access_key}",
                 dioxus::server::axum::routing::get(backend::server::resolve_access_token_handler),
             )
