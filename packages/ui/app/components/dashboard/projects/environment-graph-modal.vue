@@ -8,6 +8,7 @@ import type { Environment, ResolvedTimeline as SdkResolvedTimeline, TimelineRevi
 import DotNode from './environment-graph-dot-node.vue'
 import { ICONS } from '~/utils/icons'
 import { loadProjectEnvironments } from '~/utils/auth'
+import { syncEnvironment } from '~/utils/environments'
 
 const dotNodeType = markRaw(DotNode)
 
@@ -174,8 +175,7 @@ async function onConfirmRenameEnvironment() {
       `/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${renameEnvironmentId.value as ':environment_id'}` as const,
       { method: 'PATCH', body: { name: renameEnvironmentName.value.trim() } }
     );
-    if (store.environment?.id === updated.id) store.environment = updated;
-    store.environments = store.environments.map(environment => environment.id === updated.id ? updated : environment);
+    syncEnvironment(store, updated);
     renameModalOpen.value = false;
     toast.add({ title: 'Environment renamed', color: 'success' });
     refresh();

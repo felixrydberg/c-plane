@@ -24,6 +24,7 @@ services:
     depends_on:
       - postgresd
       - ui
+      - control-plane
     ports:
       - 8080:8080
     volumes:

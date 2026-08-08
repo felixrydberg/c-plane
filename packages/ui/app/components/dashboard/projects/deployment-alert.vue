@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ICONS } from '~/utils/icons'
+import { syncEnvironment } from '~/utils/environments'
 
 const store = useStore()
 const route = useRoute()
@@ -20,9 +21,7 @@ async function deployDraft() {
       `/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${store.environment.id as ':environment_id'}` as const,
       { method: 'PATCH', body: { deployed_timeline_id: store.environment.draft_timeline } }
     )
-    store.environment = updated
-    const index = store.environments.findIndex(environment => environment.id === updated.id)
-    if (index !== -1) store.environments[index] = updated
+    syncEnvironment(store, updated)
     store.refreshKey++
     toast.add({ title: 'Draft revision deployed', color: 'success' })
   } catch {
@@ -40,9 +39,7 @@ async function revertDraft() {
       `/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${store.environment.id as ':environment_id'}` as const,
       { method: 'PATCH', body: { draft_timeline_id: store.environment.deployed_timeline } }
     )
-    store.environment = updated
-    const index = store.environments.findIndex(environment => environment.id === updated.id)
-    if (index !== -1) store.environments[index] = updated
+    syncEnvironment(store, updated)
     const { revision, ...query } = route.query
     await router.replace({ query })
     store.refreshKey++

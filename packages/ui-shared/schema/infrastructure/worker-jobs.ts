@@ -24,6 +24,7 @@ export const worker_job = pgTable("worker_job", {
 }, (table) => [
   check("worker_job_status_check", sql`${table.status} in ('queued', 'running', 'succeeded', 'failed')`),
   check("worker_job_attempts_check", sql`${table.attempts} >= 0 and ${table.max_attempts} > 0`),
+  index("worker_job_organization_id_idx").on(table.organization_id),
   index("worker_job_claim_idx").on(table.queue_name, table.status, table.available_at, table.created_at),
   index("worker_job_lease_idx").on(table.status, table.lease_expires_at),
   uniqueIndex("worker_job_active_dedupe_uidx")

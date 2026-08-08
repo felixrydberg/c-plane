@@ -26,7 +26,7 @@ const removeAsDraft = ref(false);
 const removing = ref(false);
 
 async function confirmDelete() {
-  if (!deleteTarget.value || !props.organizationId || !deleteTarget.value.id) return
+  if (!deleteTarget.value || !props.organizationId || !props.draftRevisionId || !deleteTarget.value.id) return
   const deploy = !removeAsDraft.value
   removing.value = true
   try {

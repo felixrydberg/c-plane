@@ -211,7 +211,7 @@ pub mod server {
     use serde::{Deserialize, Serialize, de::DeserializeOwned};
     use serde_json::json;
     use sha2::{Digest, Sha256};
-    use std::env;
+    use std::{env, time::Duration as StdDuration};
     use tokio::sync::OnceCell;
     use uuid::Uuid;
 
@@ -220,6 +220,7 @@ pub mod server {
     const S3_ACCESS_TOKEN_CACHE_GENERATION: &str = "cplane:s3-access-token-generation";
     const S3_ACCESS_TOKEN_CACHE_TTL_SECONDS: u64 = 86_400;
     static DATABASE: OnceCell<DatabaseConnection> = OnceCell::const_new();
+    static OPENBAO_CLIENT: OnceCell<Client> = OnceCell::const_new();
 
     pub async fn initialize() -> Result<()> {
         required(
@@ -591,9 +592,21 @@ pub mod server {
         Ok((address.trim_end_matches('/').to_string(), token))
     }
 
+    async fn openbao_client() -> Result<&'static Client> {
+        OPENBAO_CLIENT
+            .get_or_try_init(|| async {
+                Client::builder()
+                    .timeout(StdDuration::from_secs(10))
+                    .build()
+                    .map_err(CapturedError::from_display)
+            })
+            .await
+    }
+
     async fn openbao_secret_read<T: DeserializeOwned>(path: &str) -> Result<Option<T>> {
         let (address, token) = openbao_config()?;
-        let response = Client::new()
+        let response = openbao_client()
+            .await?
             .get(format!("{address}/v1/cplane/data/{path}"))
             .header("X-Vault-Token", token)
             .send()
@@ -617,7 +630,8 @@ pub mod server {
 
     async fn openbao_secret_write(path: &str, secret: &impl Serialize) -> Result<()> {
         let (address, token) = openbao_config()?;
-        let response = Client::new()
+        let response = openbao_client()
+            .await?
             .post(format!("{address}/v1/cplane/data/{path}"))
             .header("X-Vault-Token", token)
             .json(&json!({"data": secret}))
@@ -635,8 +649,9 @@ pub mod server {
 
     async fn openbao_secret_delete(path: &str) -> Result<()> {
         let (address, token) = openbao_config()?;
-        let response = Client::new()
-            .delete(format!("{address}/v1/cplane/data/{path}"))
+        let response = openbao_client()
+            .await?
+            .delete(format!("{address}/v1/cplane/metadata/{path}"))
             .header("X-Vault-Token", token)
             .send()
             .await
@@ -732,7 +747,8 @@ pub mod server {
         raw[16..].copy_from_slice(Uuid::new_v4().as_bytes());
         let key = STANDARD.encode(raw);
         let (address, token) = openbao_config()?;
-        let response = Client::new()
+        let response = openbao_client()
+            .await?
             .post(format!("{address}/v1/cplane/data/storage/sse-c/{id}"))
             .header("X-Vault-Token", token)
             .json(&json!({ "options": { "cas": 0 }, "data": { "key": key } }))
@@ -1305,13 +1321,14 @@ pub mod server {
     pub async fn store_external_registry_secret_handler(
         dioxus::server::axum::extract::Path((organization_id, registry_id)): dioxus::server::axum::extract::Path<(Uuid, Uuid)>,
         headers: dioxus::server::axum::http::HeaderMap,
-        dioxus::server::axum::Json(secret): dioxus::server::axum::Json<ExternalRegistrySecret>,
+        dioxus::server::axum::Json(mut secret): dioxus::server::axum::Json<ExternalRegistrySecret>,
     ) -> std::result::Result<
         dioxus::server::axum::http::StatusCode,
         dioxus::server::axum::http::StatusCode,
     > {
         authorize_service(&headers)?;
-        if secret.token.trim().is_empty() {
+        secret.token = secret.token.trim().to_string();
+        if secret.token.is_empty() {
             return Err(dioxus::server::axum::http::StatusCode::BAD_REQUEST);
         }
         external_registry_secret_write(organization_id, registry_id, &secret)

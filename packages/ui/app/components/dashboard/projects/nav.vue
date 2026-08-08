@@ -2,6 +2,7 @@
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { Environment } from '@cplane/sdk'
 import { loadProjectEnvironments } from '~/utils/auth'
+import { syncEnvironment } from '~/utils/environments'
 import { ICONS } from '~/utils/icons'
 
 const store = useStore()
@@ -201,9 +202,7 @@ async function onRenameEnvironment() {
       `/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${store.environment.id as ':environment_id'}` as const,
       { method: 'PATCH', body: { name: environmentName.value.trim() } },
     )
-    store.environment = updated
-    const index = store.environments.findIndex(environment => environment.id === updated.id)
-    if (index !== -1) store.environments[index] = updated
+    syncEnvironment(store, updated)
     renameEnvironmentModal.value = false
     toast.add({ title: 'Environment renamed', color: 'success' })
   } catch (error) {

@@ -6,6 +6,7 @@ type ErrorResponse = {
 }
 
 export function getErrorMessage(error: unknown, fallback: string): string {
+  if (typeof error === 'string' && error.trim()) return error
   const response = (error && typeof error === 'object' ? error : {}) as ErrorResponse
   const message = response.data?.message ?? response.data?.statusMessage
   if (typeof message === 'string' && message.trim()) return message

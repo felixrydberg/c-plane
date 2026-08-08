@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ExternalRegistry } from '@cplane/sdk'
-import { FetchError } from 'ofetch'
 import { ICONS } from '~/utils/icons'
+import { getErrorMessage } from '~/utils/errors'
 
 const props = defineProps<{ organizationId: string }>()
 const toast = useToast()
@@ -54,9 +54,9 @@ async function submit() {
     token.value = ''
     await refresh()
   } catch (error) {
-    const message = error instanceof FetchError ? error.data?.message : undefined
+    const message = getErrorMessage(error, '')
     toast.add({
-      title: error instanceof FetchError && error.statusCode === 409
+      title: modal.value === 'delete' && (error as { statusCode?: number }).statusCode === 409
         ? 'Registry is used by one or more container versions.'
         : message || 'Could not update external registry',
       color: 'error',

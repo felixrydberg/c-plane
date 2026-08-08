@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Container } from '@cplane/sdk'
 import { ICONS } from '~/utils/icons'
+import { syncEnvironment } from '~/utils/environments'
 
 type ContainerWithProject = Container & {
   _projectName?: string;
@@ -71,11 +72,7 @@ const containers = computed<ContainerWithProject[]>(() => {
 async function refresh(view: 'draft' | 'deployed') {
   await refreshEnvironments()
   const updated = fetchedEnvironment.value
-  if (updated && store.environment?.id === updated.id) {
-    store.environment = updated
-    const index = store.environments.findIndex(item => item.id === updated.id)
-    if (index !== -1) store.environments[index] = updated
-  }
+  if (updated) syncEnvironment(store, updated)
   if (updated && view === 'draft') {
     await navigateTo({ query: { ...route.query, revision: updated.draft_timeline } })
   }

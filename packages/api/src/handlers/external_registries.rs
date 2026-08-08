@@ -17,6 +17,8 @@ use crate::{
 use super::{databases::verify_org_access, registry_access_tokens::record_event};
 
 const DEPENDENCY_CONSTRAINT: &str = "project_container_version_external_registry_fk";
+const NAME_CONSTRAINT: &str = "external_registry_organization_name_uidx";
+const HOST_USERNAME_CONSTRAINT: &str = "external_registry_organization_host_username_uidx";
 
 #[derive(Deserialize, ToSchema)]
 pub struct CreateExternalRegistryRequest {
@@ -128,6 +130,21 @@ pub async fn create_external_registry(
         Err(error) => {
             if let Err(cleanup_error) = secrets.delete(organization_id, registry_id).await {
                 tracing::warn!(%cleanup_error, %organization_id, %registry_id, "failed to clean up external registry secret after create failure");
+                if let Err(job_error) = async {
+                    let scoped = tenant_db.begin_scoped_transaction().await?;
+                    enqueue_external_registry_secret_cleanup(
+                        scoped.connection(),
+                        organization_id,
+                        registry_id,
+                    )
+                    .await?;
+                    scoped.commit().await?;
+                    Ok::<_, AppError>(())
+                }
+                .await
+                {
+                    tracing::warn!(%job_error, %organization_id, %registry_id, "failed to queue external registry secret cleanup after create failure");
+                }
             }
             Err(error)
         }
@@ -139,7 +156,12 @@ pub async fn create_external_registry(
     path = "/api/organization/{organization_id}/registry/external-registries/{registry_id}",
     request_body = RenameExternalRegistryRequest,
     params(("organization_id" = Uuid, Path), ("registry_id" = Uuid, Path)),
-    responses((status = 200, body = ExternalRegistryResponse), (status = 404)),
+    responses(
+        (status = 200, body = ExternalRegistryResponse),
+        (status = 400, body = crate::errors::ErrorResponse),
+        (status = 404),
+        (status = 409, body = crate::errors::ErrorResponse),
+    ),
     tag = "registry",
 )]
 pub async fn rename_external_registry(
@@ -173,7 +195,12 @@ pub async fn rename_external_registry(
     path = "/api/organization/{organization_id}/registry/external-registries/{registry_id}/rotate-token",
     request_body = RotateExternalRegistryTokenRequest,
     params(("organization_id" = Uuid, Path), ("registry_id" = Uuid, Path)),
-    responses((status = 204), (status = 404)),
+    responses(
+        (status = 204),
+        (status = 400, body = crate::errors::ErrorResponse),
+        (status = 404),
+        (status = 409, body = crate::errors::ErrorResponse),
+    ),
     tag = "registry",
 )]
 pub async fn rotate_external_registry_token(
@@ -184,19 +211,12 @@ pub async fn rotate_external_registry_token(
     verify_org_access(&tenant_db, organization_id)?;
     let token = required_secret(body.token)?;
     let scoped = tenant_db.begin_scoped_transaction().await?;
-    let registry = find_registry(scoped.connection(), organization_id, registry_id).await?;
-    scoped.commit().await?;
-
-    secret_service()?
-        .store(organization_id, registry_id, &token)
-        .await?;
-
-    let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
+    let registry = find_registry(tx, organization_id, registry_id).await?;
     let registry_name = registry.name.clone();
     let mut active: external_registry::ActiveModel = registry.into();
     active.updated_at = Set(Utc::now().fixed_offset());
-    active.update(tx).await?;
+    active.update(tx).await.map_err(map_registry_write_error)?;
     record_event(
         tx,
         organization_id,
@@ -206,6 +226,9 @@ pub async fn rotate_external_registry_token(
     )
     .await?;
     scoped.commit().await?;
+    secret_service()?
+        .store(organization_id, registry_id, &token)
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -228,6 +251,24 @@ pub async fn delete_external_registry(
         .exec(tx)
         .await
         .map_err(map_registry_delete_error)?;
+    enqueue_external_registry_secret_cleanup(tx, organization_id, registry_id).await?;
+    record_event(
+        tx,
+        organization_id,
+        auth.actor_id,
+        "external-registry:deleted",
+        json!({"summary": format!("Deleted external registry '{}'", registry.name), "target_id": registry_id}),
+    )
+    .await?;
+    scoped.commit().await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn enqueue_external_registry_secret_cleanup(
+    tx: &impl ConnectionTrait,
+    organization_id: Uuid,
+    registry_id: Uuid,
+) -> Result<(), AppError> {
     tx.execute(Statement::from_sql_and_values(
         DatabaseBackend::Postgres,
         "INSERT INTO worker_job (id, organization_id, queue_name, job_type, dedupe_key, payload, max_attempts) VALUES ($1::uuid, $2::uuid, 'secrets', 'external_registry_secret_cleanup', $3, $4::jsonb, 8)",
@@ -239,16 +280,7 @@ pub async fn delete_external_registry(
         ],
     ))
     .await?;
-    record_event(
-        tx,
-        organization_id,
-        auth.actor_id,
-        "external-registry:deleted",
-        json!({"summary": format!("Deleted external registry '{}'", registry.name), "target_id": registry_id}),
-    )
-    .await?;
-    scoped.commit().await?;
-    Ok(StatusCode::NO_CONTENT)
+    Ok(())
 }
 
 pub async fn find_registry(
@@ -347,9 +379,9 @@ fn required_secret(value: String) -> Result<String, AppError> {
 
 fn map_registry_write_error(error: sea_orm::DbErr) -> AppError {
     let message = error.to_string();
-    if message.contains("external_registry_organization_name_uidx") {
+    if message.contains(NAME_CONSTRAINT) {
         AppError::Conflict("An external registry with this name already exists".into())
-    } else if message.contains("external_registry_organization_host_username_uidx") {
+    } else if message.contains(HOST_USERNAME_CONSTRAINT) {
         AppError::Conflict("This registry host and username already exist".into())
     } else {
         error.into()

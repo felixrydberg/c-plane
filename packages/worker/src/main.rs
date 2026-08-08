@@ -13,6 +13,7 @@ type Result<T> = std::result::Result<T, Error>;
 
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(10);
+const CONTROL_PLANE_TIMEOUT: Duration = Duration::from_secs(10);
 const ACCESS_TOKEN_CACHE_GENERATION: &str = "cplane:s3-access-token-generation";
 
 #[derive(Clone)]
@@ -23,6 +24,7 @@ struct Config {
     registry_token_ttl: Duration,
     control_plane_url: String,
     service_token: String,
+    http: reqwest::Client,
 }
 
 #[derive(Clone)]
@@ -107,6 +109,9 @@ impl Config {
                 .trim_end_matches('/')
                 .to_owned(),
             service_token: required_env("CPLANE_SERVICE_TOKEN")?,
+            http: reqwest::Client::builder()
+                .timeout(CONTROL_PLANE_TIMEOUT)
+                .build()?,
         })
     }
 }
@@ -218,7 +223,8 @@ async fn run_job(
 async fn cleanup_external_registry_secret(config: &Config, job: &Job) -> Result<()> {
     let organization_id: Uuid = serde_json::from_value(job.payload["organization_id"].clone())?;
     let registry_id: Uuid = serde_json::from_value(job.payload["registry_id"].clone())?;
-    reqwest::Client::new()
+    config
+        .http
         .delete(format!(
             "{}/internal/organizations/{organization_id}/external-registries/{registry_id}/secret",
             config.control_plane_url

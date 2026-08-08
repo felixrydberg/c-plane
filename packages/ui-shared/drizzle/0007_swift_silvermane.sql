@@ -18,6 +18,7 @@ CREATE UNIQUE INDEX "external_registry_organization_name_uidx" ON "external_regi
 CREATE UNIQUE INDEX "external_registry_organization_host_username_uidx" ON "external_registry" USING btree ("organization_id","host","username");--> statement-breakpoint
 CREATE INDEX "external_registry_organization_id_idx" ON "external_registry" USING btree ("organization_id");--> statement-breakpoint
 ALTER TABLE "worker_job" ADD CONSTRAINT "worker_job_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "worker_job_organization_id_idx" ON "worker_job" USING btree ("organization_id");--> statement-breakpoint
 ALTER TABLE "project_container_version" ADD CONSTRAINT "project_container_version_external_registry_fk" FOREIGN KEY ("external_registry_id","organization_id") REFERENCES "public"."external_registry"("id","organization_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "project_container_version_external_registry_id_idx" ON "project_container_version" USING btree ("external_registry_id");--> statement-breakpoint
 ALTER TABLE "project_container_version" DROP COLUMN "pull_secret_id";--> statement-breakpoint

@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::time::Duration;
 use uuid::Uuid;
 
 use crate::errors::AppError;
@@ -18,7 +19,10 @@ pub struct ExternalRegistryTokenClient {
 impl ExternalRegistryTokenClient {
     pub fn new(base_url: String, service_token: String) -> Self {
         Self {
-            http: reqwest::Client::new(),
+            http: reqwest::Client::builder()
+                .timeout(Duration::from_secs(10))
+                .build()
+                .expect("failed to build external registry token client"),
             base_url: base_url.trim_end_matches('/').to_string(),
             service_token,
         }
