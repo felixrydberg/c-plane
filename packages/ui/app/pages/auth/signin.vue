@@ -322,6 +322,8 @@ const TOTPForm = useTemplateRef("TOTPForm");
 
       <UButton
         type="button"
+        :icon="ICONS.authentication"
+        color="neutral"
         variant="soft"
         size="lg"
         block
@@ -335,7 +337,8 @@ const TOTPForm = useTemplateRef("TOTPForm");
       <div class="flex gap-3">
         <UButton
           type="button"
-          variant="soft"
+          color="neutral"
+          variant="ghost"
           block
           size="lg"
           :disabled="loading"
@@ -344,7 +347,7 @@ const TOTPForm = useTemplateRef("TOTPForm");
         >
           Back
         </UButton>
-        <UButton type="submit" block :loading="loading" class="justify-center">
+        <UButton type="submit" :icon="ICONS.check" block :loading="loading" class="justify-center">
           Verify
         </UButton>
       </div>
@@ -370,6 +373,8 @@ const TOTPForm = useTemplateRef("TOTPForm");
 
       <UButton
         type="button"
+        :icon="ICONS.authentication"
+        color="neutral"
         variant="soft"
         size="lg"
         block
@@ -383,7 +388,8 @@ const TOTPForm = useTemplateRef("TOTPForm");
       <div class="flex gap-3">
         <UButton
           type="button"
-          variant="soft"
+          color="neutral"
+          variant="ghost"
           block
           size="lg"
           :disabled="loading"
@@ -392,7 +398,7 @@ const TOTPForm = useTemplateRef("TOTPForm");
         >
           Back
         </UButton>
-        <UButton type="submit" block :loading="loading" class="justify-center">
+        <UButton type="submit" :icon="ICONS.check" block :loading="loading" class="justify-center">
           Verify
         </UButton>
       </div>
@@ -407,7 +413,6 @@ const TOTPForm = useTemplateRef("TOTPForm");
       <UButton
         :icon="ICONS.passkey"
         color="neutral"
-        variant="solid"
         block
         size="lg"
         :loading="passkeyLoading"

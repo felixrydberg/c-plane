@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import z from 'zod';
 import { useDebounceFn } from '@vueuse/core';
+import { ICONS } from '~/utils/icons'
 
 const store = useStore();
 const toast = useToast();
@@ -264,13 +265,15 @@ const onInvitationUpdated = async () => {
           </ul>
         </div>
 
-        <UButton type="submit" size="lg" class="w-full flex justify-center mt-1" :loading="isCheckingOut" :disabled="isCreateDisabled">
+        <UButton type="submit" :icon="ICONS.plus" size="lg" class="mt-1 flex w-full justify-center" :loading="isCheckingOut" :disabled="isCreateDisabled">
           Create
         </UButton>
 
         <UButton
           v-if="hasPendingInvitations"
           type="button"
+          :icon="ICONS.members"
+          color="neutral"
           variant="soft"
           size="lg"
           class="w-full flex justify-center"
@@ -279,10 +282,10 @@ const onInvitationUpdated = async () => {
           Manage pending invites ({{ pendingInvitationCount }})
         </UButton>
 
-        <UButton v-if="store.organizations.length > 0" variant="link" size="lg" class="text-muted underline w-full flex justify-center pt-1" @click="goBack">
+        <UButton v-if="store.organizations.length > 0" color="neutral" variant="ghost" size="lg" class="w-full justify-center" @click="goBack">
           Back to Dashboard
         </UButton>
-        <UButton v-else variant="link" size="lg" class="text-muted underline w-full flex justify-center pt-1" @click="signOut">
+        <UButton v-else color="neutral" variant="ghost" size="lg" class="w-full justify-center" @click="signOut">
           Sign Out
         </UButton>
       </UForm>

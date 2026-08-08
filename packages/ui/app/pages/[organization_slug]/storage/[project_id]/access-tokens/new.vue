@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { BucketPermission, CreatedStorageAccessToken } from '@cplane/sdk'
+import { ICONS } from '~/utils/icons'
 
 const store = useStore()
 const route = useRoute()
@@ -57,7 +58,7 @@ async function createToken() {
       <UFormField label="S3 endpoint"><UInput :model-value="created.endpoint_url" readonly class="w-full font-mono" /></UFormField>
       <UFormField label="Access key ID"><UInput :model-value="created.access_key_id" readonly class="w-full font-mono" /></UFormField>
       <UFormField label="Secret access key"><UInput :model-value="created.secret_access_key" readonly class="w-full font-mono" /></UFormField>
-      <UButton color="primary" :to="backUrl()">I Saved the Secret</UButton>
+      <UButton :icon="ICONS.check" color="primary" :to="backUrl()">I Saved the Secret</UButton>
     </section>
 
     <div v-else class="grid lg:grid-cols-[minmax(0,1fr)_280px]">
@@ -74,7 +75,7 @@ async function createToken() {
       </main>
 
       <aside class="border-t border-default/60 py-8 lg:border-l lg:border-t-0 lg:pl-6">
-        <div class="sticky top-6"><h2 class="text-sm font-semibold">Token Summary</h2><dl class="mt-5 space-y-4 text-sm"><div><dt class="text-xs text-muted">Project</dt><dd class="mt-1">{{ projectName }}</dd></div><div><dt class="text-xs text-muted">Name</dt><dd class="mt-1 font-mono text-xs">{{ name || 'Not set' }}</dd></div><div><dt class="text-xs text-muted">Buckets</dt><dd class="mt-1">{{ selectedPermissions.length }} granted</dd></div></dl><div class="mt-8 flex gap-3"><UButton color="neutral" variant="ghost" :to="backUrl()">Cancel</UButton><UButton color="primary" :loading="loading" :disabled="!name.trim() || !selectedPermissions.length" @click="createToken">Create Access Token</UButton></div></div>
+        <div class="sticky top-6"><h2 class="text-sm font-semibold">Token Summary</h2><dl class="mt-5 space-y-4 text-sm"><div><dt class="text-xs text-muted">Project</dt><dd class="mt-1">{{ projectName }}</dd></div><div><dt class="text-xs text-muted">Name</dt><dd class="mt-1 font-mono text-xs">{{ name || 'Not set' }}</dd></div><div><dt class="text-xs text-muted">Buckets</dt><dd class="mt-1">{{ selectedPermissions.length }} granted</dd></div></dl><div class="mt-8 flex gap-3"><UButton color="neutral" variant="ghost" :to="backUrl()">Cancel</UButton><UButton :icon="ICONS.plus" color="primary" :loading="loading" :disabled="!name.trim() || !selectedPermissions.length" @click="createToken">Create Access Token</UButton></div></div>
       </aside>
     </div>
   </div>

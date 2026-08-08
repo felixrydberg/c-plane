@@ -42,11 +42,11 @@ async function selectProject(projectId: string) {
             :icon="ICONS.folder"
             :trailing-icon="ICONS.arrowTopRight"
             color="neutral"
-            variant="solid"
+            variant="ghost"
             block
             :loading="selectingProjectId === project.id"
             :disabled="Boolean(selectingProjectId)"
-            class="justify-start"
+            class="w-full justify-start rounded-none border-b border-default/25 px-4 py-3 last:border-b-0"
             @click="selectProject(project.id)"
           >
             {{ project.name }}

@@ -2,7 +2,7 @@
 
 ## Rules
 
-1. **Solid colors only** - major action buttons use solid variants.
+1. **Frosted by default** - major action buttons use the global `frosted` variant from the Nuxt UI theme. Do not recreate it with page-level classes.
 2. **Text + icon** - action buttons include both an icon and a label. Continue and Next are text-only flow-navigation exceptions, along with Cancel and Back.
 3. **No X marks** - never use an X mark for Cancel, Back, Close, or Dismiss.
 4. **Nuxt UI `<UButton>`** - always use the built-in component.
@@ -10,6 +10,14 @@
 ## Variants
 
 Not every button should be primary. `color` communicates **severity**, not importance - match it to what happens when clicked.
+
+### Frosted (default)
+
+The Nuxt UI theme applies `variant="frosted"` by default. Major actions should rely on that default.
+
+```vue
+<UButton :icon="ICONS.plus">New Container</UButton>
+```
 
 ### Primary
 
@@ -87,4 +95,4 @@ The `loading` prop disables the button and shows a spinner - no separate `:disab
 - Use `variant="ghost"` or `variant="soft"` on major actions
 - Use an X mark for Cancel, Back, Close, or Dismiss
 - Use icon-only buttons for actions
-- Use `color="neutral"` with no variant - it is invisible on the page
+- Recreate the frosted treatment with component-level CSS classes

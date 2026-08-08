@@ -195,7 +195,7 @@ const connectionString = computed(() => `postgresql://username:password@${dbName
           </Transition>
         </main>
 
-        <DeploymentsRecentActivity :key="activityRefreshKey" v-if="orgId && projectId && currentDatabaseBranchId" :organization-id="orgId" :project-id="projectId" :branch-id="branchId" event-type-prefix="database" :target-id="currentDatabaseBranchId" />
+        <DeploymentsRecentActivity v-if="orgId && projectId && currentDatabaseBranchId" :key="activityRefreshKey" :organization-id="orgId" :project-id="projectId" :branch-id="branchId" event-type-prefix="database" :target-id="currentDatabaseBranchId" />
       </div>
     </div>
   </div>

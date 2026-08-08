@@ -265,13 +265,13 @@ const graphModalOpen = ref(false)
 
 <template>
   <div class="flex min-w-0 items-center gap-2">
-    <UDropdownMenu size="sm" :items="projectItems" :content="{ align: 'start', collisionPadding: 12 }" :ui="{ content: 'w-64' }" class="shrink-0">
-      <UButton :label="projectLabel" :trailing-icon="ICONS.chevronUpDown" size="sm" color="neutral" variant="soft" class="data-[state=open]:bg-elevated" :ui="{ trailingIcon: 'text-dimmed' }" />
+    <UDropdownMenu size="sm" :items="projectItems" :content="{ align: 'start', collisionPadding: 12 }" :ui="{ content: 'w-48' }" class="shrink-0">
+      <UButton :label="projectLabel" :trailing-icon="ICONS.chevronUpDown" size="sm" color="neutral" variant="soft" class="w-48 justify-between data-[state=open]:bg-elevated" :ui="{ trailingIcon: 'text-dimmed' }" />
     </UDropdownMenu>
 
     <USeparator orientation="vertical" class="h-6 shrink-0" />
 
-    <UDropdownMenu size="sm" :items="environmentItems" :content="{ align: 'start', collisionPadding: 12 }" :ui="{ content: 'w-64' }" class="shrink-0">
+    <UDropdownMenu size="sm" :items="environmentItems" :content="{ align: 'start', collisionPadding: 12 }" :ui="{ content: 'w-48' }" class="shrink-0">
       <template #item-trailing="{ item }">
         <div v-if="item.badges?.length" class="ml-auto flex items-center gap-1">
           <UBadge v-for="badge in item.badges" :key="badge" :color="badge === 'Preview' ? 'primary' : 'neutral'" variant="soft" size="sm">
@@ -279,7 +279,7 @@ const graphModalOpen = ref(false)
           </UBadge>
         </div>
       </template>
-      <UButton :label="environmentLabel" :trailing-icon="ICONS.chevronUpDown" size="sm" color="neutral" variant="soft" :disabled="!routeProjectId && !store.project" class="data-[state=open]:bg-elevated" :ui="{ trailingIcon: 'text-dimmed' }" />
+      <UButton :label="environmentLabel" :trailing-icon="ICONS.chevronUpDown" size="sm" color="neutral" variant="soft" :disabled="!routeProjectId && !store.project" class="w-48 justify-between data-[state=open]:bg-elevated" :ui="{ trailingIcon: 'text-dimmed' }" />
     </UDropdownMenu>
     <template v-if="store.project">
       <UButton :icon="ICONS.graph" variant="ghost" color="neutral" size="sm" class="shrink-0 rotate-180" aria-label="Environment graph" @click="graphModalOpen = true" />
