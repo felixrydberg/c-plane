@@ -24,5 +24,6 @@ export const API_KEY_SCOPE_VALUES = [
   "database:postgres:manage",
   "registry:read",
   "registry:create",
+  "registry:update",
   "registry:delete",
 ] as const;

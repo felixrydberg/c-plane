@@ -13,6 +13,7 @@ type Result<T> = std::result::Result<T, Error>;
 
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(10);
+const CONTROL_PLANE_TIMEOUT: Duration = Duration::from_secs(10);
 const ACCESS_TOKEN_CACHE_GENERATION: &str = "cplane:s3-access-token-generation";
 
 #[derive(Clone)]
@@ -21,6 +22,9 @@ struct Config {
     concurrency: usize,
     redis_url: String,
     registry_token_ttl: Duration,
+    control_plane_url: String,
+    service_token: String,
+    http: reqwest::Client,
 }
 
 #[derive(Clone)]
@@ -28,7 +32,7 @@ struct Job {
     id: Uuid,
     queue_name: String,
     job_type: String,
-    _payload: serde_json::Value,
+    payload: serde_json::Value,
     attempts: i32,
     max_attempts: i32,
 }
@@ -101,6 +105,13 @@ impl Config {
             concurrency,
             redis_url: required_env("REDIS_URL")?,
             registry_token_ttl: Duration::from_secs(token_ttl_seconds),
+            control_plane_url: required_env("CONTROL_PLANE_URL")?
+                .trim_end_matches('/')
+                .to_owned(),
+            service_token: required_env("CPLANE_SERVICE_TOKEN")?,
+            http: reqwest::Client::builder()
+                .timeout(CONTROL_PLANE_TIMEOUT)
+                .build()?,
         })
     }
 }
@@ -156,7 +167,7 @@ fn job_from_row(row: QueryResult) -> Result<Job> {
         id: row.try_get("", "id")?,
         queue_name: row.try_get("", "queue_name")?,
         job_type: row.try_get("", "job_type")?,
-        _payload: serde_json::from_str(&row.try_get::<String>("", "payload")?)?,
+        payload: serde_json::from_str(&row.try_get::<String>("", "payload")?)?,
         attempts: row.try_get("", "attempts")?,
         max_attempts: row.try_get("", "max_attempts")?,
     })
@@ -204,8 +215,25 @@ async fn run_job(
 ) -> Result<()> {
     match job.job_type.as_str() {
         "registry_gc" => run_registry_gc(database, config, consumer, job).await,
+        "external_registry_secret_cleanup" => cleanup_external_registry_secret(config, job).await,
         other => Err(message(format!("unsupported job type: {other}"))),
     }
+}
+
+async fn cleanup_external_registry_secret(config: &Config, job: &Job) -> Result<()> {
+    let organization_id: Uuid = serde_json::from_value(job.payload["organization_id"].clone())?;
+    let registry_id: Uuid = serde_json::from_value(job.payload["registry_id"].clone())?;
+    config
+        .http
+        .delete(format!(
+            "{}/internal/organizations/{organization_id}/external-registries/{registry_id}/secret",
+            config.control_plane_url
+        ))
+        .header("x-cplane-token", &config.service_token)
+        .send()
+        .await?
+        .error_for_status()?;
+    Ok(())
 }
 
 async fn run_registry_gc(
@@ -261,6 +289,27 @@ async fn finish_job(
     job: &Job,
     result: std::result::Result<(), String>,
 ) -> Result<()> {
+    if let Err(error) = &result
+        && job.job_type == "external_registry_secret_cleanup"
+        && job.attempts < job.max_attempts
+    {
+        let updated = database
+            .execute(statement(
+                "UPDATE worker_job SET status='queued', available_at=NOW()+($3 * INTERVAL '1 second'), last_error=$4, locked_by=NULL, lease_expires_at=NULL, updated_at=NOW() WHERE id=$1::uuid AND status='running' AND locked_by=$2",
+                vec![
+                    job.id.into(),
+                    consumer.to_owned().into(),
+                    cleanup_retry_seconds(job.attempts).into(),
+                    error.clone().into(),
+                ],
+            ))
+            .await?;
+        if updated.rows_affected() != 1 {
+            return Err(message("job lease was lost before retry"));
+        }
+        warn!(job_id = %job.id, attempt = job.attempts, %error, "secret cleanup failed; retry queued");
+        return Ok(());
+    }
     let (status, last_error) = match &result {
         Ok(()) => ("succeeded", None),
         Err(error) => ("failed", Some(error.clone())),
@@ -297,6 +346,12 @@ async fn finish_job(
         Err(error) => warn!(job_id = %job.id, %error, "job failed"),
     }
     Ok(())
+}
+
+fn cleanup_retry_seconds(attempt: i32) -> i32 {
+    5_i32
+        .saturating_mul(2_i32.saturating_pow(attempt.saturating_sub(1) as u32))
+        .min(300)
 }
 
 async fn invalidate_access_token_cache(config: &Config) -> Result<()> {
@@ -345,12 +400,19 @@ fn message(message: impl Into<String>) -> Error {
 
 #[cfg(test)]
 mod tests {
-    use super::valid_queue_name;
+    use super::{cleanup_retry_seconds, valid_queue_name};
 
     #[test]
     fn validates_named_worker_queues() {
         assert!(valid_queue_name("maintenance"));
         assert!(valid_queue_name("cluster-state"));
         assert!(!valid_queue_name("cluster_state"));
+    }
+
+    #[test]
+    fn bounds_secret_cleanup_backoff() {
+        assert_eq!(cleanup_retry_seconds(1), 5);
+        assert_eq!(cleanup_retry_seconds(4), 40);
+        assert_eq!(cleanup_retry_seconds(20), 300);
     }
 }

@@ -208,10 +208,10 @@ pub mod server {
         ConnectionTrait, Database, DatabaseBackend, DatabaseConnection, QueryResult, Statement,
         TransactionTrait, Value,
     };
-    use serde::{Deserialize, Serialize};
+    use serde::{Deserialize, Serialize, de::DeserializeOwned};
     use serde_json::json;
     use sha2::{Digest, Sha256};
-    use std::env;
+    use std::{env, time::Duration as StdDuration};
     use tokio::sync::OnceCell;
     use uuid::Uuid;
 
@@ -220,6 +220,7 @@ pub mod server {
     const S3_ACCESS_TOKEN_CACHE_GENERATION: &str = "cplane:s3-access-token-generation";
     const S3_ACCESS_TOKEN_CACHE_TTL_SECONDS: u64 = 86_400;
     static DATABASE: OnceCell<DatabaseConnection> = OnceCell::const_new();
+    static OPENBAO_CLIENT: OnceCell<Client> = OnceCell::const_new();
 
     pub async fn initialize() -> Result<()> {
         required(
@@ -577,12 +578,12 @@ pub mod server {
     }
 
     #[derive(Deserialize)]
-    struct OpenBaoData {
-        data: OpenBaoSecret,
+    struct OpenBaoData<T> {
+        data: OpenBaoSecret<T>,
     }
     #[derive(Deserialize)]
-    struct OpenBaoSecret {
-        data: S3Credentials,
+    struct OpenBaoSecret<T> {
+        data: T,
     }
 
     fn openbao_config() -> Result<(String, String)> {
@@ -591,16 +592,29 @@ pub mod server {
         Ok((address.trim_end_matches('/').to_string(), token))
     }
 
-    async fn openbao_read(id: &str) -> Result<S3Credentials> {
+    async fn openbao_client() -> Result<&'static Client> {
+        OPENBAO_CLIENT
+            .get_or_try_init(|| async {
+                Client::builder()
+                    .timeout(StdDuration::from_secs(10))
+                    .build()
+                    .map_err(CapturedError::from_display)
+            })
+            .await
+    }
+
+    async fn openbao_secret_read<T: DeserializeOwned>(path: &str) -> Result<Option<T>> {
         let (address, token) = openbao_config()?;
-        let response = Client::new()
-            .get(format!(
-                "{address}/v1/cplane/data/platform/s3/providers/{id}"
-            ))
+        let response = openbao_client()
+            .await?
+            .get(format!("{address}/v1/cplane/data/{path}"))
             .header("X-Vault-Token", token)
             .send()
             .await
             .map_err(CapturedError::from_display)?;
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
         if !response.status().is_success() {
             return Err(CapturedError::msg(format!(
                 "OpenBao read failed: {}",
@@ -608,20 +622,19 @@ pub mod server {
             )));
         }
         response
-            .json::<OpenBaoData>()
+            .json::<OpenBaoData<T>>()
             .await
-            .map(|value| value.data.data)
+            .map(|value| Some(value.data.data))
             .map_err(CapturedError::from_display)
     }
 
-    async fn openbao_write(id: &str, credentials: &S3Credentials) -> Result<()> {
+    async fn openbao_secret_write(path: &str, secret: &impl Serialize) -> Result<()> {
         let (address, token) = openbao_config()?;
-        let response = Client::new()
-            .post(format!(
-                "{address}/v1/cplane/data/platform/s3/providers/{id}"
-            ))
+        let response = openbao_client()
+            .await?
+            .post(format!("{address}/v1/cplane/data/{path}"))
             .header("X-Vault-Token", token)
-            .json(&json!({"data": credentials}))
+            .json(&json!({"data": secret}))
             .send()
             .await
             .map_err(CapturedError::from_display)?;
@@ -634,17 +647,16 @@ pub mod server {
         Ok(())
     }
 
-    async fn openbao_delete(id: &str) -> Result<()> {
+    async fn openbao_secret_delete(path: &str) -> Result<()> {
         let (address, token) = openbao_config()?;
-        let response = Client::new()
-            .delete(format!(
-                "{address}/v1/cplane/data/platform/s3/providers/{id}"
-            ))
+        let response = openbao_client()
+            .await?
+            .delete(format!("{address}/v1/cplane/metadata/{path}"))
             .header("X-Vault-Token", token)
             .send()
             .await
             .map_err(CapturedError::from_display)?;
-        if !response.status().is_success() {
+        if !response.status().is_success() && response.status() != reqwest::StatusCode::NOT_FOUND {
             return Err(CapturedError::msg(format!(
                 "OpenBao delete failed: {}",
                 response.status()
@@ -659,30 +671,15 @@ pub mod server {
     }
 
     #[derive(Clone, Deserialize, Serialize)]
+    pub struct ExternalRegistrySecret {
+        pub token: String,
+    }
+
+    #[derive(Clone, Deserialize, Serialize)]
     struct RegistryServiceSecret {
         secret_access_key: String,
         #[serde(default)]
         gc_secret_access_key: Option<String>,
-    }
-
-    #[derive(Deserialize)]
-    struct OpenBaoAccessTokenData {
-        data: OpenBaoAccessTokenSecret,
-    }
-
-    #[derive(Deserialize)]
-    struct OpenBaoAccessTokenSecret {
-        data: S3AccessTokenSecret,
-    }
-
-    #[derive(Deserialize)]
-    struct OpenBaoRegistryServiceSecret {
-        data: RegistryServiceSecret,
-    }
-
-    #[derive(Deserialize)]
-    struct OpenBaoRegistryServiceData {
-        data: OpenBaoRegistryServiceSecret,
     }
 
     #[derive(Clone, Deserialize, Serialize)]
@@ -717,59 +714,15 @@ pub mod server {
     }
 
     async fn access_token_secret_read(id: &str) -> Result<S3AccessTokenSecret> {
-        let (address, token) = openbao_config()?;
-        let response = Client::new()
-            .get(format!(
-                "{address}/v1/cplane/data/platform/s3/access-tokens/{id}"
-            ))
-            .header("X-Vault-Token", token)
-            .send()
-            .await
-            .map_err(CapturedError::from_display)?;
-        if !response.status().is_success() {
-            return Err(CapturedError::msg(format!(
-                "OpenBao read failed: {}",
-                response.status()
-            )));
-        }
-        response
-            .json::<OpenBaoAccessTokenData>()
-            .await
-            .map(|value| value.data.data)
-            .map_err(CapturedError::from_display)
+        openbao_secret_read(&format!("platform/s3/access-tokens/{id}"))
+            .await?
+            .ok_or_else(|| CapturedError::msg("S3 access token secret not found"))
     }
 
     async fn service_credential_secret_read(id: &str) -> Result<RegistryServiceSecret> {
-        let (address, token) = openbao_config()?;
-        let response = Client::new()
-            .get(format!(
-                "{address}/v1/cplane/data/platform/s3/service-credentials/{id}"
-            ))
-            .header("X-Vault-Token", token)
-            .send()
-            .await
-            .map_err(CapturedError::from_display)?;
-        if !response.status().is_success() {
-            return Err(CapturedError::msg(format!(
-                "OpenBao read failed: {}",
-                response.status()
-            )));
-        }
-        response
-            .json::<OpenBaoRegistryServiceData>()
-            .await
-            .map(|value| value.data.data)
-            .map_err(CapturedError::from_display)
-    }
-
-    #[derive(Deserialize)]
-    struct OpenBaoBucketKeyData {
-        data: OpenBaoBucketKeySecret,
-    }
-
-    #[derive(Deserialize)]
-    struct OpenBaoBucketKeySecret {
-        data: BucketKey,
+        openbao_secret_read(&format!("platform/s3/service-credentials/{id}"))
+            .await?
+            .ok_or_else(|| CapturedError::msg("Registry service credentials not found"))
     }
 
     #[derive(Deserialize, Serialize)]
@@ -778,27 +731,11 @@ pub mod server {
     }
 
     async fn bucket_key_read(id: Uuid) -> Result<Option<String>> {
-        let (address, token) = openbao_config()?;
-        let response = Client::new()
-            .get(format!("{address}/v1/cplane/data/storage/sse-c/{id}"))
-            .header("X-Vault-Token", token)
-            .send()
-            .await
-            .map_err(CapturedError::from_display)?;
-        if response.status() == reqwest::StatusCode::NOT_FOUND {
-            return Ok(None);
-        }
-        if !response.status().is_success() {
-            return Err(CapturedError::msg(format!(
-                "OpenBao read failed: {}",
-                response.status()
-            )));
-        }
-        response
-            .json::<OpenBaoBucketKeyData>()
-            .await
-            .map(|value| Some(value.data.data.key))
-            .map_err(CapturedError::from_display)
+        Ok(
+            openbao_secret_read::<BucketKey>(&format!("storage/sse-c/{id}"))
+                .await?
+                .map(|value| value.key),
+        )
     }
 
     async fn bucket_key(id: Uuid) -> Result<String> {
@@ -810,7 +747,8 @@ pub mod server {
         raw[16..].copy_from_slice(Uuid::new_v4().as_bytes());
         let key = STANDARD.encode(raw);
         let (address, token) = openbao_config()?;
-        let response = Client::new()
+        let response = openbao_client()
+            .await?
             .post(format!("{address}/v1/cplane/data/storage/sse-c/{id}"))
             .header("X-Vault-Token", token)
             .json(&json!({ "options": { "cas": 0 }, "data": { "key": key } }))
@@ -826,65 +764,54 @@ pub mod server {
     }
 
     async fn access_token_secret_write(id: &str, secret: &S3AccessTokenSecret) -> Result<()> {
-        let (address, token) = openbao_config()?;
-        let response = Client::new()
-            .post(format!(
-                "{address}/v1/cplane/data/platform/s3/access-tokens/{id}"
-            ))
-            .header("X-Vault-Token", token)
-            .json(&json!({"data": secret}))
-            .send()
-            .await
-            .map_err(CapturedError::from_display)?;
-        if !response.status().is_success() {
-            return Err(CapturedError::msg(format!(
-                "OpenBao write failed: {}",
-                response.status()
-            )));
-        }
-        Ok(())
+        openbao_secret_write(&format!("platform/s3/access-tokens/{id}"), secret).await
+    }
+
+    async fn external_registry_secret_write(
+        organization_id: Uuid,
+        registry_id: Uuid,
+        secret: &ExternalRegistrySecret,
+    ) -> Result<()> {
+        openbao_secret_write(
+            &format!("organizations/{organization_id}/registries/{registry_id}"),
+            secret,
+        )
+        .await
+    }
+
+    async fn openbao_read(id: &str) -> Result<S3Credentials> {
+        openbao_secret_read(&format!("platform/s3/providers/{id}"))
+            .await?
+            .ok_or_else(|| CapturedError::msg("S3 provider credentials not found"))
+    }
+
+    async fn openbao_write(id: &str, credentials: &S3Credentials) -> Result<()> {
+        openbao_secret_write(&format!("platform/s3/providers/{id}"), credentials).await
+    }
+
+    async fn openbao_delete(id: &str) -> Result<()> {
+        openbao_secret_delete(&format!("platform/s3/providers/{id}")).await
+    }
+
+    async fn external_registry_secret_delete(
+        organization_id: Uuid,
+        registry_id: Uuid,
+    ) -> Result<()> {
+        openbao_secret_delete(&format!(
+            "organizations/{organization_id}/registries/{registry_id}"
+        ))
+        .await
     }
 
     async fn service_credential_secret_write(
         id: &str,
         secret: &RegistryServiceSecret,
     ) -> Result<()> {
-        let (address, token) = openbao_config()?;
-        let response = Client::new()
-            .post(format!(
-                "{address}/v1/cplane/data/platform/s3/service-credentials/{id}"
-            ))
-            .header("X-Vault-Token", token)
-            .json(&json!({"data": secret}))
-            .send()
-            .await
-            .map_err(CapturedError::from_display)?;
-        if !response.status().is_success() {
-            return Err(CapturedError::msg(format!(
-                "OpenBao write failed: {}",
-                response.status()
-            )));
-        }
-        Ok(())
+        openbao_secret_write(&format!("platform/s3/service-credentials/{id}"), secret).await
     }
 
     async fn access_token_secret_delete(id: &str) -> Result<()> {
-        let (address, token) = openbao_config()?;
-        let response = Client::new()
-            .delete(format!(
-                "{address}/v1/cplane/data/platform/s3/access-tokens/{id}"
-            ))
-            .header("X-Vault-Token", token)
-            .send()
-            .await
-            .map_err(CapturedError::from_display)?;
-        if !response.status().is_success() {
-            return Err(CapturedError::msg(format!(
-                "OpenBao delete failed: {}",
-                response.status()
-            )));
-        }
-        Ok(())
+        openbao_secret_delete(&format!("platform/s3/access-tokens/{id}")).await
     }
 
     fn provider_cache_key(id: &str) -> String {
@@ -1386,6 +1313,39 @@ pub mod server {
             .await
             .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
         access_token_secret_delete(&id)
+            .await
+            .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+        Ok(dioxus::server::axum::http::StatusCode::NO_CONTENT)
+    }
+
+    pub async fn store_external_registry_secret_handler(
+        dioxus::server::axum::extract::Path((organization_id, registry_id)): dioxus::server::axum::extract::Path<(Uuid, Uuid)>,
+        headers: dioxus::server::axum::http::HeaderMap,
+        dioxus::server::axum::Json(mut secret): dioxus::server::axum::Json<ExternalRegistrySecret>,
+    ) -> std::result::Result<
+        dioxus::server::axum::http::StatusCode,
+        dioxus::server::axum::http::StatusCode,
+    > {
+        authorize_service(&headers)?;
+        secret.token = secret.token.trim().to_string();
+        if secret.token.is_empty() {
+            return Err(dioxus::server::axum::http::StatusCode::BAD_REQUEST);
+        }
+        external_registry_secret_write(organization_id, registry_id, &secret)
+            .await
+            .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+        Ok(dioxus::server::axum::http::StatusCode::NO_CONTENT)
+    }
+
+    pub async fn delete_external_registry_secret_handler(
+        dioxus::server::axum::extract::Path((organization_id, registry_id)): dioxus::server::axum::extract::Path<(Uuid, Uuid)>,
+        headers: dioxus::server::axum::http::HeaderMap,
+    ) -> std::result::Result<
+        dioxus::server::axum::http::StatusCode,
+        dioxus::server::axum::http::StatusCode,
+    > {
+        authorize_service(&headers)?;
+        external_registry_secret_delete(organization_id, registry_id)
             .await
             .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
         Ok(dioxus::server::axum::http::StatusCode::NO_CONTENT)

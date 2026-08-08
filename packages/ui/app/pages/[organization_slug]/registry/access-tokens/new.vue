@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { CreatedRegistryAccessToken, RepositoryPermission } from '@cplane/sdk'
 import { ICONS } from '~/utils/icons'
+import { getErrorMessage } from '~/utils/errors'
 
 const store = useStore()
 const route = useRoute()
@@ -53,7 +54,7 @@ async function createToken() {
     })
     toast.add({ title: 'Access token created', color: 'success' })
   } catch (cause: unknown) {
-    error.value = cause instanceof Error ? cause.message : 'Failed to create access token'
+    error.value = getErrorMessage(cause, 'Failed to create access token')
     toast.add({ title: 'Failed to create access token', color: 'error' })
   } finally {
     loading.value = false

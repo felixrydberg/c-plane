@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { getErrorMessage } from '~/utils/errors'
 
 const store = useStore()
 const route = useRoute()
@@ -27,7 +28,7 @@ async function createBucket() {
     toast.add({ title: 'Bucket created', color: 'success' })
     await navigateTo(backUrl())
   } catch (cause: unknown) {
-    error.value = cause instanceof Error ? cause.message : 'Failed to create bucket'
+    error.value = getErrorMessage(cause, 'Failed to create bucket')
     toast.add({ title: 'Failed to create bucket', color: 'error' })
   } finally { loading.value = false }
 }

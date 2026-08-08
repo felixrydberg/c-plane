@@ -308,6 +308,54 @@ export interface paths {
         patch: operations["registry_update_access_token"];
         trace?: never;
     };
+    "/api/organization/{organization_id}/registry/external-registries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_external_registries"];
+        put?: never;
+        post: operations["create_external_registry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organization/{organization_id}/registry/external-registries/{registry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["delete_external_registry"];
+        options?: never;
+        head?: never;
+        patch: operations["rename_external_registry"];
+        trace?: never;
+    };
+    "/api/organization/{organization_id}/registry/external-registries/{registry_id}/rotate-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["rotate_external_registry_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/organization/{organization_id}/registry/maintenance": {
         parameters: {
             query?: never;
@@ -466,6 +514,8 @@ export interface components {
         ContainerVersionResponse: {
             created_at: string;
             env?: unknown;
+            /** Format: uuid */
+            external_registry_id?: string | null;
             health_check?: unknown;
             /** Format: uuid */
             id: string;
@@ -473,8 +523,6 @@ export interface components {
             /** Format: int32 */
             port?: number | null;
             public: boolean;
-            /** Format: uuid */
-            pull_secret_id?: string | null;
             /** Format: int32 */
             replica_count: number;
             resources?: unknown;
@@ -497,6 +545,8 @@ export interface components {
             env?: unknown;
             /** Format: uuid */
             environment_id: string;
+            /** Format: uuid */
+            external_registry_id?: string | null;
             health_check?: unknown;
             image: string;
             name: string;
@@ -505,8 +555,6 @@ export interface components {
             /** Format: uuid */
             project_id: string;
             public?: boolean;
-            /** Format: uuid */
-            pull_secret_id?: string | null;
             /** Format: uuid */
             region_id: string;
             /** Format: int32 */
@@ -547,6 +595,12 @@ export interface components {
             name: string;
             /** Format: uuid */
             parent_timeline_id?: string | null;
+        };
+        CreateExternalRegistryRequest: {
+            host: string;
+            name: string;
+            token: string;
+            username: string;
         };
         CreateProjectRequest: {
             name: string;
@@ -630,6 +684,17 @@ export interface components {
             id: string;
             summary: string;
         };
+        ExternalRegistryResponse: {
+            created_at: string;
+            host: string;
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: uuid */
+            organization_id: string;
+            updated_at: string;
+            username: string;
+        };
         HealthResponse: {
             status: string;
         };
@@ -704,6 +769,9 @@ export interface components {
             issued_at: string;
             token: string;
         };
+        RenameExternalRegistryRequest: {
+            name: string;
+        };
         RepositoryPermissionRequest: {
             can_pull: boolean;
             can_push: boolean;
@@ -714,6 +782,8 @@ export interface components {
             /** Format: uuid */
             container_id: string;
             container_name: string;
+            /** Format: uuid */
+            external_registry_id?: string | null;
             image: string;
             /** Format: int32 */
             version: number;
@@ -732,6 +802,9 @@ export interface components {
             parent_timeline_id?: string | null;
             /** Format: int32 */
             timeline: number;
+        };
+        RotateExternalRegistryTokenRequest: {
+            token: string;
         };
         TimelineResponse: {
             created_at: string;
@@ -752,14 +825,14 @@ export interface components {
         UpdateContainerRequest: {
             auto_deploy?: boolean;
             env?: unknown;
+            /** Format: uuid */
+            external_registry_id?: string | null;
             health_check?: unknown;
             image?: string | null;
             name?: string | null;
             /** Format: int32 */
             port?: number | null;
             public?: boolean | null;
-            /** Format: uuid */
-            pull_secret_id?: string | null;
             /** Format: int32 */
             replica_count?: number | null;
             resources?: unknown;
@@ -904,6 +977,10 @@ export interface operations {
             query: {
                 /** @description Environment ID for the revision */
                 environment_id: string;
+                /** @description Draft revision to remove the container from */
+                timeline_id: string;
+                /** @description Deploy the removal immediately */
+                deploy?: boolean;
             };
             header?: never;
             path: {
@@ -2080,6 +2157,198 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    list_external_registries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalRegistryResponse"][];
+                };
+            };
+        };
+    };
+    create_external_registry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateExternalRegistryRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalRegistryResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_external_registry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+                registry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    rename_external_registry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+                registry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameExternalRegistryRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalRegistryResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    rotate_external_registry_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+                registry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RotateExternalRegistryTokenRequest"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
         };
     };

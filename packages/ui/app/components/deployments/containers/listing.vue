@@ -13,30 +13,34 @@ const props = defineProps<{
   projectId: string | null
   environmentId: string | null
   revisionId?: string
+  draftRevisionId?: string
+  canRemove: boolean
   status: string
 }>();
 
-const emit = defineEmits<{ refresh: [] }>();
+const emit = defineEmits<{ refresh: [view: 'draft' | 'deployed'] }>();
 
 const toast = useToast();
 const deleteTarget = ref<ContainerWithProject | null>(null);
-const deleting = ref(false);
+const removeAsDraft = ref(false);
+const removing = ref(false);
 
 async function confirmDelete() {
-  if (!deleteTarget.value || !props.organizationId || !deleteTarget.value.id) return
-  deleting.value = true
+  if (!deleteTarget.value || !props.organizationId || !props.draftRevisionId || !deleteTarget.value.id) return
+  const deploy = !removeAsDraft.value
+  removing.value = true
   try {
     await $fetch(`/api/cplane/organization/${props.organizationId as ':organization_id'}/containers/${deleteTarget.value.id as ':container_id'}` as const, {
       method: 'DELETE',
-      query: { environment_id: props.environmentId ?? undefined },
+      query: { environment_id: props.environmentId ?? undefined, timeline_id: props.draftRevisionId, deploy: deploy || undefined },
     });
-    toast.add({ title: 'Container removed', color: 'success' });
+    toast.add({ title: deploy ? 'Container removed and deployed' : 'Container removed from draft', color: 'success' });
     deleteTarget.value = null
-    emit('refresh');
+    emit('refresh', deploy ? 'deployed' : 'draft');
   } catch {
-    toast.add({ title: 'Failed to remove container', color: 'error' });
+    toast.add({ title: deploy ? 'Failed to remove and deploy container' : 'Failed to remove container from draft', color: 'error' });
   } finally {
-    deleting.value = false
+    removing.value = false
   }
 }
 
@@ -88,24 +92,26 @@ const deleteModalOpen = computed({
           <NuxtTime :datetime="c.created_at" relative />
         </span>
         <UButton
+          v-if="canRemove"
           variant="solid"
           size="xs"
           color="error"
           :icon="ICONS.trash"
           @click.prevent.stop="deleteTarget = c"
         >
-          Delete
+          Remove
         </UButton>
       </NuxtLink>
     </template>
   </div>
 
-  <UModal v-model:open="deleteModalOpen" title="Delete Container">
+  <UModal v-model:open="deleteModalOpen" title="Remove Container">
     <template #body>
-      <p class="text-sm">Remove <strong>{{ deleteTarget?.name }}</strong> from this environment? The container definition will still exist in the project.</p>
+      <p class="text-sm">Remove <strong>{{ deleteTarget?.name }}</strong> from this environment?</p>
+      <UCheckbox v-model="removeAsDraft" class="mt-4" label="Remove as draft" description="Save this removal without deploying it." />
       <div class="flex justify-end gap-3 pt-4">
         <UButton variant="ghost" color="neutral" @click="deleteTarget = null">Cancel</UButton>
-        <UButton color="error" :icon="ICONS.trash" :loading="deleting" @click="confirmDelete">Delete</UButton>
+        <UButton color="error" :icon="ICONS.trash" :loading="removing" @click="confirmDelete">{{ removeAsDraft ? 'Remove from draft' : 'Remove and deploy' }}</UButton>
       </div>
     </template>
   </UModal>

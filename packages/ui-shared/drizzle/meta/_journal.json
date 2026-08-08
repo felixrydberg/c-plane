@@ -50,6 +50,13 @@
       "when": 1785018544314,
       "tag": "0006_white_lady_mastermind",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1785774964080,
+      "tag": "0007_swift_silvermane",
+      "breakpoints": true
     }
   ]
 }

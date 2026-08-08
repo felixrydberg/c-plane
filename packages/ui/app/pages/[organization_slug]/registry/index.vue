@@ -72,6 +72,8 @@ async function deleteRepository() {
       </div>
     </section>
 
+    <RegistryExternalRegistriesPanel v-if="organizationId" :organization-id="organizationId" />
+
     <UModal v-model:open="deleteModalOpen" title="Delete repository" description="This permanently deletes the repository images and access permissions.">
       <template #body>
         <div class="space-y-4">

@@ -22,8 +22,10 @@ async function syncCurrentProjectEnvironments() {
 
   const environmentId = route.params.environment_id as string | undefined
   if (store.environments_project_id === project.id) {
-    store.project = project
-    store.environment = store.environments.find(environment => environment.id === environmentId) ?? store.environments.find(environment => environment.is_default) ?? store.environments[0] ?? null
+    store.$patch({
+      project,
+      environment: store.environments.find(environment => environment.id === environmentId) ?? store.environments.find(environment => environment.is_default) ?? store.environments[0] ?? null,
+    })
     return
   }
 

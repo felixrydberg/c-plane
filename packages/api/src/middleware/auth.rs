@@ -146,6 +146,24 @@ pub(crate) fn required_scope(method: &str, path: &str) -> Option<&'static str> {
         ("DELETE", "/api/organization/{organization_id}/registry/repositories/{repository_id}") => {
             "registry:delete"
         }
+        ("GET", "/api/organization/{organization_id}/registry/external-registries") => {
+            "registry:read"
+        }
+        ("POST", "/api/organization/{organization_id}/registry/external-registries") => {
+            "registry:create"
+        }
+        (
+            "PATCH",
+            "/api/organization/{organization_id}/registry/external-registries/{registry_id}",
+        ) => "registry:update",
+        (
+            "POST",
+            "/api/organization/{organization_id}/registry/external-registries/{registry_id}/rotate-token",
+        ) => "registry:update",
+        (
+            "DELETE",
+            "/api/organization/{organization_id}/registry/external-registries/{registry_id}",
+        ) => "registry:delete",
         ("GET", "/api/organization/{organization_id}/registry/access-tokens") => {
             "access-token:read"
         }
@@ -607,6 +625,31 @@ mod tests {
             (
                 "DELETE",
                 "/api/organization/{organization_id}/registry/repositories/{repository_id}",
+                "registry:delete",
+            ),
+            (
+                "GET",
+                "/api/organization/{organization_id}/registry/external-registries",
+                "registry:read",
+            ),
+            (
+                "POST",
+                "/api/organization/{organization_id}/registry/external-registries",
+                "registry:create",
+            ),
+            (
+                "PATCH",
+                "/api/organization/{organization_id}/registry/external-registries/{registry_id}",
+                "registry:update",
+            ),
+            (
+                "POST",
+                "/api/organization/{organization_id}/registry/external-registries/{registry_id}/rotate-token",
+                "registry:update",
+            ),
+            (
+                "DELETE",
+                "/api/organization/{organization_id}/registry/external-registries/{registry_id}",
                 "registry:delete",
             ),
             (

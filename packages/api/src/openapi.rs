@@ -113,6 +113,11 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
         crate::handlers::registry_repositories::create_repository,
         crate::handlers::registry_repositories::list_repositories,
         crate::handlers::registry_repositories::delete_repository,
+        crate::handlers::external_registries::list_external_registries,
+        crate::handlers::external_registries::create_external_registry,
+        crate::handlers::external_registries::rename_external_registry,
+        crate::handlers::external_registries::rotate_external_registry_token,
+        crate::handlers::external_registries::delete_external_registry,
     ),
     components(
         schemas(
@@ -159,6 +164,10 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
             crate::handlers::registry_access_tokens::CreatedRegistryAccessTokenResponse,
             crate::handlers::registry_repositories::CreateRegistryRepositoryRequest,
             crate::handlers::registry_repositories::RegistryRepositoryResponse,
+            crate::handlers::external_registries::CreateExternalRegistryRequest,
+            crate::handlers::external_registries::RenameExternalRegistryRequest,
+            crate::handlers::external_registries::RotateExternalRegistryTokenRequest,
+            crate::handlers::external_registries::ExternalRegistryResponse,
         ),
     ),
     tags(

@@ -22,6 +22,30 @@ export const registry_repositories = pgTable("registry_repositories", {
   }),
 ]).enableRLS();
 
+export const external_registry = pgTable("external_registry", {
+  id: uuid("id").primaryKey(),
+  organization_id: uuid("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  host: text("host").notNull(),
+  username: text("username").notNull(),
+  created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+  updated_at: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("external_registry_id_organization_id_uidx").on(table.id, table.organization_id),
+  uniqueIndex("external_registry_organization_name_uidx").on(table.organization_id, table.name),
+  uniqueIndex("external_registry_organization_host_username_uidx").on(table.organization_id, table.host, table.username),
+  index("external_registry_organization_id_idx").on(table.organization_id),
+  pgPolicy("external_registry_tenant_rls", {
+    as: "permissive",
+    for: "all",
+    to: app_tenant,
+    using: orgAllowed(table.organization_id),
+    withCheck: orgAllowed(table.organization_id),
+  }),
+]).enableRLS();
+
 export const registry_access_tokens = pgTable("registry_access_tokens", {
   id: uuid("id").primaryKey(),
   organization_id: uuid("organization_id")
