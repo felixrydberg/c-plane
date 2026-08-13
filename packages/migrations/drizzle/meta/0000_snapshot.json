@@ -1,5 +1,5 @@
 {
-  "id": "2dbb0279-4c67-49cf-8a52-534afded67ac",
+  "id": "c1daa60b-2ddc-4236-8e30-aaa8b3833db3",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -137,8 +137,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"event\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"event\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"event\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"event\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
@@ -1549,7 +1549,7 @@
           "to": [
             "app_tenant"
           ],
-          "withCheck": "\"worker_job\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[])) and \"worker_job\".\"queue_name\" = 'secrets' and \"worker_job\".\"job_type\" = 'external_registry_secret_cleanup'"
+          "withCheck": "\"worker_job\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])) and \"worker_job\".\"queue_name\" = 'secrets' and \"worker_job\".\"job_type\" = 'external_registry_secret_cleanup'"
         }
       },
       "checkConstraints": {
@@ -1719,8 +1719,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"project\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"project\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"project\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"project\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
@@ -1932,8 +1932,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"project_environment\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"project_environment\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"project_environment\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"project_environment\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
@@ -2104,19 +2104,6 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "project_timeline_parent_timeline_id_project_timeline_id_fk": {
-          "name": "project_timeline_parent_timeline_id_project_timeline_id_fk",
-          "tableFrom": "project_timeline",
-          "tableTo": "project_timeline",
-          "columnsFrom": [
-            "parent_timeline_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
         "project_timeline_parent_scope_fk": {
           "name": "project_timeline_parent_scope_fk",
           "tableFrom": "project_timeline",
@@ -2155,8 +2142,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"project_timeline\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"project_timeline\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"project_timeline\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"project_timeline\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
@@ -2294,8 +2281,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"project_container\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"project_container\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"project_container\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"project_container\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
@@ -2514,8 +2501,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"project_container_version\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"project_container_version\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"project_container_version\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"project_container_version\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
@@ -2625,7 +2612,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -2639,8 +2626,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"postgres_database\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"postgres_database\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"postgres_database\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"postgres_database\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
@@ -2824,8 +2811,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"postgres_database_branch\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"postgres_database_branch\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"postgres_database_branch\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"postgres_database_branch\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
@@ -2853,8 +2840,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "region": {
-          "name": "region",
+        "region_id": {
+          "name": "region_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -2920,11 +2907,11 @@
           "method": "btree",
           "with": {}
         },
-        "bucket_region_idx": {
-          "name": "bucket_region_idx",
+        "bucket_region_id_idx": {
+          "name": "bucket_region_id_idx",
           "columns": [
             {
-              "expression": "region",
+              "expression": "region_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2963,22 +2950,31 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "bucket_region_regions_id_fk": {
-          "name": "bucket_region_regions_id_fk",
+        "bucket_region_id_regions_id_fk": {
+          "name": "bucket_region_id_regions_id_fk",
           "tableFrom": "bucket",
           "tableTo": "regions",
           "columnsFrom": [
-            "region"
+            "region_id"
           ],
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "bucket_id_organization_id_uidx": {
+          "name": "bucket_id_organization_id_uidx",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "organization_id"
+          ]
+        }
+      },
       "policies": {
         "bucket_tenant_rls": {
           "name": "bucket_tenant_rls",
@@ -2987,8 +2983,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"bucket\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"bucket\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"bucket\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"bucket\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
@@ -3140,7 +3136,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "storage_access_token_id_organization_id_uidx": {
+          "name": "storage_access_token_id_organization_id_uidx",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "organization_id"
+          ]
+        }
+      },
       "policies": {
         "storage_access_token_tenant_rls": {
           "name": "storage_access_token_tenant_rls",
@@ -3149,8 +3154,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"storage_access_token\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"storage_access_token\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"storage_access_token\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"storage_access_token\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
@@ -3247,32 +3252,6 @@
         }
       },
       "foreignKeys": {
-        "storage_access_token_bucket_access_token_id_storage_access_token_id_fk": {
-          "name": "storage_access_token_bucket_access_token_id_storage_access_token_id_fk",
-          "tableFrom": "storage_access_token_bucket",
-          "tableTo": "storage_access_token",
-          "columnsFrom": [
-            "access_token_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "storage_access_token_bucket_bucket_id_bucket_id_fk": {
-          "name": "storage_access_token_bucket_bucket_id_bucket_id_fk",
-          "tableFrom": "storage_access_token_bucket",
-          "tableTo": "bucket",
-          "columnsFrom": [
-            "bucket_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
         "storage_access_token_bucket_organization_id_organization_id_fk": {
           "name": "storage_access_token_bucket_organization_id_organization_id_fk",
           "tableFrom": "storage_access_token_bucket",
@@ -3282,6 +3261,36 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "storage_access_token_bucket_token_scope_fk": {
+          "name": "storage_access_token_bucket_token_scope_fk",
+          "tableFrom": "storage_access_token_bucket",
+          "tableTo": "storage_access_token",
+          "columnsFrom": [
+            "access_token_id",
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id",
+            "organization_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "storage_access_token_bucket_bucket_scope_fk": {
+          "name": "storage_access_token_bucket_bucket_scope_fk",
+          "tableFrom": "storage_access_token_bucket",
+          "tableTo": "bucket",
+          "columnsFrom": [
+            "bucket_id",
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id",
+            "organization_id"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -3297,8 +3306,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"storage_access_token_bucket\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"storage_access_token_bucket\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"storage_access_token_bucket\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"storage_access_token_bucket\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
@@ -3389,19 +3398,6 @@
         }
       },
       "foreignKeys": {
-        "api_key_scopes_api_key_id_api_keys_id_fk": {
-          "name": "api_key_scopes_api_key_id_api_keys_id_fk",
-          "tableFrom": "api_key_scopes",
-          "tableTo": "api_keys",
-          "columnsFrom": [
-            "api_key_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
         "api_key_scopes_organization_id_organization_id_fk": {
           "name": "api_key_scopes_organization_id_organization_id_fk",
           "tableFrom": "api_key_scopes",
@@ -3411,6 +3407,21 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "api_key_scopes_api_key_scope_fk": {
+          "name": "api_key_scopes_api_key_scope_fk",
+          "tableFrom": "api_key_scopes",
+          "tableTo": "api_keys",
+          "columnsFrom": [
+            "api_key_id",
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id",
+            "organization_id"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -3426,8 +3437,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"api_key_scopes\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"api_key_scopes\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"api_key_scopes\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"api_key_scopes\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
@@ -3529,7 +3540,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "api_keys_id_organization_id_uidx": {
+          "name": "api_keys_id_organization_id_uidx",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "organization_id"
+          ]
+        }
+      },
       "policies": {
         "api_keys_tenant_rls": {
           "name": "api_keys_tenant_rls",
@@ -3538,8 +3558,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"api_keys\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"api_keys\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"api_keys\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"api_keys\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
@@ -3625,8 +3645,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"active_organization\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"active_organization\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"active_organization\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"active_organization\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
@@ -3732,7 +3752,7 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"organization\".\"id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"organization\".\"id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         },
         "organization_tenant_rls_update": {
           "name": "organization_tenant_rls_update",
@@ -3741,8 +3761,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"organization\".\"id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"organization\".\"id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"organization\".\"id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"organization\".\"id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         },
         "organization_tenant_rls_delete": {
           "name": "organization_tenant_rls_delete",
@@ -3751,7 +3771,7 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"organization\".\"id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"organization\".\"id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         },
         "organization_tenant_rls_insert": {
           "name": "organization_tenant_rls_insert",
@@ -3893,8 +3913,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"organization_invitation\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"organization_invitation\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"organization_invitation\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"organization_invitation\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
@@ -4028,8 +4048,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"organization_member\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"organization_member\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"organization_member\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"organization_member\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
@@ -4183,8 +4203,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"external_registry\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"external_registry\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"external_registry\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"external_registry\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
@@ -4302,7 +4322,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "registry_access_tokens_id_organization_id_uidx": {
+          "name": "registry_access_tokens_id_organization_id_uidx",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "organization_id"
+          ]
+        }
+      },
       "policies": {
         "registry_access_tokens_tenant_rls": {
           "name": "registry_access_tokens_tenant_rls",
@@ -4311,8 +4340,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"registry_access_tokens\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"registry_access_tokens\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"registry_access_tokens\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"registry_access_tokens\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
@@ -4402,7 +4431,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "registry_repositories_id_organization_id_uidx": {
+          "name": "registry_repositories_id_organization_id_uidx",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "organization_id"
+          ]
+        }
+      },
       "policies": {
         "registry_repositories_tenant_rls": {
           "name": "registry_repositories_tenant_rls",
@@ -4411,8 +4449,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"registry_repositories\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"registry_repositories\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"registry_repositories\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"registry_repositories\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
@@ -4550,28 +4588,32 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "registry_repository_grants_repository_id_registry_repositories_id_fk": {
-          "name": "registry_repository_grants_repository_id_registry_repositories_id_fk",
+        "registry_repository_grants_repository_scope_fk": {
+          "name": "registry_repository_grants_repository_scope_fk",
           "tableFrom": "registry_repository_grants",
           "tableTo": "registry_repositories",
           "columnsFrom": [
-            "repository_id"
+            "repository_id",
+            "organization_id"
           ],
           "columnsTo": [
-            "id"
+            "id",
+            "organization_id"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "registry_repository_grants_access_token_id_registry_access_tokens_id_fk": {
-          "name": "registry_repository_grants_access_token_id_registry_access_tokens_id_fk",
+        "registry_repository_grants_token_scope_fk": {
+          "name": "registry_repository_grants_token_scope_fk",
           "tableFrom": "registry_repository_grants",
           "tableTo": "registry_access_tokens",
           "columnsFrom": [
-            "access_token_id"
+            "access_token_id",
+            "organization_id"
           ],
           "columnsTo": [
-            "id"
+            "id",
+            "organization_id"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -4587,8 +4629,8 @@
           "to": [
             "app_tenant"
           ],
-          "using": "\"registry_repository_grants\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"registry_repository_grants\".\"organization_id\" = ANY(COALESCE(current_setting('app.allowed_organizations', true)::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"registry_repository_grants\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"registry_repository_grants\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},

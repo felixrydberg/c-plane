@@ -84,7 +84,7 @@ a second pair is reserved for garbage collection.
 The singleton `registry_storage` row stores the normal credential and bucket
 assignment. The disposable `registry_maintenance` row stores the GC credential
 ID and current maintenance state. OpenBao stores each secret keyed by its
-public access-key ID at `platform/s3/access-keys/{access_key_id}`.
+public access-key ID at `cplane/data/platform/s3/access-keys/{access_key_id}`.
 
 The registry bucket has its own random 256-bit SSE-C key at
 `storage/sse-c/{registry_storage_id}`. Storage supplies this key to the backing

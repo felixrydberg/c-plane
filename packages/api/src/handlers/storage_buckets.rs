@@ -107,7 +107,7 @@ pub async fn create_bucket(
         id: Set(bucket_id),
         project_id: Set(body.project_id),
         organization_id: Set(organization_id),
-        region: Set(body.region),
+        region_id: Set(body.region),
         name: Set(name.clone()),
     }
     .insert(tx)
@@ -187,7 +187,7 @@ pub async fn delete_bucket(
         .await?
         .ok_or_else(|| AppError::NotFound("Bucket not found".into()))?;
     verify_project_in_org(tx, bucket.project_id, organization_id).await?;
-    let region = region::Entity::find_by_id(bucket.region)
+    let region = region::Entity::find_by_id(bucket.region_id)
         .one(tx)
         .await?
         .ok_or_else(|| AppError::NotFound("Bucket region not found".into()))?;
@@ -220,8 +220,8 @@ pub async fn delete_bucket(
     )
     .await?;
     scoped.commit().await?;
-    for access_key in access_keys {
-        providers.invalidate_access_token_cache(&access_key).await?;
+    if let Err(error) = providers.invalidate_access_token_caches(&access_keys).await {
+        tracing::warn!(%error, %bucket_id, "bucket cache invalidation failed after deletion");
     }
 
     Ok(axum::http::StatusCode::NO_CONTENT)
@@ -232,7 +232,7 @@ fn response(bucket: &bucket::Model) -> BucketResponse {
         id: bucket.id,
         project_id: bucket.project_id,
         name: bucket.name.clone(),
-        region: bucket.region,
+        region: bucket.region_id,
     }
 }
 

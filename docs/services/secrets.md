@@ -1,8 +1,8 @@
 # Secrets library
 
 OpenBao is the source of truth for secret values. API and control plane use the
-the secret service exposed by the reusable `packages/lib` Rust crate; there is
-no secrets service or secret-proxy process.
+reusable secrets library in the `packages/lib` Rust crate; there is no secrets
+service or secret-proxy process.
 
 ```rust
 let secrets = Secrets::from_env()?;

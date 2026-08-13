@@ -224,8 +224,8 @@ pub async fn rotate_external_registry_token(
         json!({"summary": format!("Rotated token for external registry '{registry_name}'"), "target_id": registry_id}),
     )
     .await?;
-    scoped.commit().await?;
     store_secret(organization_id, registry_id, &token).await?;
+    scoped.commit().await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -384,6 +384,14 @@ pub async fn delete_secret(organization_id: Uuid, registry_id: Uuid) -> Result<(
     Ok(())
 }
 
+#[utoipa::path(
+    delete,
+    path = "/internal/organizations/{organization_id}/external-registries/{registry_id}/secret",
+    params(("organization_id" = Uuid, Path), ("registry_id" = Uuid, Path)),
+    responses((status = 204), (status = 401, body = crate::errors::ErrorResponse)),
+    security(("serviceToken" = [])),
+    tag = "internal",
+)]
 pub async fn delete_secret_internal(
     Path((organization_id, registry_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, AppError> {

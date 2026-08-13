@@ -12,7 +12,7 @@ export const postgres_database = pgTable('postgres_database', {
     .notNull()
     .references(() => organization.id, { onDelete: "cascade" }),
   default_branch_id: uuid("default_branch_id")
-    .references((): AnyPgColumn => postgres_database_branch.id, { onDelete: "cascade" }),
+    .references((): AnyPgColumn => postgres_database_branch.id, { onDelete: "set null" }),
   name: text("name").notNull(),
 }, (table) => [
   index("postgres_database_project_id_idx").on(table.project_id),

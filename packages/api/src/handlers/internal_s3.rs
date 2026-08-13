@@ -2,6 +2,7 @@ use axum::{Json, extract::Path};
 use redis::AsyncCommands;
 use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
@@ -13,33 +14,48 @@ use lib::cache::S3_ACCESS_TOKEN_CACHE_PREFIX;
 
 const CACHE_TTL_SECONDS: u64 = 86_400;
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, ToSchema)]
 pub struct ResolvedS3BucketPermission {
     pub bucket_id: Uuid,
     pub bucket_name: String,
     pub physical_bucket_name: String,
     pub region: String,
     pub provider_id: Uuid,
+    #[schema(ignore)]
     pub platform_sse_key: String,
     pub can_read: bool,
     pub can_write: bool,
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, ToSchema)]
 pub struct ResolvedS3AccessToken {
     pub organization_id: Option<Uuid>,
     pub project_id: Option<Uuid>,
     pub credential_id: Uuid,
     pub bucket_permissions: Vec<ResolvedS3BucketPermission>,
+    #[schema(ignore)]
     pub secret_access_key: String,
 }
 
+#[utoipa::path(
+    get,
+    path = "/internal/s3-access-tokens/resolve/{access_key}",
+    params(("access_key" = String, Path)),
+    responses(
+        (status = 200, body = ResolvedS3AccessToken),
+        (status = 401, body = crate::errors::ErrorResponse),
+        (status = 404, body = crate::errors::ErrorResponse),
+    ),
+    security(("serviceToken" = [])),
+    tag = "internal",
+)]
 pub async fn resolve_access_token(
     Path(access_key): Path<String>,
 ) -> Result<Json<ResolvedS3AccessToken>, AppError> {
     let state = get_app_state();
     let cached = cached(&state.config.redis_url, &access_key).await?;
     if let Some(cached) = cached {
+        validate_cached_token(&cached, &access_key).await?;
         return Ok(Json(cached));
     }
     let secret = state
@@ -52,6 +68,18 @@ pub async fn resolve_access_token(
     Ok(Json(resolved))
 }
 
+#[utoipa::path(
+    get,
+    path = "/internal/s3-providers/{provider_id}/credentials",
+    params(("provider_id" = Uuid, Path)),
+    responses(
+        (status = 200, body = S3ProviderCredentials),
+        (status = 401, body = crate::errors::ErrorResponse),
+        (status = 404, body = crate::errors::ErrorResponse),
+    ),
+    security(("serviceToken" = [])),
+    tag = "internal",
+)]
 pub async fn provider_credentials(
     Path(provider_id): Path<Uuid>,
 ) -> Result<Json<S3ProviderCredentials>, AppError> {
@@ -61,6 +89,47 @@ pub async fn provider_credentials(
             .credentials(provider_id)
             .await?,
     ))
+}
+
+async fn validate_cached_token(
+    cached: &ResolvedS3AccessToken,
+    access_key: &str,
+) -> Result<(), AppError> {
+    let state = get_app_state();
+    let active = match (cached.organization_id, cached.project_id) {
+        (Some(organization_id), Some(project_id)) => {
+            let tenant = TenantDatabase::new(
+                state.tenant_db,
+                OrganizationContext { allowed_organizations: vec![organization_id] },
+            );
+            let scoped = tenant.begin_scoped_transaction().await?;
+            let row = scoped
+                .connection()
+                .query_one(Statement::from_sql_and_values(
+                    DatabaseBackend::Postgres,
+                    "SELECT 1 FROM storage_access_token WHERE id=$1 AND access_key_id=$2 AND organization_id=$3 AND project_id=$4 AND revoked_at IS NULL",
+                    vec![cached.credential_id.into(), access_key.into(), organization_id.into(), project_id.into()],
+                ))
+                .await?;
+            scoped.commit().await?;
+            row.is_some()
+        }
+        (None, None) => state
+            .tenant_db
+            .query_one(Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
+                "SELECT 1 FROM registry_storage storage LEFT JOIN registry_maintenance maintenance ON maintenance.service=storage.service WHERE storage.id=$1 AND storage.service='distribution' AND (storage.access_key_id=$2 OR maintenance.gc_access_key_id=$2) LIMIT 1",
+                vec![cached.credential_id.into(), access_key.into()],
+            ))
+            .await?
+            .is_some(),
+        _ => false,
+    };
+    if active {
+        Ok(())
+    } else {
+        Err(AppError::Unauthorized("Invalid S3 access key".into()))
+    }
 }
 
 async fn resolve_uncached(
@@ -95,7 +164,7 @@ async fn resolve_uncached(
             let rows = tx
                 .query_all(Statement::from_sql_and_values(
                     DatabaseBackend::Postgres,
-                    "SELECT permission.bucket_id, permission.can_read, permission.can_write, bucket.name AS bucket_name, region.slug AS region_slug, provider.id AS provider_id, CONCAT('cp-', REPLACE(bucket.id::text, '-', '')) AS physical_bucket_name FROM storage_access_token_bucket permission JOIN bucket ON bucket.id=permission.bucket_id JOIN regions region ON region.id=bucket.region JOIN s3_providers provider ON provider.id=region.s3_provider_id WHERE permission.access_token_id=$1 AND bucket.project_id=$2 AND provider.is_active=true",
+                    "SELECT permission.bucket_id, permission.can_read, permission.can_write, bucket.name AS bucket_name, region.slug AS region_slug, provider.id AS provider_id, CONCAT('cp-', REPLACE(bucket.id::text, '-', '')) AS physical_bucket_name FROM storage_access_token_bucket permission JOIN bucket ON bucket.id=permission.bucket_id JOIN regions region ON region.id=bucket.region_id JOIN s3_providers provider ON provider.id=region.s3_provider_id WHERE permission.access_token_id=$1 AND bucket.project_id=$2 AND provider.is_active=true",
                     vec![secret.credential_id.into(), project_id.into()],
                 ))
                 .await?;

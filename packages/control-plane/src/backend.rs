@@ -202,7 +202,6 @@ pub mod server {
     use chrono::{Duration, Utc};
     use dioxus::{CapturedError, fullstack::HeaderMap};
     use lib::secrets::Secrets;
-    use redis::AsyncCommands;
     use sea_orm::{
         ConnectionTrait, Database, DatabaseBackend, DatabaseConnection, QueryResult, Statement,
         TransactionTrait, Value,
@@ -350,7 +349,6 @@ pub mod server {
         let slug = validate_region_slug(slug)?;
         let display_name = required(display_name, "display name")?;
         let status = validate_choice(status, &["active", "inactive", "maintenance"], "status")?;
-        let access_keys = access_keys_for_region(&id).await?;
         let tx = database()
             .await?
             .begin()
@@ -376,6 +374,7 @@ pub mod server {
         let slug = validate_region_slug(slug)?;
         let display_name = required(display_name, "display name")?;
         let status = validate_choice(status, &["active", "inactive", "maintenance"], "status")?;
+        let access_keys = access_keys_for_region(&id).await?;
         let tx = database()
             .await?
             .begin()
@@ -642,7 +641,7 @@ pub mod server {
         let rows = database()
             .await?
             .query_all(statement(
-                "SELECT DISTINCT token.access_key_id FROM storage_access_token token JOIN storage_access_token_bucket permission ON permission.access_token_id=token.id JOIN bucket ON bucket.id=permission.bucket_id WHERE bucket.region=$1::uuid",
+                "SELECT DISTINCT token.access_key_id FROM storage_access_token token JOIN storage_access_token_bucket permission ON permission.access_token_id=token.id JOIN bucket ON bucket.id=permission.bucket_id WHERE bucket.region_id=$1::uuid",
                 vec![region_id.to_owned().into()],
             ))
             .await
@@ -666,7 +665,7 @@ pub mod server {
         let rows = database()
             .await?
             .query_all(statement(
-                "SELECT access_key_id FROM registry_storage WHERE service='distribution' UNION SELECT gc_access_key_id AS access_key_id FROM registry_maintenance WHERE service='distribution'",
+                "SELECT access_key_id FROM registry_storage WHERE service='distribution' AND access_key_id IS NOT NULL UNION SELECT gc_access_key_id AS access_key_id FROM registry_maintenance WHERE service='distribution' AND gc_access_key_id IS NOT NULL",
                 vec![],
             ))
             .await

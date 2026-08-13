@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+umask 077
 
 : "${REGISTRY_TOKEN_SECRET:?REGISTRY_TOKEN_SECRET is required}"
 printf '{"keys":[{"kty":"oct","use":"sig","alg":"HS256","kid":"cplane-registry","k":"%s"}]}' \

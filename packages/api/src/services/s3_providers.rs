@@ -7,6 +7,7 @@ use base64::{Engine, engine::general_purpose::STANDARD};
 use lib::{cache::S3_PROVIDER_CREDENTIAL_CACHE_PREFIX, secrets::Secrets};
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 const PROVIDER_CREDENTIAL_CACHE_TTL_SECONDS: u64 = 60;
@@ -18,10 +19,12 @@ pub struct S3ProviderSecret {
     pub session_token: Option<String>,
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, ToSchema)]
 pub struct S3ProviderCredentials {
     pub access_key_id: String,
+    #[schema(ignore)]
     pub secret_access_key: String,
+    #[schema(ignore)]
     pub session_token: Option<String>,
     pub endpoint_url: String,
     pub provider_region: Option<String>,
@@ -152,8 +155,9 @@ impl S3ProviderClient {
         let path = format!("storage/sse-c/{bucket_id}");
         if self.secrets.get::<BucketKey>(&path).await?.is_none() {
             let mut raw = [0; 32];
-            raw[..16].copy_from_slice(Uuid::new_v4().as_bytes());
-            raw[16..].copy_from_slice(Uuid::new_v4().as_bytes());
+            getrandom::fill(&mut raw).map_err(|error| {
+                AppError::Internal(format!("Failed to generate bucket key: {error}"))
+            })?;
             self.secrets
                 .set(
                     &path,
@@ -220,6 +224,17 @@ impl S3ProviderClient {
     }
 
     pub async fn invalidate_access_token_cache(&self, access_key: &str) -> Result<(), AppError> {
+        self.invalidate_access_token_caches(&[access_key.to_owned()])
+            .await
+    }
+
+    pub async fn invalidate_access_token_caches(
+        &self,
+        access_keys: &[String],
+    ) -> Result<(), AppError> {
+        if access_keys.is_empty() {
+            return Ok(());
+        }
         let client = redis::Client::open(self.redis_url.as_str())
             .map_err(|error| AppError::Internal(error.to_string()))?;
         let mut connection = client
@@ -227,11 +242,14 @@ impl S3ProviderClient {
             .await
             .map_err(|error| AppError::Internal(error.to_string()))?;
         redis::cmd("DEL")
-            .arg(format!(
-                "{}{}",
-                lib::cache::S3_ACCESS_TOKEN_CACHE_PREFIX,
-                access_key
-            ))
+            .arg(
+                access_keys
+                    .iter()
+                    .map(|access_key| {
+                        format!("{}{}", lib::cache::S3_ACCESS_TOKEN_CACHE_PREFIX, access_key)
+                    })
+                    .collect::<Vec<_>>(),
+            )
             .query_async::<u64>(&mut connection)
             .await
             .map_err(|error| AppError::Internal(error.to_string()))?;

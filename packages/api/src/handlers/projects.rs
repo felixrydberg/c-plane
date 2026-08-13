@@ -388,11 +388,12 @@ pub async fn delete_project(
     )
     .await?;
     scoped.commit().await?;
-    for access_key in access_keys {
-        get_app_state()
-            .s3_providers
-            .invalidate_access_token_cache(&access_key)
-            .await?;
+    if let Err(error) = get_app_state()
+        .s3_providers
+        .invalidate_access_token_caches(&access_keys)
+        .await
+    {
+        tracing::warn!(%error, %project_id, "project cache invalidation failed after deletion");
     }
 
     Ok(Json(serde_json::json!({ "success": true })))

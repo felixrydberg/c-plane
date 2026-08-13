@@ -24,10 +24,14 @@ services:
       REGISTRY_TOKEN_TTL_SECONDS: ${REGISTRY_TOKEN_TTL_SECONDS:-60}
       REGISTRY_TOKEN_SECRET: ${REGISTRY_TOKEN_SECRET}
     depends_on:
-      - postgresd
-      - ui
-      - openbao-init
-      - valkey
+      postgresd:
+        condition: service_started
+      ui:
+        condition: service_started
+      openbao-init:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_started
     ports:
       - 8080:8080
 

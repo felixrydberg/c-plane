@@ -334,9 +334,12 @@ pub async fn update_access_token(
     )
     .await?;
     scoped.commit().await?;
-    secrets
+    if let Err(error) = secrets
         .invalidate_access_token_cache(&token.access_key_id)
-        .await?;
+        .await
+    {
+        tracing::warn!(%error, %token_id, "access token cache invalidation failed after update");
+    }
 
     Ok(axum::http::StatusCode::NO_CONTENT)
 }

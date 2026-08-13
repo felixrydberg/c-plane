@@ -69,8 +69,7 @@ export const project_timeline = pgTable('project_timeline', {
     .references(() => organization.id, { onDelete: "cascade" }),
   timeline: integer("timeline").notNull(),
   name: text("name"),
-  parent_timeline_id: uuid("parent_timeline_id")
-    .references((): AnyPgColumn => project_timeline.id, { onDelete: "set null" }),
+  parent_timeline_id: uuid("parent_timeline_id"),
   pins: jsonb("pins").notNull().default({}),
   created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 }, (table) => [
@@ -83,7 +82,7 @@ export const project_timeline = pgTable('project_timeline', {
     columns: [table.parent_timeline_id, table.project_id, table.organization_id],
     foreignColumns: [table.id, table.project_id, table.organization_id],
     name: "project_timeline_parent_scope_fk",
-  }),
+  }).onDelete("no action"),
   index("project_timeline_id_idx").on(table.id),
   index("project_timeline_environment_id_idx").on(table.environment_id),
   index("project_timeline_organization_id_idx").on(table.organization_id),

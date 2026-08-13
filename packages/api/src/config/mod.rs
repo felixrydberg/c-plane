@@ -35,6 +35,11 @@ pub fn load_config() -> Result<Config, AppError> {
         env::var("REDIS_URL").map_err(|_| AppError::Internal("REDIS_URL is required".into()))?;
     let service_token = env::var("CPLANE_SERVICE_TOKEN")
         .map_err(|_| AppError::Internal("CPLANE_SERVICE_TOKEN is required".into()))?;
+    if service_token.trim().is_empty() {
+        return Err(AppError::Internal(
+            "CPLANE_SERVICE_TOKEN is required".into(),
+        ));
+    }
     let storage_endpoint_url =
         env::var("STORAGE_ENDPOINT_URL").unwrap_or_else(|_| "http://localhost:8081".to_string());
     let registry_token_ttl_seconds = env::var("REGISTRY_TOKEN_TTL_SECONDS")

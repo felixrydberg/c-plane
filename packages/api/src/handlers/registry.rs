@@ -497,3 +497,35 @@ mod tests {
             vec!["pull"]
         );
     }
+
+    #[test]
+    fn signs_tokens_verifiable_by_the_symmetric_registry_key() {
+        let secret = [7_u8; 32];
+        let token = sign_registry_claims_with_secret(
+            &RegistryClaims {
+                iss: "cplane-registry".into(),
+                sub: "cplane-control-plane".into(),
+                aud: "registry.example.com".into(),
+                exp: 4_102_444_800,
+                nbf: 0,
+                iat: 0,
+                jti: "test".into(),
+                access: vec![RegistryAccess {
+                    resource_type: "repository",
+                    name: "acme/api".into(),
+                    actions: vec!["pull".into()],
+                }],
+            },
+            &secret,
+        )
+        .unwrap();
+        let mut validation = Validation::new(Algorithm::HS256);
+        validation.set_audience(&["registry.example.com"]);
+        validation.set_issuer(&["cplane-registry"]);
+        let claims = decode::<Value>(&token, &DecodingKey::from_secret(&secret), &validation)
+            .unwrap()
+            .claims;
+
+        assert_eq!(claims["access"][0]["name"], "acme/api");
+    }
+}
