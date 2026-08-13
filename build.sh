@@ -37,6 +37,15 @@ ensure_secret() {
   esac
 }
 
+ensure_registry_token_secret() {
+  value="$(env_value REGISTRY_TOKEN_SECRET)"
+  case "$value" in
+    ""|replace-with-*|generated-by-*)
+      set_env REGISTRY_TOKEN_SECRET "$(openssl rand 32 | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+      ;;
+  esac
+}
+
 new_uuid() {
   hex="$(openssl rand -hex 16)"
   printf '%s-%s-4%s-a%s-%s' "${hex:0:8}" "${hex:8:4}" "${hex:13:3}" "${hex:17:3}" "${hex:20:12}"
@@ -57,30 +66,17 @@ run_quiet() {
 for key in POSTGRES_PASSWORD POSTGRES_UI_PASSWORD POSTGRES_IDENTITY_PASSWORD POSTGRES_TENANT_PASSWORD POSTGRES_ADMIN_PASSWORD VALKEY_PASSWORD BETTER_AUTH_SECRET CPLANE_SERVICE_TOKEN REGISTRY_HTTP_SECRET REGISTRY_STORAGE_S3_SECRETKEY REGISTRY_STORAGE_S3_GC_SECRETKEY; do
   ensure_secret "$key"
 done
+ensure_registry_token_secret
 ensure_secret REGISTRY_STORAGE_S3_ACCESSKEY 16
 ensure_secret REGISTRY_STORAGE_S3_GC_ACCESSKEY 16
 [ -n "$(env_value STORAGE_ENDPOINT_URL)" ] || set_env STORAGE_ENDPOINT_URL http://localhost:8081
 [ -n "$(env_value REGISTRY_HOST)" ] || set_env REGISTRY_HOST localhost:5000
 [ -n "$(env_value REGISTRY_STORAGE_S3_REGION)" ] || set_env REGISTRY_STORAGE_S3_REGION us-east-1
 [ -n "$(env_value REGISTRY_STORAGE_S3_BUCKET)" ] || set_env REGISTRY_STORAGE_S3_BUCKET cplane-registry
+[ -n "$(env_value REGISTRY_STORAGE_S3_PHYSICAL_BUCKET)" ] || set_env REGISTRY_STORAGE_S3_PHYSICAL_BUCKET "$(env_value REGISTRY_STORAGE_S3_BUCKET)"
 case "$(env_value REGISTRY_TOKEN_REALM)" in
   ""|http://localhost:3000/api/backend/registry/token) set_env REGISTRY_TOKEN_REALM http://localhost:8080/api/registry/token ;;
 esac
-
-mkdir -p .secrets
-for path in .secrets/registry-token-private.pem .secrets/registry-token-public.pem; do
-  if [ -d "$path" ]; then
-    echo "Removing invalid certificate directory: $path"
-    rm -rf -- "$path"
-  fi
-done
-if [ ! -s .secrets/registry-token-private.pem ] || [ ! -s .secrets/registry-token-public.pem ]; then
-  openssl req -x509 -newkey rsa:3072 -sha256 -nodes -days 3650 \
-    -subj "/CN=cplane-registry" \
-    -keyout .secrets/registry-token-private.pem \
-    -out .secrets/registry-token-public.pem
-  chmod 600 .secrets/registry-token-private.pem
-fi
 
 compose=(docker compose --env-file .env -f "$compose_file")
 
@@ -105,6 +101,34 @@ fi
 
 echo "Unsealing OpenBao and enabling its KV store..."
 run_quiet "${compose[@]}" run --rm openbao-init
+
+echo "Configuring OpenBao AppRoles..."
+root_bao=("${compose[@]}" exec -T -e BAO_ADDR=http://127.0.0.1:8200 -e "BAO_TOKEN=$(env_value OPENBAO_ROOT_TOKEN)" openbao bao)
+"${root_bao[@]}" auth enable approle >/dev/null 2>&1 || true
+"${root_bao[@]}" policy write cplane-api - < packages/openbao/policies/api.hcl >/dev/null
+"${root_bao[@]}" policy write cplane-control-plane - < packages/openbao/policies/control-plane.hcl >/dev/null
+"${root_bao[@]}" write auth/approle/role/cplane-api token_policies=cplane-api token_ttl=1h token_max_ttl=4h >/dev/null
+"${root_bao[@]}" write auth/approle/role/cplane-control-plane token_policies=cplane-control-plane token_ttl=1h token_max_ttl=4h >/dev/null
+api_role_id="$("${root_bao[@]}" read -field=role_id auth/approle/role/cplane-api/role-id)"
+api_secret_id="$("${root_bao[@]}" write -field=secret_id -f auth/approle/role/cplane-api/secret-id)"
+control_plane_role_id="$("${root_bao[@]}" read -field=role_id auth/approle/role/cplane-control-plane/role-id)"
+control_plane_secret_id="$("${root_bao[@]}" write -field=secret_id -f auth/approle/role/cplane-control-plane/secret-id)"
+set_env OPENBAO_API_ROLE_ID "$api_role_id"
+set_env OPENBAO_API_SECRET_ID "$api_secret_id"
+set_env OPENBAO_CONTROL_PLANE_ROLE_ID "$control_plane_role_id"
+set_env OPENBAO_CONTROL_PLANE_SECRET_ID "$control_plane_secret_id"
+
+api_token="$("${root_bao[@]}" write -field=token auth/approle/login role_id="$api_role_id" secret_id="$api_secret_id")"
+control_plane_token="$("${root_bao[@]}" write -field=token auth/approle/login role_id="$control_plane_role_id" secret_id="$control_plane_secret_id")"
+api_provider_caps="$("${compose[@]}" exec -T -e BAO_ADDR=http://127.0.0.1:8200 -e "BAO_TOKEN=$api_token" openbao bao token capabilities cplane/data/platform/s3/providers/policy-smoke-test)"
+control_plane_nonprovider_caps="$("${compose[@]}" exec -T -e BAO_ADDR=http://127.0.0.1:8200 -e "BAO_TOKEN=$control_plane_token" openbao bao token capabilities cplane/data/platform/s3/access-keys/policy-smoke-test)"
+printf '%s' "$api_provider_caps" | grep -qw read
+if printf '%s' "$api_provider_caps" | grep -Eqw 'create|update|delete'; then
+  echo "API AppRole unexpectedly has provider write access" >&2
+  exit 1
+fi
+[ "$control_plane_nonprovider_caps" = deny ] || { echo "Control-plane AppRole unexpectedly has non-provider access" >&2; exit 1; }
+unset api_token control_plane_token api_secret_id control_plane_secret_id
 
 echo "Applying database migrations..."
 run_quiet "${compose[@]}" run --rm --build migrate
@@ -202,17 +226,31 @@ SQL
 fi
 
 echo "Bootstrapping registry storage..."
-run_quiet "${compose[@]}" up -d --build --force-recreate control-plane
-
-for _ in {1..60}; do
-  registry_ready="$("${compose[@]}" exec -T postgresd psql -U cplane -d cplane -At -c "SELECT EXISTS (SELECT 1 FROM registry_storage WHERE service='distribution')::int" 2>/dev/null || true)"
-  [ "$registry_ready" = 1 ] && break
-  sleep 2
-done
-if [ "${registry_ready:-0}" != 1 ]; then
-  "${compose[@]}" logs --tail=100 control-plane >&2
-  echo "Registry storage bootstrap failed" >&2
-  exit 1
+registry_storage_id="$(new_uuid)"
+registry_storage_id="$("${compose[@]}" exec -T postgresd psql -v ON_ERROR_STOP=1 -U cplane -d cplane -At \
+  -v storage_id="$registry_storage_id" \
+  -v provider_id="$(env_value REGISTRY_STORAGE_S3_PROVIDER_ID)" \
+  -v bucket_name="$(env_value REGISTRY_STORAGE_S3_BUCKET)" \
+  -v physical_bucket_name="$(env_value REGISTRY_STORAGE_S3_PHYSICAL_BUCKET)" \
+  -v access_key="$(env_value REGISTRY_STORAGE_S3_ACCESSKEY)" \
+  -v gc_access_key="$(env_value REGISTRY_STORAGE_S3_GC_ACCESSKEY)" <<'SQL'
+INSERT INTO registry_storage (id, service, provider_id, bucket_name, physical_bucket_name, access_key_id)
+VALUES (:'storage_id'::uuid, 'distribution', :'provider_id'::uuid, :'bucket_name', :'physical_bucket_name', :'access_key')
+ON CONFLICT (service) DO UPDATE SET provider_id=EXCLUDED.provider_id, bucket_name=EXCLUDED.bucket_name,
+  physical_bucket_name=EXCLUDED.physical_bucket_name, access_key_id=EXCLUDED.access_key_id, updated_at=NOW()
+RETURNING id;
+INSERT INTO registry_maintenance (service, gc_access_key_id)
+VALUES ('distribution', :'gc_access_key')
+ON CONFLICT (service) DO UPDATE SET gc_access_key_id=EXCLUDED.gc_access_key_id, updated_at=NOW();
+SQL
+)"
+registry_storage_id="$(printf '%s\n' "$registry_storage_id" | head -n 1)"
+run_quiet "${root_bao[@]}" kv put "cplane/platform/s3/access-keys/$(env_value REGISTRY_STORAGE_S3_ACCESSKEY)" \
+  kind=distribution "credential_id=$registry_storage_id" "secret_access_key=$(env_value REGISTRY_STORAGE_S3_SECRETKEY)"
+run_quiet "${root_bao[@]}" kv put "cplane/platform/s3/access-keys/$(env_value REGISTRY_STORAGE_S3_GC_ACCESSKEY)" \
+  kind=distribution_gc "credential_id=$registry_storage_id" "secret_access_key=$(env_value REGISTRY_STORAGE_S3_GC_SECRETKEY)"
+if ! "${root_bao[@]}" kv get -field=key "cplane/storage/sse-c/$registry_storage_id" >/dev/null 2>&1; then
+  run_quiet "${root_bao[@]}" kv put "cplane/storage/sse-c/$registry_storage_id" "key=$(openssl rand -base64 32 | tr -d '\n')"
 fi
 
 echo "Ensuring registry backing bucket..."
@@ -251,7 +289,7 @@ elif [ "$bucket_status" != 200 ]; then
 fi
 unset registry_secret_key registry_session_token
 
-services=(storage ui api registry)
+services=(storage ui api registry control-plane worker)
 echo "Starting C-Plane ($mode)..."
 "${compose[@]}" up -d --build "${services[@]}"
 echo "C-Plane is installed"

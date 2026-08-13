@@ -8,7 +8,7 @@
     "vue": "latest"
   },
   "workspaces": [
-    "packages/ui-shared",
+    "packages/migrations",
     "packages/ui",
     "packages/sdk"
   ],

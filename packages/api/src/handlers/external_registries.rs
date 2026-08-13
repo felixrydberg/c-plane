@@ -94,8 +94,7 @@ pub async fn create_external_registry(
     let username = required(body.username, "Username")?;
     let token = required_secret(body.token)?;
     let registry_id = Uuid::new_v4();
-    let secrets = secret_service()?;
-    secrets.store(organization_id, registry_id, &token).await?;
+    store_secret(organization_id, registry_id, &token).await?;
 
     let result = async {
         let scoped = tenant_db.begin_scoped_transaction().await?;
@@ -128,7 +127,7 @@ pub async fn create_external_registry(
     match result {
         Ok(created) => Ok((StatusCode::CREATED, Json(response(&created)))),
         Err(error) => {
-            if let Err(cleanup_error) = secrets.delete(organization_id, registry_id).await {
+            if let Err(cleanup_error) = delete_secret(organization_id, registry_id).await {
                 tracing::warn!(%cleanup_error, %organization_id, %registry_id, "failed to clean up external registry secret after create failure");
                 if let Err(job_error) = async {
                     let scoped = tenant_db.begin_scoped_transaction().await?;
@@ -226,9 +225,7 @@ pub async fn rotate_external_registry_token(
     )
     .await?;
     scoped.commit().await?;
-    secret_service()?
-        .store(organization_id, registry_id, &token)
-        .await?;
+    store_secret(organization_id, registry_id, &token).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -353,11 +350,45 @@ pub fn image_registry_host(image: &str) -> Result<String, AppError> {
     normalize_registry_host(first)
 }
 
-fn secret_service()
--> Result<crate::services::external_registry_tokens::ExternalRegistryTokenClient, AppError> {
+#[derive(serde::Serialize, serde::Deserialize)]
+struct ExternalRegistrySecret {
+    token: String,
+}
+
+fn secret_path(organization_id: Uuid, registry_id: Uuid) -> String {
+    format!("organizations/{organization_id}/registries/{registry_id}")
+}
+
+async fn store_secret(
+    organization_id: Uuid,
+    registry_id: Uuid,
+    token: &str,
+) -> Result<(), AppError> {
     get_app_state()
-        .external_registry_tokens
-        .ok_or_else(|| AppError::Internal("Control-plane secret service is not configured".into()))
+        .secrets
+        .set(
+            &secret_path(organization_id, registry_id),
+            &ExternalRegistrySecret {
+                token: token.into(),
+            },
+        )
+        .await?;
+    Ok(())
+}
+
+pub async fn delete_secret(organization_id: Uuid, registry_id: Uuid) -> Result<(), AppError> {
+    get_app_state()
+        .secrets
+        .delete(&secret_path(organization_id, registry_id))
+        .await?;
+    Ok(())
+}
+
+pub async fn delete_secret_internal(
+    Path((organization_id, registry_id)): Path<(Uuid, Uuid)>,
+) -> Result<StatusCode, AppError> {
+    delete_secret(organization_id, registry_id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 fn required(value: String, name: &str) -> Result<String, AppError> {

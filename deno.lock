@@ -8867,7 +8867,7 @@
           ]
         }
       },
-      "packages/ui-shared": {
+      "packages/migrations": {
         "packageJson": {
           "dependencies": [
             "npm:@better-auth/cli@^1.4.21",

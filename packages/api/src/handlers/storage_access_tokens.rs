@@ -13,6 +13,7 @@ use crate::{
     middleware::auth::AuthContext,
     models::entities::{bucket, storage_access_token, storage_access_token_bucket},
     services::events,
+    services::s3_providers::S3AccessKeySecret,
     state::get_app_state,
 };
 
@@ -94,9 +95,7 @@ pub async fn create_access_token(
     }
 
     let state = get_app_state();
-    let secrets = state.s3_providers.ok_or_else(|| {
-        AppError::Internal("Control-plane secret service is not configured".into())
-    })?;
+    let secrets = state.s3_providers;
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
     verify_project_in_org(tx, project_id, organization_id).await?;
@@ -118,7 +117,16 @@ pub async fn create_access_token(
     let access_key_id = format!("{ACCESS_KEY_PREFIX}{}", Uuid::new_v4().simple()).to_uppercase();
     let secret_access_key = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
     secrets
-        .store_access_token_secret(id, &secret_access_key)
+        .store_access_key(
+            &access_key_id,
+            &S3AccessKeySecret {
+                kind: "tenant".into(),
+                credential_id: id,
+                organization_id: Some(organization_id),
+                project_id: Some(project_id),
+                secret_access_key: secret_access_key.clone(),
+            },
+        )
         .await?;
     let insert = async {
         let token = storage_access_token::ActiveModel {
@@ -126,7 +134,7 @@ pub async fn create_access_token(
             organization_id: Set(organization_id),
             project_id: Set(project_id),
             name: Set(name.into()),
-            access_key_id: Set(access_key_id),
+            access_key_id: Set(access_key_id.clone()),
             ..Default::default()
         }
         .insert(tx)
@@ -148,7 +156,7 @@ pub async fn create_access_token(
     let token = match insert {
         Ok(token) => token,
         Err(error) => {
-            let _ = secrets.delete_access_token_secret(id).await;
+            let _ = secrets.delete_access_key(&access_key_id).await;
             return Err(error.into());
         }
     };
@@ -166,11 +174,11 @@ pub async fn create_access_token(
     )
     .await
     {
-        let _ = secrets.delete_access_token_secret(id).await;
+        let _ = secrets.delete_access_key(&access_key_id).await;
         return Err(error);
     }
     if let Err(error) = scoped.commit().await {
-        let _ = secrets.delete_access_token_secret(id).await;
+        let _ = secrets.delete_access_key(&access_key_id).await;
         return Err(error);
     }
 
@@ -285,13 +293,11 @@ pub async fn update_access_token(
     if !valid_bucket_permissions(&body.bucket_permissions) {
         return Err(AppError::Conflict("Invalid bucket permissions".into()));
     }
-    let secrets = get_app_state().s3_providers.ok_or_else(|| {
-        AppError::Internal("Control-plane secret service is not configured".into())
-    })?;
+    let secrets = get_app_state().s3_providers;
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
     verify_project_in_org(tx, project_id, organization_id).await?;
-    active_token(tx, organization_id, project_id, token_id).await?;
+    let token = active_token(tx, organization_id, project_id, token_id).await?;
     verify_bucket_permissions(tx, organization_id, project_id, &body.bucket_permissions).await?;
 
     storage_access_token_bucket::Entity::delete_many()
@@ -328,7 +334,9 @@ pub async fn update_access_token(
     )
     .await?;
     scoped.commit().await?;
-    secrets.invalidate_access_token_cache().await?;
+    secrets
+        .invalidate_access_token_cache(&token.access_key_id)
+        .await?;
 
     Ok(axum::http::StatusCode::NO_CONTENT)
 }
@@ -358,6 +366,7 @@ pub async fn revoke_access_token(
     verify_project_in_org(tx, project_id, organization_id).await?;
     let token = active_token(tx, organization_id, project_id, token_id).await?;
     let token_name = token.name.clone();
+    let access_key_id = token.access_key_id.clone();
     let mut token = token.into_active_model();
     token.revoked_at = Set(Some(chrono::Utc::now().fixed_offset()));
     token.update(tx).await?;
@@ -375,8 +384,10 @@ pub async fn revoke_access_token(
     .await?;
     scoped.commit().await?;
 
-    if let Some(secrets) = get_app_state().s3_providers
-        && let Err(error) = secrets.delete_access_token_secret(token_id).await
+    if let Err(error) = get_app_state()
+        .s3_providers
+        .delete_access_key(&access_key_id)
+        .await
     {
         tracing::warn!(%error, %token_id, "revoked S3 token secret cleanup failed");
     }

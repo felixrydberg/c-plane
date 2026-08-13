@@ -74,9 +74,9 @@
 6. **Missing webhook handler** - can't receive Polar payment/subscription events
 
 ## Files Referenced:
-- [packages/ui-shared/schema/organization/schema.ts](packages/ui-shared/schema/organization/schema.ts) - org/member tables
+- [packages/migrations/schema/organization/schema.ts](packages/migrations/schema/organization/schema.ts) - org/member tables
 - [packages/ui/shared/types/organization.ts](packages/ui/shared/types/organization.ts) - subscription type def
 - [packages/ui/server/api/organization/index.post.ts](packages/ui/server/api/organization/index.post.ts) - org creation
 - [packages/ui/server/api/organization/[organization_id]/index.delete.ts](packages/ui/server/api/organization/[organization_id]/index.delete.ts) - Polar deletion
 - [packages/ui/nuxt.config.ts](packages/ui/nuxt.config.ts) - Polar module config
-- [packages/ui-shared/drizzle/0000_damp_ultimo.sql](packages/ui-shared/drizzle/0000_damp_ultimo.sql) - current migrations
+- [packages/migrations/drizzle/0000_damp_ultimo.sql](packages/migrations/drizzle/0000_damp_ultimo.sql) - current migrations

@@ -17,7 +17,7 @@
 
 ### IMPLEMENTATION GAP - Current Schema Missing Fields
 
-#### [ui-shared/schema/organization/schema.ts](packages/ui-shared/schema/organization/schema.ts)
+#### [migrations/schema/organization/schema.ts](packages/migrations/schema/organization/schema.ts)
 Organization table ONLY has:
 - id, name, email, slug, logo, created_at, **polar_customer_id**
 

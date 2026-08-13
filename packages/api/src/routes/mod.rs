@@ -1,5 +1,5 @@
 use axum::{
-    Router,
+    Router, middleware,
     routing::{delete, get, patch},
 };
 use utoipa::OpenApi;
@@ -9,6 +9,7 @@ use crate::handlers::containers;
 use crate::handlers::events;
 use crate::handlers::external_registries;
 use crate::handlers::health::health_check;
+use crate::handlers::internal_s3;
 use crate::handlers::postgres_databases;
 use crate::handlers::projects;
 use crate::handlers::regions;
@@ -17,10 +18,27 @@ use crate::handlers::registry_access_tokens;
 use crate::handlers::registry_repositories;
 use crate::handlers::storage_access_tokens;
 use crate::handlers::storage_buckets;
+use crate::middleware::internal_auth;
 use crate::openapi::ApiDoc;
 
 pub fn create_routes() -> Router {
+    let internal = Router::new()
+        .route(
+            "/s3-access-tokens/resolve/{access_key}",
+            get(internal_s3::resolve_access_token),
+        )
+        .route(
+            "/s3-providers/{provider_id}/credentials",
+            get(internal_s3::provider_credentials),
+        )
+        .route(
+            "/organizations/{organization_id}/external-registries/{registry_id}/secret",
+            delete(external_registries::delete_secret_internal),
+        )
+        .layer(middleware::from_fn(internal_auth::authorize));
+
     Router::new()
+        .nest("/internal", internal)
         .route("/health", get(health_check))
         .route("/api/registry/token", get(registry::issue_token))
         .route(

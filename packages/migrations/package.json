@@ -1,0 +1,37 @@
+{
+  "name": "@cplane/migrations",
+  "private": true,
+  "type": "module",
+  "types": "./schema/index.ts",
+  "exports": {
+    "./schema": {
+      "types": "./schema/index.ts",
+      "default": "./schema/index.ts"
+    },
+    "./types": {
+      "types": "./types/index.ts",
+      "default": "./types/index.ts"
+    },
+    "./utils": {
+      "types": "./utils/index.ts",
+      "default": "./utils/index.ts"
+    }
+  },
+  "scripts": {
+    "migrate:generate": "drizzle-kit generate --config=drizzle.config.ts",
+    "migrate": "drizzle-kit migrate --config=drizzle.config.ts",
+    "migrate:push": "drizzle-kit push --config=drizzle.config.ts",
+    "better-auth:generate:ui": "better-auth generate --config ../ui/server/utils/auth.ts --y --output ./schema/tenants/studio.ts",
+    "better-auth:generate": "deno task --env-file=../ui/.env better-auth:generate:ui"
+  },
+  "peerDependencies": {
+    "better-auth": "^1.5.5",
+    "drizzle-orm": "^0.45.1"
+  },
+  "devDependencies": {
+    "@better-auth/cli": "^1.4.21",
+    "@types/node": "^25.5.0",
+    "drizzle-kit": "0.31.9",
+    "drizzle-orm": "^0.45.1"
+  }
+}

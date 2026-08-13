@@ -10,7 +10,6 @@ use uuid::Uuid;
 
 #[derive(Clone, Deserialize)]
 pub struct S3Provider {
-    pub id: Uuid,
     pub endpoint_url: String,
     pub provider_region: Option<String>,
     pub access_key_id: String,
@@ -21,7 +20,7 @@ pub struct S3Provider {
 #[derive(Clone)]
 pub struct CredentialResolver {
     http: reqwest::Client,
-    control_plane_url: String,
+    api_url: String,
     service_token: String,
 }
 
@@ -55,10 +54,10 @@ pub struct CredentialIdentity {
 }
 
 impl CredentialResolver {
-    pub fn new(control_plane_url: String, service_token: String) -> Self {
+    pub fn new(api_url: String, service_token: String) -> Self {
         Self {
             http: reqwest::Client::new(),
-            control_plane_url,
+            api_url,
             service_token,
         }
     }
@@ -71,7 +70,7 @@ impl CredentialResolver {
             .http
             .get(format!(
                 "{}/internal/s3-access-tokens/resolve/{access_key}",
-                self.control_plane_url
+                self.api_url
             ))
             .header("x-cplane-token", &self.service_token)
             .send()
@@ -86,7 +85,7 @@ impl CredentialResolver {
         self.http
             .get(format!(
                 "{}/internal/s3-providers/{id}/credentials",
-                self.control_plane_url
+                self.api_url
             ))
             .header("x-cplane-token", &self.service_token)
             .send()
@@ -215,7 +214,6 @@ mod tests {
             return Err(StatusCode::NOT_FOUND);
         }
         Ok(Json(json!({
-            "id": id,
             "endpoint_url": "http://provider",
             "provider_region": "local",
             "access_key_id": "provider-access",

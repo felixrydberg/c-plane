@@ -8,8 +8,8 @@ pub struct Config {
     pub tenant_database_url: String,
     pub server_host: String,
     pub server_port: u16,
-    pub control_plane_url: Option<String>,
-    pub control_plane_service_token: Option<String>,
+    pub redis_url: String,
+    pub service_token: String,
     pub storage_endpoint_url: String,
     pub registry_token_ttl_seconds: u64,
 }
@@ -31,12 +31,10 @@ pub fn load_config() -> Result<Config, AppError> {
         return Err(AppError::Internal("TENANT_DATABASE_URL is required".into()));
     }
 
-    let control_plane_url = env::var("CONTROL_PLANE_URL")
-        .ok()
-        .filter(|v| !v.trim().is_empty());
-    let control_plane_service_token = env::var("CPLANE_SERVICE_TOKEN")
-        .ok()
-        .filter(|v| !v.trim().is_empty());
+    let redis_url =
+        env::var("REDIS_URL").map_err(|_| AppError::Internal("REDIS_URL is required".into()))?;
+    let service_token = env::var("CPLANE_SERVICE_TOKEN")
+        .map_err(|_| AppError::Internal("CPLANE_SERVICE_TOKEN is required".into()))?;
     let storage_endpoint_url =
         env::var("STORAGE_ENDPOINT_URL").unwrap_or_else(|_| "http://localhost:8081".to_string());
     let registry_token_ttl_seconds = env::var("REGISTRY_TOKEN_TTL_SECONDS")
@@ -61,8 +59,8 @@ pub fn load_config() -> Result<Config, AppError> {
         tenant_database_url,
         server_host,
         server_port,
-        control_plane_url,
-        control_plane_service_token,
+        redis_url,
+        service_token,
         storage_endpoint_url,
         registry_token_ttl_seconds,
     })

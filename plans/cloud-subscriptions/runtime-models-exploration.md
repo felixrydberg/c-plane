@@ -24,8 +24,8 @@ The c-plane project currently defines organizational, user, and API management s
    - Fields: `id`, `name`, `description`, `organisation_id`, `owner_id`, `is_archived`, `created_at`, `updated_at`
    - No deployment/runtime configuration
 
-### TypeScript/Nuxt Schemas (`packages/ui-shared/schema/`)
-**Database Location**: [ui-shared/drizzle/0000_damp_ultimo.sql](ui-shared/drizzle/0000_damp_ultimo.sql)
+### TypeScript/Nuxt Schemas (`packages/migrations/schema/`)
+**Database Location**: [migrations/drizzle/0000_damp_ultimo.sql](migrations/drizzle/0000_damp_ultimo.sql)
 
 #### Defined Tables:
 1. **organization** - Basic org metadata (name, email, slug, logo, Polar integration)
@@ -109,7 +109,7 @@ The c-plane project currently defines organizational, user, and API management s
 
 To add service/deployment runtime tracking, create:
 
-1. **Database Schema** (`packages/ui-shared/schema/service/schema.ts`):
+1. **Database Schema** (`packages/migrations/schema/service/schema.ts`):
    - deployments table (id, organization_id, service_id, type, status, created_at, updated_at)
    - service_resources (id, deployment_id, cpu_cores, memory_mb, storage_gb, gpu_enabled)
    - service_health (id, deployment_id, status, cpu_usage, memory_usage, last_check)
@@ -135,8 +135,8 @@ To add service/deployment runtime tracking, create:
 
 | Type | Path | Status |
 |------|------|--------|
-| Schema Index | [ui-shared/schema/index.ts](ui-shared/schema/index.ts) | Re-exports only org, api-keys, auth, webhooks |
+| Schema Index | [migrations/schema/index.ts](migrations/schema/index.ts) | Re-exports only org, api-keys, auth, webhooks |
 | Entity Index | [c-plane/src/models/entities/mod.rs](c-plane/src/models/entities/mod.rs) | Exports: org, member, project |
 | API Routes | [ui/server/api/organization/](ui/server/api/organization/) | Organization management only |
 | Config | [c-plane/src/config/mod.rs](c-plane/src/config/mod.rs) | No service runtime config |
-| Migrations | [ui-shared/drizzle/0000_damp_ultimo.sql](ui-shared/drizzle/0000_damp_ultimo.sql) | No service/deployment tables |
+| Migrations | [migrations/drizzle/0000_damp_ultimo.sql](migrations/drizzle/0000_damp_ultimo.sql) | No service/deployment tables |

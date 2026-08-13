@@ -13,3 +13,4 @@ tokio = { version = "1", features = ["macros", "process", "rt-multi-thread", "si
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["serde", "v4"] }
+lib = { path = "../lib" }

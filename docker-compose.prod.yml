@@ -12,24 +12,24 @@ services:
       BETTER_AUTH_SESSION_URL: http://ui:3000/api/auth/get-session
       IDENTITY_DATABASE_URL: postgresql://cplane_identity:${POSTGRES_IDENTITY_PASSWORD}@postgresd:5432/cplane
       TENANT_DATABASE_URL: postgresql://cplane_tenant:${POSTGRES_TENANT_PASSWORD}@postgresd:5432/cplane
-      CONTROL_PLANE_URL: http://control-plane:3001
       CPLANE_SERVICE_TOKEN: ${CPLANE_SERVICE_TOKEN}
+      OPENBAO_ADDR: http://openbao:8200
+      OPENBAO_ROLE_ID: ${OPENBAO_API_ROLE_ID:-}
+      OPENBAO_SECRET_ID: ${OPENBAO_API_SECRET_ID:-}
+      REDIS_URL: redis://valkey:6379
       STORAGE_ENDPOINT_URL: ${STORAGE_ENDPOINT_URL}
       REGISTRY_HOST: ${REGISTRY_HOST}
       REGISTRY_INTERNAL_URL: ${REGISTRY_INTERNAL_URL:-http://registry:5000}
       REGISTRY_TOKEN_ISSUER: ${REGISTRY_TOKEN_ISSUER:-cplane-registry}
       REGISTRY_TOKEN_TTL_SECONDS: ${REGISTRY_TOKEN_TTL_SECONDS:-60}
-      REGISTRY_TOKEN_PRIVATE_KEY_PATH: /run/registry/registry-token-private.pem
-      REGISTRY_TOKEN_CERTIFICATE_PATH: /run/registry/registry-token-public.pem
+      REGISTRY_TOKEN_SECRET: ${REGISTRY_TOKEN_SECRET}
     depends_on:
       - postgresd
       - ui
-      - control-plane
+      - openbao-init
+      - valkey
     ports:
       - 8080:8080
-    volumes:
-      - ./.secrets/registry-token-private.pem:/run/registry/registry-token-private.pem:ro
-      - ./.secrets/registry-token-public.pem:/run/registry/registry-token-public.pem:ro
 
   storage:
     build:
@@ -40,10 +40,10 @@ services:
         BINARY: c-plane-storage
     environment:
       STORAGE_LISTEN: 0.0.0.0:8081
-      CONTROL_PLANE_URL: http://control-plane:3001
+      API_URL: http://api:8080
       CPLANE_SERVICE_TOKEN: ${CPLANE_SERVICE_TOKEN}
     depends_on:
-      - control-plane
+      - api
     ports:
       - 8081:8081
 
@@ -77,20 +77,22 @@ services:
             - .nuxt/
             - .output/
         - action: sync
-          path: ./packages/ui-shared
-          target: /usr/src/app/packages/ui-shared
+          path: ./packages/migrations
+          target: /usr/src/app/packages/migrations
           ignore:
             - node_modules/
         - action: rebuild
           path: ./packages/ui/package.json
         - action: rebuild
-          path: ./packages/ui-shared/package.json
+          path: ./packages/migrations/package.json
 
   registry:
     image: registry:3.1.1
     restart: unless-stopped
+    entrypoint: ["/bin/sh", "/etc/distribution/start.sh"]
     environment:
       - REGISTRY_HTTP_SECRET=${REGISTRY_HTTP_SECRET}
+      - REGISTRY_TOKEN_SECRET=${REGISTRY_TOKEN_SECRET}
       - REGISTRY_AUTH_TOKEN_REALM=${REGISTRY_TOKEN_REALM}
       - REGISTRY_AUTH_TOKEN_SERVICE=${REGISTRY_HOST}
       - REGISTRY_AUTH_TOKEN_ISSUER=${REGISTRY_TOKEN_ISSUER:-cplane-registry}
@@ -103,7 +105,7 @@ services:
       - REGISTRY_STORAGE_S3_SECRETKEY
     volumes:
       - ./packages/registry/config.yml:/etc/distribution/config.yml:ro
-      - ./.secrets/registry-token-public.pem:/run/registry/registry-token-public.pem:ro
+      - ./packages/registry/start.sh:/etc/distribution/start.sh:ro
     ports:
       - "127.0.0.1:5000:5000"
     depends_on:
@@ -117,16 +119,10 @@ services:
     environment:
       ADMIN_DATABASE_URL: postgresql://cplane_admin:${POSTGRES_ADMIN_PASSWORD}@postgresd:5432/cplane
       OPENBAO_ADDR: http://openbao:8200
-      OPENBAO_TOKEN: ${OPENBAO_ROOT_TOKEN}
+      OPENBAO_ROLE_ID: ${OPENBAO_CONTROL_PLANE_ROLE_ID:-}
+      OPENBAO_SECRET_ID: ${OPENBAO_CONTROL_PLANE_SECRET_ID:-}
       REDIS_URL: redis://valkey:6379
       CPLANE_SERVICE_TOKEN: ${CPLANE_SERVICE_TOKEN}
-      REGISTRY_STORAGE_S3_PROVIDER_ID: ${REGISTRY_STORAGE_S3_PROVIDER_ID:-}
-      REGISTRY_STORAGE_S3_BUCKET: ${REGISTRY_STORAGE_S3_BUCKET}
-      REGISTRY_STORAGE_S3_PHYSICAL_BUCKET: ${REGISTRY_STORAGE_S3_PHYSICAL_BUCKET:-}
-      REGISTRY_STORAGE_S3_ACCESSKEY: ${REGISTRY_STORAGE_S3_ACCESSKEY}
-      REGISTRY_STORAGE_S3_SECRETKEY: ${REGISTRY_STORAGE_S3_SECRETKEY}
-      REGISTRY_STORAGE_S3_GC_ACCESSKEY: ${REGISTRY_STORAGE_S3_GC_ACCESSKEY}
-      REGISTRY_STORAGE_S3_GC_SECRETKEY: ${REGISTRY_STORAGE_S3_GC_SECRETKEY}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -149,7 +145,7 @@ services:
       DATABASE_URL: postgresql://cplane_admin:${POSTGRES_ADMIN_PASSWORD}@postgresd:5432/cplane
       REDIS_URL: redis://valkey:6379
       WORKER_QUEUES: maintenance,secrets
-      CONTROL_PLANE_URL: http://control-plane:3001
+      API_URL: http://api:8080
       CPLANE_SERVICE_TOKEN: ${CPLANE_SERVICE_TOKEN}
       WORKER_CONCURRENCY: 1
       REGISTRY_TOKEN_TTL_SECONDS: ${REGISTRY_TOKEN_TTL_SECONDS:-60}
@@ -161,8 +157,7 @@ services:
       REGISTRY_STORAGE_S3_ACCESSKEY: ${REGISTRY_STORAGE_S3_GC_ACCESSKEY}
       REGISTRY_STORAGE_S3_SECRETKEY: ${REGISTRY_STORAGE_S3_GC_SECRETKEY}
     volumes:
-      - ./packages/registry/config.yml:/etc/distribution/config.yml:ro
-      - ./.secrets/registry-token-public.pem:/run/registry/registry-token-public.pem:ro
+      - ./packages/registry/config-gc.yml:/etc/distribution/config.yml:ro
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -170,7 +165,7 @@ services:
         condition: service_started
       valkey:
         condition: service_started
-      control-plane:
+      api:
         condition: service_started
 
   postgresd:
@@ -199,7 +194,7 @@ services:
       context: .
       dockerfile: Dockerfile.deno
       args:
-        PACKAGE: ui-shared
+        PACKAGE: migrations
       target: migration
     environment:
       DATABASE_URL: postgresql://cplane:${POSTGRES_PASSWORD}@postgresd:5432/cplane

@@ -3,10 +3,22 @@ use aws_sdk_s3::{
     config::{BehaviorVersion, Credentials, Region},
     types::{BucketLocationConstraint, CreateBucketConfiguration},
 };
+use base64::{Engine, engine::general_purpose::STANDARD};
+use lib::{cache::S3_PROVIDER_CREDENTIAL_CACHE_PREFIX, secrets::Secrets};
+use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Clone, Deserialize)]
+const PROVIDER_CREDENTIAL_CACHE_TTL_SECONDS: u64 = 60;
+
+#[derive(Clone, Deserialize, Serialize)]
+pub struct S3ProviderSecret {
+    pub access_key_id: String,
+    pub secret_access_key: String,
+    pub session_token: Option<String>,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
 pub struct S3ProviderCredentials {
     pub access_key_id: String,
     pub secret_access_key: String,
@@ -16,55 +28,142 @@ pub struct S3ProviderCredentials {
     pub provider_type: String,
 }
 
-#[derive(Serialize)]
-struct S3AccessTokenSecret<'a> {
-    secret_access_key: &'a str,
+#[derive(Clone, Deserialize, Serialize)]
+pub struct S3AccessKeySecret {
+    pub kind: String,
+    pub credential_id: Uuid,
+    pub organization_id: Option<Uuid>,
+    pub project_id: Option<Uuid>,
+    pub secret_access_key: String,
+}
+
+#[derive(Deserialize, Serialize)]
+struct BucketKey {
+    key: String,
 }
 
 #[derive(Clone)]
 pub struct S3ProviderClient {
-    http: reqwest::Client,
-    base_url: String,
-    service_token: String,
+    database: DatabaseConnection,
+    secrets: Secrets,
+    redis_url: String,
 }
 
 impl S3ProviderClient {
-    pub fn new(base_url: String, service_token: String) -> Self {
+    pub fn new(database: DatabaseConnection, secrets: Secrets, redis_url: String) -> Self {
         Self {
-            http: reqwest::Client::new(),
-            base_url: base_url.trim_end_matches('/').to_string(),
-            service_token,
+            database,
+            secrets,
+            redis_url,
         }
     }
 
     pub async fn credentials(&self, provider_id: Uuid) -> Result<S3ProviderCredentials, AppError> {
-        let response = self
-            .http
-            .get(format!(
-                "{}/internal/s3-providers/{provider_id}/credentials",
-                self.base_url
+        let client = redis::Client::open(self.redis_url.as_str())
+            .map_err(|error| AppError::Internal(error.to_string()))?;
+        let mut connection = client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|error| AppError::Internal(error.to_string()))?;
+        let cache_key = format!("{S3_PROVIDER_CREDENTIAL_CACHE_PREFIX}{provider_id}");
+        let cached = redis::cmd("GET")
+            .arg(&cache_key)
+            .query_async::<Option<String>>(&mut connection)
+            .await
+            .map_err(|error| AppError::Internal(error.to_string()))?;
+        if let Some(cached) = cached {
+            return serde_json::from_str(&cached)
+                .map_err(|error| AppError::Internal(error.to_string()));
+        }
+
+        let row = self
+            .database
+            .query_one(Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
+                "SELECT endpoint_url, provider_region, provider_type::text FROM s3_providers WHERE id=$1 AND is_active=true",
+                vec![provider_id.into()],
             ))
-            .header("x-cplane-token", &self.service_token)
-            .send()
+            .await?
+            .ok_or_else(|| AppError::NotFound("S3 provider not found".into()))?;
+        let secret = self
+            .secrets
+            .get::<S3ProviderSecret>(&format!("platform/s3/providers/{provider_id}"))
+            .await?
+            .ok_or_else(|| AppError::NotFound("S3 provider credentials not found".into()))?;
+        let credentials = S3ProviderCredentials {
+            access_key_id: secret.access_key_id,
+            secret_access_key: secret.secret_access_key,
+            session_token: secret.session_token,
+            endpoint_url: row.try_get("", "endpoint_url")?,
+            provider_region: row.try_get("", "provider_region")?,
+            provider_type: row.try_get("", "provider_type")?,
+        };
+        redis::cmd("SETEX")
+            .arg(cache_key)
+            .arg(PROVIDER_CREDENTIAL_CACHE_TTL_SECONDS)
+            .arg(
+                serde_json::to_string(&credentials)
+                    .map_err(|error| AppError::Internal(error.to_string()))?,
+            )
+            .query_async::<()>(&mut connection)
             .await
-            .map_err(|error| {
-                AppError::Internal(format!("Control-plane request failed: {error}"))
-            })?;
+            .map_err(|error| AppError::Internal(error.to_string()))?;
+        Ok(credentials)
+    }
 
-        if response.status() == reqwest::StatusCode::NOT_FOUND {
-            return Err(AppError::NotFound("S3 provider not found".into()));
-        }
-        if !response.status().is_success() {
-            return Err(AppError::Internal(format!(
-                "Control-plane returned {}",
-                response.status()
-            )));
-        }
+    pub async fn access_key(
+        &self,
+        access_key: &str,
+    ) -> Result<Option<S3AccessKeySecret>, AppError> {
+        Ok(self
+            .secrets
+            .get(&format!("platform/s3/access-keys/{access_key}"))
+            .await?)
+    }
 
-        response
-            .json()
-            .await
-            .map_err(|error| AppError::Internal(format!("Invalid control-plane response: {error}")))
+    pub async fn store_access_key(
+        &self,
+        access_key: &str,
+        secret: &S3AccessKeySecret,
+    ) -> Result<(), AppError> {
+        self.secrets
+            .set(&format!("platform/s3/access-keys/{access_key}"), secret)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn delete_access_key(&self, access_key: &str) -> Result<(), AppError> {
+        self.invalidate_access_token_cache(access_key).await?;
+        self.secrets
+            .delete(&format!("platform/s3/access-keys/{access_key}"))
+            .await?;
+        Ok(())
+    }
+
+    pub async fn bucket_key(&self, bucket_id: Uuid) -> Result<String, AppError> {
+        self.secrets
+            .get::<BucketKey>(&format!("storage/sse-c/{bucket_id}"))
+            .await?
+            .map(|secret| secret.key)
+            .ok_or_else(|| AppError::NotFound("Bucket encryption key not found".into()))
+    }
+
+    pub async fn ensure_bucket_sse_key(&self, bucket_id: Uuid) -> Result<(), AppError> {
+        let path = format!("storage/sse-c/{bucket_id}");
+        if self.secrets.get::<BucketKey>(&path).await?.is_none() {
+            let mut raw = [0; 32];
+            raw[..16].copy_from_slice(Uuid::new_v4().as_bytes());
+            raw[16..].copy_from_slice(Uuid::new_v4().as_bytes());
+            self.secrets
+                .set(
+                    &path,
+                    &BucketKey {
+                        key: STANDARD.encode(raw),
+                    },
+                )
+                .await?;
+        }
+        Ok(())
     }
 
     pub async fn create_bucket(
@@ -77,21 +176,7 @@ impl S3ProviderClient {
             .provider_region
             .clone()
             .unwrap_or_else(|| "us-east-1".into());
-        let client = aws_sdk_s3::Client::from_conf(
-            aws_sdk_s3::Config::builder()
-                .behavior_version(BehaviorVersion::latest())
-                .endpoint_url(provider.endpoint_url)
-                .region(Region::new(region.clone()))
-                .credentials_provider(Credentials::new(
-                    provider.access_key_id,
-                    provider.secret_access_key,
-                    provider.session_token,
-                    None,
-                    "c-plane-control-plane",
-                ))
-                .force_path_style(true)
-                .build(),
-        );
+        let client = aws_sdk_s3::Client::from_conf(s3_config(&provider, &region));
         let request = client.create_bucket().bucket(bucket_name);
         let result = if provider.provider_type == "aws_s3" && region != "us-east-1" {
             request
@@ -112,28 +197,6 @@ impl S3ProviderClient {
         Ok(())
     }
 
-    pub async fn ensure_bucket_sse_key(&self, bucket_id: Uuid) -> Result<(), AppError> {
-        let response = self
-            .http
-            .put(format!(
-                "{}/internal/s3-buckets/{bucket_id}/sse-key",
-                self.base_url
-            ))
-            .header("x-cplane-token", &self.service_token)
-            .send()
-            .await
-            .map_err(|error| {
-                AppError::Internal(format!("Control-plane request failed: {error}"))
-            })?;
-        if !response.status().is_success() {
-            return Err(AppError::Internal(format!(
-                "Control-plane returned {}",
-                response.status()
-            )));
-        }
-        Ok(())
-    }
-
     pub async fn delete_bucket(
         &self,
         provider_id: Uuid,
@@ -142,23 +205,9 @@ impl S3ProviderClient {
         let provider = self.credentials(provider_id).await?;
         let region = provider
             .provider_region
+            .clone()
             .unwrap_or_else(|| "us-east-1".into());
-        let client = aws_sdk_s3::Client::from_conf(
-            aws_sdk_s3::Config::builder()
-                .behavior_version(BehaviorVersion::latest())
-                .endpoint_url(provider.endpoint_url)
-                .region(Region::new(region))
-                .credentials_provider(Credentials::new(
-                    provider.access_key_id,
-                    provider.secret_access_key,
-                    provider.session_token,
-                    None,
-                    "c-plane-control-plane",
-                ))
-                .force_path_style(true)
-                .build(),
-        );
-        client
+        aws_sdk_s3::Client::from_conf(s3_config(&provider, &region))
             .delete_bucket()
             .bucket(bucket_name)
             .send()
@@ -170,71 +219,38 @@ impl S3ProviderClient {
         Ok(())
     }
 
-    pub async fn store_access_token_secret(
-        &self,
-        credential_id: Uuid,
-        secret_access_key: &str,
-    ) -> Result<(), AppError> {
-        self.secret_request(
-            reqwest::Method::PUT,
-            credential_id,
-            Some(S3AccessTokenSecret { secret_access_key }),
-        )
-        .await
-    }
-
-    pub async fn delete_access_token_secret(&self, credential_id: Uuid) -> Result<(), AppError> {
-        self.secret_request::<S3AccessTokenSecret<'_>>(reqwest::Method::DELETE, credential_id, None)
+    pub async fn invalidate_access_token_cache(&self, access_key: &str) -> Result<(), AppError> {
+        let client = redis::Client::open(self.redis_url.as_str())
+            .map_err(|error| AppError::Internal(error.to_string()))?;
+        let mut connection = client
+            .get_multiplexed_async_connection()
             .await
-    }
-
-    pub async fn invalidate_access_token_cache(&self) -> Result<(), AppError> {
-        let response = self
-            .http
-            .delete(format!("{}/internal/s3-access-token-cache", self.base_url))
-            .header("x-cplane-token", &self.service_token)
-            .send()
+            .map_err(|error| AppError::Internal(error.to_string()))?;
+        redis::cmd("DEL")
+            .arg(format!(
+                "{}{}",
+                lib::cache::S3_ACCESS_TOKEN_CACHE_PREFIX,
+                access_key
+            ))
+            .query_async::<u64>(&mut connection)
             .await
-            .map_err(|error| {
-                AppError::Internal(format!("Control-plane request failed: {error}"))
-            })?;
-        if !response.status().is_success() {
-            return Err(AppError::Internal(format!(
-                "Control-plane returned {}",
-                response.status()
-            )));
-        }
+            .map_err(|error| AppError::Internal(error.to_string()))?;
         Ok(())
     }
+}
 
-    async fn secret_request<T: Serialize>(
-        &self,
-        method: reqwest::Method,
-        credential_id: Uuid,
-        body: Option<T>,
-    ) -> Result<(), AppError> {
-        let mut request = self
-            .http
-            .request(
-                method,
-                format!(
-                    "{}/internal/s3-access-tokens/{credential_id}",
-                    self.base_url
-                ),
-            )
-            .header("x-cplane-token", &self.service_token);
-        if let Some(body) = body {
-            request = request.json(&body);
-        }
-        let response = request.send().await.map_err(|error| {
-            AppError::Internal(format!("Control-plane request failed: {error}"))
-        })?;
-        if !response.status().is_success() {
-            return Err(AppError::Internal(format!(
-                "Control-plane returned {}",
-                response.status()
-            )));
-        }
-        Ok(())
-    }
+fn s3_config(provider: &S3ProviderCredentials, region: &str) -> aws_sdk_s3::Config {
+    aws_sdk_s3::Config::builder()
+        .behavior_version(BehaviorVersion::latest())
+        .endpoint_url(provider.endpoint_url.clone())
+        .region(Region::new(region.to_owned()))
+        .credentials_provider(Credentials::new(
+            provider.access_key_id.clone(),
+            provider.secret_access_key.clone(),
+            provider.session_token.clone(),
+            None,
+            "c-plane-api",
+        ))
+        .force_path_style(true)
+        .build()
 }

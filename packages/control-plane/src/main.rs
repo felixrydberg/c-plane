@@ -14,43 +14,10 @@ fn main() {
         backend::server::initialize()
             .await
             .unwrap_or_else(|error| panic!("control-plane initialization failed: {error}"));
-        Ok(dioxus::server::router(App)
-            .route(
-                "/internal/s3-providers/{id}/credentials",
-                dioxus::server::axum::routing::get(backend::server::credentials_handler),
-            )
-            .route(
-                "/internal/s3-buckets/{id}/sse-key",
-                dioxus::server::axum::routing::put(backend::server::ensure_bucket_sse_key_handler),
-            )
-            .route(
-                "/internal/s3-access-tokens/{id}",
-                dioxus::server::axum::routing::put(
-                    backend::server::store_access_token_secret_handler,
-                )
-                .delete(backend::server::delete_access_token_secret_handler),
-            )
-            .route(
-                "/internal/organizations/{organization_id}/external-registries/{registry_id}/secret",
-                dioxus::server::axum::routing::put(
-                    backend::server::store_external_registry_secret_handler,
-                )
-                .delete(backend::server::delete_external_registry_secret_handler),
-            )
-            .route(
-                "/internal/s3-access-tokens/resolve/{access_key}",
-                dioxus::server::axum::routing::get(backend::server::resolve_access_token_handler),
-            )
-            .route(
-                "/internal/s3-access-token-cache",
-                dioxus::server::axum::routing::delete(
-                    backend::server::invalidate_access_token_cache_handler,
-                ),
-            )
-            .route(
-                "/internal/regions",
-                dioxus::server::axum::routing::get(backend::server::eligible_regions_handler),
-            ))
+        Ok(dioxus::server::router(App).route(
+            "/internal/regions",
+            dioxus::server::axum::routing::get(backend::server::eligible_regions_handler),
+        ))
     });
 
     #[cfg(not(feature = "server"))]

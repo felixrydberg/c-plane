@@ -26,9 +26,9 @@ Establish a cloud-only, capability-first billing foundation that persists plan e
 18. Add structured logs and minimal observability around webhook processing and capability resolution decisions for debugging and support. *parallel with 16-17*
 
 **Relevant files**
-- c:/Users/balle/Documents/GitHub/c-plane/packages/ui-shared/schema/organization/schema.ts - add organization billing/capability columns, enums, and relations
-- c:/Users/balle/Documents/GitHub/c-plane/packages/ui-shared/schema/index.ts - export new billing/subscription schema modules
-- c:/Users/balle/Documents/GitHub/c-plane/packages/ui-shared/drizzle/0000_damp_ultimo.sql - reference baseline migration patterns; add follow-up migration files
+- c:/Users/balle/Documents/GitHub/c-plane/packages/migrations/schema/organization/schema.ts - add organization billing/capability columns, enums, and relations
+- c:/Users/balle/Documents/GitHub/c-plane/packages/migrations/schema/index.ts - export new billing/subscription schema modules
+- c:/Users/balle/Documents/GitHub/c-plane/packages/migrations/drizzle/0000_damp_ultimo.sql - reference baseline migration patterns; add follow-up migration files
 - c:/Users/balle/Documents/GitHub/c-plane/packages/ui/shared/types/organization.ts - extend organization type for onboarding/capabilities/billing summary
 - c:/Users/balle/Documents/GitHub/c-plane/packages/ui/server/api/organization/index.post.ts - initialize cloud defaults on org creation
 - c:/Users/balle/Documents/GitHub/c-plane/packages/ui/server/api/organization/active.get.ts - return effective billing/capability state in active org payload

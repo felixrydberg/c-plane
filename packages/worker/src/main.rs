@@ -1,4 +1,3 @@
-use redis::AsyncCommands;
 use sea_orm::{
     ConnectionTrait, Database, DatabaseBackend, DatabaseConnection, QueryResult, Statement,
     TransactionTrait, Value,
@@ -14,7 +13,6 @@ type Result<T> = std::result::Result<T, Error>;
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(10);
 const CONTROL_PLANE_TIMEOUT: Duration = Duration::from_secs(10);
-const ACCESS_TOKEN_CACHE_GENERATION: &str = "cplane:s3-access-token-generation";
 
 #[derive(Clone)]
 struct Config {
@@ -22,8 +20,10 @@ struct Config {
     concurrency: usize,
     redis_url: String,
     registry_token_ttl: Duration,
-    control_plane_url: String,
+    api_url: String,
     service_token: String,
+    registry_access_key: String,
+    registry_gc_access_key: String,
     http: reqwest::Client,
 }
 
@@ -105,10 +105,11 @@ impl Config {
             concurrency,
             redis_url: required_env("REDIS_URL")?,
             registry_token_ttl: Duration::from_secs(token_ttl_seconds),
-            control_plane_url: required_env("CONTROL_PLANE_URL")?
-                .trim_end_matches('/')
-                .to_owned(),
+            api_url: required_env("API_URL")?.trim_end_matches('/').to_owned(),
             service_token: required_env("CPLANE_SERVICE_TOKEN")?,
+            registry_access_key: env::var("REGISTRY_STORAGE_S3_ACCESSKEY").unwrap_or_default(),
+            registry_gc_access_key: env::var("REGISTRY_STORAGE_S3_GC_ACCESSKEY")
+                .unwrap_or_default(),
             http: reqwest::Client::builder()
                 .timeout(CONTROL_PLANE_TIMEOUT)
                 .build()?,
@@ -227,7 +228,7 @@ async fn cleanup_external_registry_secret(config: &Config, job: &Job) -> Result<
         .http
         .delete(format!(
             "{}/internal/organizations/{organization_id}/external-registries/{registry_id}/secret",
-            config.control_plane_url
+            config.api_url
         ))
         .header("x-cplane-token", &config.service_token)
         .send()
@@ -243,10 +244,10 @@ async fn run_registry_gc(
     job: &Job,
 ) -> Result<()> {
     set_registry_phase(database, job.id, consumer, "draining").await?;
-    invalidate_access_token_cache(config).await?;
+    invalidate_registry_access_token_caches(config).await?;
     tokio::time::sleep(config.registry_token_ttl).await;
     set_registry_phase(database, job.id, consumer, "collecting").await?;
-    invalidate_access_token_cache(config).await?;
+    invalidate_registry_access_token_caches(config).await?;
 
     let mut command = Command::new("/usr/local/bin/registry");
     command
@@ -316,7 +317,7 @@ async fn finish_job(
     };
     if job.job_type == "registry_gc" {
         set_registry_phase(database, job.id, consumer, "restoring").await?;
-        invalidate_access_token_cache(config).await?;
+        invalidate_registry_access_token_caches(config).await?;
     }
 
     let transaction = database.begin().await?;
@@ -339,7 +340,7 @@ async fn finish_job(
     }
     transaction.commit().await?;
     if job.job_type == "registry_gc" {
-        invalidate_access_token_cache(config).await?;
+        invalidate_registry_access_token_caches(config).await?;
     }
     match result {
         Ok(()) => info!(job_id = %job.id, "job succeeded"),
@@ -354,12 +355,28 @@ fn cleanup_retry_seconds(attempt: i32) -> i32 {
         .min(300)
 }
 
-async fn invalidate_access_token_cache(config: &Config) -> Result<()> {
+async fn invalidate_registry_access_token_caches(config: &Config) -> Result<()> {
+    let access_keys = [
+        config.registry_access_key.as_str(),
+        config.registry_gc_access_key.as_str(),
+    ];
     for attempt in 1..=5 {
         let result = async {
             let client = redis::Client::open(config.redis_url.as_str())?;
             let mut connection = client.get_multiplexed_async_connection().await?;
-            let _: u64 = connection.incr(ACCESS_TOKEN_CACHE_GENERATION, 1).await?;
+            for access_key in access_keys
+                .iter()
+                .filter(|access_key| !access_key.is_empty())
+            {
+                let _: u64 = redis::cmd("DEL")
+                    .arg(format!(
+                        "{}{}",
+                        lib::cache::S3_ACCESS_TOKEN_CACHE_PREFIX,
+                        access_key
+                    ))
+                    .query_async(&mut connection)
+                    .await?;
+            }
             Ok::<(), redis::RedisError>(())
         }
         .await;

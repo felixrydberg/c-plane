@@ -11,7 +11,9 @@ use uuid::Uuid;
 use super::databases::verify_org_access;
 use crate::errors::AppError;
 use crate::middleware::auth::AuthContext;
-use crate::models::entities::{project, project_environment, project_timeline};
+use crate::models::entities::{
+    project, project_environment, project_timeline, storage_access_token,
+};
 use crate::models::pins::TimelinePins;
 use crate::services::agent;
 use crate::services::events;
@@ -364,6 +366,13 @@ pub async fn delete_project(
         .one(tx)
         .await?
         .ok_or_else(|| AppError::NotFound("Project not found".into()))?;
+    let access_keys = storage_access_token::Entity::find()
+        .filter(storage_access_token::Column::ProjectId.eq(project_id))
+        .all(tx)
+        .await?
+        .into_iter()
+        .map(|token| token.access_key_id)
+        .collect::<Vec<_>>();
 
     Entity::delete_by_id(project_id).exec(tx).await?;
     events::record(
@@ -379,8 +388,11 @@ pub async fn delete_project(
     )
     .await?;
     scoped.commit().await?;
-    if let Some(s3_providers) = get_app_state().s3_providers {
-        s3_providers.invalidate_access_token_cache().await?;
+    for access_key in access_keys {
+        get_app_state()
+            .s3_providers
+            .invalidate_access_token_cache(&access_key)
+            .await?;
     }
 
     Ok(Json(serde_json::json!({ "success": true })))
