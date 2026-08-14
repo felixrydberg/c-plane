@@ -18,4 +18,4 @@
 - Export and reuse a constant for enum values (for example, `S3_PROVIDER_TYPES`) and use it in zod enums.
 
 ## Migrations
-- When having to do Drizzle migrations never write them manually. Use the ui-shared Deno command `deno task migrate:generate` instead
+- When having to do Drizzle migrations never write them manually. Use the migrations package command `deno task migrate:generate` instead

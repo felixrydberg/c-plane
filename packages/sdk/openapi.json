@@ -2882,6 +2882,165 @@
           }
         }
       }
+    },
+    "/internal/organizations/{organization_id}/external-registries/{registry_id}/secret": {
+      "delete": {
+        "tags": [
+          "internal"
+        ],
+        "operationId": "delete_secret_internal",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "registry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "serviceToken": []
+          }
+        ]
+      }
+    },
+    "/internal/s3-access-tokens/resolve/{access_key}": {
+      "get": {
+        "tags": [
+          "internal"
+        ],
+        "operationId": "resolve_access_token",
+        "parameters": [
+          {
+            "name": "access_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolvedS3AccessToken"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "serviceToken": []
+          }
+        ]
+      }
+    },
+    "/internal/s3-providers/{provider_id}/credentials": {
+      "get": {
+        "tags": [
+          "internal"
+        ],
+        "operationId": "provider_credentials",
+        "parameters": [
+          {
+            "name": "provider_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/S3ProviderCredentials"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "serviceToken": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -4035,6 +4194,76 @@
           }
         }
       },
+      "ResolvedS3AccessToken": {
+        "type": "object",
+        "required": [
+          "credential_id",
+          "bucket_permissions"
+        ],
+        "properties": {
+          "bucket_permissions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResolvedS3BucketPermission"
+            }
+          },
+          "credential_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organization_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "ResolvedS3BucketPermission": {
+        "type": "object",
+        "required": [
+          "bucket_id",
+          "bucket_name",
+          "physical_bucket_name",
+          "region",
+          "provider_id",
+          "can_read",
+          "can_write"
+        ],
+        "properties": {
+          "bucket_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bucket_name": {
+            "type": "string"
+          },
+          "can_read": {
+            "type": "boolean"
+          },
+          "can_write": {
+            "type": "boolean"
+          },
+          "physical_bucket_name": {
+            "type": "string"
+          },
+          "provider_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "region": {
+            "type": "string"
+          }
+        }
+      },
       "ResolvedTimelineResponse": {
         "type": "object",
         "required": [
@@ -4090,6 +4319,31 @@
         ],
         "properties": {
           "token": {
+            "type": "string"
+          }
+        }
+      },
+      "S3ProviderCredentials": {
+        "type": "object",
+        "required": [
+          "access_key_id",
+          "endpoint_url",
+          "provider_type"
+        ],
+        "properties": {
+          "access_key_id": {
+            "type": "string"
+          },
+          "endpoint_url": {
+            "type": "string"
+          },
+          "provider_region": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_type": {
             "type": "string"
           }
         }
@@ -4317,6 +4571,12 @@
       "registryBasic": {
         "type": "http",
         "scheme": "basic"
+      },
+      "serviceToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-cplane-token",
+        "description": "Internal service token."
       }
     }
   },
@@ -4348,6 +4608,10 @@
     {
       "name": "registry",
       "description": "OCI registry authentication"
+    },
+    {
+      "name": "internal",
+      "description": "Internal service endpoints"
     }
   ]
 }

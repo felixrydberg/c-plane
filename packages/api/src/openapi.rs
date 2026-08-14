@@ -23,6 +23,13 @@ impl Modify for SecurityAddon {
             "registryBasic",
             SecurityScheme::Http(HttpBuilder::new().scheme(HttpAuthScheme::Basic).build()),
         );
+        components.add_security_scheme(
+            "serviceToken",
+            SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::with_description(
+                "x-cplane-token",
+                "Internal service token.",
+            ))),
+        );
 
         for (path, item) in &mut openapi.paths.paths {
             document_scope("GET", path, item.get.as_mut());
@@ -118,6 +125,9 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
         crate::handlers::external_registries::rename_external_registry,
         crate::handlers::external_registries::rotate_external_registry_token,
         crate::handlers::external_registries::delete_external_registry,
+        crate::handlers::external_registries::delete_secret_internal,
+        crate::handlers::internal_s3::resolve_access_token,
+        crate::handlers::internal_s3::provider_credentials,
     ),
     components(
         schemas(
@@ -168,6 +178,9 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
             crate::handlers::external_registries::RenameExternalRegistryRequest,
             crate::handlers::external_registries::RotateExternalRegistryTokenRequest,
             crate::handlers::external_registries::ExternalRegistryResponse,
+            crate::handlers::internal_s3::ResolvedS3AccessToken,
+            crate::handlers::internal_s3::ResolvedS3BucketPermission,
+            crate::services::s3_providers::S3ProviderCredentials,
         ),
     ),
     tags(
@@ -178,6 +191,7 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
         (name = "databases/postgres", description = "Postgres database management"),
         (name = "storage", description = "S3 bucket and access token management"),
         (name = "registry", description = "OCI registry authentication"),
+        (name = "internal", description = "Internal service endpoints"),
     ),
     modifiers(&SecurityAddon),
 )]

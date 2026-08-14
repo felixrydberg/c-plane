@@ -4,7 +4,7 @@ import { api_keys, api_key_scopes } from "~~/server/schema";
 import { eq, and, notInArray } from "drizzle-orm";
 import { getOrganizationMembership } from "~~/server/utils/authorization";
 import { uuidv7 } from "uuidv7";
-import { API_KEY_SCOPE_VALUES } from "@cplane/ui-shared/utils";
+import { API_KEY_SCOPE_VALUES } from "@cplane/migrations/utils";
 
 export default defineEventHandler(async (event) => {
   const params = getRouterParams(event);

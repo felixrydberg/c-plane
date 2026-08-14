@@ -20,9 +20,9 @@ const positiveInt = (name, fallback) => {
   return value
 }
 
-const accessKey = 'CP19469FE6F0654ED89F42FFEF7EAFE95D'
-const secretKey = '064e39b8c5ff4058b655f9c3576626f909c526f8c69a442dafe303c0c7b0cd8c'
-const bucket = 'max-blackmail'
+const accessKey = 'CP12230038F5D640A9A10FD83D127983AE'
+const secretKey = '5f61c10cbc3244d4b1ab591bf511075c3eea65565bb6420fb1b5581acbe311dd'
+const bucket = 'test'
 if (!bucket) throw new Error('Set S3_BUCKET.')
 
 const endpoint = new URL(env('S3_ENDPOINT', 'http://localhost:8081'))

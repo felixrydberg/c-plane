@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { API_KEY_SCOPE_VALUES } from '@cplane/ui-shared/utils';
+  import { API_KEY_SCOPE_VALUES } from '@cplane/migrations/utils';
 
   const selectedScopes = defineModel<Record<string, boolean>>({ default: () => ({}) });
   const emits = defineEmits(['update']);

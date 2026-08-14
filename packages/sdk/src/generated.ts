@@ -468,6 +468,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/internal/organizations/{organization_id}/external-registries/{registry_id}/secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["delete_secret_internal"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/s3-access-tokens/resolve/{access_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["resolve_access_token"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/s3-providers/{provider_id}/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["provider_credentials"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -790,6 +838,26 @@ export interface components {
             /** Format: uuid */
             version_id: string;
         };
+        ResolvedS3AccessToken: {
+            bucket_permissions: components["schemas"]["ResolvedS3BucketPermission"][];
+            /** Format: uuid */
+            credential_id: string;
+            /** Format: uuid */
+            organization_id?: string | null;
+            /** Format: uuid */
+            project_id?: string | null;
+        };
+        ResolvedS3BucketPermission: {
+            /** Format: uuid */
+            bucket_id: string;
+            bucket_name: string;
+            can_read: boolean;
+            can_write: boolean;
+            physical_bucket_name: string;
+            /** Format: uuid */
+            provider_id: string;
+            region: string;
+        };
         ResolvedTimelineResponse: {
             containers: components["schemas"]["ResolvedContainerPin"][];
             created_at: string;
@@ -805,6 +873,12 @@ export interface components {
         };
         RotateExternalRegistryTokenRequest: {
             token: string;
+        };
+        S3ProviderCredentials: {
+            access_key_id: string;
+            endpoint_url: string;
+            provider_region?: string | null;
+            provider_type: string;
         };
         TimelineResponse: {
             created_at: string;
@@ -2674,6 +2748,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    delete_secret_internal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+                registry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    resolve_access_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                access_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolvedS3AccessToken"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    provider_credentials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["S3ProviderCredentials"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

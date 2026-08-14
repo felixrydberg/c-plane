@@ -10,7 +10,8 @@ Before writing any UI code, read these:
 
 - `packages/c-plane` — Rust backend (axum, sea-orm, utoipa)
 - `packages/ui` — Nuxt frontend
-- `packages/ui-shared` — shared Drizzle schemas and types
+- `packages/migrations` — Drizzle schemas, migrations, and database types
+- `packages/lib` — reusable Rust services, currently OpenBao secrets
 
 ## Patterns
 

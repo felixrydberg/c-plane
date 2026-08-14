@@ -2,7 +2,7 @@ import type { api_key_scopes_type } from "~~/server/schema";
 import { api_keys, api_key_scopes } from "~~/server/schema";
 import { uuidv7 } from "uuidv7";
 import { withTenantDb } from "~~/server/utils/db";
-import { API_KEY_SCOPE_VALUES } from "@cplane/ui-shared/utils";
+import { API_KEY_SCOPE_VALUES } from "@cplane/migrations/utils";
 
 export default defineEventHandler(async (event) => {
   const membership = await getOrganizationMembership(event);

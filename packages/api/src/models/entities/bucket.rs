@@ -8,7 +8,7 @@ pub struct Model {
     pub id: Uuid,
     pub project_id: Uuid,
     pub organization_id: Uuid,
-    pub region: Uuid,
+    pub region_id: Uuid,
     pub name: String,
 }
 

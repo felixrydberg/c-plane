@@ -2,7 +2,10 @@ use axum::{
     Json,
     extract::{Path, Query},
 };
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseBackend, EntityTrait, QueryFilter,
+    QueryOrder, Set, Statement,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use utoipa::ToSchema;
@@ -14,7 +17,6 @@ use crate::{
     models::entities::{
         bucket,
         region::{self, RegionRoutingMode, RegionStatus},
-        storage_access_token_bucket,
     },
 };
 
@@ -62,9 +64,7 @@ pub async fn create_bucket(
     Json(body): Json<CreateBucketRequest>,
 ) -> Result<(axum::http::StatusCode, Json<BucketResponse>), AppError> {
     verify_org_access(&tenant_db, organization_id)?;
-    let providers = crate::state::get_app_state()
-        .s3_providers
-        .ok_or_else(|| AppError::Internal("S3 provider service is not configured".into()))?;
+    let providers = crate::state::get_app_state().s3_providers;
     let name = body.name.trim().to_ascii_lowercase();
     if !valid_bucket_name(&name) {
         return Err(AppError::BadRequest("Invalid bucket name".into()));
@@ -107,7 +107,7 @@ pub async fn create_bucket(
         id: Set(bucket_id),
         project_id: Set(body.project_id),
         organization_id: Set(organization_id),
-        region: Set(body.region),
+        region_id: Set(body.region),
         name: Set(name.clone()),
     }
     .insert(tx)
@@ -178,9 +178,7 @@ pub async fn delete_bucket(
     Path((organization_id, bucket_id)): Path<(Uuid, Uuid)>,
 ) -> Result<axum::http::StatusCode, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
-    let providers = crate::state::get_app_state()
-        .s3_providers
-        .ok_or_else(|| AppError::Internal("S3 provider service is not configured".into()))?;
+    let providers = crate::state::get_app_state().s3_providers;
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
     let bucket = bucket::Entity::find_by_id(bucket_id)
@@ -189,18 +187,24 @@ pub async fn delete_bucket(
         .await?
         .ok_or_else(|| AppError::NotFound("Bucket not found".into()))?;
     verify_project_in_org(tx, bucket.project_id, organization_id).await?;
-    let region = region::Entity::find_by_id(bucket.region)
+    let region = region::Entity::find_by_id(bucket.region_id)
         .one(tx)
         .await?
         .ok_or_else(|| AppError::NotFound("Bucket region not found".into()))?;
     let provider_id = region
         .s3_provider_id
         .ok_or_else(|| AppError::Conflict("Region has no S3 provider".into()))?;
-    let has_access_tokens = storage_access_token_bucket::Entity::find()
-        .filter(storage_access_token_bucket::Column::BucketId.eq(bucket.id))
-        .one(tx)
-        .await?
-        .is_some();
+    let rows = tx
+        .query_all(Statement::from_sql_and_values(
+            DatabaseBackend::Postgres,
+            "SELECT DISTINCT token.access_key_id FROM storage_access_token token JOIN storage_access_token_bucket permission ON permission.access_token_id=token.id WHERE permission.bucket_id=$1",
+            vec![bucket.id.into()],
+        ))
+        .await?;
+    let access_keys = rows
+        .iter()
+        .map(|row| row.try_get("", "access_key_id"))
+        .collect::<Result<Vec<String>, _>>()?;
 
     providers
         .delete_bucket(provider_id, &physical_bucket_name(bucket.id))
@@ -216,8 +220,8 @@ pub async fn delete_bucket(
     )
     .await?;
     scoped.commit().await?;
-    if has_access_tokens {
-        providers.invalidate_access_token_cache().await?;
+    if let Err(error) = providers.invalidate_access_token_caches(&access_keys).await {
+        tracing::warn!(%error, %bucket_id, "bucket cache invalidation failed after deletion");
     }
 
     Ok(axum::http::StatusCode::NO_CONTENT)
@@ -228,7 +232,7 @@ fn response(bucket: &bucket::Model) -> BucketResponse {
         id: bucket.id,
         project_id: bucket.project_id,
         name: bucket.name.clone(),
-        region: bucket.region,
+        region: bucket.region_id,
     }
 }
 

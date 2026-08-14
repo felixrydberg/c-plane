@@ -3,12 +3,15 @@ use axum::{
     extract::{Path, RawQuery},
     http::{HeaderMap, header},
 };
-use base64::{Engine, engine::general_purpose::STANDARD};
+use base64::{
+    Engine,
+    engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
+};
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use std::{env, fs, sync::OnceLock};
+use std::env;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -82,11 +85,6 @@ struct RegistryAccess {
     resource_type: &'static str,
     name: String,
     actions: Vec<String>,
-}
-
-struct RegistrySigner {
-    key: EncodingKey,
-    certificate: String,
 }
 
 struct RegistryIdentity {
@@ -205,10 +203,17 @@ pub(crate) async fn sign_repository_token(
 }
 
 fn sign_registry_claims(claims: &RegistryClaims) -> Result<String, AppError> {
-    let signer = registry_signer()?;
-    let mut jwt_header = Header::new(Algorithm::RS256);
-    jwt_header.x5c = Some(vec![signer.certificate.clone()]);
-    encode(&jwt_header, claims, &signer.key)
+    let secret = registry_signing_secret()?;
+    sign_registry_claims_with_secret(claims, &secret)
+}
+
+fn sign_registry_claims_with_secret(
+    claims: &RegistryClaims,
+    secret: &[u8],
+) -> Result<String, AppError> {
+    let mut jwt_header = Header::new(Algorithm::HS256);
+    jwt_header.kid = Some("cplane-registry".into());
+    encode(&jwt_header, claims, &EncodingKey::from_secret(secret))
         .map_err(|error| AppError::Internal(format!("Failed to sign registry token: {error}")))
 }
 
@@ -417,47 +422,29 @@ async fn organization_slug(organization_id: Uuid) -> Result<String, AppError> {
         .map_err(|error| AppError::Internal(format!("Failed to resolve organization: {error}")))
 }
 
-fn registry_signer() -> Result<&'static RegistrySigner, AppError> {
-    static SIGNER: OnceLock<RegistrySigner> = OnceLock::new();
-    if let Some(signer) = SIGNER.get() {
-        return Ok(signer);
+fn registry_signing_secret() -> Result<Vec<u8>, AppError> {
+    let encoded = env::var("REGISTRY_TOKEN_SECRET")
+        .map_err(|_| AppError::Internal("REGISTRY_TOKEN_SECRET is required".into()))?;
+    let secret = URL_SAFE_NO_PAD
+        .decode(encoded)
+        .map_err(|_| AppError::Internal("REGISTRY_TOKEN_SECRET is invalid".into()))?;
+    if secret.len() < 32 {
+        return Err(AppError::Internal(
+            "REGISTRY_TOKEN_SECRET must contain at least 32 bytes".into(),
+        ));
     }
-    let private_key_path = env::var("REGISTRY_TOKEN_PRIVATE_KEY_PATH")
-        .unwrap_or_else(|_| "/run/registry/registry-token-private.pem".into());
-    let certificate_path = env::var("REGISTRY_TOKEN_CERTIFICATE_PATH")
-        .unwrap_or_else(|_| "/run/registry/registry-token-public.pem".into());
-    let private_key = fs::read(&private_key_path).map_err(|error| {
-        AppError::Internal(format!("Failed to read registry signing key: {error}"))
-    })?;
-    let certificate_pem = fs::read_to_string(&certificate_path).map_err(|error| {
-        AppError::Internal(format!("Failed to read registry certificate: {error}"))
-    })?;
-    let certificate = certificate_pem
-        .lines()
-        .filter(|line| !line.starts_with("-----"))
-        .map(str::trim)
-        .collect::<String>();
-    STANDARD
-        .decode(&certificate)
-        .map_err(|error| AppError::Internal(format!("Invalid registry certificate: {error}")))?;
-    let signer = RegistrySigner {
-        key: EncodingKey::from_rsa_pem(&private_key).map_err(|error| {
-            AppError::Internal(format!("Invalid registry signing key: {error}"))
-        })?,
-        certificate,
-    };
-    let _ = SIGNER.set(signer);
-    SIGNER
-        .get()
-        .ok_or_else(|| AppError::Internal("Failed to initialize registry signer".into()))
+    Ok(secret)
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        access_for_scope, apply_repository_grant, parse_registry_token_query, registry_token_exp,
-        requests_write,
+        RegistryAccess, RegistryClaims, access_for_scope, apply_repository_grant,
+        parse_registry_token_query, registry_token_exp, requests_write,
+        sign_registry_claims_with_secret,
     };
+    use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
+    use serde_json::Value;
 
     #[test]
     fn accepts_repeated_registry_scopes() {
@@ -509,5 +496,36 @@ mod tests {
             apply_repository_grant(access, true, true, true).actions,
             vec!["pull"]
         );
+    }
+
+    #[test]
+    fn signs_tokens_verifiable_by_the_symmetric_registry_key() {
+        let secret = [7_u8; 32];
+        let token = sign_registry_claims_with_secret(
+            &RegistryClaims {
+                iss: "cplane-registry".into(),
+                sub: "cplane-control-plane".into(),
+                aud: "registry.example.com".into(),
+                exp: 4_102_444_800,
+                nbf: 0,
+                iat: 0,
+                jti: "test".into(),
+                access: vec![RegistryAccess {
+                    resource_type: "repository",
+                    name: "acme/api".into(),
+                    actions: vec!["pull".into()],
+                }],
+            },
+            &secret,
+        )
+        .unwrap();
+        let mut validation = Validation::new(Algorithm::HS256);
+        validation.set_audience(&["registry.example.com"]);
+        validation.set_issuer(&["cplane-registry"]);
+        let claims = decode::<Value>(&token, &DecodingKey::from_secret(&secret), &validation)
+            .unwrap()
+            .claims;
+
+        assert_eq!(claims["access"][0]["name"], "acme/api");
     }
 }

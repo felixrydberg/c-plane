@@ -804,13 +804,17 @@ dependencies = [
  "chrono",
  "dotenvy",
  "form_urlencoded",
+ "getrandom 0.3.3",
  "hex",
  "jsonwebtoken",
+ "lib",
+ "redis",
  "reqwest",
  "sea-orm",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "subtle",
  "tokio",
  "tower-http",
  "tracing",
@@ -845,6 +849,7 @@ dependencies = [
 name = "c-plane-worker"
 version = "0.1.0"
 dependencies = [
+ "lib",
  "redis",
  "reqwest",
  "sea-orm",
@@ -1079,13 +1084,12 @@ dependencies = [
 name = "control-plane"
 version = "0.1.0"
 dependencies = [
- "base64",
  "chrono",
  "dioxus",
  "dioxus-fullstack",
  "hex",
+ "lib",
  "redis",
- "reqwest",
  "sea-orm",
  "serde",
  "serde_json",
@@ -3200,6 +3204,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 dependencies = [
  "spin 0.9.8",
+]
+
+[[package]]
+name = "lib"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
 ]
 
 [[package]]

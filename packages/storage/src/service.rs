@@ -452,10 +452,8 @@ fn same_provider(source: &BucketPermission, destination: &BucketPermission) -> S
 
 impl StorageService {
     pub async fn from_config(config: Config) -> Result<Self, reqwest::Error> {
-        let credentials = CredentialResolver::new(
-            config.control_plane_url.clone(),
-            config.internal_token.clone(),
-        );
+        let credentials =
+            CredentialResolver::new(config.api_url.clone(), config.internal_token.clone());
         Ok(Self {
             config,
             credentials,

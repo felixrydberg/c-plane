@@ -22,9 +22,9 @@ auth:
     realm: http://localhost:8080/api/registry/token
     service: localhost:5000
     issuer: cplane-registry
-    rootcertbundle: /run/registry/registry-token-public.pem
+    jwks: /run/registry-token-jwks.json
     signingalgorithms:
-      - RS256
+      - HS256
 
 validation:
   disabled: false

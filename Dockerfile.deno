@@ -6,15 +6,15 @@ WORKDIR /usr/src/app
 
 COPY package.json ./package.json
 COPY deno.lock ./deno.lock
-COPY packages/ui-shared/package.json ./packages/ui-shared/package.json
+COPY packages/migrations/package.json ./packages/migrations/package.json
 COPY packages/ui/package.json ./packages/ui/package.json
 COPY packages/sdk/package.json ./packages/sdk/package.json
 
 RUN deno ci
 
-COPY packages/ui-shared/schema ./packages/ui-shared/schema
-COPY packages/ui-shared/types ./packages/ui-shared/types
-COPY packages/ui-shared/utils ./packages/ui-shared/utils
+COPY packages/migrations/schema ./packages/migrations/schema
+COPY packages/migrations/types ./packages/migrations/types
+COPY packages/migrations/utils ./packages/migrations/utils
 COPY packages/sdk ./packages/sdk
 COPY packages/${PACKAGE} ./packages/${PACKAGE}
 

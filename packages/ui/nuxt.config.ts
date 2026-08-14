@@ -85,7 +85,6 @@ export default defineNuxtConfig({
           'app/**/*.{vue,ts,tsx,md,mdc,mdx,js,jsx}',
           'packages/**/app/**/*.{vue,ts,tsx,md,mdx,js,jsx}',
           'node_modules/@nuxt/ui/**/*.{vue,ts,tsx,js,jsx}',
-          'node_modules/@id-proval/ui-shared/**/*.{vue,ts,tsx,js,jsx}',
         ],
       },
       sizeLimitKb: 512,
