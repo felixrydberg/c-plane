@@ -2957,54 +2957,6 @@
         }
       }
     },
-    "/internal/organizations/{organization_id}/external-registries/{registry_id}/secret": {
-      "delete": {
-        "tags": [
-          "internal"
-        ],
-        "operationId": "delete_secret_internal",
-        "parameters": [
-          {
-            "name": "organization_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "registry_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": ""
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "serviceToken": []
-          }
-        ]
-      }
-    },
     "/internal/s3-access-tokens/resolve/{access_key}": {
       "get": {
         "tags": [
@@ -3559,16 +3511,22 @@
         "type": "object",
         "required": [
           "name",
-          "host",
+          "provider",
           "username",
           "token"
         ],
         "properties": {
           "host": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "name": {
             "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ExternalRegistryProvider"
           },
           "token": {
             "type": "string"
@@ -3884,6 +3842,16 @@
             "type": "string"
           }
         }
+      },
+      "ExternalRegistryProvider": {
+        "type": "string",
+        "enum": [
+          "docker_hub",
+          "github",
+          "gitlab",
+          "google_artifact_registry",
+          "aws_ecr"
+        ]
       },
       "ExternalRegistryResponse": {
         "type": "object",

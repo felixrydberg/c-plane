@@ -5,7 +5,7 @@ import { region } from '../infrastructure/regions';
 import { app_tenant, orgAllowed } from '../rls';
 import { external_registry } from '../tenants/registry';
 
-export const container = pgTable('project_container', {
+export const container = pgTable('container', {
   id: uuid("id").primaryKey(),
   project_id: uuid("project_id")
     .notNull()
@@ -20,9 +20,9 @@ export const container = pgTable('project_container', {
   created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
   updated_at: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 }, (table) => [
-  index("project_container_organization_id_idx").on(table.organization_id),
-  index("project_container_project_id_idx").on(table.project_id),
-  pgPolicy("project_container_tenant_rls", {
+  index("container_organization_id_idx").on(table.organization_id),
+  index("container_project_id_idx").on(table.project_id),
+  pgPolicy("container_tenant_rls", {
     as: "permissive",
     for: "all",
     to: app_tenant,
@@ -31,7 +31,7 @@ export const container = pgTable('project_container', {
   }),
 ]).enableRLS();
 
-export const container_version = pgTable('project_container_version', {
+export const container_version = pgTable('container_version', {
   id: uuid("id").primaryKey(),
   container_id: uuid("container_id")
     .notNull()
@@ -52,17 +52,17 @@ export const container_version = pgTable('project_container_version', {
   health_check: jsonb("health_check"),
   created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 }, (table) => [
-  uniqueIndex("project_container_version_container_id_version_uidx")
+  uniqueIndex("container_version_container_id_version_uidx")
     .on(table.container_id, table.version),
-  index("project_container_version_container_id_idx").on(table.container_id),
-  index("project_container_version_organization_id_idx").on(table.organization_id),
-  index("project_container_version_external_registry_id_idx").on(table.external_registry_id),
+  index("container_version_container_id_idx").on(table.container_id),
+  index("container_version_organization_id_idx").on(table.organization_id),
+  index("container_version_external_registry_id_idx").on(table.external_registry_id),
   foreignKey({
     columns: [table.external_registry_id, table.organization_id],
     foreignColumns: [external_registry.id, external_registry.organization_id],
-    name: "project_container_version_external_registry_fk",
+    name: "container_version_external_registry_fk",
   }).onDelete("restrict"),
-  pgPolicy("project_container_version_tenant_rls", {
+  pgPolicy("container_version_tenant_rls", {
     as: "permissive",
     for: "all",
     to: app_tenant,

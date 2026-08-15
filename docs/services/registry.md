@@ -1,5 +1,21 @@
 # Registry operations
 
+## External registries
+
+C-Plane stores reusable pull credentials for these private registry providers:
+
+- Docker Hub
+- GitHub Container Registry
+- GitLab Container Registry
+- Google Artifact Registry
+- AWS Elastic Container Registry
+
+Docker Hub, GitHub, and GitLab use fixed registry hosts. Google Artifact
+Registry accepts only `<location>-docker.pkg.dev`; ECR accepts only its
+account-and-region `dkr.ecr` host. Arbitrary and self-hosted private registries
+are not supported. Tokens are stored in OpenBao and are never returned by the
+API.
+
 ## Garbage collection
 
 Deleting a repository removes its manifests. Shared, content-addressed layers
@@ -52,20 +68,15 @@ Postgres; restart the dependency or any worker replica and let lease recovery
 continue the job. Do not clear the maintenance row manually while a worker may
 still own its lease.
 
-## Worker queues
+## GC worker
 
-`worker_job` is the durable generic queue. `queue_name` isolates workloads and
-`job_type` selects the handler. Worker replicas claim rows with
-`FOR UPDATE SKIP LOCKED`, so replicas process different jobs without a central
+`worker_job` stores durable `registry_gc` jobs. Worker replicas claim jobs with
+`FOR UPDATE SKIP LOCKED`, so replicas process different runs without a central
 coordinator.
 
-Configure a worker with comma-separated queues and local concurrency:
+Configure the worker with the maintenance queue and local concurrency:
 
 ```text
-WORKER_QUEUES=maintenance,cluster-state
+WORKER_QUEUES=maintenance
 WORKER_CONCURRENCY=4
 ```
-
-To add a job, enqueue its type and payload in `worker_job`, then add one match
-arm in the worker dispatcher. A partial unique index on `(queue_name,
-dedupe_key)` prevents duplicate active jobs when a producer supplies a key.

@@ -1,8 +1,7 @@
 use axum::{Json, extract::Path, http::StatusCode};
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseBackend, EntityTrait, QueryFilter,
-    QueryOrder, Set, Statement,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, Set,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -20,10 +19,21 @@ const DEPENDENCY_CONSTRAINT: &str = "project_container_version_external_registry
 const NAME_CONSTRAINT: &str = "external_registry_organization_name_uidx";
 const HOST_USERNAME_CONSTRAINT: &str = "external_registry_organization_host_username_uidx";
 
+#[derive(Clone, Copy, Deserialize, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ExternalRegistryProvider {
+    DockerHub,
+    Github,
+    Gitlab,
+    GoogleArtifactRegistry,
+    AwsEcr,
+}
+
 #[derive(Deserialize, ToSchema)]
 pub struct CreateExternalRegistryRequest {
     pub name: String,
-    pub host: String,
+    pub provider: ExternalRegistryProvider,
+    pub host: Option<String>,
     pub username: String,
     pub token: String,
 }
@@ -90,7 +100,7 @@ pub async fn create_external_registry(
 ) -> Result<(StatusCode, Json<ExternalRegistryResponse>), AppError> {
     verify_org_access(&tenant_db, organization_id)?;
     let name = required(body.name, "Name")?;
-    let host = normalize_registry_host(&body.host)?;
+    let host = trusted_registry_host(body.provider, body.host.as_deref())?;
     let username = required(body.username, "Username")?;
     let token = required_secret(body.token)?;
     let registry_id = Uuid::new_v4();
@@ -129,21 +139,6 @@ pub async fn create_external_registry(
         Err(error) => {
             if let Err(cleanup_error) = delete_secret(organization_id, registry_id).await {
                 tracing::warn!(%cleanup_error, %organization_id, %registry_id, "failed to clean up external registry secret after create failure");
-                if let Err(job_error) = async {
-                    let scoped = tenant_db.begin_scoped_transaction().await?;
-                    enqueue_external_registry_secret_cleanup(
-                        scoped.connection(),
-                        organization_id,
-                        registry_id,
-                    )
-                    .await?;
-                    scoped.commit().await?;
-                    Ok::<_, AppError>(())
-                }
-                .await
-                {
-                    tracing::warn!(%job_error, %organization_id, %registry_id, "failed to queue external registry secret cleanup after create failure");
-                }
             }
             Err(error)
         }
@@ -248,7 +243,6 @@ pub async fn delete_external_registry(
         .exec(tx)
         .await
         .map_err(map_registry_delete_error)?;
-    enqueue_external_registry_secret_cleanup(tx, organization_id, registry_id).await?;
     record_event(
         tx,
         organization_id,
@@ -258,26 +252,10 @@ pub async fn delete_external_registry(
     )
     .await?;
     scoped.commit().await?;
+    if let Err(error) = delete_secret(organization_id, registry_id).await {
+        tracing::warn!(%error, %organization_id, %registry_id, "failed to delete external registry secret");
+    }
     Ok(StatusCode::NO_CONTENT)
-}
-
-async fn enqueue_external_registry_secret_cleanup(
-    tx: &impl ConnectionTrait,
-    organization_id: Uuid,
-    registry_id: Uuid,
-) -> Result<(), AppError> {
-    tx.execute(Statement::from_sql_and_values(
-        DatabaseBackend::Postgres,
-        "INSERT INTO worker_job (id, organization_id, queue_name, job_type, dedupe_key, payload, max_attempts) VALUES ($1::uuid, $2::uuid, 'secrets', 'external_registry_secret_cleanup', $3, $4::jsonb, 8)",
-        vec![
-            Uuid::new_v4().into(),
-            organization_id.into(),
-            format!("external-registry-secret:{registry_id}").into(),
-            json!({"organization_id": organization_id, "registry_id": registry_id}).to_string().into(),
-        ],
-    ))
-    .await?;
-    Ok(())
 }
 
 pub async fn find_registry(
@@ -292,45 +270,57 @@ pub async fn find_registry(
         .ok_or_else(|| AppError::NotFound("External registry not found".into()))
 }
 
-pub fn normalize_registry_host(value: &str) -> Result<String, AppError> {
-    let value = value.trim().trim_end_matches('/');
-    if value.to_ascii_lowercase().starts_with("http://") {
-        return Err(AppError::BadRequest(
-            "External registries must use HTTPS".into(),
-        ));
-    }
-    let value = if value
-        .get(..8)
-        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("https://"))
-    {
-        &value[8..]
+fn trusted_registry_host(
+    provider: ExternalRegistryProvider,
+    host: Option<&str>,
+) -> Result<String, AppError> {
+    let (validator, expected): (fn(&str) -> bool, &str) = match provider {
+        ExternalRegistryProvider::DockerHub => return Ok("docker.io".into()),
+        ExternalRegistryProvider::Github => return Ok("ghcr.io".into()),
+        ExternalRegistryProvider::Gitlab => return Ok("registry.gitlab.com".into()),
+        ExternalRegistryProvider::GoogleArtifactRegistry => (
+            valid_google_artifact_registry_host,
+            "Google Artifact Registry",
+        ),
+        ExternalRegistryProvider::AwsEcr => (valid_ecr_host, "AWS ECR"),
+    };
+    let host = host.unwrap_or_default().trim().to_ascii_lowercase();
+    if validator(&host) {
+        Ok(host)
     } else {
-        value
-    };
-    if value.is_empty()
-        || value.contains("://")
-        || value.contains('/')
-        || value.contains('@')
-        || value.contains('?')
-        || value.contains('#')
-    {
-        return Err(AppError::BadRequest(
-            "Registry host must be a hostname with an optional port".into(),
-        ));
+        Err(AppError::BadRequest(format!(
+            "A valid {expected} host is required"
+        )))
     }
-    let url = reqwest::Url::parse(&format!("https://{value}"))
-        .map_err(|_| AppError::BadRequest("Invalid registry host".into()))?;
-    let host = url
-        .host_str()
-        .ok_or_else(|| AppError::BadRequest("Invalid registry host".into()))?
-        .to_ascii_lowercase();
-    let canonical = match host.as_str() {
-        "index.docker.io" | "registry-1.docker.io" => "docker.io".to_string(),
-        _ => host,
+}
+
+fn valid_google_artifact_registry_host(host: &str) -> bool {
+    host.strip_suffix("-docker.pkg.dev")
+        .is_some_and(valid_dns_label)
+}
+
+fn valid_ecr_host(host: &str) -> bool {
+    let Some(host) = host
+        .strip_suffix(".amazonaws.com")
+        .or_else(|| host.strip_suffix(".amazonaws.com.cn"))
+    else {
+        return false;
     };
-    Ok(url
-        .port()
-        .map_or(canonical.clone(), |port| format!("{canonical}:{port}")))
+    let Some((account, region)) = host.split_once(".dkr.ecr.") else {
+        return false;
+    };
+    account.len() == 12
+        && account.bytes().all(|byte| byte.is_ascii_digit())
+        && valid_dns_label(region)
+}
+
+fn valid_dns_label(value: &str) -> bool {
+    !value.is_empty()
+        && !value.starts_with('-')
+        && !value.ends_with('-')
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -368,27 +358,12 @@ pub async fn load_secret(organization_id: Uuid, registry_id: Uuid) -> Result<Str
         .ok_or_else(|| AppError::Conflict("External registry credentials are unavailable".into()))
 }
 
-pub async fn delete_secret(organization_id: Uuid, registry_id: Uuid) -> Result<(), AppError> {
+async fn delete_secret(organization_id: Uuid, registry_id: Uuid) -> Result<(), AppError> {
     get_app_state()
         .secrets
         .delete(&secret_path(organization_id, registry_id))
         .await?;
     Ok(())
-}
-
-#[utoipa::path(
-    delete,
-    path = "/internal/organizations/{organization_id}/external-registries/{registry_id}/secret",
-    params(("organization_id" = Uuid, Path), ("registry_id" = Uuid, Path)),
-    responses((status = 204), (status = 401, body = crate::errors::ErrorResponse)),
-    security(("serviceToken" = [])),
-    tag = "internal",
-)]
-pub async fn delete_secret_internal(
-    Path((organization_id, registry_id)): Path<(Uuid, Uuid)>,
-) -> Result<StatusCode, AppError> {
-    delete_secret(organization_id, registry_id).await?;
-    Ok(StatusCode::NO_CONTENT)
 }
 
 fn required(value: String, name: &str) -> Result<String, AppError> {
@@ -442,29 +417,47 @@ fn response(registry: &external_registry::Model) -> ExternalRegistryResponse {
 #[cfg(test)]
 mod tests {
     use super::{
-        DEPENDENCY_CONSTRAINT, map_registry_delete_error, normalize_registry_host, required_secret,
+        DEPENDENCY_CONSTRAINT, ExternalRegistryProvider, map_registry_delete_error,
+        required_secret, trusted_registry_host,
     };
     use crate::errors::AppError;
 
     #[test]
-    fn normalizes_registry_hosts() {
-        assert_eq!(normalize_registry_host("GHCR.IO/").unwrap(), "ghcr.io");
+    fn allows_only_supported_private_registry_hosts() {
         assert_eq!(
-            normalize_registry_host("https://GHCR.IO/").unwrap(),
-            "ghcr.io"
-        );
-        assert_eq!(
-            normalize_registry_host("registry-1.docker.io").unwrap(),
+            trusted_registry_host(ExternalRegistryProvider::DockerHub, None).unwrap(),
             "docker.io"
         );
         assert_eq!(
-            normalize_registry_host("example.com:5443").unwrap(),
-            "example.com:5443"
+            trusted_registry_host(ExternalRegistryProvider::Github, None).unwrap(),
+            "ghcr.io"
         );
-        assert!(normalize_registry_host("http://example.com").is_err());
         assert_eq!(
-            normalize_registry_host("127.0.0.1:5000").unwrap(),
-            "127.0.0.1:5000"
+            trusted_registry_host(
+                ExternalRegistryProvider::GoogleArtifactRegistry,
+                Some("EUROPE-WEST1-DOCKER.PKG.DEV"),
+            )
+            .unwrap(),
+            "europe-west1-docker.pkg.dev"
+        );
+        assert_eq!(
+            trusted_registry_host(
+                ExternalRegistryProvider::AwsEcr,
+                Some("123456789012.dkr.ecr.eu-north-1.amazonaws.com"),
+            )
+            .unwrap(),
+            "123456789012.dkr.ecr.eu-north-1.amazonaws.com"
+        );
+        assert!(
+            trusted_registry_host(
+                ExternalRegistryProvider::GoogleArtifactRegistry,
+                Some("registry.example.com"),
+            )
+            .is_err()
+        );
+        assert!(
+            trusted_registry_host(ExternalRegistryProvider::AwsEcr, Some("127.0.0.1:5000"),)
+                .is_err()
         );
     }
 

@@ -43,6 +43,7 @@ export default defineNuxtConfig({
   },
   nitro: {
     preset: 'node-server',
+    serveStatic: 'inline',
     minify: true,
     sourceMap: false,
     routeRules: {

@@ -1,6 +1,6 @@
 {
-  "id": "c1daa60b-2ddc-4236-8e30-aaa8b3833db3",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "f6c1673b-5427-4ea5-bc84-661e4438d994",
+  "prevId": "c1daa60b-2ddc-4236-8e30-aaa8b3833db3",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2139,8 +2139,8 @@
       "checkConstraints": {},
       "isRLSEnabled": true
     },
-    "public.project_container": {
-      "name": "project_container",
+    "public.container": {
+      "name": "container",
       "schema": "",
       "columns": {
         "id": {
@@ -2189,8 +2189,8 @@
         }
       },
       "indexes": {
-        "project_container_organization_id_idx": {
-          "name": "project_container_organization_id_idx",
+        "container_organization_id_idx": {
+          "name": "container_organization_id_idx",
           "columns": [
             {
               "expression": "organization_id",
@@ -2204,8 +2204,8 @@
           "method": "btree",
           "with": {}
         },
-        "project_container_project_id_idx": {
-          "name": "project_container_project_id_idx",
+        "container_project_id_idx": {
+          "name": "container_project_id_idx",
           "columns": [
             {
               "expression": "project_id",
@@ -2221,9 +2221,9 @@
         }
       },
       "foreignKeys": {
-        "project_container_project_id_project_id_fk": {
-          "name": "project_container_project_id_project_id_fk",
-          "tableFrom": "project_container",
+        "container_project_id_project_id_fk": {
+          "name": "container_project_id_project_id_fk",
+          "tableFrom": "container",
           "tableTo": "project",
           "columnsFrom": [
             "project_id"
@@ -2234,9 +2234,9 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "project_container_organization_id_organization_id_fk": {
-          "name": "project_container_organization_id_organization_id_fk",
-          "tableFrom": "project_container",
+        "container_organization_id_organization_id_fk": {
+          "name": "container_organization_id_organization_id_fk",
+          "tableFrom": "container",
           "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
@@ -2247,9 +2247,9 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "project_container_region_id_regions_id_fk": {
-          "name": "project_container_region_id_regions_id_fk",
-          "tableFrom": "project_container",
+        "container_region_id_regions_id_fk": {
+          "name": "container_region_id_regions_id_fk",
+          "tableFrom": "container",
           "tableTo": "regions",
           "columnsFrom": [
             "region_id"
@@ -2264,22 +2264,22 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {
-        "project_container_tenant_rls": {
-          "name": "project_container_tenant_rls",
+        "container_tenant_rls": {
+          "name": "container_tenant_rls",
           "as": "PERMISSIVE",
           "for": "ALL",
           "to": [
             "app_tenant"
           ],
-          "using": "\"project_container\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"project_container\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"container\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"container\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
       "isRLSEnabled": true
     },
-    "public.project_container_version": {
-      "name": "project_container_version",
+    "public.container_version": {
+      "name": "container_version",
       "schema": "",
       "columns": {
         "id": {
@@ -2377,8 +2377,8 @@
         }
       },
       "indexes": {
-        "project_container_version_container_id_version_uidx": {
-          "name": "project_container_version_container_id_version_uidx",
+        "container_version_container_id_version_uidx": {
+          "name": "container_version_container_id_version_uidx",
           "columns": [
             {
               "expression": "container_id",
@@ -2398,8 +2398,8 @@
           "method": "btree",
           "with": {}
         },
-        "project_container_version_container_id_idx": {
-          "name": "project_container_version_container_id_idx",
+        "container_version_container_id_idx": {
+          "name": "container_version_container_id_idx",
           "columns": [
             {
               "expression": "container_id",
@@ -2413,8 +2413,8 @@
           "method": "btree",
           "with": {}
         },
-        "project_container_version_organization_id_idx": {
-          "name": "project_container_version_organization_id_idx",
+        "container_version_organization_id_idx": {
+          "name": "container_version_organization_id_idx",
           "columns": [
             {
               "expression": "organization_id",
@@ -2428,8 +2428,8 @@
           "method": "btree",
           "with": {}
         },
-        "project_container_version_external_registry_id_idx": {
-          "name": "project_container_version_external_registry_id_idx",
+        "container_version_external_registry_id_idx": {
+          "name": "container_version_external_registry_id_idx",
           "columns": [
             {
               "expression": "external_registry_id",
@@ -2445,10 +2445,10 @@
         }
       },
       "foreignKeys": {
-        "project_container_version_container_id_project_container_id_fk": {
-          "name": "project_container_version_container_id_project_container_id_fk",
-          "tableFrom": "project_container_version",
-          "tableTo": "project_container",
+        "container_version_container_id_container_id_fk": {
+          "name": "container_version_container_id_container_id_fk",
+          "tableFrom": "container_version",
+          "tableTo": "container",
           "columnsFrom": [
             "container_id"
           ],
@@ -2458,9 +2458,9 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "project_container_version_organization_id_organization_id_fk": {
-          "name": "project_container_version_organization_id_organization_id_fk",
-          "tableFrom": "project_container_version",
+        "container_version_organization_id_organization_id_fk": {
+          "name": "container_version_organization_id_organization_id_fk",
+          "tableFrom": "container_version",
           "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
@@ -2471,9 +2471,9 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "project_container_version_external_registry_fk": {
-          "name": "project_container_version_external_registry_fk",
-          "tableFrom": "project_container_version",
+        "container_version_external_registry_fk": {
+          "name": "container_version_external_registry_fk",
+          "tableFrom": "container_version",
           "tableTo": "external_registry",
           "columnsFrom": [
             "external_registry_id",
@@ -2490,15 +2490,15 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {
-        "project_container_version_tenant_rls": {
-          "name": "project_container_version_tenant_rls",
+        "container_version_tenant_rls": {
+          "name": "container_version_tenant_rls",
           "as": "PERMISSIVE",
           "for": "ALL",
           "to": [
             "app_tenant"
           ],
-          "using": "\"project_container_version\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
-          "withCheck": "\"project_container_version\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
+          "using": "\"container_version\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+          "withCheck": "\"container_version\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))"
         }
       },
       "checkConstraints": {},
