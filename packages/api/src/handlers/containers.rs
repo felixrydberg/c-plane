@@ -267,6 +267,7 @@ pub async fn create_container(
     let registry =
         selected_external_registry(tx, organization_id, body.external_registry_id).await?;
     let resolved_image = images::resolve_image(&image, organization_id, registry.as_ref()).await?;
+    let external_registry_id = registry.as_ref().map(|registry| registry.id);
 
     let created_container: container::Model = container::ActiveModel {
         id: Set(container_id),
@@ -292,7 +293,7 @@ pub async fn create_container(
         port: Set(body.port),
         env: Set(body.env.clone()),
         resources: Set(body.resources.clone()),
-        external_registry_id: Set(body.external_registry_id),
+        external_registry_id: Set(external_registry_id),
         health_check: Set(body.health_check.clone()),
         created_at: Set(Utc::now().fixed_offset()),
     }
@@ -618,6 +619,7 @@ pub async fn update_container(
         } else {
             base.resolved_image.clone()
         };
+        let external_registry_id = registry.as_ref().map(|registry| registry.id);
 
         let next_ver = latest_version_number.version + 1;
         let version_id = Uuid::new_v4();
@@ -634,7 +636,7 @@ pub async fn update_container(
             port: Set(body.port.or(base.port)),
             env: Set(body.env.clone().or(base.env.clone())),
             resources: Set(body.resources.clone().or(base.resources.clone())),
-            external_registry_id: Set(next_registry_id),
+            external_registry_id: Set(external_registry_id),
             health_check: Set(body.health_check.clone().or(base.health_check.clone())),
             created_at: Set(Utc::now().fixed_offset()),
         };

@@ -31,10 +31,6 @@ pub async fn resolve_image(
         .parse()
         .map_err(|_| AppError::BadRequest("Invalid image reference".into()))?;
 
-    if let Some(digest) = reference.digest() {
-        return Ok(reference.clone_with_digest(digest.into()).whole());
-    }
-
     let registry_host = env::var("REGISTRY_HOST").unwrap_or_else(|_| "localhost:5000".into());
     let (network_reference, auth, client) =
         if reference.registry().eq_ignore_ascii_case(&registry_host) {
@@ -47,6 +43,10 @@ pub async fn resolve_image(
         } else {
             external_registry(&reference, organization_id, registry).await?
         };
+
+    if let Some(digest) = reference.digest() {
+        return Ok(reference.clone_with_digest(digest.into()).whole());
+    }
 
     let digest = client
         .fetch_manifest_digest(&network_reference, &auth)
@@ -61,22 +61,22 @@ async fn internal_registry(
     organization_id: Uuid,
 ) -> Result<(Reference, RegistryAuth, Client), AppError> {
     let slug = organization_slug(organization_id).await?;
-    let repository_name = reference
-        .repository()
-        .strip_prefix(&format!("{slug}/"))
-        .filter(|name| !name.is_empty())
-        .ok_or_else(|| {
-            AppError::BadRequest("Internal registry image must belong to this organization".into())
-        })?;
+    let repository_name = internal_repository_name(reference.repository(), &slug)?;
     let token = sign_repository_token(organization_id, repository_name, &["pull"]).await?;
     let internal_url =
         env::var("REGISTRY_INTERNAL_URL").unwrap_or_else(|_| "http://registry:5000".into());
     let (registry, protocol) = internal_endpoint(&internal_url)?;
-    let network_reference = Reference::with_tag(
-        registry.clone(),
-        reference.repository().into(),
-        reference.tag().expect("tag references are resolved").into(),
-    );
+    let network_reference = match (reference.tag(), reference.digest()) {
+        (Some(tag), None) => {
+            Reference::with_tag(registry.clone(), reference.repository().into(), tag.into())
+        }
+        (None, Some(digest)) => Reference::with_digest(
+            registry.clone(),
+            reference.repository().into(),
+            digest.into(),
+        ),
+        _ => unreachable!("parsed image references must have a tag or digest"),
+    };
     let client = oci_client(protocol)?;
     Ok((network_reference, RegistryAuth::Bearer(token), client))
 }
@@ -86,24 +86,41 @@ async fn external_registry(
     organization_id: Uuid,
     registry: Option<&external_registry::Model>,
 ) -> Result<(Reference, RegistryAuth, Client), AppError> {
+    validate_external_registry_host(reference, registry)?;
     let auth = match registry {
-        Some(registry) => {
-            if !reference.registry().eq_ignore_ascii_case(&registry.host) {
-                return Err(AppError::BadRequest(format!(
-                    "Selected registry host '{}' does not match image host '{}'",
-                    registry.host,
-                    reference.registry()
-                )));
-            }
-            RegistryAuth::Basic(
-                registry.username.clone(),
-                load_secret(organization_id, registry.id).await?,
-            )
-        }
+        Some(registry) => RegistryAuth::Basic(
+            registry.username.clone(),
+            load_secret(organization_id, registry.id).await?,
+        ),
         None => RegistryAuth::Anonymous,
     };
     let client = oci_client(ClientProtocol::Https)?;
     Ok((reference.clone(), auth, client))
+}
+
+fn internal_repository_name<'a>(repository: &'a str, slug: &str) -> Result<&'a str, AppError> {
+    repository
+        .strip_prefix(&format!("{slug}/"))
+        .filter(|name| !name.is_empty())
+        .ok_or_else(|| {
+            AppError::BadRequest("Internal registry image must belong to this organization".into())
+        })
+}
+
+fn validate_external_registry_host(
+    reference: &Reference,
+    registry: Option<&external_registry::Model>,
+) -> Result<(), AppError> {
+    if let Some(registry) = registry {
+        if !reference.registry().eq_ignore_ascii_case(&registry.host) {
+            return Err(AppError::BadRequest(format!(
+                "Selected registry host '{}' does not match image host '{}'",
+                registry.host,
+                reference.registry()
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn oci_client(protocol: ClientProtocol) -> Result<Client, AppError> {
@@ -176,6 +193,7 @@ fn map_oci_error(error: OciDistributionError) -> AppError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Utc;
 
     #[tokio::test]
     async fn accepts_an_existing_digest_without_network_access() {
@@ -184,5 +202,37 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(result, format!("docker.io/library/nginx@{digest}"));
+    }
+
+    #[test]
+    fn rejects_a_foreign_internal_repository() {
+        let result = internal_repository_name("other/image", "acme");
+        assert!(
+            matches!(result, Err(AppError::BadRequest(message)) if message.contains("belong to this organization"))
+        );
+    }
+
+    #[tokio::test]
+    async fn rejects_a_mismatched_external_registry_for_a_digest() {
+        let digest = format!("sha256:{}", "a".repeat(64));
+        let registry = external_registry::Model {
+            id: Uuid::new_v4(),
+            organization_id: Uuid::new_v4(),
+            name: "private".into(),
+            host: "registry.example.com".into(),
+            username: "user".into(),
+            created_at: Utc::now().fixed_offset(),
+            updated_at: Utc::now().fixed_offset(),
+        };
+        let result = resolve_image(
+            &format!("other.example.com/team/image@{digest}"),
+            Uuid::nil(),
+            Some(&registry),
+        )
+        .await;
+
+        assert!(
+            matches!(result, Err(AppError::BadRequest(message)) if message.contains("does not match image host"))
+        );
     }
 }
