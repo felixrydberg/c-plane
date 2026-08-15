@@ -1064,7 +1064,7 @@ pub async fn get_timeline(
                         .unwrap_or_else(|| "Unknown".into()),
                     version_id: *version_id,
                     version: version.version,
-                    image: version.image.clone(),
+                    image: version.resolved_image.clone(),
                     external_registry_id: version.external_registry_id,
                 });
             }

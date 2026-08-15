@@ -3193,6 +3193,7 @@
           "id",
           "version",
           "image",
+          "resolved_image",
           "public",
           "replica_count",
           "created_at"
@@ -3230,6 +3231,9 @@
           "replica_count": {
             "type": "integer",
             "format": "int32"
+          },
+          "resolved_image": {
+            "type": "string"
           },
           "resources": {},
           "version": {

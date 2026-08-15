@@ -2322,6 +2322,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "resolved_image": {
+          "name": "resolved_image",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "public": {
           "name": "public",
           "type": "boolean",

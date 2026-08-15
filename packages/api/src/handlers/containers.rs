@@ -6,17 +6,14 @@ use std::collections::HashMap;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use super::{
-    databases::verify_org_access,
-    external_registries::{find_registry, image_registry_host},
-};
+use super::{databases::verify_org_access, external_registries::find_registry};
 use crate::errors::AppError;
 use crate::middleware::auth::AuthContext;
 use crate::models::entities::{
     container, container_version, project_environment, project_timeline,
 };
 use crate::models::pins::TimelinePins;
-use crate::services::{agent, events, revisions};
+use crate::services::{agent, events, images, revisions};
 
 #[derive(Deserialize, ToSchema)]
 pub struct CreateContainerRequest {
@@ -110,6 +107,7 @@ pub struct ContainerVersionResponse {
     pub id: Uuid,
     pub version: i32,
     pub image: String,
+    pub resolved_image: String,
     pub public: bool,
     pub replica_count: i32,
     pub port: Option<i32>,
@@ -125,6 +123,7 @@ fn resolve_latest_version(version: &container_version::Model) -> ContainerVersio
         id: version.id,
         version: version.version,
         image: version.image.clone(),
+        resolved_image: version.resolved_image.clone(),
         public: version.public,
         replica_count: version.replica_count,
         port: version.port,
@@ -147,24 +146,17 @@ fn has_config_change(req: &UpdateContainerRequest) -> bool {
         || req.health_check.is_some()
 }
 
-async fn validate_external_registry(
+async fn selected_external_registry(
     tx: &impl sea_orm::ConnectionTrait,
     organization_id: Uuid,
     registry_id: Option<Uuid>,
-    image: &str,
-) -> Result<(), AppError> {
+) -> Result<Option<crate::models::entities::external_registry::Model>, AppError> {
     let Some(registry_id) = registry_id else {
-        return Ok(());
+        return Ok(None);
     };
-    let registry = find_registry(tx, organization_id, registry_id).await?;
-    let image_host = image_registry_host(image)?;
-    if image_host != registry.host {
-        return Err(AppError::BadRequest(format!(
-            "Selected registry host '{}' does not match image host '{}'. Choose a matching registry or clear the registry selection.",
-            registry.host, image_host
-        )));
-    }
-    Ok(())
+    find_registry(tx, organization_id, registry_id)
+        .await
+        .map(Some)
 }
 
 async fn get_environment(
@@ -272,7 +264,9 @@ pub async fn create_container(
         Some(body.project_id),
     )
     .await?;
-    validate_external_registry(tx, organization_id, body.external_registry_id, &image).await?;
+    let registry =
+        selected_external_registry(tx, organization_id, body.external_registry_id).await?;
+    let resolved_image = images::resolve_image(&image, organization_id, registry.as_ref()).await?;
 
     let created_container: container::Model = container::ActiveModel {
         id: Set(container_id),
@@ -292,6 +286,7 @@ pub async fn create_container(
         organization_id: Set(organization_id),
         version: Set(1),
         image: Set(image.clone()),
+        resolved_image: Set(resolved_image),
         public: Set(body.public),
         replica_count: Set(body.replica_count),
         port: Set(body.port),
@@ -617,7 +612,12 @@ pub async fn update_container(
         let next_registry_id = body
             .external_registry_id
             .unwrap_or(base.external_registry_id);
-        validate_external_registry(tx, organization_id, next_registry_id, &next_image).await?;
+        let registry = selected_external_registry(tx, organization_id, next_registry_id).await?;
+        let resolved_image = if body.image.is_some() || body.external_registry_id.is_some() {
+            images::resolve_image(&next_image, organization_id, registry.as_ref()).await?
+        } else {
+            base.resolved_image.clone()
+        };
 
         let next_ver = latest_version_number.version + 1;
         let version_id = Uuid::new_v4();
@@ -628,6 +628,7 @@ pub async fn update_container(
             organization_id: Set(organization_id),
             version: Set(next_ver),
             image: Set(next_image),
+            resolved_image: Set(resolved_image),
             public: Set(body.public.unwrap_or(base.public)),
             replica_count: Set(body.replica_count.unwrap_or(base.replica_count)),
             port: Set(body.port.or(base.port)),

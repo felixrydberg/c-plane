@@ -207,6 +207,7 @@ CREATE TABLE "project_container_version" (
 	"organization_id" uuid NOT NULL,
 	"version" integer NOT NULL,
 	"image" text NOT NULL,
+	"resolved_image" text NOT NULL,
 	"public" boolean DEFAULT false NOT NULL,
 	"replica_count" integer DEFAULT 1 NOT NULL,
 	"port" integer,

@@ -573,6 +573,7 @@ export interface components {
             public: boolean;
             /** Format: int32 */
             replica_count: number;
+            resolved_image: string;
             resources?: unknown;
             /** Format: int32 */
             version: number;
