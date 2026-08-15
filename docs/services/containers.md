@@ -5,7 +5,7 @@ A container deployment is a user-defined workload running inside a platform-mana
 ## Deployment Config
 
 **Required:**
-- `image` — OCI image reference. Tag or digest. Digest recommended for reproducible deploys.
+- `image` — OCI image reference. Tags are resolved when a container version is created; deployments receive the immutable digest while the configured reference is retained.
 - `region` — which region to deploy into.
 - `port` — the port the container listens on.
 
@@ -14,7 +14,7 @@ A container deployment is a user-defined workload running inside a platform-mana
 - `resources` — CPU and memory requests/limits. Defaults apply if not set (0.1 CPU / 128Mi).
 - `replicas` — number of instances. Default: 1. Zero-downtime rolling updates require ≥ 2.
 - `public` — whether to expose the deployment on a public hostname. Default: false.
-- `pull_secret_id` — reference to stored registry pull credentials. Required for private registries.
+- `external_registry_id` — optional organization-owned registry credentials for private images.
 - `health_check` — readiness/liveness probe. HTTP path or TCP. Used by Kubernetes to determine pod health.
 
 ## Placement

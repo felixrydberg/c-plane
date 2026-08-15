@@ -333,23 +333,6 @@ pub fn normalize_registry_host(value: &str) -> Result<String, AppError> {
         .map_or(canonical.clone(), |port| format!("{canonical}:{port}")))
 }
 
-pub fn image_registry_host(image: &str) -> Result<String, AppError> {
-    let image = image.trim();
-    if image.is_empty() || image.contains("://") || image.starts_with('/') {
-        return Err(AppError::BadRequest("Invalid image reference".into()));
-    }
-    let name = image.split('@').next().unwrap_or_default();
-    let first = name.split('/').next().unwrap_or_default();
-    if first.is_empty() {
-        return Err(AppError::BadRequest("Invalid image reference".into()));
-    }
-    if !name.contains('/') || !(first.contains('.') || first.contains(':') || first == "localhost")
-    {
-        return Ok("docker.io".into());
-    }
-    normalize_registry_host(first)
-}
-
 #[derive(serde::Serialize, serde::Deserialize)]
 struct ExternalRegistrySecret {
     token: String,
@@ -374,6 +357,15 @@ async fn store_secret(
         )
         .await?;
     Ok(())
+}
+
+pub async fn load_secret(organization_id: Uuid, registry_id: Uuid) -> Result<String, AppError> {
+    get_app_state()
+        .secrets
+        .get::<ExternalRegistrySecret>(&secret_path(organization_id, registry_id))
+        .await?
+        .map(|secret| secret.token)
+        .ok_or_else(|| AppError::Conflict("External registry credentials are unavailable".into()))
 }
 
 pub async fn delete_secret(organization_id: Uuid, registry_id: Uuid) -> Result<(), AppError> {
@@ -450,8 +442,7 @@ fn response(registry: &external_registry::Model) -> ExternalRegistryResponse {
 #[cfg(test)]
 mod tests {
     use super::{
-        DEPENDENCY_CONSTRAINT, image_registry_host, map_registry_delete_error,
-        normalize_registry_host, required_secret,
+        DEPENDENCY_CONSTRAINT, map_registry_delete_error, normalize_registry_host, required_secret,
     };
     use crate::errors::AppError;
 
@@ -474,23 +465,6 @@ mod tests {
         assert_eq!(
             normalize_registry_host("127.0.0.1:5000").unwrap(),
             "127.0.0.1:5000"
-        );
-    }
-
-    #[test]
-    fn extracts_canonical_image_registry() {
-        assert_eq!(image_registry_host("nginx:latest").unwrap(), "docker.io");
-        assert_eq!(
-            image_registry_host("library/nginx:latest").unwrap(),
-            "docker.io"
-        );
-        assert_eq!(
-            image_registry_host("ghcr.io/acme/api:v1").unwrap(),
-            "ghcr.io"
-        );
-        assert_eq!(
-            image_registry_host("registry.example.com:5443/acme/api:v1").unwrap(),
-            "registry.example.com:5443"
         );
     }
 

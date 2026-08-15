@@ -10,6 +10,7 @@ pub struct Model {
     pub organization_id: Uuid,
     pub version: i32,
     pub image: String,
+    pub resolved_image: String,
     pub public: bool,
     pub replica_count: i32,
     pub port: Option<i32>,

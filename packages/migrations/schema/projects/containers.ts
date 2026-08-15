@@ -41,6 +41,7 @@ export const container_version = pgTable('project_container_version', {
     .references(() => organization.id, { onDelete: "cascade" }),
   version: integer("version").notNull(),
   image: text("image").notNull(),
+  resolved_image: text("resolved_image").notNull(),
   public: boolean("public").notNull().default(false),
   replica_count: integer("replica_count").notNull().default(1),
   port: integer("port"),

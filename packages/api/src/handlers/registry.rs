@@ -406,7 +406,7 @@ fn apply_repository_grant(
     access
 }
 
-async fn organization_slug(organization_id: Uuid) -> Result<String, AppError> {
+pub(crate) async fn organization_slug(organization_id: Uuid) -> Result<String, AppError> {
     let row = get_app_state()
         .identity_db
         .connection()

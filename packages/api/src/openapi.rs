@@ -92,6 +92,7 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
         crate::handlers::containers::list_containers,
         crate::handlers::containers::get_container,
         crate::handlers::containers::update_container,
+        crate::handlers::containers::redeploy_container,
         crate::handlers::containers::delete_container,
         crate::handlers::postgres_databases::create_database,
         crate::handlers::postgres_databases::list_databases,
