@@ -82,6 +82,9 @@ pub(crate) fn required_scope(method: &str, path: &str) -> Option<&'static str> {
         ("PATCH", "/api/organization/{organization_id}/containers/{container_id}") => {
             "container:update"
         }
+        ("POST", "/api/organization/{organization_id}/containers/{container_id}/deploy") => {
+            "container:update"
+        }
         ("DELETE", "/api/organization/{organization_id}/containers/{container_id}") => {
             "container:delete"
         }
@@ -520,6 +523,11 @@ mod tests {
             (
                 "PATCH",
                 "/api/organization/{organization_id}/containers/{container_id}",
+                "container:update",
+            ),
+            (
+                "POST",
+                "/api/organization/{organization_id}/containers/{container_id}/deploy",
                 "container:update",
             ),
             (

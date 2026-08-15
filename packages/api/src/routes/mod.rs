@@ -1,6 +1,6 @@
 use axum::{
     Router, middleware,
-    routing::{delete, get, patch},
+    routing::{delete, get, patch, post},
 };
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -148,6 +148,10 @@ pub fn create_routes() -> Router {
             get(containers::get_container)
                 .patch(containers::update_container)
                 .delete(containers::delete_container),
+        )
+        .route(
+            "/api/organization/{organization_id}/containers/{container_id}/deploy",
+            post(containers::redeploy_container),
         )
         .route(
             "/api/organization/{organization_id}/databases/postgres",
