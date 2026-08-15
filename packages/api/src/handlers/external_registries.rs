@@ -15,7 +15,7 @@ use crate::{
 
 use super::{databases::verify_org_access, registry_access_tokens::record_event};
 
-const DEPENDENCY_CONSTRAINT: &str = "project_container_version_external_registry_fk";
+const DEPENDENCY_CONSTRAINT: &str = "container_version_external_registry_fk";
 const NAME_CONSTRAINT: &str = "external_registry_organization_name_uidx";
 const HOST_USERNAME_CONSTRAINT: &str = "external_registry_organization_host_username_uidx";
 
