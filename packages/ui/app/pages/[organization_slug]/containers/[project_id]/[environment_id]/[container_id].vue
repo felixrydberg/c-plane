@@ -228,7 +228,7 @@ const yamlPreview = computed(() => [
 const canRefreshLatest = computed(() => image.value.trim().endsWith(':latest'))
 
 async function refreshLatest() {
-  if (!orgId.value || !containerId.value || !environmentId.value || !selectedTimelineId.value) return
+  if (!orgId.value || !containerId.value || !environmentId.value || !selectedTimelineId.value || hasChanges.value) return
   refreshing.value = true
   try {
     await $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/containers/${containerId.value as ':container_id'}/deploy` as const, {
@@ -237,6 +237,7 @@ async function refreshLatest() {
     })
     if (projectId.value && environmentId.value) {
       await loadProjectEnvironments(projectId.value, environmentId.value)
+      await refreshEnvironmentList()
     }
     await router.replace({
       query: Object.fromEntries(Object.entries(route.query).filter(([key]) => key !== 'revision')),
@@ -349,7 +350,7 @@ watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged(
                     <UInput v-model="name" disabled class="w-full" />
                     <div class="flex gap-2">
                       <UInput v-model="image" placeholder="nginx:latest" class="min-w-0 flex-1" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @input="markChanged" />
-                      <UButton v-if="canRefreshLatest && (revisionView === 'draft' || revisionView === 'synced')" :icon="ICONS.refresh" color="neutral" variant="solid" :loading="refreshing" @click="refreshLatest">Refresh latest</UButton>
+                      <UButton v-if="canRefreshLatest && (revisionView === 'draft' || revisionView === 'synced')" :icon="ICONS.refresh" color="neutral" variant="solid" :loading="refreshing" :disabled="hasChanges" @click="refreshLatest">Refresh latest</UButton>
                     </div>
                     <UFormField label="External registry" description="Optional credentials for a private image.">
                       <USelect v-model="externalRegistryId" :items="externalRegistryItems" class="w-full" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @change="markChanged" />
