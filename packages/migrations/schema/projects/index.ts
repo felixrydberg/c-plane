@@ -1,10 +1,10 @@
 import { pgTable, text, uuid, timestamp, integer, jsonb, boolean, index, uniqueIndex, unique, pgPolicy, foreignKey } from 'drizzle-orm/pg-core';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
-import { organization } from '../tenants/organization';
-import { app_tenant, orgAllowed } from '../rls';
-export * from './containers';
-export * from './postgres';
-export * from './storage';
+import { organization } from '../tenants/organization.ts';
+import { app_tenant, orgAllowed } from '../rls.ts';
+export * from './containers.ts';
+export * from './postgres.ts';
+export * from './storage.ts';
 
 export const project = pgTable('project', {
   id: uuid("id").primaryKey(),

@@ -1,1 +1,1 @@
-export type { ContainerRow, ContainerVersionRow } from "./containers";
+export type { ContainerRow, ContainerVersionRow } from "./containers.ts";

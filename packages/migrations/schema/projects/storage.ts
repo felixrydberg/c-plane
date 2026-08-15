@@ -1,9 +1,9 @@
 import { index, pgEnum, pgPolicy, pgTable, text, timestamp, unique, uniqueIndex, uuid, boolean, foreignKey } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { project } from ".";
-import { organization } from "../tenants/organization";
-import { app_tenant, orgAllowed } from "../rls";
-import { region } from "../infrastructure/regions";
+import { project } from "./index.ts";
+import { organization } from "../tenants/organization.ts";
+import { app_tenant, orgAllowed } from "../rls.ts";
+import { region } from "../infrastructure/regions.ts";
 
 export const bucket_status = pgEnum("bucket_status", ["provisioning", "ready", "deleting", "failed"]);
 

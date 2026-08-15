@@ -15,9 +15,8 @@
     "npm:@vue-flow/controls@^1.1.3": "1.1.3_@vue-flow+core@1.48.2__vue@3.5.40___typescript@5.9.3__typescript@5.9.3_vue@3.5.40__typescript@5.9.3_typescript@5.9.3",
     "npm:@vue-flow/core@^1.48.2": "1.48.2_vue@3.5.40__typescript@5.9.3_typescript@5.9.3",
     "npm:better-auth@^1.6.23": "1.6.23_drizzle-kit@0.31.9_drizzle-orm@0.45.2__kysely@0.28.17__postgres@3.4.9_vue@3.5.40__typescript@5.9.3_postgres@3.4.9_typescript@5.9.3",
-    "npm:drizzle-kit@0.31.9": "0.31.9",
-    "npm:drizzle-orm@~0.45.1": "0.45.2_kysely@0.28.17_postgres@3.4.9",
-    "npm:drizzle-orm@~0.45.2": "0.45.2_kysely@0.28.17_postgres@3.4.9",
+    "npm:drizzle-kit@1.0.0-rc.4": "1.0.0-rc.4",
+    "npm:drizzle-orm@1.0.0-rc.4": "1.0.0-rc.4_postgres@3.4.9_zod@4.4.3",
     "npm:eslint@^10.7.0": "10.7.0_jiti@2.7.0",
     "npm:h3@1.15.11": "1.15.11",
     "npm:nuxt@^4.5.0": "4.5.0_@types+node@25.9.1_drizzle-orm@0.45.2__kysely@0.28.17__postgres@3.4.9_eslint@10.7.0__jiti@2.7.0_kysely@0.28.17_pinia@3.0.4__typescript@5.9.3__vue@3.5.40___typescript@5.9.3_postgres@3.4.9_typescript@5.9.3_vite@8.1.5__@types+node@25.9.1__jiti@2.7.0__yaml@2.9.0",
@@ -588,6 +587,9 @@
     },
     "@drizzle-team/brocli@0.10.2": {
       "integrity": "sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w=="
+    },
+    "@drizzle-team/brocli@0.12.0": {
+      "integrity": "sha512-mlUE+rZ8CatQekLhnaiN91Iemdd+e2gFKooGlnRB3oPTL3VghLfX24dx7HrzMNeC1JrIB/0kpsfyty3f5HNfxQ=="
     },
     "@dxup/nuxt@0.5.3_@types+node@25.9.1_jiti@2.7.0_rolldown@1.2.0": {
       "integrity": "sha512-PRwX3kEDjZF4t+j+lWbhFSZ1WBklwFSus5byNtkCL2PgWoUMbywNtewJcUHVSOQdwEYsbD1H/md3e/CKaTvDyw==",
@@ -1410,6 +1412,12 @@
       "dependencies": [
         "@jridgewell/resolve-uri",
         "@jridgewell/sourcemap-codec"
+      ]
+    },
+    "@js-temporal/polyfill@0.5.1": {
+      "integrity": "sha512-hloP58zRVCRSpgDxmqCWJNlizAlUgJFqG2ypq79DCvyv9tHjRYMDOcPFjzfl/A1/YxDvRCZz8wvZvmapQnKwFQ==",
+      "dependencies": [
+        "jsbi"
       ]
     },
     "@kwsites/file-exists@1.1.1": {
@@ -4116,7 +4124,7 @@
         "better-call@1.1.8_zod@4.4.3",
         "better-sqlite3",
         "defu",
-        "drizzle-kit",
+        "drizzle-kit@0.31.9",
         "drizzle-orm@0.41.0_@prisma+client@5.22.0_@types+pg@8.20.0_better-sqlite3@12.10.0_kysely@0.28.17_pg@8.21.0_postgres@3.4.9",
         "jose",
         "kysely",
@@ -4128,7 +4136,7 @@
       "optionalPeers": [
         "@prisma/client",
         "better-sqlite3",
-        "drizzle-kit",
+        "drizzle-kit@0.31.9",
         "drizzle-orm@0.41.0_@prisma+client@5.22.0_@types+pg@8.20.0_better-sqlite3@12.10.0_kysely@0.28.17_pg@8.21.0_postgres@3.4.9",
         "pg",
         "vue"
@@ -4150,7 +4158,7 @@
         "@noble/hashes",
         "better-call@1.3.7_zod@4.4.3",
         "defu",
-        "drizzle-kit",
+        "drizzle-kit@0.31.9",
         "drizzle-orm@0.45.2_kysely@0.28.17_postgres@3.4.9",
         "jose",
         "kysely",
@@ -4159,7 +4167,7 @@
         "zod"
       ],
       "optionalPeers": [
-        "drizzle-kit",
+        "drizzle-kit@0.31.9",
         "drizzle-orm@0.45.2_kysely@0.28.17_postgres@3.4.9",
         "vue"
       ]
@@ -4755,10 +4763,21 @@
     "drizzle-kit@0.31.9": {
       "integrity": "sha512-GViD3IgsXn7trFyBUUHyTFBpH/FsHTxYJ66qdbVggxef4UBPHRYxQaRzYLTuekYnk9i5FIEL9pbBIwMqX/Uwrg==",
       "dependencies": [
-        "@drizzle-team/brocli",
+        "@drizzle-team/brocli@0.10.2",
         "@esbuild-kit/esm-loader",
         "esbuild@0.25.12",
         "esbuild-register"
+      ],
+      "bin": true
+    },
+    "drizzle-kit@1.0.0-rc.4": {
+      "integrity": "sha512-KZCpjRyu+oYHLj/UJogfFlOkWhHVkaEI2EOT1U3NDVXUzLoTyPjqwFxwOrlQxsY6jzRyxcz4EacqboGfhEeYrA==",
+      "dependencies": [
+        "@drizzle-team/brocli@0.12.0",
+        "@js-temporal/polyfill",
+        "esbuild@0.25.12",
+        "get-tsconfig",
+        "jiti"
       ],
       "bin": true
     },
@@ -4790,6 +4809,17 @@
       "optionalPeers": [
         "kysely",
         "postgres"
+      ]
+    },
+    "drizzle-orm@1.0.0-rc.4_postgres@3.4.9_zod@4.4.3": {
+      "integrity": "sha512-BT+pf+qoiYHqltoA88Jmf6ilGMXPlpfE0hEJKc2adRtMCAl25Swk/t5gXcWxZNAwdtf3F5gCd2FpeOyP/pT0Hw==",
+      "dependencies": [
+        "postgres",
+        "zod"
+      ],
+      "optionalPeers": [
+        "postgres",
+        "zod"
       ]
     },
     "duplexer@0.1.2": {
@@ -5854,6 +5884,9 @@
         "argparse"
       ],
       "bin": true
+    },
+    "jsbi@4.3.2": {
+      "integrity": "sha512-9fqMSQbhJykSeii05nxKl4m6Eqn2P6rOlYiS+C5Dr/HPIU/7yZxu5qzbs40tgaFORiw2Amd0mirjxatXYMkIew=="
     },
     "jsdoc-type-pratt-parser@7.2.0": {
       "integrity": "sha512-dh140MMgjyg3JhJZY/+iEzW+NO5xR2gpbDFKHqotCmexElVntw7GjWjt511+C/Ef02RU5TKYrJo/Xlzk+OLaTw=="
@@ -8825,6 +8858,16 @@
       }
     },
     "members": {
+      "packages/migrations": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@better-auth/cli@^1.4.21",
+            "npm:@types/node@^25.5.0",
+            "npm:drizzle-kit@1.0.0-rc.4",
+            "npm:drizzle-orm@1.0.0-rc.4"
+          ]
+        }
+      },
       "packages/sdk": {
         "packageJson": {
           "dependencies": [
@@ -8849,8 +8892,8 @@
             "npm:@vue-flow/controls@^1.1.3",
             "npm:@vue-flow/core@^1.48.2",
             "npm:better-auth@^1.6.23",
-            "npm:drizzle-kit@0.31.9",
-            "npm:drizzle-orm@~0.45.2",
+            "npm:drizzle-kit@1.0.0-rc.4",
+            "npm:drizzle-orm@1.0.0-rc.4",
             "npm:eslint@^10.7.0",
             "npm:h3@1.15.11",
             "npm:nuxt@^4.5.0",
@@ -8864,16 +8907,6 @@
             "npm:typescript@^5.9.3",
             "npm:uuidv7@^1.2.1",
             "npm:zod@^4.4.3"
-          ]
-        }
-      },
-      "packages/migrations": {
-        "packageJson": {
-          "dependencies": [
-            "npm:@better-auth/cli@^1.4.21",
-            "npm:@types/node@^25.5.0",
-            "npm:drizzle-kit@0.31.9",
-            "npm:drizzle-orm@~0.45.1"
           ]
         }
       }

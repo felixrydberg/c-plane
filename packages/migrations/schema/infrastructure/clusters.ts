@@ -1,6 +1,6 @@
 import { boolean, index, integer, pgEnum, pgPolicy, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { region } from "./regions";
-import { app_tenant } from "../rls";
+import { region } from "./regions.ts";
+import { app_tenant } from "../rls.ts";
 import { sql } from "drizzle-orm";
 
 export const cluster_status = pgEnum("cluster_status", ["pending", "bootstrapping", "healthy", "draining", "offline", "removed"]);

@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { index, jsonb, pgPolicy, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
-import { app_audit_reader } from "../rls";
+import { app_audit_reader } from "../rls.ts";
 
 export const infrastructure_audit_log = pgTable("infrastructure_audit_log", {
   id: uuid("id").primaryKey(),

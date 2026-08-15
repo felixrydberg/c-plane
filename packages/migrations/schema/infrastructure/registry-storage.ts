@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { index, pgPolicy, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { s3_provider } from "./durability";
-import { app_tenant } from "../rls";
+import { s3_provider } from "./durability.ts";
+import { app_tenant } from "../rls.ts";
 
 export const registry_storage = pgTable("registry_storage", {
   id: uuid("id").primaryKey(),

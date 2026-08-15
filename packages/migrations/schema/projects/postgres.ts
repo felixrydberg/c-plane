@@ -1,7 +1,7 @@
 import { boolean, integer, pgTable, text, uuid, index, pgPolicy, AnyPgColumn } from "drizzle-orm/pg-core"
-import { project, project_environment } from "."
-import { organization } from "../tenants/organization";
-import { app_tenant, orgAllowed } from "../rls";
+import { project, project_environment } from "./index.ts"
+import { organization } from "../tenants/organization.ts";
+import { app_tenant, orgAllowed } from "../rls.ts";
 
 export const postgres_database = pgTable('postgres_database', {
   id: uuid("id").primaryKey(),
