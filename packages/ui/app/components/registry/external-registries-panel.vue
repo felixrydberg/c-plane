@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ExternalRegistry } from '@cplane/sdk'
+import type { ExternalRegistry, ExternalRegistryProvider } from '@cplane/sdk'
 import { ICONS } from '~/utils/icons'
 import { getErrorMessage } from '~/utils/errors'
 
@@ -12,9 +12,21 @@ const modal = ref<'create' | 'rename' | 'rotate' | 'delete' | null>(null)
 const selected = ref<ExternalRegistry | null>(null)
 const loading = ref(false)
 const name = ref('')
+const provider = ref<ExternalRegistryProvider>('docker_hub')
 const host = ref('')
 const username = ref('')
 const token = ref('')
+const providerItems: { label: string, value: ExternalRegistryProvider }[] = [
+  { label: 'Docker Hub', value: 'docker_hub' },
+  { label: 'GitHub Container Registry', value: 'github' },
+  { label: 'GitLab Container Registry', value: 'gitlab' },
+  { label: 'Google Artifact Registry', value: 'google_artifact_registry' },
+  { label: 'AWS Elastic Container Registry', value: 'aws_ecr' },
+]
+const needsHost = computed(() => provider.value === 'google_artifact_registry' || provider.value === 'aws_ecr')
+const hostPlaceholder = computed(() => provider.value === 'aws_ecr'
+  ? '123456789012.dkr.ecr.eu-north-1.amazonaws.com'
+  : 'europe-west1-docker.pkg.dev')
 
 function closeModal() {
   modal.value = null
@@ -23,6 +35,7 @@ function closeModal() {
 function openCreate() {
   selected.value = null
   name.value = ''
+  provider.value = 'docker_hub'
   host.value = ''
   username.value = ''
   token.value = ''
@@ -41,7 +54,16 @@ async function submit() {
   loading.value = true
   try {
     if (modal.value === 'create') {
-      await $fetch(endpoint.value, { method: 'POST', body: { name: name.value, host: host.value, username: username.value, token: token.value } })
+      await $fetch(endpoint.value, {
+        method: 'POST',
+        body: {
+          name: name.value,
+          provider: provider.value,
+          host: needsHost.value ? host.value : null,
+          username: username.value,
+          token: token.value,
+        },
+      })
     } else if (modal.value === 'rename' && selected.value) {
       await $fetch(`${endpoint.value}/${selected.value.id as ':registry_id'}` as const, { method: 'PATCH', body: { name: name.value } })
     } else if (modal.value === 'rotate' && selected.value) {
@@ -104,12 +126,13 @@ async function submit() {
       <template #body>
         <form class="space-y-4" @submit.prevent="submit">
           <UFormField label="Display name" required><UInput v-model="name" class="w-full" autofocus /></UFormField>
-          <UFormField label="HTTPS host" description="Hostname with an optional port. HTTPS is always used." required><UInput v-model="host" placeholder="ghcr.io" class="w-full" /></UFormField>
+          <UFormField label="Provider" required><USelect v-model="provider" :items="providerItems" class="w-full" /></UFormField>
+          <UFormField v-if="needsHost" label="Registry host" description="Use the registry host supplied by your cloud provider." required><UInput v-model="host" :placeholder="hostPlaceholder" class="w-full" /></UFormField>
           <UFormField label="Username" required><UInput v-model="username" class="w-full" /></UFormField>
           <UFormField label="Access token" required><UInput v-model="token" type="password" class="w-full" autocomplete="new-password" /></UFormField>
           <div class="flex justify-end gap-3 pt-2">
             <UButton color="neutral" variant="ghost" :disabled="loading" @click="closeModal">Cancel</UButton>
-            <UButton type="submit" color="primary" :loading="loading">Add registry</UButton>
+            <UButton type="submit" :icon="ICONS.plus" color="primary" :loading="loading">Add registry</UButton>
           </div>
         </form>
       </template>
@@ -121,7 +144,7 @@ async function submit() {
           <UFormField label="Display name" required><UInput v-model="name" class="w-full" autofocus /></UFormField>
           <div class="flex justify-end gap-3 pt-2">
             <UButton color="neutral" variant="ghost" :disabled="loading" @click="closeModal">Cancel</UButton>
-            <UButton type="submit" color="primary" :loading="loading">Save name</UButton>
+            <UButton type="submit" :icon="ICONS.check" color="primary" :loading="loading">Save name</UButton>
           </div>
         </form>
       </template>

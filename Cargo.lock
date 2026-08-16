@@ -853,9 +853,7 @@ version = "0.1.0"
 dependencies = [
  "lib",
  "redis",
- "reqwest 0.12.28",
  "sea-orm",
- "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",

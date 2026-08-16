@@ -31,10 +31,6 @@ pub fn create_routes() -> Router {
             "/s3-providers/{provider_id}/credentials",
             get(internal_s3::provider_credentials),
         )
-        .route(
-            "/organizations/{organization_id}/external-registries/{registry_id}/secret",
-            delete(external_registries::delete_secret_internal),
-        )
         .layer(middleware::from_fn(internal_auth::authorize));
 
     Router::new()

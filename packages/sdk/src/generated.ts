@@ -479,22 +479,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/internal/organizations/{organization_id}/external-registries/{registry_id}/secret": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete: operations["delete_secret_internal"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/internal/s3-access-tokens/resolve/{access_key}": {
         parameters: {
             query?: never;
@@ -657,8 +641,9 @@ export interface components {
             parent_timeline_id?: string | null;
         };
         CreateExternalRegistryRequest: {
-            host: string;
+            host?: string | null;
             name: string;
+            provider: components["schemas"]["ExternalRegistryProvider"];
             token: string;
             username: string;
         };
@@ -744,6 +729,7 @@ export interface components {
             id: string;
             summary: string;
         };
+        ExternalRegistryProvider: "docker_hub" | "github" | "gitlab" | "google_artifact_registry" | "aws_ecr";
         ExternalRegistryResponse: {
             created_at: string;
             host: string;
@@ -2804,34 +2790,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
-                };
-            };
-        };
-    };
-    delete_secret_internal: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                organization_id: string;
-                registry_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
