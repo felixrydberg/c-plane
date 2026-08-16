@@ -1,19 +1,20 @@
 use axum::{Json, extract::Path};
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use super::databases::verify_org_access;
+use super::{databases::verify_org_access, external_registries::find_registry};
 use crate::errors::AppError;
-use crate::middleware::auth::AuthContext;
+use crate::middleware::auth::{AuthContext, RequestAuthContext};
 use crate::models::entities::{
     container, container_version, project_environment, project_timeline,
 };
 use crate::models::pins::TimelinePins;
-use crate::services::{agent, events, revisions};
+use crate::services::{agent, events, images, revisions};
+use crate::state::TenantDatabase;
 
 #[derive(Deserialize, ToSchema)]
 pub struct CreateContainerRequest {
@@ -28,7 +29,7 @@ pub struct CreateContainerRequest {
     pub port: Option<i32>,
     pub env: Option<serde_json::Value>,
     pub resources: Option<serde_json::Value>,
-    pub pull_secret_id: Option<Uuid>,
+    pub external_registry_id: Option<Uuid>,
     pub health_check: Option<serde_json::Value>,
     #[serde(default)]
     pub auto_deploy: bool,
@@ -39,7 +40,15 @@ fn default_replica_count() -> i32 {
     1
 }
 
-#[derive(Deserialize, ToSchema)]
+fn deserialize_present_nullable<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(Some)
+}
+
+#[derive(Default, Deserialize, ToSchema)]
 pub struct UpdateContainerRequest {
     pub name: Option<String>,
     pub image: Option<String>,
@@ -48,7 +57,8 @@ pub struct UpdateContainerRequest {
     pub port: Option<i32>,
     pub env: Option<serde_json::Value>,
     pub resources: Option<serde_json::Value>,
-    pub pull_secret_id: Option<Uuid>,
+    #[serde(default, deserialize_with = "deserialize_present_nullable")]
+    pub external_registry_id: Option<Option<Uuid>>,
     pub health_check: Option<serde_json::Value>,
     #[serde(default)]
     pub auto_deploy: bool,
@@ -57,6 +67,9 @@ pub struct UpdateContainerRequest {
 #[derive(Deserialize, ToSchema)]
 pub struct ContainerActionQuery {
     pub environment_id: Uuid,
+    pub timeline_id: Uuid,
+    #[serde(default)]
+    pub deploy: bool,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -95,12 +108,13 @@ pub struct ContainerVersionResponse {
     pub id: Uuid,
     pub version: i32,
     pub image: String,
+    pub resolved_image: String,
     pub public: bool,
     pub replica_count: i32,
     pub port: Option<i32>,
     pub env: Option<serde_json::Value>,
     pub resources: Option<serde_json::Value>,
-    pub pull_secret_id: Option<Uuid>,
+    pub external_registry_id: Option<Uuid>,
     pub health_check: Option<serde_json::Value>,
     pub created_at: String,
 }
@@ -110,12 +124,13 @@ fn resolve_latest_version(version: &container_version::Model) -> ContainerVersio
         id: version.id,
         version: version.version,
         image: version.image.clone(),
+        resolved_image: version.resolved_image.clone(),
         public: version.public,
         replica_count: version.replica_count,
         port: version.port,
         env: version.env.clone(),
         resources: version.resources.clone(),
-        pull_secret_id: version.pull_secret_id,
+        external_registry_id: version.external_registry_id,
         health_check: version.health_check.clone(),
         created_at: version.created_at.to_string(),
     }
@@ -128,8 +143,25 @@ fn has_config_change(req: &UpdateContainerRequest) -> bool {
         || req.port.is_some()
         || req.env.is_some()
         || req.resources.is_some()
-        || req.pull_secret_id.is_some()
+        || req.external_registry_id.is_some()
         || req.health_check.is_some()
+}
+
+fn is_exact_latest_image(image: &str) -> bool {
+    image.ends_with(":latest")
+}
+
+async fn selected_external_registry(
+    tx: &impl sea_orm::ConnectionTrait,
+    organization_id: Uuid,
+    registry_id: Option<Uuid>,
+) -> Result<Option<crate::models::entities::external_registry::Model>, AppError> {
+    let Some(registry_id) = registry_id else {
+        return Ok(None);
+    };
+    find_registry(tx, organization_id, registry_id)
+        .await
+        .map(Some)
 }
 
 async fn get_environment(
@@ -237,6 +269,10 @@ pub async fn create_container(
         Some(body.project_id),
     )
     .await?;
+    let registry =
+        selected_external_registry(tx, organization_id, body.external_registry_id).await?;
+    let resolved_image = images::resolve_image(&image, organization_id, registry.as_ref()).await?;
+    let external_registry_id = registry.as_ref().map(|registry| registry.id);
 
     let created_container: container::Model = container::ActiveModel {
         id: Set(container_id),
@@ -256,12 +292,13 @@ pub async fn create_container(
         organization_id: Set(organization_id),
         version: Set(1),
         image: Set(image.clone()),
+        resolved_image: Set(resolved_image),
         public: Set(body.public),
         replica_count: Set(body.replica_count),
         port: Set(body.port),
         env: Set(body.env.clone()),
         resources: Set(body.resources.clone()),
-        pull_secret_id: Set(body.pull_secret_id),
+        external_registry_id: Set(external_registry_id),
         health_check: Set(body.health_check.clone()),
         created_at: Set(Utc::now().fixed_offset()),
     }
@@ -512,6 +549,66 @@ pub async fn update_container(
     axum::extract::Query(action): axum::extract::Query<UpdateContainerQuery>,
     Json(body): Json<UpdateContainerRequest>,
 ) -> Result<Json<ContainerResponse>, AppError> {
+    update_container_with_options(
+        tenant_db,
+        auth,
+        organization_id,
+        container_id,
+        action,
+        body,
+        false,
+        "Updated container configuration",
+    )
+    .await
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/organization/{organization_id}/containers/{container_id}/deploy",
+    params(
+        ("organization_id" = Uuid, Path, description = "Organization ID"),
+        ("container_id" = Uuid, Path, description = "Container ID"),
+        ("environment_id" = Uuid, Query, description = "Environment ID for the revision"),
+        ("timeline_id" = Uuid, Query, description = "Draft revision to deploy"),
+    ),
+    responses(
+        (status = 200, description = "Container redeployed", body = ContainerResponse),
+        (status = 400, description = "Container image is not refreshable"),
+        (status = 404, description = "Not found"),
+    ),
+    tag = "containers",
+)]
+pub async fn redeploy_container(
+    AuthContext { tenant_db, auth }: AuthContext,
+    Path((organization_id, container_id)): Path<(Uuid, Uuid)>,
+    axum::extract::Query(action): axum::extract::Query<UpdateContainerQuery>,
+) -> Result<Json<ContainerResponse>, AppError> {
+    update_container_with_options(
+        tenant_db,
+        auth,
+        organization_id,
+        container_id,
+        action,
+        UpdateContainerRequest {
+            auto_deploy: true,
+            ..Default::default()
+        },
+        true,
+        "Redeployed latest container image",
+    )
+    .await
+}
+
+async fn update_container_with_options(
+    tenant_db: TenantDatabase,
+    auth: RequestAuthContext,
+    organization_id: Uuid,
+    container_id: Uuid,
+    action: UpdateContainerQuery,
+    body: UpdateContainerRequest,
+    force_version: bool,
+    timeline_summary: &str,
+) -> Result<Json<ContainerResponse>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
@@ -551,7 +648,7 @@ pub async fn update_container(
     let mut new_version: Option<container_version::Model> = None;
     let mut compute_revision = None;
 
-    if has_config_change(&body) {
+    if has_config_change(&body) || force_version {
         let mut pins =
             get_project_revision_pins(tx, environment.project_id, action.timeline_id).await?;
         let base_version_id = pins.container.get(&container_id).ok_or_else(|| {
@@ -569,6 +666,32 @@ pub async fn update_container(
             .await?
             .ok_or_else(|| AppError::NotFound("Container version not found".into()))?;
 
+        let next_image = body
+            .image
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or(&base.image)
+            .to_string();
+        if next_image.is_empty() {
+            return Err(AppError::BadRequest("Image is required".into()));
+        }
+        if force_version && !is_exact_latest_image(&next_image) {
+            return Err(AppError::BadRequest(
+                "Only images configured with the exact :latest tag can be redeployed".into(),
+            ));
+        }
+        let next_registry_id = body
+            .external_registry_id
+            .unwrap_or(base.external_registry_id);
+        let registry = selected_external_registry(tx, organization_id, next_registry_id).await?;
+        let resolved_image =
+            if body.image.is_some() || body.external_registry_id.is_some() || force_version {
+                images::resolve_image(&next_image, organization_id, registry.as_ref()).await?
+            } else {
+                base.resolved_image.clone()
+            };
+        let external_registry_id = registry.as_ref().map(|registry| registry.id);
+
         let next_ver = latest_version_number.version + 1;
         let version_id = Uuid::new_v4();
 
@@ -577,13 +700,14 @@ pub async fn update_container(
             container_id: Set(container_id),
             organization_id: Set(organization_id),
             version: Set(next_ver),
-            image: Set(body.image.unwrap_or_else(|| base.image.clone())),
+            image: Set(next_image),
+            resolved_image: Set(resolved_image),
             public: Set(body.public.unwrap_or(base.public)),
             replica_count: Set(body.replica_count.unwrap_or(base.replica_count)),
             port: Set(body.port.or(base.port)),
             env: Set(body.env.clone().or(base.env.clone())),
             resources: Set(body.resources.clone().or(base.resources.clone())),
-            pull_secret_id: Set(body.pull_secret_id.or(base.pull_secret_id)),
+            external_registry_id: Set(external_registry_id),
             health_check: Set(body.health_check.clone().or(base.health_check.clone())),
             created_at: Set(Utc::now().fixed_offset()),
         };
@@ -595,7 +719,7 @@ pub async fn update_container(
             tx,
             &environment,
             &pins,
-            Some("Updated container configuration".into()),
+            Some(timeline_summary.into()),
             body.auto_deploy,
         )
         .await?;
@@ -649,6 +773,19 @@ pub async fn update_container(
     }))
 }
 
+#[cfg(test)]
+mod redeploy_tests {
+    use super::is_exact_latest_image;
+
+    #[test]
+    fn only_exact_latest_images_can_be_redeployed() {
+        assert!(is_exact_latest_image("nginx:latest"));
+        assert!(is_exact_latest_image("registry.example.com/app:latest"));
+        assert!(!is_exact_latest_image("nginx:Latest"));
+        assert!(!is_exact_latest_image("nginx:latest@sha256:abc"));
+    }
+}
+
 #[utoipa::path(
     delete,
     path = "/api/organization/{organization_id}/containers/{container_id}",
@@ -656,6 +793,8 @@ pub async fn update_container(
         ("organization_id" = Uuid, Path, description = "Organization ID"),
         ("container_id" = Uuid, Path, description = "Container ID"),
         ("environment_id" = Uuid, Query, description = "Environment ID for the revision"),
+        ("timeline_id" = Uuid, Query, description = "Draft revision to remove the container from"),
+        ("deploy" = Option<bool>, Query, description = "Deploy the removal immediately"),
     ),
     responses(
         (status = 200, description = "Container deleted"),
@@ -688,26 +827,35 @@ pub async fn delete_container(
     )
     .await?;
 
-    let mut pins = get_environment_timeline_pins(tx, &environment).await?;
+    if action.timeline_id != environment.draft_timeline {
+        return Err(AppError::Conflict(
+            "Switch to the draft revision before removing a container".into(),
+        ));
+    }
+
+    let mut pins =
+        get_project_revision_pins(tx, environment.project_id, action.timeline_id).await?;
     pins.remove_container(&container_id);
     let revision = revisions::create_revision(
         tx,
         &environment,
         &pins,
         Some(format!("Removed container '{}'", c.name)),
-        true,
+        action.deploy,
     )
     .await?;
     events::record(tx, organization_id, c.project_id, "container:removed", serde_json::json!({"summary": format!("Removed container '{}'", c.name), "target_id": container_id.to_string(), "environment_id": environment.id.to_string()}), auth.actor_id).await?;
 
     scoped.commit().await?;
-    agent::emit_compute(
-        environment.project_id,
-        organization_id,
-        environment.id,
-        revision.id,
-    )
-    .await?;
+    if action.deploy {
+        agent::emit_compute(
+            environment.project_id,
+            organization_id,
+            environment.id,
+            revision.id,
+        )
+        .await?;
+    }
 
     Ok(Json(serde_json::json!({ "success": true })))
 }

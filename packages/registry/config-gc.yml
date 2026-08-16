@@ -1,0 +1,21 @@
+version: 0.1
+
+log:
+  level: info
+
+http:
+  addr: :5000
+
+storage:
+  s3:
+    region: us-east-1
+    bucket: cplane-registry
+    secure: true
+    v4auth: true
+  redirect:
+    disable: true
+  delete:
+    enabled: true
+
+validation:
+  disabled: false

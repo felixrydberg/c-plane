@@ -234,6 +234,25 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "timeline_id",
+            "in": "query",
+            "description": "Draft revision to remove the container from",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "deploy",
+            "in": "query",
+            "description": "Deploy the removal immediately",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -318,6 +337,80 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "container:update"
+      }
+    },
+    "/api/organization/{organization_id}/containers/{container_id}/deploy": {
+      "post": {
+        "tags": [
+          "containers"
+        ],
+        "operationId": "redeploy_container",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "container_id",
+            "in": "path",
+            "description": "Container ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "environment_id",
+            "in": "query",
+            "description": "Environment ID for the revision",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "timeline_id",
+            "in": "query",
+            "description": "Draft revision to deploy",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Container redeployed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContainerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Container image is not refreshable"
           },
           "404": {
             "description": "Not found"
@@ -2127,6 +2220,314 @@
         "x-cplane-required-scope": "access-token:update"
       }
     },
+    "/api/organization/{organization_id}/registry/external-registries": {
+      "get": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "list_external_registries",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ExternalRegistryResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "registry:read"
+      },
+      "post": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "create_external_registry",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExternalRegistryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalRegistryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "registry:create"
+      }
+    },
+    "/api/organization/{organization_id}/registry/external-registries/{registry_id}": {
+      "delete": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "delete_external_registry",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "registry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "registry:delete"
+      },
+      "patch": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "rename_external_registry",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "registry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameExternalRegistryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalRegistryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": ""
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "registry:update"
+      }
+    },
+    "/api/organization/{organization_id}/registry/external-registries/{registry_id}/rotate-token": {
+      "post": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "rotate_external_registry_token",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "registry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RotateExternalRegistryTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": ""
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "registry:update"
+      }
+    },
     "/api/organization/{organization_id}/registry/maintenance": {
       "get": {
         "tags": [
@@ -2471,6 +2872,230 @@
         "x-cplane-required-scope": "bucket:delete"
       }
     },
+    "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects": {
+      "get": {
+        "tags": [
+          "storage"
+        ],
+        "operationId": "storage_list_bucket_objects",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "bucket_id",
+            "in": "path",
+            "description": "Bucket ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "prefix",
+            "in": "query",
+            "description": "Folder prefix",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "continuation_token",
+            "in": "query",
+            "description": "S3 continuation token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Objects and folders in the bucket",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BucketObjectsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Bucket not found"
+          },
+          "503": {
+            "description": "Storage gateway unavailable"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "bucket:read"
+      },
+      "delete": {
+        "tags": [
+          "storage"
+        ],
+        "operationId": "storage_delete_bucket_objects",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "bucket_id",
+            "in": "path",
+            "description": "Bucket ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "key",
+            "in": "query",
+            "description": "Exact object key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "prefix",
+            "in": "query",
+            "description": "Folder prefix",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "continuation_token",
+            "in": "query",
+            "description": "Continuation token for a partial folder deletion",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Folder deletion partially completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteObjectsResponse"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "Object or folder deleted"
+          },
+          "400": {
+            "description": "Exactly one non-empty key or prefix is required"
+          },
+          "404": {
+            "description": "Bucket not found"
+          },
+          "503": {
+            "description": "Storage gateway unavailable"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "bucket:delete"
+      }
+    },
+    "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects/download": {
+      "get": {
+        "tags": [
+          "storage"
+        ],
+        "operationId": "storage_download_bucket_object",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "bucket_id",
+            "in": "path",
+            "description": "Bucket ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "key",
+            "in": "query",
+            "description": "Exact object key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Object download",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Object key is required"
+          },
+          "404": {
+            "description": "Bucket or object not found"
+          },
+          "503": {
+            "description": "Storage gateway unavailable"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "bucket:read"
+      }
+    },
     "/api/registry/token": {
       "get": {
         "tags": [
@@ -2555,6 +3180,117 @@
           }
         }
       }
+    },
+    "/internal/s3-access-tokens/resolve/{access_key}": {
+      "get": {
+        "tags": [
+          "internal"
+        ],
+        "operationId": "resolve_access_token",
+        "parameters": [
+          {
+            "name": "access_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolvedS3AccessToken"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "serviceToken": []
+          }
+        ]
+      }
+    },
+    "/internal/s3-providers/{provider_id}/credentials": {
+      "get": {
+        "tags": [
+          "internal"
+        ],
+        "operationId": "provider_credentials",
+        "parameters": [
+          {
+            "name": "provider_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/S3ProviderCredentials"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "serviceToken": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -2601,6 +3337,61 @@
           },
           "name": {
             "type": "string"
+          }
+        }
+      },
+      "BucketObjectResponse": {
+        "type": "object",
+        "required": [
+          "key",
+          "size"
+        ],
+        "properties": {
+          "etag": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "key": {
+            "type": "string"
+          },
+          "last_modified": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "BucketObjectsResponse": {
+        "type": "object",
+        "required": [
+          "folders",
+          "objects"
+        ],
+        "properties": {
+          "folders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "next_continuation_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BucketObjectResponse"
+            }
           }
         }
       },
@@ -2707,6 +3498,7 @@
           "id",
           "version",
           "image",
+          "resolved_image",
           "public",
           "replica_count",
           "created_at"
@@ -2716,6 +3508,13 @@
             "type": "string"
           },
           "env": {},
+          "external_registry_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
           "health_check": {},
           "id": {
             "type": "string",
@@ -2734,16 +3533,12 @@
           "public": {
             "type": "boolean"
           },
-          "pull_secret_id": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "uuid"
-          },
           "replica_count": {
             "type": "integer",
             "format": "int32"
+          },
+          "resolved_image": {
+            "type": "string"
           },
           "resources": {},
           "version": {
@@ -2809,6 +3604,13 @@
             "type": "string",
             "format": "uuid"
           },
+          "external_registry_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
           "health_check": {},
           "image": {
             "type": "string"
@@ -2829,13 +3631,6 @@
           },
           "public": {
             "type": "boolean"
-          },
-          "pull_secret_id": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "uuid"
           },
           "region_id": {
             "type": "string",
@@ -2988,6 +3783,35 @@
               "null"
             ],
             "format": "uuid"
+          }
+        }
+      },
+      "CreateExternalRegistryRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "provider",
+          "username",
+          "token"
+        ],
+        "properties": {
+          "host": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ExternalRegistryProvider"
+          },
+          "token": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
           }
         }
       },
@@ -3172,6 +3996,24 @@
           }
         }
       },
+      "DeleteObjectsResponse": {
+        "type": "object",
+        "required": [
+          "deleted"
+        ],
+        "properties": {
+          "deleted": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "next_continuation_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "EnvironmentResponse": {
         "type": "object",
         "required": [
@@ -3294,6 +4136,53 @@
             "format": "uuid"
           },
           "summary": {
+            "type": "string"
+          }
+        }
+      },
+      "ExternalRegistryProvider": {
+        "type": "string",
+        "enum": [
+          "docker_hub",
+          "github",
+          "gitlab",
+          "google_artifact_registry",
+          "aws_ecr"
+        ]
+      },
+      "ExternalRegistryResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "organization_id",
+          "name",
+          "host",
+          "username",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "username": {
             "type": "string"
           }
         }
@@ -3580,6 +4469,17 @@
           }
         }
       },
+      "RenameExternalRegistryRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      },
       "RepositoryPermissionRequest": {
         "type": "object",
         "required": [
@@ -3617,6 +4517,13 @@
           "container_name": {
             "type": "string"
           },
+          "external_registry_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
           "image": {
             "type": "string"
           },
@@ -3627,6 +4534,76 @@
           "version_id": {
             "type": "string",
             "format": "uuid"
+          }
+        }
+      },
+      "ResolvedS3AccessToken": {
+        "type": "object",
+        "required": [
+          "credential_id",
+          "bucket_permissions"
+        ],
+        "properties": {
+          "bucket_permissions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResolvedS3BucketPermission"
+            }
+          },
+          "credential_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organization_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "ResolvedS3BucketPermission": {
+        "type": "object",
+        "required": [
+          "bucket_id",
+          "bucket_name",
+          "physical_bucket_name",
+          "region",
+          "provider_id",
+          "can_read",
+          "can_write"
+        ],
+        "properties": {
+          "bucket_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bucket_name": {
+            "type": "string"
+          },
+          "can_read": {
+            "type": "boolean"
+          },
+          "can_write": {
+            "type": "boolean"
+          },
+          "physical_bucket_name": {
+            "type": "string"
+          },
+          "provider_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "region": {
+            "type": "string"
           }
         }
       },
@@ -3675,6 +4652,42 @@
           "timeline": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "RotateExternalRegistryTokenRequest": {
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "S3ProviderCredentials": {
+        "type": "object",
+        "required": [
+          "access_key_id",
+          "endpoint_url",
+          "provider_type"
+        ],
+        "properties": {
+          "access_key_id": {
+            "type": "string"
+          },
+          "endpoint_url": {
+            "type": "string"
+          },
+          "provider_region": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_type": {
+            "type": "string"
           }
         }
       },
@@ -3742,6 +4755,13 @@
             "type": "boolean"
           },
           "env": {},
+          "external_registry_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
           "health_check": {},
           "image": {
             "type": [
@@ -3767,13 +4787,6 @@
               "boolean",
               "null"
             ]
-          },
-          "pull_secret_id": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "uuid"
           },
           "replica_count": {
             "type": [
@@ -3901,6 +4914,12 @@
       "registryBasic": {
         "type": "http",
         "scheme": "basic"
+      },
+      "serviceToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-cplane-token",
+        "description": "Internal service token."
       }
     }
   },
@@ -3932,6 +4951,10 @@
     {
       "name": "registry",
       "description": "OCI registry authentication"
+    },
+    {
+      "name": "internal",
+      "description": "Internal service endpoints"
     }
   ]
 }

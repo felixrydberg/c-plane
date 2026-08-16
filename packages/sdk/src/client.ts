@@ -13,6 +13,7 @@ export type Sdk = {
     delete_container: Operation<"/api/organization/{organization_id}/containers/{container_id}", 'delete'>
     get_container: Operation<"/api/organization/{organization_id}/containers/{container_id}", 'get'>
     list_containers: Operation<"/api/organization/{organization_id}/containers", 'get'>
+    redeploy_container: Operation<"/api/organization/{organization_id}/containers/{container_id}/deploy", 'post'>
     update_container: Operation<"/api/organization/{organization_id}/containers/{container_id}", 'patch'>
   }
   databases: {
@@ -41,6 +42,10 @@ export type Sdk = {
   health: {
     check: Operation<"/health", 'get'>
   }
+  internal: {
+    provider_credentials: Operation<"/internal/s3-providers/{provider_id}/credentials", 'get'>
+    resolve_access_token: Operation<"/internal/s3-access-tokens/resolve/{access_key}", 'get'>
+  }
   projects: {
     create_project: Operation<"/api/organization/{organization_id}/projects", 'post'>
     delete_project: Operation<"/api/organization/{organization_id}/projects/{project_id}", 'delete'>
@@ -54,22 +59,30 @@ export type Sdk = {
   }
   registry: {
     create_access_token: Operation<"/api/organization/{organization_id}/registry/access-tokens", 'post'>
+    create_external_registry: Operation<"/api/organization/{organization_id}/registry/external-registries", 'post'>
     create_repository: Operation<"/api/organization/{organization_id}/registry/repositories", 'post'>
+    delete_external_registry: Operation<"/api/organization/{organization_id}/registry/external-registries/{registry_id}", 'delete'>
     delete_repository: Operation<"/api/organization/{organization_id}/registry/repositories/{repository_id}", 'delete'>
     get_access_token: Operation<"/api/organization/{organization_id}/registry/access-tokens/{token_id}", 'get'>
     issue_token: Operation<"/api/registry/token", 'get'>
     list_access_tokens: Operation<"/api/organization/{organization_id}/registry/access-tokens", 'get'>
+    list_external_registries: Operation<"/api/organization/{organization_id}/registry/external-registries", 'get'>
     list_repositories: Operation<"/api/organization/{organization_id}/registry/repositories", 'get'>
     maintenance_status: Operation<"/api/organization/{organization_id}/registry/maintenance", 'get'>
+    rename_external_registry: Operation<"/api/organization/{organization_id}/registry/external-registries/{registry_id}", 'patch'>
     revoke_access_token: Operation<"/api/organization/{organization_id}/registry/access-tokens/{token_id}", 'delete'>
+    rotate_external_registry_token: Operation<"/api/organization/{organization_id}/registry/external-registries/{registry_id}/rotate-token", 'post'>
     update_access_token: Operation<"/api/organization/{organization_id}/registry/access-tokens/{token_id}", 'patch'>
   }
   storage: {
     create_access_token: Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens", 'post'>
     create_bucket: Operation<"/api/organization/{organization_id}/storage/buckets", 'post'>
     delete_bucket: Operation<"/api/organization/{organization_id}/storage/buckets/{bucket_id}", 'delete'>
+    delete_bucket_objects: Operation<"/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects", 'delete'>
+    download_bucket_object: Operation<"/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects/download", 'get'>
     get_access_token: Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}", 'get'>
     list_access_tokens: Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens", 'get'>
+    list_bucket_objects: Operation<"/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects", 'get'>
     list_buckets: Operation<"/api/organization/{organization_id}/storage/buckets", 'get'>
     revoke_access_token: Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}", 'delete'>
     update_access_token: Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}", 'patch'>
@@ -84,6 +97,7 @@ export const createSdk = (options: SdkOptions = {}): Sdk => {
       delete_container: (...args: Parameters<Operation<"/api/organization/{organization_id}/containers/{container_id}", 'delete'>>) => client.DELETE("/api/organization/{organization_id}/containers/{container_id}", ...args),
       get_container: (...args: Parameters<Operation<"/api/organization/{organization_id}/containers/{container_id}", 'get'>>) => client.GET("/api/organization/{organization_id}/containers/{container_id}", ...args),
       list_containers: (...args: Parameters<Operation<"/api/organization/{organization_id}/containers", 'get'>>) => client.GET("/api/organization/{organization_id}/containers", ...args),
+      redeploy_container: (...args: Parameters<Operation<"/api/organization/{organization_id}/containers/{container_id}/deploy", 'post'>>) => client.POST("/api/organization/{organization_id}/containers/{container_id}/deploy", ...args),
       update_container: (...args: Parameters<Operation<"/api/organization/{organization_id}/containers/{container_id}", 'patch'>>) => client.PATCH("/api/organization/{organization_id}/containers/{container_id}", ...args)
     },
     databases: {
@@ -112,6 +126,10 @@ export const createSdk = (options: SdkOptions = {}): Sdk => {
     health: {
       check: (...args: Parameters<Operation<"/health", 'get'>>) => client.GET("/health", ...args)
     },
+    internal: {
+      provider_credentials: (...args: Parameters<Operation<"/internal/s3-providers/{provider_id}/credentials", 'get'>>) => client.GET("/internal/s3-providers/{provider_id}/credentials", ...args),
+      resolve_access_token: (...args: Parameters<Operation<"/internal/s3-access-tokens/resolve/{access_key}", 'get'>>) => client.GET("/internal/s3-access-tokens/resolve/{access_key}", ...args)
+    },
     projects: {
       create_project: (...args: Parameters<Operation<"/api/organization/{organization_id}/projects", 'post'>>) => client.POST("/api/organization/{organization_id}/projects", ...args),
       delete_project: (...args: Parameters<Operation<"/api/organization/{organization_id}/projects/{project_id}", 'delete'>>) => client.DELETE("/api/organization/{organization_id}/projects/{project_id}", ...args),
@@ -125,22 +143,30 @@ export const createSdk = (options: SdkOptions = {}): Sdk => {
     },
     registry: {
       create_access_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/access-tokens", 'post'>>) => client.POST("/api/organization/{organization_id}/registry/access-tokens", ...args),
+      create_external_registry: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/external-registries", 'post'>>) => client.POST("/api/organization/{organization_id}/registry/external-registries", ...args),
       create_repository: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/repositories", 'post'>>) => client.POST("/api/organization/{organization_id}/registry/repositories", ...args),
+      delete_external_registry: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/external-registries/{registry_id}", 'delete'>>) => client.DELETE("/api/organization/{organization_id}/registry/external-registries/{registry_id}", ...args),
       delete_repository: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/repositories/{repository_id}", 'delete'>>) => client.DELETE("/api/organization/{organization_id}/registry/repositories/{repository_id}", ...args),
       get_access_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/access-tokens/{token_id}", 'get'>>) => client.GET("/api/organization/{organization_id}/registry/access-tokens/{token_id}", ...args),
       issue_token: (...args: Parameters<Operation<"/api/registry/token", 'get'>>) => client.GET("/api/registry/token", ...args),
       list_access_tokens: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/access-tokens", 'get'>>) => client.GET("/api/organization/{organization_id}/registry/access-tokens", ...args),
+      list_external_registries: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/external-registries", 'get'>>) => client.GET("/api/organization/{organization_id}/registry/external-registries", ...args),
       list_repositories: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/repositories", 'get'>>) => client.GET("/api/organization/{organization_id}/registry/repositories", ...args),
       maintenance_status: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/maintenance", 'get'>>) => client.GET("/api/organization/{organization_id}/registry/maintenance", ...args),
+      rename_external_registry: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/external-registries/{registry_id}", 'patch'>>) => client.PATCH("/api/organization/{organization_id}/registry/external-registries/{registry_id}", ...args),
       revoke_access_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/access-tokens/{token_id}", 'delete'>>) => client.DELETE("/api/organization/{organization_id}/registry/access-tokens/{token_id}", ...args),
+      rotate_external_registry_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/external-registries/{registry_id}/rotate-token", 'post'>>) => client.POST("/api/organization/{organization_id}/registry/external-registries/{registry_id}/rotate-token", ...args),
       update_access_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/access-tokens/{token_id}", 'patch'>>) => client.PATCH("/api/organization/{organization_id}/registry/access-tokens/{token_id}", ...args)
     },
     storage: {
       create_access_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens", 'post'>>) => client.POST("/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens", ...args),
       create_bucket: (...args: Parameters<Operation<"/api/organization/{organization_id}/storage/buckets", 'post'>>) => client.POST("/api/organization/{organization_id}/storage/buckets", ...args),
       delete_bucket: (...args: Parameters<Operation<"/api/organization/{organization_id}/storage/buckets/{bucket_id}", 'delete'>>) => client.DELETE("/api/organization/{organization_id}/storage/buckets/{bucket_id}", ...args),
+      delete_bucket_objects: (...args: Parameters<Operation<"/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects", 'delete'>>) => client.DELETE("/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects", ...args),
+      download_bucket_object: (...args: Parameters<Operation<"/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects/download", 'get'>>) => client.GET("/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects/download", { ...args[0], parseAs: "blob" }),
       get_access_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}", 'get'>>) => client.GET("/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}", ...args),
       list_access_tokens: (...args: Parameters<Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens", 'get'>>) => client.GET("/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens", ...args),
+      list_bucket_objects: (...args: Parameters<Operation<"/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects", 'get'>>) => client.GET("/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects", ...args),
       list_buckets: (...args: Parameters<Operation<"/api/organization/{organization_id}/storage/buckets", 'get'>>) => client.GET("/api/organization/{organization_id}/storage/buckets", ...args),
       revoke_access_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}", 'delete'>>) => client.DELETE("/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}", ...args),
       update_access_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}", 'patch'>>) => client.PATCH("/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}", ...args)

@@ -53,7 +53,7 @@ tenant boundary:
 4. C-Plane hashes and resolves the registry token, verifies the username matches
    its organization, loads the repository grant, and intersects the requested
    actions with that grant. It only grants existing repository names beginning
-   with that organization's slug and signs a five-minute RS256 JWT.
+   with that organization's slug and signs a short-lived HS256 JWT.
 5. The client retries the repository operation with the JWT. Distribution
    verifies it and permits only its repository and actions.
 
@@ -76,13 +76,15 @@ than mutable tags.
 
 ## Keys and configuration
 
-The API holds the registry token private key. Distribution receives the
-matching public certificate and a dedicated platform S3 service access-key
-pair for Storage. A second access-key pair is reserved for garbage collection.
+The API and Distribution receive the same base64url-encoded 256-bit
+`REGISTRY_TOKEN_SECRET`. The API signs HS256 tokens with it; Distribution
+writes an ephemeral symmetric JWKS under `/run` at startup. A dedicated
+platform S3 service access-key pair authenticates Distribution to Storage, and
+a second pair is reserved for garbage collection.
 The singleton `registry_storage` row stores the normal credential and bucket
 assignment. The disposable `registry_maintenance` row stores the GC credential
-ID and current maintenance state. OpenBao stores both secret access keys at
-`platform/s3/service-credentials/{registry_storage_id}`.
+ID and current maintenance state. OpenBao stores each secret keyed by its
+public access-key ID at `cplane/data/platform/s3/access-keys/{access_key_id}`.
 
 The registry bucket has its own random 256-bit SSE-C key at
 `storage/sse-c/{registry_storage_id}`. Storage supplies this key to the backing
@@ -91,7 +93,9 @@ belongs to the global registry bucket rather than an organization so shared
 content-addressed layers remain readable across organization namespaces.
 
 Its runtime configuration lives in `packages/registry/config.yml`;
-installation secrets provide the public hosts and Storage access-key pair.
+installation secrets provide the public hosts, JWT secret, and Storage
+access-key pair. Garbage collection uses the auth-free
+`packages/registry/config-gc.yml`, so Worker does not receive the JWT secret.
 
 ## Operational boundaries
 
@@ -99,9 +103,9 @@ installation secrets provide the public hosts and Storage access-key pair.
   tags, layers, and upload state.
 - Manifest deletion makes blobs eligible for collection. The control plane
   queues a `registry_gc` job in Postgres; horizontally scalable workers claim
-  named queues with `FOR UPDATE SKIP LOCKED` and run Distribution's official
-  collector. API token grants and Storage permissions make the Registry
-  read-only while the shared maintenance state is active.
+  the maintenance queue with `FOR UPDATE SKIP LOCKED` and run Distribution's
+  official collector. API token grants and Storage permissions make the
+  Registry read-only while the shared maintenance state is active.
 - Provider mirroring is deferred to the generic Storage design; the registry
   initially uses one authoritative provider.
 - Quotas, organization deletion cleanup, and private external-registry

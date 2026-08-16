@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { Environment, TimelineRevision } from '@cplane/sdk'
+import { getErrorMessage } from '~/utils/errors'
 
 const store = useStore();
 const toast = useToast();
@@ -95,7 +96,7 @@ async function handleCreate() {
     open.value = false;
     emit('created', created);
   } catch (e: unknown) {
-    error.value = (e as { data?: { message?: string } })?.data?.message || (e as { message?: string })?.message || 'Failed to create environment';
+    error.value = getErrorMessage(e, 'Failed to create environment');
   } finally {
     loading.value = false;
   }

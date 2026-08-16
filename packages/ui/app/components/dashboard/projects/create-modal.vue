@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Project } from '@cplane/sdk'
+import { getErrorMessage } from '~/utils/errors'
 
 const store = useStore();
 const open = defineModel<boolean>('open', { required: true });
@@ -27,8 +28,7 @@ async function handleCreate() {
     open.value = false;
     emit('created', response);
   } catch (cause: unknown) {
-    const errorCause = cause as { data?: { message?: string }, message?: string }
-    error.value = errorCause.data?.message ?? errorCause.message ?? 'Failed to create project';
+    error.value = getErrorMessage(cause, 'Failed to create project');
   } finally {
     loading.value = false;
   }

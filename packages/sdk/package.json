@@ -15,7 +15,7 @@
     }
   },
   "scripts": {
-    "generate": "cargo run -p c-plane -- --openapi openapi.json && deno run -A npm:openapi-typescript openapi.json -o src/generated.ts && deno run -A scripts/generate-client.mjs",
+    "generate": "cargo run -p c-plane -- --openapi openapi.json && deno run -A scripts/generate-types.mjs && deno run -A scripts/generate-client.mjs",
     "typecheck": "deno check src/index.ts src/nuxt.ts"
   },
   "dependencies": {

@@ -16,6 +16,8 @@ export type {
   Environment,
   EnvironmentWithProject,
   Event,
+  ExternalRegistry,
+  ExternalRegistryProvider,
   Project,
   Region,
   RegistryAccessToken,

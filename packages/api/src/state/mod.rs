@@ -1,12 +1,13 @@
 use crate::config::{Config, load_config};
 use crate::errors::AppError;
 use crate::services::s3_providers::S3ProviderClient;
+use lib::secrets::Secrets;
 use sea_orm::{
     ConnectOptions, ConnectionTrait, Database, DatabaseBackend, DatabaseConnection,
     DatabaseTransaction, Statement, TransactionTrait,
 };
-use std::process;
 use std::sync::OnceLock;
+use std::{process, time::Duration};
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -92,7 +93,9 @@ pub struct State {
     pub identity_db: AppDatabase,
     pub tenant_db: DatabaseConnection,
     pub config: Config,
-    pub s3_providers: Option<S3ProviderClient>,
+    pub secrets: Secrets,
+    pub s3_providers: S3ProviderClient,
+    pub storage_client: reqwest::Client,
 }
 
 static STATE: OnceLock<State> = OnceLock::new();
@@ -102,18 +105,21 @@ pub async fn create_app_state() -> Result<State, AppError> {
     let identity_db = connect_database(&config.identity_database_url, "app_identity").await?;
     let tenant_db = connect_database(&config.tenant_database_url, "app_tenant").await?;
 
-    let s3_providers = match (
-        config.control_plane_url.clone(),
-        config.control_plane_service_token.clone(),
-    ) {
-        (Some(url), Some(token)) => Some(S3ProviderClient::new(url, token)),
-        _ => None,
-    };
+    let secrets = Secrets::from_env()?;
+    let s3_providers =
+        S3ProviderClient::new(tenant_db.clone(), secrets.clone(), config.redis_url.clone());
+    let storage_client = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(5))
+        .read_timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|error| AppError::Internal(format!("Failed to create storage client: {error}")))?;
     let state = State {
         identity_db: AppDatabase(identity_db),
         tenant_db,
         config,
+        secrets,
         s3_providers,
+        storage_client,
     };
     STATE
         .set(state)

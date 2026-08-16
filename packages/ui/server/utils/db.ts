@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { createError } from "h3";
 
@@ -36,10 +36,11 @@ export const getIdentityDb = () => identityDb;
 export const getTenantDb = () => tenantDb;
 
 export async function activeOrganizationScope(userId: string, nextOrganizationId: string) {
-  const current = await identityDb.query.active_organization.findFirst({
-    where: (table, { eq }) => eq(table.user_id, userId),
-    columns: { organization_id: true },
-  });
+  const [current] = await identityDb
+    .select({ organization_id: schema.active_organization.organization_id })
+    .from(schema.active_organization)
+    .where(eq(schema.active_organization.user_id, userId))
+    .limit(1);
 
   return [...new Set([nextOrganizationId, current?.organization_id].filter(Boolean))] as string[];
 }

@@ -1,1 +1,0 @@
-ALTER TABLE "project_environment" ALTER COLUMN "is_preview" SET DEFAULT true;

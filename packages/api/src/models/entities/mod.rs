@@ -2,6 +2,7 @@ pub mod bucket;
 pub mod container;
 pub mod container_version;
 pub mod event;
+pub mod external_registry;
 pub mod organisation;
 pub mod organisation_member;
 pub mod postgres_database;

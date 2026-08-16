@@ -1,13 +1,15 @@
 use axum::{
-    Router,
-    routing::{delete, get, patch},
+    Router, middleware,
+    routing::{delete, get, patch, post},
 };
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::handlers::containers;
 use crate::handlers::events;
+use crate::handlers::external_registries;
 use crate::handlers::health::health_check;
+use crate::handlers::internal_s3;
 use crate::handlers::postgres_databases;
 use crate::handlers::projects;
 use crate::handlers::regions;
@@ -16,10 +18,24 @@ use crate::handlers::registry_access_tokens;
 use crate::handlers::registry_repositories;
 use crate::handlers::storage_access_tokens;
 use crate::handlers::storage_buckets;
+use crate::handlers::storage_objects;
+use crate::middleware::internal_auth;
 use crate::openapi::ApiDoc;
 
 pub fn create_routes() -> Router {
+    let internal = Router::new()
+        .route(
+            "/s3-access-tokens/resolve/{access_key}",
+            get(internal_s3::resolve_access_token),
+        )
+        .route(
+            "/s3-providers/{provider_id}/credentials",
+            get(internal_s3::provider_credentials),
+        )
+        .layer(middleware::from_fn(internal_auth::authorize));
+
     Router::new()
+        .nest("/internal", internal)
         .route("/health", get(health_check))
         .route("/api/registry/token", get(registry::issue_token))
         .route(
@@ -34,6 +50,20 @@ pub fn create_routes() -> Router {
         .route(
             "/api/organization/{organization_id}/registry/repositories/{repository_id}",
             delete(registry_repositories::delete_repository),
+        )
+        .route(
+            "/api/organization/{organization_id}/registry/external-registries",
+            get(external_registries::list_external_registries)
+                .post(external_registries::create_external_registry),
+        )
+        .route(
+            "/api/organization/{organization_id}/registry/external-registries/{registry_id}",
+            patch(external_registries::rename_external_registry)
+                .delete(external_registries::delete_external_registry),
+        )
+        .route(
+            "/api/organization/{organization_id}/registry/external-registries/{registry_id}/rotate-token",
+            axum::routing::post(external_registries::rotate_external_registry_token),
         )
         .route(
             "/api/organization/{organization_id}/registry/access-tokens",
@@ -89,6 +119,14 @@ pub fn create_routes() -> Router {
             delete(storage_buckets::delete_bucket),
         )
         .route(
+            "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects",
+            get(storage_objects::list_objects).delete(storage_objects::delete_objects),
+        )
+        .route(
+            "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects/download",
+            get(storage_objects::download_object),
+        )
+        .route(
             "/api/organization/{organization_id}/storage/buckets",
             get(storage_buckets::list_buckets)
                 .post(storage_buckets::create_bucket),
@@ -115,6 +153,10 @@ pub fn create_routes() -> Router {
             get(containers::get_container)
                 .patch(containers::update_container)
                 .delete(containers::delete_container),
+        )
+        .route(
+            "/api/organization/{organization_id}/containers/{container_id}/deploy",
+            post(containers::redeploy_container),
         )
         .route(
             "/api/organization/{organization_id}/databases/postgres",

@@ -2,6 +2,7 @@
 import type { ContainerVersion } from '@cplane/sdk'
 import { ICONS } from '~/utils/icons'
 import { loadProjectEnvironments } from '~/utils/auth'
+import { getErrorMessage } from '~/utils/errors'
 
 definePageMeta({ key: route => `container-workbench-${route.params.project_id}` })
 
@@ -14,6 +15,17 @@ const orgId = computed(() => store.organization?.id ?? '')
 const projectId = computed(() => route.params.project_id?.toString() || null)
 const environmentId = computed(() => route.params.environment_id?.toString() || null)
 const containerId = computed(() => route.params.container_id?.toString() || null)
+const externalRegistriesUrl = computed(() => orgId.value
+  ? `/api/cplane/organization/${orgId.value as ':organization_id'}/registry/external-registries` as const
+  : '')
+const { data: externalRegistries } = await useFetch(externalRegistriesUrl, { default: () => [] })
+const externalRegistryItems = computed(() => [
+  { label: 'No managed registry', value: 'none' },
+  ...externalRegistries.value.map(registry => ({
+    label: `${registry.name} — ${registry.host} (${registry.username})`,
+    value: registry.id,
+  })),
+])
 
 const projectName = computed(() => store.projects.find(p => p.id === projectId.value)?.name ?? projectId.value ?? '')
 const environmentsUrl = computed(() => orgId.value && projectId.value
@@ -55,6 +67,7 @@ const { data: containerList } = await useFetch(listUrl, {
 
 const name = ref('')
 const image = ref('')
+const externalRegistryId = ref('none')
 const port = ref<number | null>(null)
 const replicaCount = ref(1)
 const isPublic = ref(false)
@@ -62,6 +75,7 @@ const healthCheckPath = ref('')
 const envRows = ref<{ key: string; value: string }[]>([])
 const hasChanges = ref(false)
 const saving = ref(false)
+const refreshing = ref(false)
 const loading = ref(true)
 const loadError = ref('')
 const forking = ref(false)
@@ -81,6 +95,7 @@ async function fetchContainer() {
     name.value = c.name
     if (c.current_version) {
       image.value = c.current_version.image
+      externalRegistryId.value = c.current_version.external_registry_id ?? 'none'
       port.value = c.current_version.port
       replicaCount.value = c.current_version.replica_count
       isPublic.value = c.current_version.public
@@ -125,6 +140,7 @@ async function save(autoDeploy: boolean) {
           query: { environment_id: environmentId.value, timeline_id: selectedTimelineId.value },
         body: {
           image: image.value,
+          external_registry_id: externalRegistryId.value === 'none' ? null : externalRegistryId.value,
           port: port.value,
           replica_count: replicaCount.value,
           public: isPublic.value,
@@ -147,8 +163,9 @@ async function save(autoDeploy: boolean) {
     toast.add({ title: autoDeploy ? 'Container updated and deployed' : 'Container draft saved', color: 'success' })
     hasChanges.value = false
     await recentActivity.value?.refresh()
-  } catch {
-    toast.add({ title: 'Failed to save', color: 'error' })
+  } catch (e: unknown) {
+    const message = getErrorMessage(e, '')
+    toast.add({ title: 'Failed to save', description: message, color: 'error' })
   } finally {
     saving.value = false
   }
@@ -201,12 +218,38 @@ function backUrl() {
 const yamlPreview = computed(() => [
   `name: ${name.value}`,
   `image: ${image.value}`,
+  `externalRegistry: ${externalRegistryId.value === 'none' ? 'null' : externalRegistryId.value}`,
   `port: ${port.value ?? 'null'}`,
   `replicas: ${replicaCount.value}`,
   `public: ${isPublic.value}`,
   'healthCheck:',
   `  path: ${healthCheckPath.value || 'null'}`,
 ].join('\n'))
+const canRefreshLatest = computed(() => image.value.trim().endsWith(':latest'))
+
+async function refreshLatest() {
+  if (!orgId.value || !containerId.value || !environmentId.value || !selectedTimelineId.value || hasChanges.value) return
+  refreshing.value = true
+  try {
+    await $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/containers/${containerId.value as ':container_id'}/deploy` as const, {
+      query: { environment_id: environmentId.value, timeline_id: selectedTimelineId.value },
+      method: 'POST',
+    })
+    if (projectId.value && environmentId.value) {
+      await loadProjectEnvironments(projectId.value, environmentId.value)
+      await refreshEnvironmentList()
+    }
+    await router.replace({
+      query: Object.fromEntries(Object.entries(route.query).filter(([key]) => key !== 'revision')),
+    })
+    toast.add({ title: 'Latest image refreshed and deployed', color: 'success' })
+    await recentActivity.value?.refresh()
+  } catch (e: unknown) {
+    toast.add({ title: 'Failed to refresh latest image', description: getErrorMessage(e, ''), color: 'error' })
+  } finally {
+    refreshing.value = false
+  }
+}
 
 watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged())
 </script>
@@ -303,7 +346,16 @@ watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged(
               <div class="divide-y divide-default/60 pt-4">
                 <section class="grid gap-4 py-6 first:pt-2 lg:grid-cols-[180px_minmax(0,1fr)]">
                   <div><h3 class="text-sm font-semibold">Image</h3><p class="mt-1 text-xs text-muted">Container identity and image.</p></div>
-                  <div class="space-y-3"><UInput v-model="name" disabled /><UInput v-model="image" placeholder="nginx:latest" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @input="markChanged" /></div>
+                  <div class="space-y-3">
+                    <UInput v-model="name" disabled class="w-full" />
+                    <div class="flex gap-2">
+                      <UInput v-model="image" placeholder="nginx:latest" class="min-w-0 flex-1" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @input="markChanged" />
+                      <UButton v-if="canRefreshLatest && (revisionView === 'draft' || revisionView === 'synced')" :icon="ICONS.refresh" color="neutral" variant="solid" :loading="refreshing" :disabled="hasChanges" @click="refreshLatest">Refresh latest</UButton>
+                    </div>
+                    <UFormField label="External registry" description="Optional credentials for a private image.">
+                      <USelect v-model="externalRegistryId" :items="externalRegistryItems" class="w-full" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @change="markChanged" />
+                    </UFormField>
+                  </div>
                 </section>
                 <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
                   <div><h3 class="text-sm font-semibold">Compute</h3><p class="mt-1 text-xs text-muted">Network port and scale.</p></div>

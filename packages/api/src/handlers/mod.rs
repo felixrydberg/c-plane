@@ -1,7 +1,9 @@
 pub mod containers;
 pub mod databases;
 pub mod events;
+pub mod external_registries;
 pub mod health;
+pub mod internal_s3;
 pub mod postgres_databases;
 pub mod projects;
 pub mod regions;
@@ -10,3 +12,4 @@ pub mod registry_access_tokens;
 pub mod registry_repositories;
 pub mod storage_access_tokens;
 pub mod storage_buckets;
+pub mod storage_objects;

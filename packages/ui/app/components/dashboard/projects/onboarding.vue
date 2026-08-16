@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Project } from '@cplane/sdk'
+import { getErrorMessage } from '~/utils/errors'
 import { loadProjectEnvironments } from '~/utils/auth'
 import { ICONS } from '~/utils/icons'
 
@@ -39,8 +40,7 @@ async function createProject() {
     createdProject.value = project
     await loadCreatedProject()
   } catch (cause: unknown) {
-    const errorCause = cause as { data?: { message?: string }, message?: string }
-    error.value = errorCause.data?.message ?? errorCause.message ?? 'Failed to create project'
+    error.value = getErrorMessage(cause, 'Failed to create project')
   } finally {
     loading.value = false
   }

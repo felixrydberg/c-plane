@@ -1,6 +1,8 @@
 use utoipa::openapi::{
+    Content, RefOr,
     extensions::Extensions,
     path::Operation,
+    schema::{KnownFormat, ObjectBuilder, SchemaFormat, Type},
     security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityScheme},
 };
 use utoipa::{Modify, OpenApi};
@@ -23,14 +25,43 @@ impl Modify for SecurityAddon {
             "registryBasic",
             SecurityScheme::Http(HttpBuilder::new().scheme(HttpAuthScheme::Basic).build()),
         );
+        components.add_security_scheme(
+            "serviceToken",
+            SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::with_description(
+                "x-cplane-token",
+                "Internal service token.",
+            ))),
+        );
 
         for (path, item) in &mut openapi.paths.paths {
             document_scope("GET", path, item.get.as_mut());
             document_scope("POST", path, item.post.as_mut());
             document_scope("PATCH", path, item.patch.as_mut());
             document_scope("DELETE", path, item.delete.as_mut());
+            document_download_response(path, item.get.as_mut());
         }
     }
+}
+
+fn document_download_response(path: &str, operation: Option<&mut Operation>) {
+    if path != "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects/download" {
+        return;
+    }
+    let Some(operation) = operation else {
+        return;
+    };
+    let Some(RefOr::T(response)) = operation.responses.responses.get_mut("200") else {
+        return;
+    };
+    response.content.insert(
+        "application/octet-stream".into(),
+        Content::new(Some(
+            ObjectBuilder::new()
+                .schema_type(Type::String)
+                .format(Some(SchemaFormat::KnownFormat(KnownFormat::Binary)))
+                .build(),
+        )),
+    );
 }
 
 fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
@@ -85,6 +116,7 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
         crate::handlers::containers::list_containers,
         crate::handlers::containers::get_container,
         crate::handlers::containers::update_container,
+        crate::handlers::containers::redeploy_container,
         crate::handlers::containers::delete_container,
         crate::handlers::postgres_databases::create_database,
         crate::handlers::postgres_databases::list_databases,
@@ -98,6 +130,9 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
         crate::handlers::storage_buckets::create_bucket,
         crate::handlers::storage_buckets::delete_bucket,
         crate::handlers::storage_buckets::list_buckets,
+        crate::handlers::storage_objects::download_object,
+        crate::handlers::storage_objects::list_objects,
+        crate::handlers::storage_objects::delete_objects,
         crate::handlers::storage_access_tokens::create_access_token,
         crate::handlers::storage_access_tokens::get_access_token,
         crate::handlers::storage_access_tokens::list_access_tokens,
@@ -113,6 +148,13 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
         crate::handlers::registry_repositories::create_repository,
         crate::handlers::registry_repositories::list_repositories,
         crate::handlers::registry_repositories::delete_repository,
+        crate::handlers::external_registries::list_external_registries,
+        crate::handlers::external_registries::create_external_registry,
+        crate::handlers::external_registries::rename_external_registry,
+        crate::handlers::external_registries::rotate_external_registry_token,
+        crate::handlers::external_registries::delete_external_registry,
+        crate::handlers::internal_s3::resolve_access_token,
+        crate::handlers::internal_s3::provider_credentials,
     ),
     components(
         schemas(
@@ -143,6 +185,8 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
             crate::utils::pagination::PaginationMeta,
             crate::handlers::storage_buckets::CreateBucketRequest,
             crate::handlers::storage_buckets::BucketResponse,
+            crate::handlers::storage_objects::BucketObjectResponse,
+            crate::handlers::storage_objects::BucketObjectsResponse,
             crate::handlers::storage_access_tokens::CreateAccessTokenRequest,
             crate::handlers::storage_access_tokens::UpdateAccessTokenRequest,
             crate::handlers::storage_access_tokens::BucketPermissionRequest,
@@ -159,6 +203,14 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
             crate::handlers::registry_access_tokens::CreatedRegistryAccessTokenResponse,
             crate::handlers::registry_repositories::CreateRegistryRepositoryRequest,
             crate::handlers::registry_repositories::RegistryRepositoryResponse,
+            crate::handlers::external_registries::CreateExternalRegistryRequest,
+            crate::handlers::external_registries::ExternalRegistryProvider,
+            crate::handlers::external_registries::RenameExternalRegistryRequest,
+            crate::handlers::external_registries::RotateExternalRegistryTokenRequest,
+            crate::handlers::external_registries::ExternalRegistryResponse,
+            crate::handlers::internal_s3::ResolvedS3AccessToken,
+            crate::handlers::internal_s3::ResolvedS3BucketPermission,
+            crate::services::s3_providers::S3ProviderCredentials,
         ),
     ),
     tags(
@@ -169,6 +221,7 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
         (name = "databases/postgres", description = "Postgres database management"),
         (name = "storage", description = "S3 bucket and access token management"),
         (name = "registry", description = "OCI registry authentication"),
+        (name = "internal", description = "Internal service endpoints"),
     ),
     modifiers(&SecurityAddon),
 )]

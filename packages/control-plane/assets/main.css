@@ -51,6 +51,7 @@ button.danger { background: #a93232; color: white; }
 button:disabled { cursor: wait; opacity: .65; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .popover { min-width: 420px; padding: 12px 0; }
+.form-note { grid-column: 1 / -1; margin: 0; color: #695214; font-size: 12px; line-height: 1.5; }
 .form-error { grid-column: 1 / -1; margin: 8px 0; color: #a22f2f; }
 .token { grid-column: 1 / -1; padding: 10px; overflow-wrap: anywhere; background: #fff8d8; border-radius: 7px; }
 

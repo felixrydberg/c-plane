@@ -31,6 +31,12 @@ impl From<sea_orm::DbErr> for AppError {
     }
 }
 
+impl From<lib::secrets::SecretError> for AppError {
+    fn from(err: lib::secrets::SecretError) -> Self {
+        AppError::Internal(err.to_string())
+    }
+}
+
 impl fmt::Display for AppError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

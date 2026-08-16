@@ -5,7 +5,7 @@ use thiserror::Error;
 #[derive(Clone)]
 pub struct Config {
     pub listen: SocketAddr,
-    pub control_plane_url: String,
+    pub api_url: String,
     pub internal_token: String,
 }
 
@@ -31,9 +31,7 @@ impl Config {
             .map_err(|_| ConfigError::Invalid("STORAGE_LISTEN"))?;
         Ok(Self {
             listen,
-            control_plane_url: required("CONTROL_PLANE_URL")?
-                .trim_end_matches('/')
-                .to_string(),
+            api_url: required("API_URL")?.trim_end_matches('/').to_string(),
             internal_token: required("CPLANE_SERVICE_TOKEN")?,
         })
     }

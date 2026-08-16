@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { COMPUTE_UNIT_ITEMS, computeUnitByLabel } from '~/utils/compute-units'
 import { ICONS } from '~/utils/icons'
+import { getErrorMessage } from '~/utils/errors'
 
 const store = useStore()
 const route = useRoute()
@@ -37,7 +38,7 @@ async function handleCreate() {
     toast.add({ title: 'Database created', color: 'success' })
     navigateTo(`/${route.params.organization_slug}/databases/postgres/${projectId.value}`)
   } catch (e: unknown) {
-    error.value = (e as any)?.data?.message ?? 'Failed to create database'
+    error.value = getErrorMessage(e, 'Failed to create database')
     toast.add({ title: 'Failed to create database', color: 'error' })
   } finally { loading.value = false }
 }

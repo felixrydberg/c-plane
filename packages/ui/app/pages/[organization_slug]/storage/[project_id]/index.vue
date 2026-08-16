@@ -56,7 +56,10 @@ async function deleteBucket() {
     <section v-for="bucket in buckets" :key="bucket.id" class="overflow-hidden rounded-lg border border-dashed border-default bg-transparent">
       <div class="flex items-center justify-between gap-3 p-4 border-b border-default">
         <div><h2 class="font-semibold">{{ bucket.name }}</h2></div>
-        <UButton :icon="ICONS.trash" color="error" size="sm" @click="confirmDelete(bucket)">Delete</UButton>
+        <div class="flex gap-2">
+          <UButton :icon="ICONS.folder" color="neutral" variant="solid" size="sm" :to="`/${route.params.organization_slug}/storage/${projectId}/${bucket.id}`">View objects</UButton>
+          <UButton :icon="ICONS.trash" color="error" size="sm" @click="confirmDelete(bucket)">Delete</UButton>
+        </div>
       </div>
     </section>
     <UModal v-model:open="deleteModalOpen" title="Delete bucket" description="This deletes the physical provider bucket and its logical record. The bucket must be empty.">

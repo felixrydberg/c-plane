@@ -2,6 +2,7 @@
 import type { Region } from '@cplane/sdk'
 import { ICONS } from '~/utils/icons'
 import { COMPUTE_UNIT_ITEMS, computeUnitByLabel } from '~/utils/compute-units'
+import { getErrorMessage } from '~/utils/errors'
 import { loadProjectEnvironments } from '~/utils/auth'
 
 const store = useStore()
@@ -12,6 +13,18 @@ const orgId = computed(() => store.organization?.id ?? '')
 const projectId = computed(() => route.params.project_id?.toString() || null)
 const environmentId = computed(() => route.params.environment_id?.toString() || null)
 const projectName = computed(() => store.projects.find(p => p.id === projectId.value)?.name ?? projectId.value ?? '')
+const externalRegistriesUrl = computed(() => orgId.value
+  ? `/api/cplane/organization/${orgId.value as ':organization_id'}/registry/external-registries` as const
+  : '')
+const { data: externalRegistries } = await useFetch(externalRegistriesUrl, { default: () => [] })
+const externalRegistryId = ref('none')
+const externalRegistryItems = computed(() => [
+  { label: 'No managed registry', value: 'none' },
+  ...externalRegistries.value.map(registry => ({
+    label: `${registry.name} — ${registry.host} (${registry.username})`,
+    value: registry.id,
+  })),
+])
 
 const loading = ref(false)
 const error = ref('')
@@ -56,6 +69,7 @@ async function handleCreate() {
       health_check: { path: state.healthCheckPath }, region_id: regionId.value,
       resources: { cpu: { min: unit.cpu, max: unit.cpu }, memory: { min: `${Math.round(unit.ramGib * 1024)}Mi`, max: `${Math.round(unit.ramGib * 1024)}Mi` } },
       auto_deploy: !createAsDraft.value,
+      external_registry_id: externalRegistryId.value === 'none' ? null : externalRegistryId.value,
     }
     if (Object.keys(envObj).length > 0) body.env = envObj
 
@@ -67,8 +81,9 @@ async function handleCreate() {
       ? { path, query: { revision: store.environment.draft_timeline } }
       : path)
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : 'Failed to create container'
-    toast.add({ title: 'Failed to create container', color: 'error' })
+    error.value = getErrorMessage(e, 'Failed to create container')
+    const message = getErrorMessage(e, '')
+    toast.add({ title: 'Failed to create container', description: message, color: 'error' })
   } finally { loading.value = false }
 }
 
@@ -87,7 +102,7 @@ function backUrl() { return `/${route.params.organization_slug}/containers/${pro
       <main class="divide-y divide-default/60 lg:pr-8">
         <section class="grid gap-4 py-7 lg:grid-cols-[190px_minmax(0,1fr)]">
           <div><h2 class="text-sm font-semibold">Container</h2><p class="mt-1 text-xs text-muted">Name the service and choose its image.</p></div>
-          <div class="grid gap-3"><UFormField label="Name"><UInput v-model="state.name" placeholder="api-gateway" class="w-full" :disabled="loading" /></UFormField><UFormField label="Image"><UInput v-model="state.image" placeholder="nginx:latest" class="w-full" :disabled="loading" /></UFormField></div>
+          <div class="grid gap-3"><UFormField label="Name"><UInput v-model="state.name" placeholder="api-gateway" class="w-full" :disabled="loading" /></UFormField><UFormField label="Image"><UInput v-model="state.image" placeholder="nginx:latest" class="w-full" :disabled="loading" /></UFormField><UFormField label="External registry" description="Optional credentials for a private image."><USelect v-model="externalRegistryId" :items="externalRegistryItems" class="w-full" :disabled="loading" /></UFormField></div>
         </section>
         <section class="grid gap-4 py-7 lg:grid-cols-[190px_minmax(0,1fr)]">
           <div><h2 class="text-sm font-semibold">Compute</h2><p class="mt-1 text-xs text-muted">CPU, memory, network, and scale.</p></div>
