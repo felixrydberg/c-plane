@@ -78,6 +78,7 @@ export type Sdk = {
     create_access_token: Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens", 'post'>
     create_bucket: Operation<"/api/organization/{organization_id}/storage/buckets", 'post'>
     delete_bucket: Operation<"/api/organization/{organization_id}/storage/buckets/{bucket_id}", 'delete'>
+    delete_bucket_objects: Operation<"/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects", 'delete'>
     download_bucket_object: Operation<"/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects/download", 'get'>
     get_access_token: Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}", 'get'>
     list_access_tokens: Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens", 'get'>
@@ -161,6 +162,7 @@ export const createSdk = (options: SdkOptions = {}): Sdk => {
       create_access_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens", 'post'>>) => client.POST("/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens", ...args),
       create_bucket: (...args: Parameters<Operation<"/api/organization/{organization_id}/storage/buckets", 'post'>>) => client.POST("/api/organization/{organization_id}/storage/buckets", ...args),
       delete_bucket: (...args: Parameters<Operation<"/api/organization/{organization_id}/storage/buckets/{bucket_id}", 'delete'>>) => client.DELETE("/api/organization/{organization_id}/storage/buckets/{bucket_id}", ...args),
+      delete_bucket_objects: (...args: Parameters<Operation<"/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects", 'delete'>>) => client.DELETE("/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects", ...args),
       download_bucket_object: (...args: Parameters<Operation<"/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects/download", 'get'>>) => client.GET("/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects/download", ...args),
       get_access_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}", 'get'>>) => client.GET("/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}", ...args),
       list_access_tokens: (...args: Parameters<Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens", 'get'>>) => client.GET("/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens", ...args),

@@ -1,6 +1,8 @@
 use utoipa::openapi::{
+    Content, RefOr,
     extensions::Extensions,
     path::Operation,
+    schema::{KnownFormat, ObjectBuilder, SchemaFormat, Type},
     security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityScheme},
 };
 use utoipa::{Modify, OpenApi};
@@ -36,8 +38,30 @@ impl Modify for SecurityAddon {
             document_scope("POST", path, item.post.as_mut());
             document_scope("PATCH", path, item.patch.as_mut());
             document_scope("DELETE", path, item.delete.as_mut());
+            document_download_response(path, item.get.as_mut());
         }
     }
+}
+
+fn document_download_response(path: &str, operation: Option<&mut Operation>) {
+    if path != "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects/download" {
+        return;
+    }
+    let Some(operation) = operation else {
+        return;
+    };
+    let Some(RefOr::T(response)) = operation.responses.responses.get_mut("200") else {
+        return;
+    };
+    response.content.insert(
+        "application/octet-stream".into(),
+        Content::new(Some(
+            ObjectBuilder::new()
+                .schema_type(Type::String)
+                .format(Some(SchemaFormat::KnownFormat(KnownFormat::Binary)))
+                .build(),
+        )),
+    );
 }
 
 fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {

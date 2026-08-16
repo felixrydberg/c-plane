@@ -10,7 +10,9 @@ use axum::{
     response::Response,
 };
 use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use subtle::ConstantTimeEq;
+use tokio::{sync::Mutex, time::Instant};
 use uuid::Uuid;
 
 use crate::{auth::CredentialResolver, crypto::select_sse_key};
@@ -19,7 +21,16 @@ use crate::{auth::CredentialResolver, crypto::select_sse_key};
 pub struct InternalStorage {
     credentials: CredentialResolver,
     service_token: String,
+    clients: Arc<Mutex<HashMap<Uuid, CachedClient>>>,
 }
+
+struct CachedClient {
+    client: aws_sdk_s3::Client,
+    expires_at: Instant,
+}
+
+const PROVIDER_CLIENT_TTL: Duration = Duration::from_secs(60);
+const MAX_DELETE_PAGES: usize = 100;
 
 #[derive(Clone, Deserialize)]
 pub struct BucketDescriptor {
@@ -52,6 +63,7 @@ pub struct DeleteObjectsRequest {
     pub bucket: BucketDescriptor,
     pub key: Option<String>,
     pub prefix: Option<String>,
+    pub continuation_token: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -72,6 +84,7 @@ pub struct StoredObject {
 #[derive(Serialize)]
 pub struct DeleteObjectsResponse {
     pub deleted: usize,
+    pub next_continuation_token: Option<String>,
 }
 
 impl InternalStorage {
@@ -79,6 +92,7 @@ impl InternalStorage {
         Self {
             credentials,
             service_token,
+            clients: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -95,6 +109,11 @@ impl InternalStorage {
     }
 
     async fn client(&self, bucket: &BucketDescriptor) -> Result<aws_sdk_s3::Client, StatusCode> {
+        if let Some(cached) = self.clients.lock().await.get(&bucket.provider_id) {
+            if cached.expires_at > Instant::now() {
+                return Ok(cached.client.clone());
+            }
+        }
         let provider = self
             .credentials
             .provider(bucket.provider_id)
@@ -106,7 +125,7 @@ impl InternalStorage {
         let region = provider
             .provider_region
             .unwrap_or_else(|| "us-east-1".to_string());
-        Ok(aws_sdk_s3::Client::from_conf(
+        let client = aws_sdk_s3::Client::from_conf(
             aws_sdk_s3::Config::builder()
                 .behavior_version(BehaviorVersion::latest())
                 .endpoint_url(provider.endpoint_url)
@@ -120,7 +139,15 @@ impl InternalStorage {
                 ))
                 .force_path_style(true)
                 .build(),
-        ))
+        );
+        self.clients.lock().await.insert(
+            bucket.provider_id,
+            CachedClient {
+                client: client.clone(),
+                expires_at: Instant::now() + PROVIDER_CLIENT_TTL,
+            },
+        );
+        Ok(client)
     }
 }
 
@@ -240,7 +267,7 @@ pub async fn delete_objects(
     }
 
     let client = state.client(&request.bucket).await?;
-    let deleted = if let Some(key) = key {
+    let result = if let Some(key) = key {
         client
             .delete_object()
             .bucket(&request.bucket.physical_bucket_name)
@@ -251,30 +278,53 @@ pub async fn delete_objects(
                 tracing::error!(%error, organization_id = %request.bucket.organization_id, bucket_id = %request.bucket.bucket_id, operation = "DeleteObject", "storage gateway operation failed");
                 StatusCode::BAD_GATEWAY
             })?;
-        1
+        DeletePrefixResult {
+            deleted: 1,
+            next_continuation_token: None,
+        }
     } else if let Some(prefix) = prefix {
-        delete_prefix(&client, &request.bucket.physical_bucket_name, &prefix).await?
+        delete_prefix(
+            &client,
+            &request.bucket.physical_bucket_name,
+            &prefix,
+            request.continuation_token,
+        )
+        .await?
     } else {
-        0
+        DeletePrefixResult {
+            deleted: 0,
+            next_continuation_token: None,
+        }
     };
 
-    tracing::info!(organization_id = %request.bucket.organization_id, bucket_id = %request.bucket.bucket_id, deleted, operation = "DeleteObjects", outcome = "success", "storage gateway operation");
-    Ok(Json(DeleteObjectsResponse { deleted }))
+    tracing::info!(organization_id = %request.bucket.organization_id, bucket_id = %request.bucket.bucket_id, deleted = result.deleted, partial = result.next_continuation_token.is_some(), operation = "DeleteObjects", outcome = "success", "storage gateway operation");
+    Ok(Json(DeleteObjectsResponse {
+        deleted: result.deleted,
+        next_continuation_token: result.next_continuation_token,
+    }))
+}
+
+struct DeletePrefixResult {
+    deleted: usize,
+    next_continuation_token: Option<String>,
 }
 
 async fn delete_prefix(
     client: &aws_sdk_s3::Client,
     bucket: &str,
     prefix: &str,
-) -> Result<usize, StatusCode> {
-    let mut continuation_token = None;
+    continuation_token: Option<String>,
+) -> Result<DeletePrefixResult, StatusCode> {
+    let prefix = folder_prefix(prefix);
+    let mut continuation_token = continuation_token;
     let mut deleted = 0;
+    let mut pages = 0;
 
     loop {
         let output = client
             .list_objects_v2()
             .bucket(bucket)
-            .prefix(prefix)
+            .prefix(&prefix)
             .set_continuation_token(continuation_token)
             .send()
             .await
@@ -326,12 +376,22 @@ async fn delete_prefix(
         }
 
         continuation_token = output.next_continuation_token().map(str::to_owned);
-        if continuation_token.is_none() {
-            break;
+        pages += 1;
+        if continuation_token.is_none() || pages == MAX_DELETE_PAGES {
+            return Ok(DeletePrefixResult {
+                deleted,
+                next_continuation_token: continuation_token,
+            });
         }
     }
+}
 
-    Ok(deleted)
+fn folder_prefix(prefix: &str) -> String {
+    if prefix.ends_with('/') {
+        prefix.to_owned()
+    } else {
+        format!("{prefix}/")
+    }
 }
 
 fn is_folder_marker(object: &Object) -> bool {
@@ -365,5 +425,11 @@ mod tests {
         assert!(!storage.authorized(&headers));
         headers.insert("x-cplane-token", HeaderValue::from_static("correct"));
         assert!(storage.authorized(&headers));
+    }
+
+    #[test]
+    fn normalizes_folder_prefixes() {
+        assert_eq!(super::folder_prefix("folder"), "folder/");
+        assert_eq!(super::folder_prefix("folder/"), "folder/");
     }
 }

@@ -3,7 +3,7 @@ use axum::{
     body::Body,
     extract::{Path, Query},
     http::{HeaderValue, StatusCode, header},
-    response::Response,
+    response::{IntoResponse, Response},
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
@@ -36,6 +36,7 @@ pub struct DownloadObjectQuery {
 pub struct DeleteObjectsQuery {
     pub key: Option<String>,
     pub prefix: Option<String>,
+    pub continuation_token: Option<String>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -91,6 +92,19 @@ struct StorageDeleteObjectsRequest {
     bucket: StorageBucketDescriptor,
     key: Option<String>,
     prefix: Option<String>,
+    continuation_token: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct StorageDeleteObjectsResponse {
+    deleted: usize,
+    next_continuation_token: Option<String>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct DeleteObjectsResponse {
+    pub deleted: usize,
+    pub next_continuation_token: Option<String>,
 }
 
 #[utoipa::path(
@@ -117,7 +131,7 @@ pub async fn list_objects(
 ) -> Result<Json<BucketObjectsResponse>, AppError> {
     let bucket = bucket_descriptor(&tenant_db, organization_id, bucket_id).await?;
     let response = storage_request(
-        "internal/objects/list",
+        ".cplane/objects/list",
         StorageListObjectsRequest {
             bucket,
             prefix: query.prefix,
@@ -149,7 +163,7 @@ pub async fn list_objects(
         ("key" = String, Query, description = "Exact object key"),
     ),
     responses(
-        (status = 200, description = "Object download"),
+        (status = 200, description = "Object download", body = [u8]),
         (status = 400, description = "Object key is required"),
         (status = 404, description = "Bucket or object not found"),
         (status = 503, description = "Storage gateway unavailable"),
@@ -166,7 +180,7 @@ pub async fn download_object(
     }
     let bucket = bucket_descriptor(&tenant_db, organization_id, bucket_id).await?;
     let response = storage_request(
-        "internal/objects/download",
+        ".cplane/objects/download",
         StorageDownloadObjectRequest {
             bucket,
             key: query.key.clone(),
@@ -201,9 +215,11 @@ pub async fn download_object(
         ("bucket_id" = Uuid, Path, description = "Bucket ID"),
         ("key" = Option<String>, Query, description = "Exact object key"),
         ("prefix" = Option<String>, Query, description = "Folder prefix"),
+        ("continuation_token" = Option<String>, Query, description = "Continuation token for a partial folder deletion"),
     ),
     responses(
         (status = 204, description = "Object or folder deleted"),
+        (status = 200, description = "Folder deletion partially completed", body = DeleteObjectsResponse),
         (status = 400, description = "Exactly one non-empty key or prefix is required"),
         (status = 404, description = "Bucket not found"),
         (status = 503, description = "Storage gateway unavailable"),
@@ -214,7 +230,7 @@ pub async fn delete_objects(
     AuthContext { tenant_db, .. }: AuthContext,
     Path((organization_id, bucket_id)): Path<(Uuid, Uuid)>,
     Query(query): Query<DeleteObjectsQuery>,
-) -> Result<StatusCode, AppError> {
+) -> Result<Response, AppError> {
     let key = query.key.filter(|value| !value.is_empty());
     let prefix = query.prefix.filter(|value| !value.is_empty());
     if key.is_some() == prefix.is_some() {
@@ -224,16 +240,32 @@ pub async fn delete_objects(
     }
 
     let bucket = bucket_descriptor(&tenant_db, organization_id, bucket_id).await?;
-    storage_request(
-        "internal/objects/delete",
+    let response = storage_request(
+        ".cplane/objects/delete",
         StorageDeleteObjectsRequest {
             bucket,
             key,
             prefix,
+            continuation_token: query.continuation_token,
         },
     )
-    .await?;
-    Ok(StatusCode::NO_CONTENT)
+    .await?
+    .json::<StorageDeleteObjectsResponse>()
+    .await
+    .map_err(|error| {
+        AppError::ServiceUnavailable(format!("Invalid storage gateway response: {error}"))
+    })?;
+    if let Some(next_continuation_token) = response.next_continuation_token {
+        return Ok((
+            StatusCode::OK,
+            Json(DeleteObjectsResponse {
+                deleted: response.deleted,
+                next_continuation_token: Some(next_continuation_token),
+            }),
+        )
+            .into_response());
+    }
+    Ok(StatusCode::NO_CONTENT.into_response())
 }
 
 async fn bucket_descriptor(
@@ -269,14 +301,15 @@ async fn bucket_descriptor(
 }
 
 async fn storage_request<T: Serialize>(path: &str, body: T) -> Result<reqwest::Response, AppError> {
-    let config = &get_app_state().config;
-    let response = reqwest::Client::new()
+    let state = get_app_state();
+    let response = state
+        .storage_client
         .post(format!(
             "{}/{}",
-            config.storage_endpoint_url.trim_end_matches('/'),
+            state.config.storage_endpoint_url.trim_end_matches('/'),
             path
         ))
-        .header("x-cplane-token", &config.service_token)
+        .header("x-cplane-token", &state.config.service_token)
         .json(&body)
         .send()
         .await

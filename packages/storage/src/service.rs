@@ -472,15 +472,15 @@ impl StorageService {
         let app = Router::new()
             .route("/health", get(|| async { "OK" }))
             .route(
-                "/internal/objects/list",
+                "/.cplane/objects/list",
                 axum::routing::post(internal::list_objects),
             )
             .route(
-                "/internal/objects/download",
+                "/.cplane/objects/download",
                 axum::routing::post(internal::download_object),
             )
             .route(
-                "/internal/objects/delete",
+                "/.cplane/objects/delete",
                 axum::routing::post(internal::delete_objects),
             )
             .with_state(InternalStorage::new(

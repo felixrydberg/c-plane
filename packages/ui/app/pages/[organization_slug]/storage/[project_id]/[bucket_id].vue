@@ -105,8 +105,9 @@ async function reloadObjects() {
   refreshing.value = true
   try {
     await refresh()
-  } catch {
-    toast.add({ title: 'Failed to reload objects', color: 'error' })
+    if (error.value) {
+      toast.add({ title: 'Failed to reload objects', color: 'error' })
+    }
   } finally {
     refreshing.value = false
   }
@@ -127,14 +128,22 @@ function confirmDelete(type: DeleteTarget['type'], key: string) {
 
 async function deleteSelected() {
   if (!deleteTarget.value) return
+  const type = deleteTarget.value.type
   deleting.value = true
   try {
-    const query = deleteTarget.value.type === 'folder'
+    const query = type === 'folder'
       ? { prefix: deleteTarget.value.key }
       : { key: deleteTarget.value.key }
-    await $fetch(objectsUrl.value, { method: 'DELETE', query })
+    let continuationToken: string | undefined
+    do {
+      const response = await $fetch<{ next_continuation_token?: string | null }>(objectsUrl.value, {
+        method: 'DELETE',
+        query: { ...query, continuation_token: continuationToken },
+      })
+      continuationToken = response?.next_continuation_token ?? undefined
+    } while (continuationToken)
     toast.add({
-      title: deleteTarget.value.type === 'folder' ? 'Folder deleted' : 'Object deleted',
+      title: type === 'folder' ? 'Folder deleted' : 'Object deleted',
       color: 'success',
     })
     deleteModalOpen.value = false
@@ -142,7 +151,7 @@ async function deleteSelected() {
     await reloadObjects()
   } catch {
     toast.add({
-      title: deleteTarget.value.type === 'folder' ? 'Failed to delete folder' : 'Failed to delete object',
+      title: type === 'folder' ? 'Failed to delete folder' : 'Failed to delete object',
       color: 'error',
     })
   } finally {
@@ -158,8 +167,10 @@ async function download(object: BucketObject) {
     const anchor = document.createElement('a')
     anchor.href = url
     anchor.download = object.key.split('/').filter(Boolean).pop() || 'download'
+    document.body.append(anchor)
     anchor.click()
-    URL.revokeObjectURL(url)
+    anchor.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 0)
   } catch {
     toast.add({ title: 'Failed to download object', color: 'error' })
   } finally {
@@ -196,7 +207,6 @@ function formatSize(size: number) {
         </div>
         <div class="flex flex-wrap gap-2">
           <UButton :icon="ICONS.refresh" color="neutral" variant="solid" :loading="refreshing" @click="reloadObjects">Reload</UButton>
-          <UButton v-if="prefix" :icon="ICONS.folder" color="neutral" variant="solid" @click="openPrefix(parentPrefix())">Up one folder</UButton>
         </div>
       </div>
     </div>
