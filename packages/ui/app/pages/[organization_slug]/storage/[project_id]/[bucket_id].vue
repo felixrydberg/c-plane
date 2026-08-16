@@ -206,7 +206,7 @@ function formatSize(size: number) {
           </div>
         </div>
         <div class="flex flex-wrap gap-2">
-          <UButton :icon="ICONS.refresh" color="neutral" variant="solid" :loading="refreshing" @click="reloadObjects">Reload</UButton>
+          <UButton :icon="ICONS.refresh" color="neutral" variant="solid" :loading="refreshing" aria-label="Reload objects" @click="reloadObjects" />
         </div>
       </div>
     </div>
@@ -214,7 +214,7 @@ function formatSize(size: number) {
     <div v-if="status === 'pending'" class="flex items-center justify-center py-14 text-sm text-muted">Loading objects…</div>
     <div v-else-if="error" class="flex flex-col items-center justify-center gap-3 py-14 text-center">
       <p class="text-sm text-muted">Unable to load this bucket.</p>
-      <UButton :icon="ICONS.refresh" color="neutral" variant="solid" :loading="refreshing" @click="reloadObjects">Retry</UButton>
+      <UButton :icon="ICONS.refresh" color="neutral" variant="solid" :loading="refreshing" aria-label="Retry loading objects" @click="reloadObjects" />
     </div>
     <div v-else-if="!folders.length && !objects.length" class="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-default py-14 text-center">
       <UIcon :name="ICONS.folder" class="size-10 text-muted" />
