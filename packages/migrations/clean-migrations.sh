@@ -13,7 +13,7 @@ else
 fi
 
 rm -rf drizzle/
-"${DENO[@]}" x -p drizzle-kit@0.31.9 drizzle-kit generate --config=drizzle.config.ts
+"${DENO[@]}" x -p drizzle-kit@1.0.0-rc.4 drizzle-kit generate --config=drizzle.config.ts
 
 initial_migration=$(ls drizzle/0000_*.sql 2>/dev/null | head -1)
 echo "Generated initial migration: $initial_migration"
@@ -36,7 +36,7 @@ for entry in "${ordered_migrations[@]}"; do
   IFS=: read -r migration_num name <<< "$entry"
   echo "Generating custom migration: $name"
 
-  "${DENO[@]}" x -p drizzle-kit@0.31.9 drizzle-kit generate --custom --name="$name"
+  "${DENO[@]}" x -p drizzle-kit@1.0.0-rc.4 drizzle-kit generate --custom --name="$name"
 
   if [ -f "custom-migrations/$name.sql" ]; then
     generated_file=$(ls drizzle/${migration_num}_*.sql 2>/dev/null | head -1)

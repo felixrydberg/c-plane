@@ -1,9 +1,9 @@
 import { pgTable, text, uuid, timestamp, integer, boolean, index, uniqueIndex, jsonb, pgPolicy, foreignKey } from 'drizzle-orm/pg-core';
-import { project } from '.';
-import { organization } from '../tenants/organization';
-import { region } from '../infrastructure/regions';
-import { app_tenant, orgAllowed } from '../rls';
-import { external_registry } from '../tenants/registry';
+import { project } from './index.ts';
+import { organization } from '../tenants/organization.ts';
+import { region } from '../infrastructure/regions.ts';
+import { app_tenant, orgAllowed } from '../rls.ts';
+import { external_registry } from '../tenants/registry.ts';
 
 export const container = pgTable('container', {
   id: uuid("id").primaryKey(),

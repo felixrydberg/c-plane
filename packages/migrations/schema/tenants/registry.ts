@@ -1,7 +1,7 @@
 import { boolean, foreignKey, index, pgPolicy, pgTable, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { app_tenant, orgAllowed } from "../rls";
-import { organization } from "./organization";
+import { app_tenant, orgAllowed } from "../rls.ts";
+import { organization } from "./organization.ts";
 
 export const registry_repositories = pgTable("registry_repositories", {
   id: uuid("id").primaryKey(),

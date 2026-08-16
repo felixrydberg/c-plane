@@ -1,8 +1,8 @@
 import { boolean, index, json, pgPolicy, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
-import { organization } from "./tenants/organization";
-import type { EventType } from "../utils/event-types";
-export type { EventType } from "../utils/event-types";
-import { app_tenant, orgAllowed } from "./rls";
+import { organization } from "./tenants/organization.ts";
+import type { EventType } from "../utils/event-types.ts";
+export type { EventType } from "../utils/event-types.ts";
+import { app_tenant, orgAllowed } from "./rls.ts";
 
 export const event = pgTable("event", {
   id: uuid("id").primaryKey(),

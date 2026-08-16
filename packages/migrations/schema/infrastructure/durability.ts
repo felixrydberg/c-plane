@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { boolean, index, pgEnum, pgPolicy, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
-import { app_tenant } from "../rls";
+import { app_tenant } from "../rls.ts";
 
 export const S3_PROVIDER_TYPES = ["aws_s3", "cloudflare_r2"] as const;
 export const s3_provider_type = pgEnum("s3_provider_type", S3_PROVIDER_TYPES);

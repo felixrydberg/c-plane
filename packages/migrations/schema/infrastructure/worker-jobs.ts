@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { check, index, integer, jsonb, pgPolicy, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { organization } from "../tenants/organization";
-import { app_tenant } from "../rls";
+import { organization } from "../tenants/organization.ts";
+import { app_tenant } from "../rls.ts";
 
 export const worker_job = pgTable("worker_job", {
   id: uuid("id").primaryKey(),

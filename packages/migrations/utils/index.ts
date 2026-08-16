@@ -1,2 +1,2 @@
-export * from './api-key-scopes';
-export * from './event-types';
+export * from './api-key-scopes.ts';
+export * from './event-types.ts';
