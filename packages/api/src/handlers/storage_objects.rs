@@ -19,7 +19,7 @@ use crate::{
 
 use super::{databases::verify_project_in_org, storage_buckets::physical_bucket_name};
 
-const OBJECT_PAGE_SIZE: i32 = 100;
+const OBJECT_PAGE_SIZE: i32 = 25;
 
 #[derive(Deserialize)]
 pub struct ListObjectsQuery {

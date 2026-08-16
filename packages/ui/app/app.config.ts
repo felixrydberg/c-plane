@@ -22,7 +22,7 @@ export default defineAppConfig({
         { color: 'info', variant: 'frosted', class: '[--button-frosted-color:var(--ui-info)] focus-visible:outline-info/25' },
         { color: 'warning', variant: 'frosted', class: '[--button-frosted-color:var(--ui-warning)] text-inverted focus-visible:outline-warning/25' },
         { color: 'error', variant: 'frosted', class: '[--button-frosted-color:var(--ui-error)] focus-visible:outline-error/25' },
-        { color: 'neutral', variant: 'frosted', class: '[--button-frosted-color:var(--ui-color-neutral-900)] text-inverted focus-visible:outline-inverted/25 dark:[--button-frosted-color:var(--ui-color-neutral-100)]' },
+        { color: 'neutral', variant: 'frosted', class: '[--button-frosted-color:var(--ui-color-neutral-700)] text-inverted focus-visible:outline-inverted/25 dark:[--button-frosted-color:var(--ui-color-neutral-300)]' },
       ],
       defaultVariants: {
         variant: 'frosted',

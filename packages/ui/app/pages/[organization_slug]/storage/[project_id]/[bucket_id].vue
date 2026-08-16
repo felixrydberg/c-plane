@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { h } from 'vue'
 import type { Bucket } from '@cplane/sdk'
+import type { TableColumn } from '@nuxt/ui'
 import { ICONS } from '~/utils/icons'
 
 type BucketObject = {
@@ -18,6 +20,15 @@ type BucketObjectsPage = {
 type DeleteTarget = {
   type: 'object' | 'folder'
   key: string
+}
+
+type BucketRow = {
+  type: 'object' | 'folder'
+  key: string
+  name: string
+  last_modified: string | null
+  size: number | null
+  object?: BucketObject
 }
 
 const store = useStore()
@@ -49,7 +60,9 @@ const bucket = computed(() => buckets.value.find(item => item.id === bucketId.va
 const folders = ref<string[]>([])
 const objects = ref<BucketObject[]>([])
 const nextContinuationToken = ref<string | null>(null)
-const loadingMore = ref(false)
+const pageNumber = ref(1)
+const pageCache = ref<BucketObjectsPage[]>([])
+const loadingPage = ref(false)
 const downloading = ref<string | null>(null)
 const refreshing = ref(false)
 const deleteTarget = ref<DeleteTarget | null>(null)
@@ -57,9 +70,10 @@ const deleteModalOpen = ref(false)
 const deleting = ref(false)
 
 watch(initialPage, (page) => {
-  folders.value = page?.folders ?? []
-  objects.value = page?.objects ?? []
-  nextContinuationToken.value = page?.next_continuation_token ?? null
+  const firstPage = page ?? { folders: [], objects: [], next_continuation_token: null }
+  pageCache.value = [firstPage]
+  pageNumber.value = 1
+  applyPage(firstPage)
 }, { immediate: true })
 
 const breadcrumbs = computed(() => {
@@ -84,20 +98,33 @@ async function openPrefix(nextPrefix: string) {
   await navigateTo({ query: nextPrefix ? { prefix: nextPrefix } : {} })
 }
 
-async function loadMore() {
-  if (!nextContinuationToken.value || loadingMore.value) return
-  loadingMore.value = true
+function applyPage(page: BucketObjectsPage) {
+  folders.value = page.folders
+  objects.value = page.objects
+  nextContinuationToken.value = page.next_continuation_token
+}
+
+async function goToPage(targetPage: number) {
+  if (targetPage < 1 || loadingPage.value) return
+  const cachedPage = pageCache.value[targetPage - 1]
+  if (cachedPage) {
+    pageNumber.value = targetPage
+    applyPage(cachedPage)
+    return
+  }
+  if (targetPage !== pageNumber.value + 1 || !nextContinuationToken.value) return
+  loadingPage.value = true
   try {
     const page = await $fetch<BucketObjectsPage>(objectsUrl.value, {
       query: { prefix: prefix.value || undefined, continuation_token: nextContinuationToken.value },
     })
-    folders.value.push(...page.folders)
-    objects.value.push(...page.objects)
-    nextContinuationToken.value = page.next_continuation_token
+    pageCache.value[targetPage - 1] = page
+    pageNumber.value = targetPage
+    applyPage(page)
   } catch {
-    toast.add({ title: 'Failed to load more objects', color: 'error' })
+    toast.add({ title: 'Failed to load next page', color: 'error' })
   } finally {
-    loadingMore.value = false
+    loadingPage.value = false
   }
 }
 
@@ -189,6 +216,93 @@ function formatSize(size: number) {
   }
   return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unit]}`
 }
+
+const UButton = resolveComponent('UButton')
+const UIcon = resolveComponent('UIcon')
+const rows = computed<BucketRow[]>(() => [
+  ...folders.value.map(key => ({
+    type: 'folder' as const,
+    key,
+    name: key.slice(prefix.value.length).replace(/\/$/, ''),
+    last_modified: null,
+    size: null,
+  })),
+  ...objects.value.map(object => ({
+    type: 'object' as const,
+    key: object.key,
+    name: object.key.slice(prefix.value.length),
+    last_modified: object.last_modified,
+    size: object.size,
+    object,
+  })),
+])
+
+const columns: TableColumn<BucketRow>[] = [
+  {
+    accessorKey: 'name',
+    header: 'Name',
+    cell: ({ row }) => {
+      const item = row.original
+      if (item.type === 'folder') {
+        return h('button', {
+          type: 'button',
+          class: 'flex min-w-0 items-center gap-2 text-left hover:text-default',
+          onClick: () => openPrefix(item.key),
+        }, [
+          h(UIcon, { name: ICONS.folder, class: 'size-4 shrink-0 text-muted' }),
+          h('span', { class: 'truncate' }, item.name),
+        ])
+      }
+      return h('span', { class: 'font-mono text-xs break-all' }, item.name)
+    },
+  },
+  {
+    accessorKey: 'last_modified',
+    header: 'Modified',
+    meta: { class: { th: 'hidden sm:table-cell', td: 'hidden sm:table-cell' } },
+    cell: ({ row }) => row.original.last_modified
+      ? new Date(row.original.last_modified).toLocaleString()
+      : '—',
+  },
+  {
+    accessorKey: 'size',
+    header: 'Size',
+    meta: { class: { th: 'hidden sm:table-cell text-right', td: 'hidden sm:table-cell text-right' } },
+    cell: ({ row }) => row.original.size === null ? '—' : formatSize(row.original.size),
+  },
+  {
+    id: 'actions',
+    header: 'Actions',
+    meta: { class: { th: 'text-right', td: 'text-right' } },
+    cell: ({ row }) => {
+      const item = row.original
+      const buttons = item.type === 'folder'
+        ? [h(UButton, {
+            icon: ICONS.trash,
+            color: 'error',
+            size: 'xs',
+            onClick: () => confirmDelete('folder', item.key),
+          }, { default: () => 'Delete' })]
+        : [
+            h(UButton, {
+              icon: ICONS.download,
+              color: 'neutral',
+              size: 'xs',
+              loading: downloading.value === item.key,
+              onClick: () => download(item.object!),
+            }, { default: () => 'Download' }),
+            h(UButton, {
+              icon: ICONS.trash,
+              color: 'error',
+              size: 'xs',
+              loading: deleting.value && deleteTarget.value?.key === item.key,
+              onClick: () => confirmDelete('object', item.key),
+            }, { default: () => 'Delete' }),
+          ]
+      return h('div', { class: 'flex justify-end gap-2' }, buttons)
+    },
+  },
+]
 </script>
 
 <template>
@@ -206,7 +320,7 @@ function formatSize(size: number) {
           </div>
         </div>
         <div class="flex flex-wrap gap-2">
-          <UButton :icon="ICONS.refresh" color="neutral" variant="solid" :loading="refreshing" aria-label="Reload objects" @click="reloadObjects" />
+          <UButton :icon="ICONS.refresh" color="neutral" :loading="refreshing" aria-label="Reload objects" @click="reloadObjects" />
         </div>
       </div>
     </div>
@@ -214,44 +328,21 @@ function formatSize(size: number) {
     <div v-if="status === 'pending'" class="flex items-center justify-center py-14 text-sm text-muted">Loading objects…</div>
     <div v-else-if="error" class="flex flex-col items-center justify-center gap-3 py-14 text-center">
       <p class="text-sm text-muted">Unable to load this bucket.</p>
-      <UButton :icon="ICONS.refresh" color="neutral" variant="solid" :loading="refreshing" aria-label="Retry loading objects" @click="reloadObjects" />
+      <UButton :icon="ICONS.refresh" color="neutral" :loading="refreshing" aria-label="Retry loading objects" @click="reloadObjects" />
     </div>
-    <div v-else-if="!folders.length && !objects.length" class="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-default py-14 text-center">
-      <UIcon :name="ICONS.folder" class="size-10 text-muted" />
-      <p class="text-muted">This folder is empty.</p>
+    <UiTable v-else :status="status" :items="rows" :columns="columns" disable-header>
+      <template #empty>
+        <div class="flex flex-col items-center justify-center gap-3 py-14 text-center">
+          <UIcon :name="ICONS.folder" class="size-10 text-muted" />
+          <p class="text-muted">This folder is empty.</p>
+        </div>
+      </template>
+    </UiTable>
+    <div v-if="pageNumber > 1 || nextContinuationToken" class="flex items-center justify-center gap-3">
+      <UButton color="neutral" variant="ghost" :disabled="loadingPage || pageNumber === 1" @click="goToPage(pageNumber - 1)">Previous</UButton>
+      <span class="text-sm text-muted">Page {{ pageNumber }}</span>
+      <UButton color="neutral" variant="ghost" :loading="loadingPage" :disabled="!nextContinuationToken" @click="goToPage(pageNumber + 1)">Next</UButton>
     </div>
-    <div v-else class="overflow-hidden rounded-lg border border-default/60">
-      <table class="w-full text-sm">
-        <thead class="bg-elevated text-left">
-          <tr><th class="p-3">Name</th><th class="hidden p-3 sm:table-cell">Modified</th><th class="hidden p-3 text-right sm:table-cell">Size</th><th class="p-3"><span class="sr-only">Actions</span></th></tr>
-        </thead>
-        <tbody>
-          <tr v-for="folder in folders" :key="folder" class="border-t border-default/60">
-            <td colspan="4" class="p-0">
-              <div class="flex items-center gap-2 p-2 hover:bg-elevated">
-                <button class="flex min-w-0 flex-1 items-center gap-2 p-1 text-left" @click="openPrefix(folder)">
-                  <UIcon :name="ICONS.folder" class="size-4 shrink-0 text-muted" />
-                  <span class="truncate">{{ folder.slice(prefix.length).replace(/\/$/, '') }}</span>
-                </button>
-                <UButton :icon="ICONS.trash" color="error" size="xs" @click="confirmDelete('folder', folder)">Delete</UButton>
-              </div>
-            </td>
-          </tr>
-          <tr v-for="object in objects" :key="object.key" class="border-t border-default/60">
-            <td class="p-3 font-mono text-xs break-all">{{ object.key.slice(prefix.length) }}</td>
-            <td class="hidden p-3 text-xs text-muted sm:table-cell">{{ object.last_modified ? new Date(object.last_modified).toLocaleString() : '—' }}</td>
-            <td class="hidden p-3 text-right text-xs text-muted sm:table-cell">{{ formatSize(object.size) }}</td>
-            <td class="p-3 text-right">
-              <div class="flex justify-end gap-2">
-                <UButton :icon="ICONS.download" color="neutral" variant="solid" size="xs" :loading="downloading === object.key" @click="download(object)">Download</UButton>
-                <UButton :icon="ICONS.trash" color="error" size="xs" :loading="deleting && deleteTarget?.key === object.key" @click="confirmDelete('object', object.key)">Delete</UButton>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <div v-if="nextContinuationToken" class="flex justify-center"><UButton :icon="ICONS.refresh" color="neutral" variant="solid" :loading="loadingMore" @click="loadMore">Load more</UButton></div>
 
     <UModal v-model:open="deleteModalOpen" :title="deleteTarget?.type === 'folder' ? 'Delete folder' : 'Delete object'" :description="deleteTarget?.type === 'folder' ? 'This deletes every object under the folder prefix.' : 'This permanently deletes the object.'">
       <template #body>

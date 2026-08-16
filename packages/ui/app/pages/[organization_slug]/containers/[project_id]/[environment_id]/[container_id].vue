@@ -263,7 +263,7 @@ watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged(
     <div v-else-if="loadError" class="rounded-lg border border-default/60 bg-default p-8 text-center">
       <p class="text-sm font-medium">Container unavailable</p>
       <p class="mt-1 text-sm text-muted">{{ loadError }}</p>
-      <UButton class="mt-5" color="neutral" variant="solid" :to="backUrl()">Back to containers</UButton>
+      <UButton class="mt-5" color="neutral" :to="backUrl()">Back to containers</UButton>
     </div>
 
     <div v-else class="overflow-hidden rounded-lg border border-default/60 bg-default">
@@ -350,7 +350,7 @@ watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged(
                     <UInput v-model="name" disabled class="w-full" />
                     <div class="flex gap-2">
                       <UInput v-model="image" placeholder="nginx:latest" class="min-w-0 flex-1" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @input="markChanged" />
-                      <UButton v-if="canRefreshLatest && (revisionView === 'draft' || revisionView === 'synced')" :icon="ICONS.refresh" color="neutral" variant="solid" :loading="refreshing" :disabled="hasChanges" @click="refreshLatest">Refresh latest</UButton>
+                      <UButton v-if="canRefreshLatest && (revisionView === 'draft' || revisionView === 'synced')" :icon="ICONS.refresh" color="neutral" :loading="refreshing" :disabled="hasChanges" @click="refreshLatest">Refresh latest</UButton>
                     </div>
                     <UFormField label="External registry" description="Optional credentials for a private image.">
                       <USelect v-model="externalRegistryId" :items="externalRegistryItems" class="w-full" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @change="markChanged" />
@@ -378,7 +378,7 @@ watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged(
                       <UButton size="xs" color="error" :icon="ICONS.trash" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @click="removeEnvRow(i)">Remove</UButton>
                     </div>
                     <p v-if="envRows.length === 0" class="text-sm text-muted">No environment variables configured.</p>
-                    <UButton size="sm" variant="solid" color="neutral" :icon="ICONS.plus" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @click="addEnvRow">Add Variable</UButton>
+                    <UButton size="sm" color="neutral" :icon="ICONS.plus" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @click="addEnvRow">Add Variable</UButton>
                   </div>
                 </section>
                 <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
@@ -388,12 +388,12 @@ watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged(
                 <div class="flex justify-end gap-3 py-5">
                   <template v-if="revisionView === 'draft' || revisionView === 'synced'">
                     <UButton variant="ghost" color="neutral" :to="backUrl()">Cancel</UButton>
-                    <UButton :icon="ICONS.pencil" color="neutral" variant="solid" :loading="saving" :disabled="!hasChanges" @click="save(false)">Save as draft</UButton>
+                    <UButton :icon="ICONS.pencil" color="neutral" :loading="saving" :disabled="!hasChanges" @click="save(false)">Save as draft</UButton>
                     <UButton :icon="ICONS.check" :loading="saving" :disabled="!hasChanges" @click="save(true)">Save &amp; deploy</UButton>
                   </template>
                   <template v-else>
                     <p class="mr-auto text-sm text-muted">Fork this revision to edit it.</p>
-                    <UButton :icon="ICONS.pencil" color="neutral" variant="solid" :loading="forking" @click="forkRevision">Fork revision</UButton>
+                    <UButton :icon="ICONS.pencil" color="neutral" :loading="forking" @click="forkRevision">Fork revision</UButton>
                     <UButton v-if="revisionView === 'historical'" :icon="ICONS.check" :loading="deployingRevision" @click="deployRevision">Deploy revision</UButton>
                   </template>
                 </div>

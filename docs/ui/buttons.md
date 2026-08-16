@@ -33,8 +33,8 @@ For the single most important action on a page: Create, Save, Deploy. Use sparin
 For actions without destructive or primary weight: Edit, Settings, Link, Manage, Hide, Graph. The default choice when primary is already claimed.
 
 ```vue
-<UButton :icon="ICONS.general" variant="solid" color="neutral" @click="openSettings">Settings</UButton>
-<UButton :icon="ICONS.plus" variant="solid" color="neutral" @click="addEnvRow">Add</UButton>
+<UButton :icon="ICONS.general" color="neutral" @click="openSettings">Settings</UButton>
+<UButton :icon="ICONS.plus" color="neutral" @click="addEnvRow">Add</UButton>
 ```
 
 ### Destructive

@@ -221,7 +221,7 @@
         <UButton type="submit" block :loading="loading" :disabled="passkeyLoading" size="lg" class="justify-center">
           Sign up
         </UButton>
-        <UButton type="button" :icon="ICONS.passkey" color="neutral" variant="solid" block :loading="passkeyLoading" :disabled="loading" size="lg" class="justify-center" @click="onPasskeySignUp">
+        <UButton type="button" :icon="ICONS.passkey" color="neutral" block :loading="passkeyLoading" :disabled="loading" size="lg" class="justify-center" @click="onPasskeySignUp">
           Save a passkey instead
         </UButton>
         <UButton type="button" color="neutral" variant="ghost" block :disabled="loading || passkeyLoading" size="lg" class="justify-center" @click="signupStep = 'identity'">

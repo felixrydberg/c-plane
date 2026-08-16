@@ -36,7 +36,7 @@ async function revoke(token: NonNullable<typeof tokens.value>[number]) {
             <td class="p-3">{{ new Date(token.created_at).toLocaleDateString() }}</td>
             <td class="p-3 text-right">
               <div class="flex justify-end gap-2">
-                <UButton :icon="ICONS.pencil" color="neutral" variant="solid" size="sm" :to="`/${route.params.organization_slug}/registry/access-tokens/${token.id}`">Edit</UButton>
+                <UButton :icon="ICONS.pencil" color="neutral" size="sm" :to="`/${route.params.organization_slug}/registry/access-tokens/${token.id}`">Edit</UButton>
                 <UButton :icon="ICONS.trash" color="error" size="sm" :loading="revokingId === token.id" @click="revoke(token)">Revoke</UButton>
               </div>
             </td>

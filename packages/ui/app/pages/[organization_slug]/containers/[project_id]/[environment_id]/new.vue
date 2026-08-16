@@ -121,7 +121,7 @@ function backUrl() { return `/${route.params.organization_slug}/containers/${pro
               <UButton size="xs" color="error" :icon="ICONS.trash" @click="removeEnvRow(i)">Remove</UButton>
             </div>
             <p v-if="envRows.length === 0" class="text-sm text-muted">No environment variables configured.</p>
-            <UButton size="sm" variant="solid" color="neutral" :icon="ICONS.plus" @click="addEnvRow">Add Variable</UButton>
+            <UButton size="sm" color="neutral" :icon="ICONS.plus" @click="addEnvRow">Add Variable</UButton>
           </div>
         </section>
         <p v-if="error" class="py-4 text-sm text-error">{{ error }}</p>

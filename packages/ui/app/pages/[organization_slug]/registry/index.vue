@@ -51,7 +51,7 @@ async function deleteRepository() {
         <p class="text-muted text-sm mt-1">Private repositories for {{ organizationSlug }}.</p>
       </div>
       <div class="flex flex-wrap justify-end gap-2">
-        <UButton :icon="ICONS.authentication" color="neutral" variant="solid" :to="`/${organizationSlug}/registry/access-tokens`">Manage access tokens</UButton>
+        <UButton :icon="ICONS.authentication" color="neutral" :to="`/${organizationSlug}/registry/access-tokens`">Manage access tokens</UButton>
         <UButton :icon="ICONS.plus" color="primary" :to="`/${route.params.organization_slug}/registry/new`">New repository</UButton>
       </div>
     </div>

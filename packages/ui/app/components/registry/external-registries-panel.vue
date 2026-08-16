@@ -112,8 +112,8 @@ async function submit() {
             <td class="p-3">{{ registry.username }}</td>
             <td class="p-3">
               <div class="flex justify-end gap-2">
-                <UButton :icon="ICONS.pencil" color="neutral" variant="solid" size="sm" @click="openAction('rename', registry)">Rename</UButton>
-                <UButton :icon="ICONS.refresh" color="neutral" variant="solid" size="sm" @click="openAction('rotate', registry)">Rotate token</UButton>
+                <UButton :icon="ICONS.pencil" color="neutral" size="sm" @click="openAction('rename', registry)">Rename</UButton>
+                <UButton :icon="ICONS.refresh" color="neutral" size="sm" @click="openAction('rotate', registry)">Rotate token</UButton>
                 <UButton :icon="ICONS.trash" color="error" size="sm" @click="openAction('delete', registry)">Delete</UButton>
               </div>
             </td>

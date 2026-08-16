@@ -46,7 +46,7 @@ async function deleteBucket() {
     <div class="flex flex-col gap-4 border-b border-default/60 pb-5 sm:flex-row sm:items-end sm:justify-between">
       <div><h1 class="text-2xl font-semibold">Storage</h1><p class="text-muted text-sm mt-1">Buckets for {{ projectName }}.</p></div>
       <div class="flex flex-wrap justify-end gap-2">
-        <UButton :icon="ICONS.authentication" color="neutral" variant="solid" :to="`/${route.params.organization_slug}/storage/${projectId}/access-tokens`">Manage access tokens</UButton>
+        <UButton :icon="ICONS.authentication" color="neutral" :to="`/${route.params.organization_slug}/storage/${projectId}/access-tokens`">Manage access tokens</UButton>
         <UButton :icon="ICONS.plus" color="primary" :to="`/${route.params.organization_slug}/storage/${projectId}/new`">New bucket</UButton>
       </div>
     </div>
@@ -57,7 +57,7 @@ async function deleteBucket() {
       <div class="flex items-center justify-between gap-3 p-4 border-b border-default">
         <div><h2 class="font-semibold">{{ bucket.name }}</h2></div>
         <div class="flex gap-2">
-          <UButton :icon="ICONS.folder" color="neutral" variant="solid" size="sm" :to="`/${route.params.organization_slug}/storage/${projectId}/${bucket.id}`">View objects</UButton>
+            <UButton :icon="ICONS.folder" color="neutral" size="sm" :to="`/${route.params.organization_slug}/storage/${projectId}/${bucket.id}`">View objects</UButton>
           <UButton :icon="ICONS.trash" color="error" size="sm" @click="confirmDelete(bucket)">Delete</UButton>
         </div>
       </div>
