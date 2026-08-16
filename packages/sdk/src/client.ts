@@ -43,7 +43,6 @@ export type Sdk = {
     check: Operation<"/health", 'get'>
   }
   internal: {
-    delete_secret_internal: Operation<"/internal/organizations/{organization_id}/external-registries/{registry_id}/secret", 'delete'>
     provider_credentials: Operation<"/internal/s3-providers/{provider_id}/credentials", 'get'>
     resolve_access_token: Operation<"/internal/s3-access-tokens/resolve/{access_key}", 'get'>
   }
@@ -125,7 +124,6 @@ export const createSdk = (options: SdkOptions = {}): Sdk => {
       check: (...args: Parameters<Operation<"/health", 'get'>>) => client.GET("/health", ...args)
     },
     internal: {
-      delete_secret_internal: (...args: Parameters<Operation<"/internal/organizations/{organization_id}/external-registries/{registry_id}/secret", 'delete'>>) => client.DELETE("/internal/organizations/{organization_id}/external-registries/{registry_id}/secret", ...args),
       provider_credentials: (...args: Parameters<Operation<"/internal/s3-providers/{provider_id}/credentials", 'get'>>) => client.GET("/internal/s3-providers/{provider_id}/credentials", ...args),
       resolve_access_token: (...args: Parameters<Operation<"/internal/s3-access-tokens/resolve/{access_key}", 'get'>>) => client.GET("/internal/s3-access-tokens/resolve/{access_key}", ...args)
     },

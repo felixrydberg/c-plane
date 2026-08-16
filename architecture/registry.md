@@ -103,9 +103,9 @@ access-key pair. Garbage collection uses the auth-free
   tags, layers, and upload state.
 - Manifest deletion makes blobs eligible for collection. The control plane
   queues a `registry_gc` job in Postgres; horizontally scalable workers claim
-  named queues with `FOR UPDATE SKIP LOCKED` and run Distribution's official
-  collector. API token grants and Storage permissions make the Registry
-  read-only while the shared maintenance state is active.
+  the maintenance queue with `FOR UPDATE SKIP LOCKED` and run Distribution's
+  official collector. API token grants and Storage permissions make the
+  Registry read-only while the shared maintenance state is active.
 - Provider mirroring is deferred to the generic Storage design; the registry
   initially uses one authoritative provider.
 - Quotas, organization deletion cleanup, and private external-registry

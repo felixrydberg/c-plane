@@ -148,9 +148,7 @@ services:
     environment:
       DATABASE_URL: postgresql://cplane_admin:${POSTGRES_ADMIN_PASSWORD}@postgresd:5432/cplane
       REDIS_URL: redis://valkey:6379
-      WORKER_QUEUES: maintenance,secrets
-      API_URL: http://api:8080
-      CPLANE_SERVICE_TOKEN: ${CPLANE_SERVICE_TOKEN}
+      WORKER_QUEUES: maintenance
       WORKER_CONCURRENCY: 1
       REGISTRY_TOKEN_TTL_SECONDS: ${REGISTRY_TOKEN_TTL_SECONDS:-60}
       REGISTRY_STORAGE_S3_REGION: ${REGISTRY_STORAGE_S3_REGION}
