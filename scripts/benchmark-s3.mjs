@@ -20,8 +20,8 @@ const positiveInt = (name, fallback) => {
   return value
 }
 
-const accessKey = 'CP12230038F5D640A9A10FD83D127983AE'
-const secretKey = '5f61c10cbc3244d4b1ab591bf511075c3eea65565bb6420fb1b5581acbe311dd'
+const accessKey = 'CPF7ECD9A20E9A4C059CDA709498E10ABA'
+const secretKey = 'edccfbe3d5fd4e1fb1b4d6ac74ceb4ae66de02646bd74077989f79377402acd9'
 const bucket = 'test'
 if (!bucket) throw new Error('Set S3_BUCKET.')
 

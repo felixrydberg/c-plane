@@ -12,3 +12,4 @@ pub mod registry_access_tokens;
 pub mod registry_repositories;
 pub mod storage_access_tokens;
 pub mod storage_buckets;
+pub mod storage_objects;

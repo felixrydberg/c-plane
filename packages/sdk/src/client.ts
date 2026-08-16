@@ -78,8 +78,10 @@ export type Sdk = {
     create_access_token: Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens", 'post'>
     create_bucket: Operation<"/api/organization/{organization_id}/storage/buckets", 'post'>
     delete_bucket: Operation<"/api/organization/{organization_id}/storage/buckets/{bucket_id}", 'delete'>
+    download_bucket_object: Operation<"/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects/download", 'get'>
     get_access_token: Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}", 'get'>
     list_access_tokens: Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens", 'get'>
+    list_bucket_objects: Operation<"/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects", 'get'>
     list_buckets: Operation<"/api/organization/{organization_id}/storage/buckets", 'get'>
     revoke_access_token: Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}", 'delete'>
     update_access_token: Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}", 'patch'>
@@ -159,8 +161,10 @@ export const createSdk = (options: SdkOptions = {}): Sdk => {
       create_access_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens", 'post'>>) => client.POST("/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens", ...args),
       create_bucket: (...args: Parameters<Operation<"/api/organization/{organization_id}/storage/buckets", 'post'>>) => client.POST("/api/organization/{organization_id}/storage/buckets", ...args),
       delete_bucket: (...args: Parameters<Operation<"/api/organization/{organization_id}/storage/buckets/{bucket_id}", 'delete'>>) => client.DELETE("/api/organization/{organization_id}/storage/buckets/{bucket_id}", ...args),
+      download_bucket_object: (...args: Parameters<Operation<"/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects/download", 'get'>>) => client.GET("/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects/download", ...args),
       get_access_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}", 'get'>>) => client.GET("/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}", ...args),
       list_access_tokens: (...args: Parameters<Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens", 'get'>>) => client.GET("/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens", ...args),
+      list_bucket_objects: (...args: Parameters<Operation<"/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects", 'get'>>) => client.GET("/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects", ...args),
       list_buckets: (...args: Parameters<Operation<"/api/organization/{organization_id}/storage/buckets", 'get'>>) => client.GET("/api/organization/{organization_id}/storage/buckets", ...args),
       revoke_access_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}", 'delete'>>) => client.DELETE("/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}", ...args),
       update_access_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}", 'patch'>>) => client.PATCH("/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}", ...args)

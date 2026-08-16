@@ -18,6 +18,7 @@ use crate::handlers::registry_access_tokens;
 use crate::handlers::registry_repositories;
 use crate::handlers::storage_access_tokens;
 use crate::handlers::storage_buckets;
+use crate::handlers::storage_objects;
 use crate::middleware::internal_auth;
 use crate::openapi::ApiDoc;
 
@@ -116,6 +117,14 @@ pub fn create_routes() -> Router {
         .route(
             "/api/organization/{organization_id}/storage/buckets/{bucket_id}",
             delete(storage_buckets::delete_bucket),
+        )
+        .route(
+            "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects",
+            get(storage_objects::list_objects).delete(storage_objects::delete_objects),
+        )
+        .route(
+            "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects/download",
+            get(storage_objects::download_object),
         )
         .route(
             "/api/organization/{organization_id}/storage/buckets",

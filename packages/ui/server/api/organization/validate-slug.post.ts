@@ -14,9 +14,11 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const org = await getIdentityDb().query.organization.findFirst({
-    where: eq(organization.slug, body.slug),
-  });
+  const org = await getIdentityDb()
+    .select({ id: organization.id })
+    .from(organization)
+    .where(eq(organization.slug, body.slug))
+    .limit(1);
 
-  return { exists: !!org };
+  return { exists: org.length > 0 };
 });

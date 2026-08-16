@@ -144,6 +144,16 @@ pub(crate) fn required_scope(method: &str, path: &str) -> Option<&'static str> {
         ("DELETE", "/api/organization/{organization_id}/storage/buckets/{bucket_id}") => {
             "bucket:delete"
         }
+        ("GET", "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects") => {
+            "bucket:read"
+        }
+        ("DELETE", "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects") => {
+            "bucket:delete"
+        }
+        (
+            "GET",
+            "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects/download",
+        ) => "bucket:read",
         ("GET", "/api/organization/{organization_id}/registry/repositories") => "registry:read",
         ("POST", "/api/organization/{organization_id}/registry/repositories") => "registry:create",
         ("DELETE", "/api/organization/{organization_id}/registry/repositories/{repository_id}") => {
@@ -618,6 +628,21 @@ mod tests {
             (
                 "DELETE",
                 "/api/organization/{organization_id}/storage/buckets/{bucket_id}",
+                "bucket:delete",
+            ),
+            (
+                "GET",
+                "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects",
+                "bucket:read",
+            ),
+            (
+                "GET",
+                "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects/download",
+                "bucket:read",
+            ),
+            (
+                "DELETE",
+                "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects",
                 "bucket:delete",
             ),
             (

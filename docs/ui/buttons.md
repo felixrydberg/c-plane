@@ -64,6 +64,7 @@ Use these icon keys from `~/utils/icons`:
 | `pencil` | `i-heroicons:pencil-square` | Edit |
 | `check` | `i-heroicons:check` | Confirm / Save |
 | `refresh` | `i-heroicons:arrow-path` | Retry / Refresh |
+| `download` | `i-heroicons:arrow-down-tray` | Download |
 
 Add new keys to `packages/ui/app/utils/icons.ts` and register them here.
 

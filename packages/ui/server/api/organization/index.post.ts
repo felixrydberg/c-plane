@@ -30,20 +30,24 @@ export default defineEventHandler(async (event) => {
 
   const { name, email, slug } = parsed.data;
 
-  const existingSlug = await getIdentityDb().query.organization.findFirst({
-    where: eq(organization.slug, slug),
-  });
-  if (existingSlug) {
+  const existingSlug = await getIdentityDb()
+    .select({ id: organization.id })
+    .from(organization)
+    .where(eq(organization.slug, slug))
+    .limit(1);
+  if (existingSlug.length > 0) {
     throw createError({
       statusCode: 409,
       statusMessage: "Organization slug is already in use",
     });
   }
 
-  const existingEmail = await getIdentityDb().query.organization.findFirst({
-    where: eq(organization.email, email),
-  });
-  if (existingEmail) {
+  const existingEmail = await getIdentityDb()
+    .select({ id: organization.id })
+    .from(organization)
+    .where(eq(organization.email, email))
+    .limit(1);
+  if (existingEmail.length > 0) {
     throw createError({
       statusCode: 409,
       statusMessage: "Organization email is already in use",

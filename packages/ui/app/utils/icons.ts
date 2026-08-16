@@ -16,6 +16,7 @@ export const ICONS = {
   pencil: 'i-heroicons:pencil-square',
   check: 'i-heroicons:check',
   refresh: 'i-heroicons:arrow-path',
+  download: 'i-heroicons:arrow-down-tray',
   link: 'i-heroicons:link',
   arrowTopRight: 'i-heroicons:arrow-top-right-on-square',
   chevronUpDown: 'i-heroicons:chevron-up-down',
