@@ -69,7 +69,9 @@ done
 ensure_registry_token_secret
 ensure_secret REGISTRY_STORAGE_S3_ACCESSKEY 16
 ensure_secret REGISTRY_STORAGE_S3_GC_ACCESSKEY 16
-[ -n "$(env_value STORAGE_ENDPOINT_URL)" ] || set_env STORAGE_ENDPOINT_URL http://localhost:8081
+case "$(env_value STORAGE_ENDPOINT_URL)" in
+  ""|http://localhost:8081) set_env STORAGE_ENDPOINT_URL http://storage:8081 ;;
+esac
 [ -n "$(env_value REGISTRY_HOST)" ] || set_env REGISTRY_HOST localhost:5000
 [ -n "$(env_value REGISTRY_STORAGE_S3_REGION)" ] || set_env REGISTRY_STORAGE_S3_REGION us-east-1
 [ -n "$(env_value REGISTRY_STORAGE_S3_BUCKET)" ] || set_env REGISTRY_STORAGE_S3_BUCKET cplane-registry

@@ -14,6 +14,7 @@ use crate::{
     auth::{BucketPermission, CredentialIdentity, CredentialResolver},
     config::Config,
     crypto::select_sse_key,
+    internal::{self, InternalStorage},
 };
 
 pub struct StorageService {
@@ -461,14 +462,31 @@ impl StorageService {
     }
 
     pub async fn serve(self) -> Result<(), std::io::Error> {
+        let credentials = self.credentials.clone();
         let mut builder = S3ServiceBuilder::new(ProviderProxy {
-            credentials: self.credentials.clone(),
+            credentials: credentials.clone(),
         });
-        builder.set_auth(self.credentials.clone());
-        builder.set_access(self.credentials);
+        builder.set_auth(credentials.clone());
+        builder.set_access(credentials.clone());
         let s3 = HandleError::new(builder.build(), handle_s3_error);
         let app = Router::new()
             .route("/health", get(|| async { "OK" }))
+            .route(
+                "/.cplane/objects/list",
+                axum::routing::post(internal::list_objects),
+            )
+            .route(
+                "/.cplane/objects/download",
+                axum::routing::post(internal::download_object),
+            )
+            .route(
+                "/.cplane/objects/delete",
+                axum::routing::post(internal::delete_objects),
+            )
+            .with_state(InternalStorage::new(
+                credentials,
+                self.config.internal_token.clone(),
+            ))
             .fallback_service(s3);
         let listener = tokio::net::TcpListener::bind(self.config.listen).await?;
         tracing::info!(address = %self.config.listen, "storage endpoint started");

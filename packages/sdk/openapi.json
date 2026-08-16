@@ -2872,6 +2872,230 @@
         "x-cplane-required-scope": "bucket:delete"
       }
     },
+    "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects": {
+      "get": {
+        "tags": [
+          "storage"
+        ],
+        "operationId": "storage_list_bucket_objects",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "bucket_id",
+            "in": "path",
+            "description": "Bucket ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "prefix",
+            "in": "query",
+            "description": "Folder prefix",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "continuation_token",
+            "in": "query",
+            "description": "S3 continuation token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Objects and folders in the bucket",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BucketObjectsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Bucket not found"
+          },
+          "503": {
+            "description": "Storage gateway unavailable"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "bucket:read"
+      },
+      "delete": {
+        "tags": [
+          "storage"
+        ],
+        "operationId": "storage_delete_bucket_objects",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "bucket_id",
+            "in": "path",
+            "description": "Bucket ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "key",
+            "in": "query",
+            "description": "Exact object key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "prefix",
+            "in": "query",
+            "description": "Folder prefix",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "continuation_token",
+            "in": "query",
+            "description": "Continuation token for a partial folder deletion",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Folder deletion partially completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteObjectsResponse"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "Object or folder deleted"
+          },
+          "400": {
+            "description": "Exactly one non-empty key or prefix is required"
+          },
+          "404": {
+            "description": "Bucket not found"
+          },
+          "503": {
+            "description": "Storage gateway unavailable"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "bucket:delete"
+      }
+    },
+    "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects/download": {
+      "get": {
+        "tags": [
+          "storage"
+        ],
+        "operationId": "storage_download_bucket_object",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "bucket_id",
+            "in": "path",
+            "description": "Bucket ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "key",
+            "in": "query",
+            "description": "Exact object key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Object download",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Object key is required"
+          },
+          "404": {
+            "description": "Bucket or object not found"
+          },
+          "503": {
+            "description": "Storage gateway unavailable"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "bucket:read"
+      }
+    },
     "/api/registry/token": {
       "get": {
         "tags": [
@@ -3113,6 +3337,61 @@
           },
           "name": {
             "type": "string"
+          }
+        }
+      },
+      "BucketObjectResponse": {
+        "type": "object",
+        "required": [
+          "key",
+          "size"
+        ],
+        "properties": {
+          "etag": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "key": {
+            "type": "string"
+          },
+          "last_modified": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "BucketObjectsResponse": {
+        "type": "object",
+        "required": [
+          "folders",
+          "objects"
+        ],
+        "properties": {
+          "folders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "next_continuation_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BucketObjectResponse"
+            }
           }
         }
       },
@@ -3714,6 +3993,24 @@
           "project_id": {
             "type": "string",
             "format": "uuid"
+          }
+        }
+      },
+      "DeleteObjectsResponse": {
+        "type": "object",
+        "required": [
+          "deleted"
+        ],
+        "properties": {
+          "deleted": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "next_continuation_token": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },

@@ -447,6 +447,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["storage_list_bucket_objects"];
+        put?: never;
+        post?: never;
+        delete: operations["storage_delete_bucket_objects"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["storage_download_bucket_object"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/registry/token": {
         parameters: {
             query?: never;
@@ -524,6 +556,18 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
+        };
+        BucketObjectResponse: {
+            etag?: string | null;
+            key: string;
+            last_modified?: string | null;
+            /** Format: int64 */
+            size: number;
+        };
+        BucketObjectsResponse: {
+            folders: string[];
+            next_continuation_token?: string | null;
+            objects: components["schemas"]["BucketObjectResponse"][];
         };
         BucketPermissionRequest: {
             /** Format: uuid */
@@ -693,6 +737,10 @@ export interface components {
             /** Format: uuid */
             project_id: string;
         };
+        DeleteObjectsResponse: {
+            deleted: number;
+            next_continuation_token?: string | null;
+        };
         EnvironmentResponse: {
             deployed_timeline: string;
             draft_timeline: string;
@@ -729,6 +777,7 @@ export interface components {
             id: string;
             summary: string;
         };
+        /** @enum {string} */
         ExternalRegistryProvider: "docker_hub" | "github" | "gitlab" | "google_artifact_registry" | "aws_ecr";
         ExternalRegistryResponse: {
             created_at: string;
@@ -2726,6 +2775,159 @@ export interface operations {
             };
             /** @description Provider bucket could not be deleted */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    storage_list_bucket_objects: {
+        parameters: {
+            query?: {
+                /** @description Folder prefix */
+                prefix?: string;
+                /** @description S3 continuation token */
+                continuation_token?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                organization_id: string;
+                /** @description Bucket ID */
+                bucket_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Objects and folders in the bucket */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BucketObjectsResponse"];
+                };
+            };
+            /** @description Bucket not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Storage gateway unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    storage_delete_bucket_objects: {
+        parameters: {
+            query?: {
+                /** @description Exact object key */
+                key?: string;
+                /** @description Folder prefix */
+                prefix?: string;
+                /** @description Continuation token for a partial folder deletion */
+                continuation_token?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                organization_id: string;
+                /** @description Bucket ID */
+                bucket_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Folder deletion partially completed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteObjectsResponse"];
+                };
+            };
+            /** @description Object or folder deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Exactly one non-empty key or prefix is required */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bucket not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Storage gateway unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    storage_download_bucket_object: {
+        parameters: {
+            query: {
+                /** @description Exact object key */
+                key: string;
+            };
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                organization_id: string;
+                /** @description Bucket ID */
+                bucket_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Object download */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": Blob;
+                };
+            };
+            /** @description Object key is required */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bucket or object not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Storage gateway unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

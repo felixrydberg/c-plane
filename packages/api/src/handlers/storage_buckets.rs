@@ -236,7 +236,7 @@ fn response(bucket: &bucket::Model) -> BucketResponse {
     }
 }
 
-fn physical_bucket_name(id: Uuid) -> String {
+pub(crate) fn physical_bucket_name(id: Uuid) -> String {
     format!("{BUCKET_PREFIX}{}", id.simple())
 }
 
