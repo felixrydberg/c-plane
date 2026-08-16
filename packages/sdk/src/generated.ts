@@ -2909,7 +2909,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/octet-stream": string;
+                    "application/octet-stream": Blob;
                 };
             };
             /** @description Object key is required */
