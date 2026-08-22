@@ -1,9 +1,10 @@
-use axum::extract::{FromRequestParts, MatchedPath};
+use axum::extract::{ConnectInfo, FromRequestParts, MatchedPath};
 use axum::http::request::Parts;
 use reqwest::Client;
 use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
+use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 use std::{collections::HashSet, sync::OnceLock};
 use uuid::Uuid;
@@ -196,6 +197,44 @@ pub(crate) fn required_scope(method: &str, path: &str) -> Option<&'static str> {
     })
 }
 
+/// Routes reachable by API keys without any scope. Everything else must either
+/// appear in `required_scope` or API keys are denied (fail-closed).
+const PUBLIC_API_ROUTES: &[(&str, &str)] = &[
+    ("GET", "/health"),
+    ("GET", "/api/registry/token"),
+    (
+        "GET",
+        "/api/organization/{organization_id}/registry/maintenance",
+    ),
+];
+
+fn api_key_scope_requirement(
+    method: &str,
+    path: &str,
+) -> Result<Option<&'static str>, AppError> {
+    if PUBLIC_API_ROUTES.contains(&(method, path)) {
+        return Ok(None);
+    }
+    required_scope(method, path).map(Some).ok_or_else(|| {
+        AppError::Forbidden(format!(
+            "API keys cannot access {method} {path}: no scope is registered for this route"
+        ))
+    })
+}
+
+fn ip_allowed(allowed_ips: Option<&str>, peer_ip: Option<IpAddr>) -> bool {
+    let Some(allowed) = allowed_ips.map(str::trim).filter(|s| !s.is_empty()) else {
+        return true;
+    };
+    match peer_ip {
+        Some(peer) => allowed
+            .split(',')
+            .filter_map(|entry| entry.trim().parse::<IpAddr>().ok())
+            .any(|ip| ip == peer),
+        None => false,
+    }
+}
+
 pub struct AuthContext {
     pub tenant_db: TenantDatabase,
     pub auth: RequestAuthContext,
@@ -225,10 +264,14 @@ where
     type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        let required_scope = parts
+        let matched_path = parts
             .extensions
             .get::<MatchedPath>()
-            .and_then(|path| required_scope(parts.method.as_str(), path.as_str()));
+            .map(|path| path.as_str().to_owned());
+        let peer_ip = parts
+            .extensions
+            .get::<ConnectInfo<SocketAddr>>()
+            .map(|info| info.0.ip());
         let state = get_app_state();
         let identity_db = state.identity_db;
         let tenant_db_conn = state.tenant_db;
@@ -236,17 +279,23 @@ where
         let (organization_context, request_auth) = if let Some(raw_api_key) =
             extract_api_key_from_parts(parts).map(str::to_owned)
         {
-            let api_key: ApiKeyLookup = resolve_api_key(&identity_db, &raw_api_key)
+            let api_key: ApiKeyLookup = resolve_api_key(&identity_db, &raw_api_key, peer_ip)
                 .await?
                 .ok_or_else(|| AppError::Unauthorized("Invalid API key".to_string()))?;
+            let request_auth = RequestAuthContext {
+                actor_id: api_key.id,
+                api_key_scopes: Some(api_key.scopes),
+            };
+            if let Some(path) = matched_path.as_deref() {
+                if let Some(scope) = api_key_scope_requirement(parts.method.as_str(), path)? {
+                    request_auth.require_scope(scope)?;
+                }
+            }
             (
                 OrganizationContext {
                     allowed_organizations: vec![api_key.organization_id],
                 },
-                RequestAuthContext {
-                    actor_id: api_key.id,
-                    api_key_scopes: Some(api_key.scopes),
-                },
+                request_auth,
             )
         } else {
             let cookie_header = parts
@@ -273,10 +322,6 @@ where
                 },
             )
         };
-
-        if let Some(scope) = required_scope {
-            request_auth.require_scope(scope)?;
-        }
 
         let tenant_db = TenantDatabase::new(tenant_db_conn, organization_context);
 
@@ -389,6 +434,7 @@ async fn resolve_user_organizations(
 async fn resolve_api_key(
     app_db: &AppDatabase,
     raw_api_key: &str,
+    peer_ip: Option<IpAddr>,
 ) -> Result<Option<ApiKeyLookup>, AppError> {
     let key_hash = hash_api_key(raw_api_key);
 
@@ -396,7 +442,7 @@ async fn resolve_api_key(
         .0
         .query_one(Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
-            "SELECT api_keys.id, api_keys.organization_id, COALESCE(array_agg(api_key_scopes.scope::text) FILTER (WHERE api_key_scopes.scope IS NOT NULL), ARRAY[]::text[]) AS scopes FROM api_keys LEFT JOIN api_key_scopes ON api_key_scopes.api_key_id = api_keys.id WHERE api_keys.key_hash = $1 AND (api_keys.expires_at IS NULL OR api_keys.expires_at = 0 OR api_keys.created_at + make_interval(months => api_keys.expires_at) > NOW()) GROUP BY api_keys.id, api_keys.organization_id LIMIT 1",
+            "SELECT api_keys.id, api_keys.organization_id, api_keys.allowed_ips, COALESCE(array_agg(api_key_scopes.scope::text) FILTER (WHERE api_key_scopes.scope IS NOT NULL), ARRAY[]::text[]) AS scopes FROM api_keys LEFT JOIN api_key_scopes ON api_key_scopes.api_key_id = api_keys.id WHERE api_keys.key_hash = $1 AND (api_keys.expires_at IS NULL OR api_keys.expires_at = 0 OR api_keys.created_at + make_interval(months => api_keys.expires_at) > NOW()) GROUP BY api_keys.id, api_keys.organization_id, api_keys.allowed_ips LIMIT 1",
             vec![key_hash.into()],
         ))
         .await
@@ -412,6 +458,16 @@ async fn resolve_api_key(
     let organization_id = row
         .try_get::<Uuid>("", "organization_id")
         .map_err(|err| AppError::Internal(err.to_string()))?;
+    let allowed_ips: Option<String> = row
+        .try_get::<Option<String>>("", "allowed_ips")
+        .map_err(|err| AppError::Internal(err.to_string()))?;
+    if !ip_allowed(allowed_ips.as_deref(), peer_ip) {
+        tracing::warn!(
+            "API key {key_id} rejected: peer IP {:?} not in allowlist",
+            peer_ip
+        );
+        return Ok(None);
+    }
     let scopes = row
         .try_get::<Vec<String>>("", "scopes")
         .map_err(|err| AppError::Internal(err.to_string()))?
@@ -429,7 +485,48 @@ async fn resolve_api_key(
 mod tests {
     use super::RequestAuthContext;
     use std::collections::HashSet;
+    use std::net::IpAddr;
     use uuid::Uuid;
+
+    #[test]
+    fn unlisted_routes_are_denied_for_api_keys() {
+        assert!(super::api_key_scope_requirement("GET", "/health").unwrap().is_none());
+        assert!(
+            super::api_key_scope_requirement("GET", "/api/registry/token")
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(
+            super::api_key_scope_requirement(
+                "GET",
+                "/api/organization/{organization_id}/containers"
+            )
+            .unwrap(),
+            Some("container:read")
+        );
+        // Not in the scope table and not public -> denied, not silently allowed.
+        assert!(super::api_key_scope_requirement("DELETE", "/some/future/route").is_err());
+    }
+
+    #[test]
+    fn ip_allowlist_is_enforced() {
+        let ip = |s: &str| s.parse::<IpAddr>().unwrap();
+
+        // Empty/missing allowlist allows everything.
+        assert!(super::ip_allowed(None, Some(ip("1.2.3.4"))));
+        assert!(super::ip_allowed(Some(""), Some(ip("1.2.3.4"))));
+        assert!(super::ip_allowed(Some("  "), Some(ip("1.2.3.4"))));
+
+        let list = "192.168.1.1, 10.0.0.1";
+        assert!(super::ip_allowed(Some(list), Some(ip("10.0.0.1"))));
+        assert!(!super::ip_allowed(Some(list), Some(ip("10.0.0.2"))));
+
+        // No peer IP (e.g. unix socket / test harness) with an allowlist -> deny.
+        assert!(!super::ip_allowed(Some(list), None));
+
+        // Malformed entries are ignored, valid ones still match.
+        assert!(super::ip_allowed(Some("not-an-ip, 10.0.0.1"), Some(ip("10.0.0.1"))));
+    }
 
     #[test]
     fn api_key_scope_checks_fail_closed_while_sessions_bypass_them() {
