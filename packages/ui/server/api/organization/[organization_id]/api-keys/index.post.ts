@@ -5,7 +5,7 @@ import { withTenantDb } from "~~/server/utils/db";
 import { API_KEY_SCOPE_VALUES } from "@cplane/migrations/utils";
 
 export default defineEventHandler(async (event) => {
-  const membership = await getOrganizationMembership(event);
+  const membership = await requireScope(event, "api-key:manage");
 
   const body = await readBody(event);
   const { name, scopes, expires_at, allowed_ips } = body as { name: string; scopes: Record<string, boolean>; expires_at?: number | null; allowed_ips?: string | null };

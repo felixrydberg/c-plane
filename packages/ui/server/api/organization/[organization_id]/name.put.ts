@@ -2,6 +2,8 @@ import { withTenantDb } from "~~/server/utils/db";
 import { organization, organization_member } from "~~/server/schema";
 import { eq, and } from "drizzle-orm";
 import { logEvent } from "~~/server/utils/events";
+import { getOrganizationMembership, assertAllowed } from "~~/server/utils/authorization";
+import { denyRenameOrganization } from "~~/server/utils/permissions";
 import z from "zod";
 
 const renameOrganizationSchema = z.object({
@@ -20,6 +22,8 @@ export default defineEventHandler(async (event) => {
     });
   }
   const { name } = parsed.data;
+
+  assertAllowed(denyRenameOrganization(membership));
 
   const organizationId = membership.organization_id;
 
@@ -72,5 +76,12 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  return _organization[0];
+  const org = _organization[0]!;
+  return {
+    ...org,
+    member: {
+      ...org.member,
+      permissions: membership.permissions,
+    },
+  };
 });

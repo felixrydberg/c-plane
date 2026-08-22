@@ -3,7 +3,7 @@ import { check, index, integer, jsonb, pgPolicy, pgTable, text, timestamp, uniqu
 import { organization } from "../tenants/organization.ts";
 import { app_tenant } from "../rls.ts";
 
-export const worker_job = pgTable("worker_job", {
+export const worker_job = pgTable.withRLS("worker_job", {
   id: uuid("id").primaryKey(),
   organization_id: uuid("organization_id").references(() => organization.id, { onDelete: "cascade" }),
   queue_name: text("queue_name").notNull(),
@@ -30,9 +30,9 @@ export const worker_job = pgTable("worker_job", {
   uniqueIndex("worker_job_active_dedupe_uidx")
     .on(table.queue_name, table.dedupe_key)
     .where(sql`${table.dedupe_key} is not null and ${table.status} in ('queued', 'running')`),
-]).enableRLS();
+]);
 
-export const registry_maintenance = pgTable("registry_maintenance", {
+export const registry_maintenance = pgTable.withRLS("registry_maintenance", {
   service: text("service").primaryKey().default("distribution"),
   gc_access_key_id: text("gc_access_key_id").notNull().unique(),
   phase: text("phase").notNull().default("idle"),
@@ -52,4 +52,4 @@ export const registry_maintenance = pgTable("registry_maintenance", {
     to: app_tenant,
     using: sql`true`,
   }),
-]).enableRLS();
+]);

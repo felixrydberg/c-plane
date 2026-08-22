@@ -1,8 +1,9 @@
 import { auth } from "./auth";
 import { getIdentityDb } from "./db";
-import { organization_member, user  } from "~~/server/schema";
+import { organization_member, user, organization_member_permission } from "~~/server/schema";
 import { eq, and } from "drizzle-orm";
 import type { H3Event } from "h3";
+import { hasScope, type Subject } from "./permissions";
 
 export const requireSession = async (event: H3Event) => {
   const session = await auth.api.getSession({
@@ -72,5 +73,67 @@ export async function getOrganizationMembership(event: H3Event, organization_id?
     });
   }
 
-  return userMembership
+  const membership =
+    userMembership.role === "owner"
+      ? userMembership
+      : { ...userMembership, role: "member" };
+
+  return withPermissions(membership)
+}
+
+export async function withPermissions<M extends { id: string; role: string }>(
+  membership: M,
+): Promise<M & Subject> {
+  const rows = await getIdentityDb()
+    .select({ scope: organization_member_permission.scope })
+    .from(organization_member_permission)
+    .where(eq(organization_member_permission.member_id, membership.id));
+
+  return { ...membership, permissions: rows.map((row) => row.scope) };
+}
+
+export async function permissionsForUser(
+  organization_id: string,
+  user_id: string,
+): Promise<string[]> {
+  const rows = await getIdentityDb()
+    .select({ scope: organization_member_permission.scope })
+    .from(organization_member_permission)
+    .innerJoin(
+      organization_member,
+      eq(organization_member_permission.member_id, organization_member.id),
+    )
+    .where(
+      and(
+        eq(organization_member.organization_id, organization_id),
+        eq(organization_member.user_id, user_id),
+      ),
+    );
+  return rows.map((row) => row.scope);
+}
+
+export function assertAllowed(denial: string | null) {
+  if (denial) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: denial,
+    });
+  }
+}
+
+export async function requireScope(event: H3Event, scope: string, organization_id?: string) {
+  const membership = await getOrganizationMembership(event, organization_id);
+  assertAllowed(hasScope(membership, scope) ? null : `Missing required permission: ${scope}`);
+  return membership;
+}
+
+export async function requireOwner(event: H3Event, organization_id?: string) {
+  const membership = await getOrganizationMembership(event, organization_id);
+  if (membership.role !== "owner") {
+    throw createError({
+      statusCode: 403,
+      statusMessage: "Only organization owners can perform this action",
+    });
+  }
+  return membership;
 }

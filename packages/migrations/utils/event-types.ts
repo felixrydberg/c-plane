@@ -3,6 +3,8 @@ export const EVENT_TYPE_VALUES = [
   "organization:updated",
   "organization:member_added",
   "organization:member_removed",
+  "organization:member_updated",
+  "organization:permissions_updated",
   "organization:invitation_created",
   "organization:invitation_accepted",
   "organization:invitation_revoked",

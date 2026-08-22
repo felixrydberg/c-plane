@@ -3,16 +3,18 @@ import { withTenantDb } from "~~/server/utils/db";
 import { and, eq } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import { logEvent } from "~~/server/utils/events";
+import { getOrganizationMembership, assertAllowed } from "~~/server/utils/authorization";
+import { denyCreateInvitation } from "~~/server/utils/permissions";
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{
     email: string;
-    role: "member" | "admin";
+    role?: string;
     organization_id: string;
   }>(event);
 
-  const { email, role, organization_id } = body;
-  const inviteEmail = email.trim().toLowerCase();
+  const { email, organization_id } = body;
+  const inviteEmail = email?.trim().toLowerCase();
 
   if (!email || !inviteEmail) {
     throw createError({
@@ -35,6 +37,9 @@ export default defineEventHandler(async (event) => {
       statusMessage: "Organization mismatch",
     });
   }
+
+  assertAllowed(denyCreateInvitation(membership, body.role ?? "member"));
+  const role = (body.role ?? "member") as "owner" | "member";
 
   const invitationId = uuidv7();
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days

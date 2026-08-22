@@ -7,5 +7,6 @@ export type Organization = {
   member: {
     id: string;
     role: string;
+    permissions: string[];
   };
 }

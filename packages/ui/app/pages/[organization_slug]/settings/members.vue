@@ -3,6 +3,7 @@ import { h } from 'vue';
 import type { TableColumn, TableRow } from '@nuxt/ui';
 import * as z from 'zod';
 import { ICONS } from '~/utils/icons'
+import { MEMBER_PERMISSION_SCOPE_VALUES } from '@cplane/migrations/utils'
 
 const store = useStore();
 
@@ -34,6 +35,10 @@ const isAdding = ref(false);
 const deleteModalOpen = ref(false);
 const isRemoving = ref(false);
 const selectedMemberToDelete = ref<Member | null>(null);
+const permissionsModalOpen = ref(false);
+const isSavingPermissions = ref(false);
+const selectedMemberForPermissions = ref<Member | null>(null);
+const permissionsDraft = ref<Record<string, boolean>>({});
 
 const members = computed(() => data.value?.data ?? []);
 const total = computed(() => data.value?.pagination.total ?? 0);
@@ -70,20 +75,78 @@ const columns: TableColumn<Member>[] = [
   },
 ];
 
-const getContextMenuItems = (row: TableRow<Member>) => [
-  {
-    type: 'label' as const,
-    label: 'Actions',
-  },
-  {
-    label: 'Remove Member',
-    color: 'error' as const,
-    onSelect: () => {
-      selectedMemberToDelete.value = row.original;
-      deleteModalOpen.value = true;
+const getContextMenuItems = (row: TableRow<Member>) => {
+  const items: Array<Record<string, unknown>> = [
+    {
+      type: 'label' as const,
+      label: 'Actions',
     },
-  },
-];
+  ];
+  if (store.isOwner && row.original.role !== 'owner') {
+    items.push({
+      label: 'Edit Permissions',
+      onSelect: () => {
+        selectedMemberForPermissions.value = row.original;
+        permissionsDraft.value = Object.fromEntries(
+          MEMBER_PERMISSION_SCOPE_VALUES.map((scope) => [
+            scope,
+            row.original.permissions.includes(scope),
+          ]),
+        );
+        permissionsModalOpen.value = true;
+      },
+    });
+  }
+  if (row.original.role !== 'owner') {
+    items.push({
+      label: 'Remove Member',
+      color: 'error' as const,
+      onSelect: () => {
+        selectedMemberToDelete.value = row.original;
+        deleteModalOpen.value = true;
+      },
+    });
+  }
+  return items;
+};
+
+const onSavePermissions = async () => {
+  isSavingPermissions.value = true;
+  try {
+    if (!selectedMemberForPermissions.value) return;
+
+    await $fetch(
+      `/api/organization/${store.organization?.id as ':organization_id'}/members/${selectedMemberForPermissions.value.id as ':member_id'}/permissions`,
+      {
+        method: 'PUT',
+        body: {
+          permissions: Object.entries(permissionsDraft.value)
+            .filter(([, enabled]) => enabled)
+            .map(([scope]) => scope),
+        },
+      }
+    );
+
+    toast.add({
+      title: 'Success',
+      description: 'Permissions updated successfully',
+      color: 'success',
+    });
+
+    permissionsModalOpen.value = false;
+    selectedMemberForPermissions.value = null;
+    refresh();
+  } catch (error) {
+    toast.add({
+      title: 'An Error accured',
+      description:
+        error instanceof Error ? error.message : 'Failed to update permissions',
+      color: 'error' as const,
+    });
+  } finally {
+    isSavingPermissions.value = false;
+  }
+};
 
 const onDeleteMember = async () => {
   isRemoving.value = true;
@@ -213,6 +276,27 @@ const onAddMember = async () => {
             <UButton variant="ghost" color="neutral" @click="deleteModalOpen = false">Cancel</UButton>
             <UButton :icon="ICONS.trash" color="error" :loading="isRemoving" @click="onDeleteMember">Remove</UButton>
           </div>
+        </div>
+      </template>
+    </UModal>
+
+    <UModal
+      v-model:open="permissionsModalOpen"
+      :title="`Permissions — ${selectedMemberForPermissions?.user.name ?? ''}`"
+      description="Scopes mirror the API-key vocabulary and gate this member's access"
+    >
+      <template #body>
+        <div class="max-h-96 space-y-1 overflow-y-auto pr-1">
+          <UCheckbox
+            v-for="scope in MEMBER_PERMISSION_SCOPE_VALUES"
+            :key="scope"
+            v-model="permissionsDraft[scope]"
+            :label="scope"
+          />
+        </div>
+        <div class="mt-4 flex justify-end gap-3">
+          <UButton variant="ghost" color="neutral" @click="permissionsModalOpen = false">Cancel</UButton>
+          <UButton color="primary" :loading="isSavingPermissions" @click="onSavePermissions">Save</UButton>
         </div>
       </template>
     </UModal>

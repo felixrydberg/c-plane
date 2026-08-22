@@ -3,7 +3,7 @@ import { index, pgPolicy, pgTable, text, timestamp, uniqueIndex, uuid } from "dr
 import { s3_provider } from "./durability.ts";
 import { app_tenant } from "../rls.ts";
 
-export const registry_storage = pgTable("registry_storage", {
+export const registry_storage = pgTable.withRLS("registry_storage", {
   id: uuid("id").primaryKey(),
   service: text("service").notNull().default("distribution"),
   provider_id: uuid("provider_id")
@@ -26,4 +26,4 @@ export const registry_storage = pgTable("registry_storage", {
     to: app_tenant,
     using: sql`true`,
   }),
-]).enableRLS();
+]);

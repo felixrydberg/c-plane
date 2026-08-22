@@ -1,6 +1,8 @@
 import { organization_invitation } from "~~/server/schema";
 import { withTenantDb } from "~~/server/utils/db";
 import { eq, and } from "drizzle-orm";
+import { getOrganizationMembership, assertAllowed } from "~~/server/utils/authorization";
+import { denyRevokeInvitation } from "~~/server/utils/permissions";
 
 export default defineEventHandler(async (event) => {
   const params = getRouterParams(event);
@@ -21,6 +23,8 @@ export default defineEventHandler(async (event) => {
       statusMessage: "Organization mismatch",
     });
   }
+
+  assertAllowed(denyRevokeInvitation(membership));
 
   await withTenantDb([organizationId], async (tx) => {
     const updated = await tx

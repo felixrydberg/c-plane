@@ -5,7 +5,7 @@ import { app_tenant } from "../rls.ts";
 export const S3_PROVIDER_TYPES = ["aws_s3", "cloudflare_r2"] as const;
 export const s3_provider_type = pgEnum("s3_provider_type", S3_PROVIDER_TYPES);
 
-export const s3_provider = pgTable("s3_providers", {
+export const s3_provider = pgTable.withRLS("s3_providers", {
   id: uuid("id").primaryKey(),
   provider_type: s3_provider_type("provider_type").notNull(),
   endpoint_url: text("endpoint_url").notNull(),
@@ -22,4 +22,4 @@ export const s3_provider = pgTable("s3_providers", {
     to: app_tenant,
     using: sql`true`,
   }),
-]).enableRLS();
+]);

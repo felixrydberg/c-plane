@@ -2,6 +2,7 @@
 import { active_organization, organization, organization_member } from "~~/server/schema";
 import { and, eq } from "drizzle-orm";
 import { getIdentityDb } from "~~/server/utils/db";
+import { permissionsForUser } from "~~/server/utils/authorization";
 
 export default defineEventHandler(async (event) => {
   const session = await requireSession(event);
@@ -31,6 +32,13 @@ export default defineEventHandler(async (event) => {
       statusMessage: "No active organization found for the user",
     });
   }
-  
-  return activeOrganization[0];
+
+  const row = activeOrganization[0]!;
+  return {
+    ...row,
+    member: {
+      ...row.member,
+      permissions: await permissionsForUser(row.id, session.user.id),
+    },
+  };
 });

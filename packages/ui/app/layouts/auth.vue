@@ -18,93 +18,116 @@ const draftRevisionQuery = computed(() => {
     : ''
 })
 
-const items = computed<NavigationMenuItem[]>(() => [
-  {
-    label: 'Overview',
-    icon: ICONS.overview,
-    to: `/${store.organization?.slug}`,
-    exact: true,
-  },
-  {
-    type: "label",
-    label: 'Project Resources',
-  },
-  {
-    label: 'Containers',
-    icon: ICONS.containers,
-    to: `/${store.organization?.slug}/containers${navProjectId.value ? `/${navProjectId.value}${routeEnvironmentId.value ? `/${routeEnvironmentId.value}` : ''}` : ''}${draftRevisionQuery.value}`,
-  },
-  {
-    label: 'Databases',
-    icon: ICONS.databases,
-    open: true,
-    children: [
-      {
-        label: 'Postgres',
-        to: `/${store.organization?.slug}/databases/postgres${navProjectId.value ? `/${navProjectId.value}` : ''}`,
-      },
-    ]
-  },
-  {
-    label: 'Secrets',
-    icon: ICONS.secrets,
-    disabled: true,
-  },
-  {
-    label: "Storage",
-    icon: ICONS.storage,
-    to: `/${store.organization?.slug}/storage${navProjectId.value ? `/${navProjectId.value}` : ''}`,
-  },
-  {
-    type: "label",
-    label: 'Organization',
-  },
-  {
-    label: "Registry",
-    icon: ICONS.registry,
-    to: `/${store.organization?.slug}/registry`,
-  },
-  {
-    label: 'Logs',
-    icon: ICONS.logs,
-    disabled: true,
-    to: `/${store.organization?.slug}/logs`,
-  },
-  {
-    label: 'Analytics',
-    icon: ICONS.analytics,
-    disabled: true,
-    to: `/${store.organization?.slug}/analytics`,
-  },
-  {
-    type: "label",
-    label: 'Settings',
-  },
-      {
-        label: 'General',
-        icon: ICONS.general,
-        to: `/${store.organization?.slug}/settings`,
-        exact: true,
-      },
-      {
-        label: 'Members',
-        icon: ICONS.members,
-        to: `/${store.organization?.slug}/settings/members`,
-        exact: true,
-      },
-      {
-        label: 'Authentication',
-        icon: ICONS.authentication,
-        to: `/${store.organization?.slug}/settings/authentication`,
-        exact: true,
-      },
-      {
-        label: 'Audit Log',
-        icon: ICONS.logs,
-        to: `/${store.organization?.slug}/settings/audit-log`,
-        exact: true,
-      },
-] satisfies NavigationMenuItem[]);
+const items = computed<NavigationMenuItem[]>(() => {
+  const all: NavigationMenuItem[] = [
+    {
+      label: 'Overview',
+      icon: ICONS.overview,
+      to: `/${store.organization?.slug}`,
+      exact: true,
+    },
+    {
+      type: "label",
+      label: 'Project Resources',
+    },
+    {
+      label: 'Containers',
+      icon: ICONS.containers,
+      to: `/${store.organization?.slug}/containers${navProjectId.value ? `/${navProjectId.value}${routeEnvironmentId.value ? `/${routeEnvironmentId.value}` : ''}` : ''}${draftRevisionQuery.value}`,
+    },
+    {
+      label: 'Databases',
+      icon: ICONS.databases,
+      open: true,
+      children: [
+        {
+          label: 'Postgres',
+          to: `/${store.organization?.slug}/databases/postgres${navProjectId.value ? `/${navProjectId.value}` : ''}`,
+        },
+      ]
+    },
+    {
+      label: 'Secrets',
+      icon: ICONS.secrets,
+      disabled: true,
+    },
+    {
+      label: "Storage",
+      icon: ICONS.storage,
+      to: `/${store.organization?.slug}/storage${navProjectId.value ? `/${navProjectId.value}` : ''}`,
+    },
+    {
+      type: "label",
+      label: 'Organization',
+    },
+    {
+      label: "Registry",
+      icon: ICONS.registry,
+      to: `/${store.organization?.slug}/registry`,
+    },
+    {
+      label: 'Logs',
+      icon: ICONS.logs,
+      disabled: true,
+      to: `/${store.organization?.slug}/logs`,
+    },
+    {
+      label: 'Analytics',
+      icon: ICONS.analytics,
+      disabled: true,
+      to: `/${store.organization?.slug}/analytics`,
+    },
+    {
+      type: "label",
+      label: 'Settings',
+    },
+        {
+          label: 'General',
+          icon: ICONS.general,
+          to: `/${store.organization?.slug}/settings`,
+          exact: true,
+        },
+        {
+          label: 'Members',
+          icon: ICONS.members,
+          to: `/${store.organization?.slug}/settings/members`,
+          exact: true,
+        },
+        {
+          label: 'Authentication',
+          icon: ICONS.authentication,
+          to: `/${store.organization?.slug}/settings/authentication`,
+          exact: true,
+        },
+        {
+          label: 'Audit Log',
+          icon: ICONS.logs,
+          to: `/${store.organization?.slug}/settings/audit-log`,
+          exact: true,
+        },
+  ];
+
+  // Hide nav entries the active member has no scope for; the backend stays the boundary.
+  const requiredScope: Record<string, string> = {
+    Containers: 'container:read',
+    Databases: 'database:postgres:read',
+    Storage: 'bucket:read',
+    Registry: 'registry:read',
+    General: 'org:update',
+    Authentication: 'api-key:manage',
+    'Audit Log': 'event:read',
+  };
+
+  return all.filter((item) => {
+    const label = item.label as string;
+    if (label === 'Members') {
+      return store.isOwner || store.can('member:invite') || store.can('member:remove');
+    }
+    const scope = label ? requiredScope[label] : undefined;
+    if (!scope) return true;
+    return store.can(scope);
+  });
+});
 </script>
 
 <template>

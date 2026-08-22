@@ -2,6 +2,7 @@ import { organization, organization_member } from "~~/server/schema";
 import { withTenantDb } from "~~/server/utils/db";
 import { eq, and } from "drizzle-orm";
 import type { Project } from '@cplane/sdk';
+import { permissionsForUser } from "~~/server/utils/authorization";
 
 export default defineEventHandler(async (event) => {
   const membership = await getOrganizationMembership(event);
@@ -39,20 +40,26 @@ export default defineEventHandler(async (event) => {
     });
   }
 
+  const org = _organization[0]!;
+
   let projects: Project[] = [];
   try {
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:8080';
     const headers = getRequestHeaders(event);
-    const response = await $fetch(`${backendUrl}/api/organization/${organizationId}/projects`, {
+    const response = await $fetch<{ data?: Project[] }>(`${backendUrl}/api/organization/${organizationId}/projects`, {
       headers: headers as Record<string, string>,
     });
-    projects = (response as any)?.data ?? [];
+    projects = response?.data ?? [];
   } catch {
     projects = [];
   }
 
   return {
-    ..._organization[0],
+    ...org,
+    member: {
+      ...org.member,
+      permissions: await permissionsForUser(organizationId, membership.user_id),
+    },
     projects,
   };
 });

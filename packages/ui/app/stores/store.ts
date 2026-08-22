@@ -29,6 +29,16 @@ export const useStore = defineStore("auth", {
     environments_project_id: null,
     refreshKey: 0,
   }),
+  getters: {
+    can(): (scope: string) => boolean {
+      return (scope) =>
+        this.organization?.member.role === "owner" ||
+        (this.organization?.member.permissions?.includes(scope) ?? false)
+    },
+    isOwner(): boolean {
+      return this.organization?.member.role === "owner"
+    },
+  },
 
   actions: {
     setOrganization(organization: Organization | null) {

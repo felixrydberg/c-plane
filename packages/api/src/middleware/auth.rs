@@ -4,8 +4,9 @@ use reqwest::Client;
 use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
-use std::{collections::HashSet, sync::OnceLock};
+use std::sync::OnceLock;
 use uuid::Uuid;
 
 use crate::errors::AppError;
@@ -22,26 +23,67 @@ fn reqwest_client() -> &'static Client {
     })
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OrganizationRole {
+    Owner,
+    Member,
+}
+
+#[derive(Clone, Debug)]
+pub struct OrganizationAccess {
+    pub role: OrganizationRole,
+    pub scopes: HashSet<String>,
+}
+
+impl OrganizationAccess {
+    pub fn allows(&self, scope: &str) -> bool {
+        self.role == OrganizationRole::Owner || self.scopes.contains(scope)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct RequestAuthContext {
     pub actor_id: Uuid,
-    api_key_scopes: Option<HashSet<String>>,
+    organizations: HashMap<Uuid, OrganizationAccess>,
 }
 
 impl RequestAuthContext {
-    pub fn require_scope(&self, scope: &str) -> Result<(), AppError> {
-        if self
-            .api_key_scopes
-            .as_ref()
-            .is_none_or(|scopes| scopes.contains(scope))
-        {
+    pub fn is_owner(&self, organization_id: Uuid) -> bool {
+        self.organizations
+            .get(&organization_id)
+            .is_some_and(|access| access.role == OrganizationRole::Owner)
+    }
+
+    pub fn has_scope(&self, organization_id: Uuid, scope: &str) -> bool {
+        self.organizations
+            .get(&organization_id)
+            .is_some_and(|access| access.allows(scope))
+    }
+
+    pub fn require_scope(&self, organization_id: Uuid, scope: &str) -> Result<(), AppError> {
+        if self.has_scope(organization_id, scope) {
             return Ok(());
         }
-
         Err(AppError::Forbidden(format!(
-            "API key is missing required scope: {scope}"
+            "Missing required permission: {scope}"
         )))
     }
+
+    #[allow(dead_code)]
+    pub fn require_owner(&self, organization_id: Uuid) -> Result<(), AppError> {
+        if self.is_owner(organization_id) {
+            return Ok(());
+        }
+        Err(AppError::Forbidden(
+            "Only organization owners can perform this action".to_string(),
+        ))
+    }
+}
+
+fn organization_id_from_path(path: &str) -> Option<Uuid> {
+    let rest = path.strip_prefix("/api/organization/")?;
+    let segment = rest.split('/').next()?;
+    Uuid::parse_str(segment).ok()
 }
 
 pub(crate) fn required_scope(method: &str, path: &str) -> Option<&'static str> {
@@ -192,8 +234,25 @@ pub(crate) fn required_scope(method: &str, path: &str) -> Option<&'static str> {
         ("DELETE", "/api/organization/{organization_id}/registry/access-tokens/{token_id}") => {
             "access-token:delete"
         }
+        ("GET", "/api/organization/{organization_id}/registry/maintenance") => "registry:read",
         _ => return None,
     })
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum RoutePolicy {
+    Public,
+    Scope(&'static str),
+    OwnerOnly,
+}
+
+pub(crate) fn route_policy(method: &str, path: &str) -> RoutePolicy {
+    let method = if method == "HEAD" { "GET" } else { method };
+    match required_scope(method, path) {
+        Some(scope) => RoutePolicy::Scope(scope),
+        None if path.starts_with("/api/organization/") => RoutePolicy::OwnerOnly,
+        None => RoutePolicy::Public,
+    }
 }
 
 pub struct AuthContext {
@@ -218,6 +277,13 @@ struct ApiKeyLookup {
     scopes: HashSet<String>,
 }
 
+#[derive(Debug)]
+struct MemberLookup {
+    organization_id: Uuid,
+    role: String,
+    scopes: HashSet<String>,
+}
+
 impl<S> FromRequestParts<S> for AuthContext
 where
     S: Send + Sync,
@@ -225,10 +291,11 @@ where
     type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        let required_scope = parts
+        let policy = parts
             .extensions
             .get::<MatchedPath>()
-            .and_then(|path| required_scope(parts.method.as_str(), path.as_str()));
+            .map(|path| route_policy(parts.method.as_str(), path.as_str()))
+            .unwrap_or(RoutePolicy::Public);
         let state = get_app_state();
         let identity_db = state.identity_db;
         let tenant_db_conn = state.tenant_db;
@@ -239,13 +306,21 @@ where
             let api_key: ApiKeyLookup = resolve_api_key(&identity_db, &raw_api_key)
                 .await?
                 .ok_or_else(|| AppError::Unauthorized("Invalid API key".to_string()))?;
+            let mut organizations = HashMap::new();
+            organizations.insert(
+                api_key.organization_id,
+                OrganizationAccess {
+                    role: OrganizationRole::Member,
+                    scopes: api_key.scopes,
+                },
+            );
             (
                 OrganizationContext {
                     allowed_organizations: vec![api_key.organization_id],
                 },
                 RequestAuthContext {
                     actor_id: api_key.id,
-                    api_key_scopes: Some(api_key.scopes),
+                    organizations,
                 },
             )
         } else {
@@ -255,12 +330,29 @@ where
                 .and_then(|h| h.to_str().ok())
                 .ok_or_else(|| AppError::Unauthorized("Missing session cookie".to_string()))?;
             let actor_id = resolve_user_from_cookie(cookie_header).await?;
-            let allowed_organizations = resolve_user_organizations(&identity_db, actor_id).await?;
+            let memberships = resolve_user_memberships(&identity_db, actor_id).await?;
 
-            if allowed_organizations.is_empty() {
+            if memberships.is_empty() {
                 return Err(AppError::Forbidden(
                     "User has no organization access".to_string(),
                 ));
+            }
+
+            let mut organizations = HashMap::new();
+            let mut allowed_organizations = Vec::with_capacity(memberships.len());
+            for membership in memberships {
+                allowed_organizations.push(membership.organization_id);
+                organizations.insert(
+                    membership.organization_id,
+                    OrganizationAccess {
+                        role: if membership.role == "owner" {
+                            OrganizationRole::Owner
+                        } else {
+                            OrganizationRole::Member
+                        },
+                        scopes: membership.scopes,
+                    },
+                );
             }
 
             (
@@ -269,13 +361,19 @@ where
                 },
                 RequestAuthContext {
                     actor_id,
-                    api_key_scopes: None,
+                    organizations,
                 },
             )
         };
 
-        if let Some(scope) = required_scope {
-            request_auth.require_scope(scope)?;
+        if policy != RoutePolicy::Public {
+            let organization_id = organization_id_from_path(parts.uri.path()).ok_or_else(|| {
+                AppError::Forbidden("Route requires an organization context".to_string())
+            })?;
+            match policy {
+                RoutePolicy::Scope(scope) => request_auth.require_scope(organization_id, scope)?,
+                _ => request_auth.require_owner(organization_id)?,
+            }
         }
 
         let tenant_db = TenantDatabase::new(tenant_db_conn, organization_context);
@@ -361,29 +459,41 @@ fn hash_api_key(raw_api_key: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
-async fn resolve_user_organizations(
+async fn resolve_user_memberships(
     app_db: &AppDatabase,
     actor_id: Uuid,
-) -> Result<Vec<Uuid>, AppError> {
+) -> Result<Vec<MemberLookup>, AppError> {
     let rows = app_db
         .0
         .query_all(Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
-            "SELECT organization_id FROM organization_member WHERE user_id = $1",
+            "SELECT m.organization_id, m.role, COALESCE(array_agg(p.scope::text) FILTER (WHERE p.scope IS NOT NULL), ARRAY[]::text[]) AS scopes FROM organization_member m LEFT JOIN organization_member_permission p ON p.member_id = m.id WHERE m.user_id = $1 GROUP BY m.id, m.organization_id, m.role",
             vec![actor_id.into()],
         ))
         .await
         .map_err(|err| AppError::Internal(err.to_string()))?;
 
-    let mut organizations = Vec::with_capacity(rows.len());
+    let mut memberships = Vec::with_capacity(rows.len());
     for row in rows {
-        let org_id = row
+        let organization_id = row
             .try_get::<Uuid>("", "organization_id")
             .map_err(|err| AppError::Internal(err.to_string()))?;
-        organizations.push(org_id);
+        let role = row
+            .try_get::<String>("", "role")
+            .map_err(|err| AppError::Internal(err.to_string()))?;
+        let scopes = row
+            .try_get::<Vec<String>>("", "scopes")
+            .map_err(|err| AppError::Internal(err.to_string()))?
+            .into_iter()
+            .collect();
+        memberships.push(MemberLookup {
+            organization_id,
+            role,
+            scopes,
+        });
     }
 
-    Ok(organizations)
+    Ok(memberships)
 }
 
 async fn resolve_api_key(
@@ -427,24 +537,135 @@ async fn resolve_api_key(
 
 #[cfg(test)]
 mod tests {
-    use super::RequestAuthContext;
-    use std::collections::HashSet;
+    use super::{OrganizationAccess, OrganizationRole, RequestAuthContext};
+    use std::collections::HashMap;
     use uuid::Uuid;
 
-    #[test]
-    fn api_key_scope_checks_fail_closed_while_sessions_bypass_them() {
-        let session = RequestAuthContext {
+    fn context(
+        organizations: Vec<(Uuid, OrganizationRole, &[&str])>,
+    ) -> RequestAuthContext {
+        let mut map = HashMap::new();
+        for (id, role, scopes) in organizations {
+            map.insert(
+                id,
+                OrganizationAccess {
+                    role,
+                    scopes: scopes.iter().map(|s| s.to_string()).collect(),
+                },
+            );
+        }
+        RequestAuthContext {
             actor_id: Uuid::nil(),
-            api_key_scopes: None,
-        };
-        assert!(session.require_scope("project:delete").is_ok());
+            organizations: map,
+        }
+    }
 
-        let scoped_key = RequestAuthContext {
-            actor_id: Uuid::nil(),
-            api_key_scopes: Some(HashSet::from(["project:read".into()])),
-        };
-        assert!(scoped_key.require_scope("project:read").is_ok());
-        assert!(scoped_key.require_scope("project:delete").is_err());
+    #[test]
+    fn api_keys_are_scope_limited_members_of_one_organization() {
+        let org = Uuid::new_v4();
+        let other = Uuid::new_v4();
+        let key = context(vec![(org, OrganizationRole::Member, &["project:read"])]);
+
+        assert!(key.require_scope(org, "project:read").is_ok());
+        assert!(key.require_scope(org, "project:delete").is_err());
+        assert!(!key.is_owner(org), "api keys are never owners");
+
+        assert!(key.require_scope(other, "project:read").is_err());
+    }
+
+    #[test]
+    fn members_are_enforced_against_their_granted_scopes() {
+        let org = Uuid::new_v4();
+        let member = context(vec![
+            (org, OrganizationRole::Member, &["container:read", "bucket:read"]),
+        ]);
+
+        assert!(member.has_scope(org, "container:read"));
+        assert!(member.require_scope(org, "container:create").is_err());
+
+        let promoted = context(vec![
+            (
+                org,
+                OrganizationRole::Member,
+                &["container:read", "container:create"],
+            ),
+        ]);
+        assert!(promoted.require_scope(org, "container:create").is_ok());
+    }
+
+    #[test]
+    fn owners_hold_every_scope_and_pass_owner_checks() {
+        let org = Uuid::new_v4();
+        let owner = context(vec![(org, OrganizationRole::Owner, &[])]);
+
+        for scope in [
+            "project:delete",
+            "registry:update",
+            "database:postgres:manage",
+            "org:update",
+        ] {
+            assert!(owner.require_scope(org, scope).is_ok(), "{scope}");
+        }
+        assert!(owner.require_owner(org).is_ok());
+    }
+
+    #[test]
+    fn members_fail_owner_checks_even_with_scopes() {
+        let org = Uuid::new_v4();
+        let member = context(vec![(
+            org,
+            OrganizationRole::Member,
+            &[
+                "org:update",
+                "member:invite",
+                "member:remove",
+                "api-key:manage",
+            ],
+        )]);
+
+        assert!(member.require_owner(org).is_err());
+    }
+
+    #[test]
+    fn access_is_isolated_per_organization() {
+        let org_a = Uuid::new_v4();
+        let org_b = Uuid::new_v4();
+        let user = context(vec![
+            (org_a, OrganizationRole::Owner, &[]),
+            (org_b, OrganizationRole::Member, &["project:read"]),
+        ]);
+
+        assert!(user.is_owner(org_a));
+        assert!(user.require_scope(org_b, "project:read").is_ok());
+        assert!(user.require_scope(org_b, "project:delete").is_err());
+        assert!(user.require_owner(org_b).is_err());
+    }
+
+    #[test]
+    fn unknown_organizations_fail_closed() {
+        let org = Uuid::new_v4();
+        let stranger = context(vec![]);
+        assert!(stranger.require_scope(org, "project:read").is_err());
+        assert!(stranger.require_owner(org).is_err());
+        assert!(!stranger.is_owner(org));
+    }
+
+    #[test]
+    fn organization_id_parses_from_request_paths() {
+        let id = Uuid::new_v4();
+        assert_eq!(
+            super::organization_id_from_path(&format!("/api/organization/{id}/projects")),
+            Some(id)
+        );
+        assert_eq!(
+            super::organization_id_from_path(&format!("/api/organization/{id}")),
+            Some(id)
+        );
+        assert_eq!(super::organization_id_from_path("/health"), None);
+        assert_eq!(
+            super::organization_id_from_path("/api/organization/not-a-uuid/projects"),
+            None
+        );
     }
 
     #[test]
@@ -720,15 +941,56 @@ mod tests {
             );
         }
 
-        for (method, path) in [
-            ("GET", "/health"),
-            ("GET", "/api/registry/token"),
-            (
-                "GET",
-                "/api/organization/{organization_id}/registry/maintenance",
-            ),
-        ] {
+        for (method, path) in [("GET", "/health"), ("GET", "/api/registry/token")] {
             assert_eq!(super::required_scope(method, path), None, "{method} {path}");
         }
+    }
+
+    #[test]
+    fn route_policy_fails_closed_and_normalizes_head() {
+        use super::{RoutePolicy, route_policy};
+
+        assert_eq!(
+            route_policy("GET", "/api/organization/{organization_id}/projects"),
+            RoutePolicy::Scope("project:read")
+        );
+        assert_eq!(
+            route_policy(
+                "DELETE",
+                "/api/organization/{organization_id}/containers/{container_id}"
+            ),
+            RoutePolicy::Scope("container:delete")
+        );
+
+        assert_eq!(
+            route_policy("HEAD", "/api/organization/{organization_id}/projects"),
+            RoutePolicy::Scope("project:read")
+        );
+
+        assert_eq!(
+            route_policy("GET", "/api/organization/{organization_id}/registry/maintenance"),
+            RoutePolicy::Scope("registry:read")
+        );
+
+        assert_eq!(
+            route_policy(
+                "GET",
+                "/api/organization/{organization_id}/something-new"
+            ),
+            RoutePolicy::OwnerOnly
+        );
+        assert_eq!(
+            route_policy(
+                "POST",
+                "/api/organization/{organization_id}/registry/maintenance/run"
+            ),
+            RoutePolicy::OwnerOnly
+        );
+
+        assert_eq!(route_policy("GET", "/health"), RoutePolicy::Public);
+        assert_eq!(
+            route_policy("GET", "/api/registry/token"),
+            RoutePolicy::Public
+        );
     }
 }

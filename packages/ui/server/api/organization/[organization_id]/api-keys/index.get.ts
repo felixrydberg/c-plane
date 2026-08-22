@@ -1,13 +1,13 @@
 import { withTenantDb } from "~~/server/utils/db";
 import { api_keys } from "~~/server/schema";
 import { eq } from "drizzle-orm";
-import { getOrganizationMembership } from "~~/server/utils/authorization";
+import { requireScope } from "~~/server/utils/authorization";
 
 export default defineEventHandler(async (event) => {
   const params = getRouterParams(event);
   const organization_id = params.organization_id as string;
 
-  await getOrganizationMembership(event, organization_id);
+  await requireScope(event, "api-key:manage", organization_id);
 
   const query = getQuery(event);
   const limit = Math.min(parseInt(query.limit as string) || 50, 100);

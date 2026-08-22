@@ -1,6 +1,6 @@
-import { organization_member, user } from "~~/server/schema";
+import { organization_member, user, organization_member_permission } from "~~/server/schema";
 import { withTenantDb } from "~~/server/utils/db";
-import { eq, and, or, ilike, count, ne } from "drizzle-orm";
+import { eq, and, or, ilike, count, ne, inArray } from "drizzle-orm";
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event);
@@ -74,8 +74,29 @@ export default defineEventHandler(async (event) => {
     const totalResult = await countQuery;
     const total = totalResult[0]?.count || 0;
 
+    const memberIds = members.map((m) => m.id);
+    const permissionRows = memberIds.length
+      ? await tx
+          .select({
+            member_id: organization_member_permission.member_id,
+            scope: organization_member_permission.scope,
+          })
+          .from(organization_member_permission)
+          .where(inArray(organization_member_permission.member_id, memberIds))
+      : [];
+    const permissionsByMember = new Map<string, string[]>();
+    for (const row of permissionRows) {
+      const list = permissionsByMember.get(row.member_id) ?? [];
+      list.push(row.scope);
+      permissionsByMember.set(row.member_id, list);
+    }
+
     return {
-      data: members,
+      data: members.map((m) => ({
+        ...m,
+        role: m.role === "owner" ? "owner" : "member",
+        permissions: permissionsByMember.get(m.id) ?? [],
+      })),
       pagination: {
         total,
         limit,

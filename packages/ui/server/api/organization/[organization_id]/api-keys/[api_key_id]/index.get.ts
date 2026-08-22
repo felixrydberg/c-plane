@@ -1,14 +1,14 @@
 import { withTenantDb } from "~~/server/utils/db";
 import { api_keys, api_key_scopes } from "~~/server/schema";
 import { eq, and } from "drizzle-orm";
-import { getOrganizationMembership } from "~~/server/utils/authorization";
+import { requireScope } from "~~/server/utils/authorization";
 
 export default defineEventHandler(async (event) => {
   const params = getRouterParams(event);
   const organization_id = params.organization_id as string;
   const api_key_id = params.api_key_id as string;
 
-  await getOrganizationMembership(event, organization_id);
+  await requireScope(event, "api-key:manage", organization_id);
   const { key, scopes } = await withTenantDb([organization_id], async (tx) => {
     const result = await tx
       .select()

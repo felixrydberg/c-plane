@@ -11,8 +11,9 @@ import {
 import { sql } from "drizzle-orm";
 import { user } from "./studio.ts";
 import { app_tenant, orgAllowed } from "../rls.ts";
+import { MEMBER_PERMISSION_SCOPE_VALUES } from "../../utils/api-key-scopes.ts";
 
-export const organization = pgTable(
+export const organization = pgTable.withRLS(
   "organization",
   {
     id: uuid("id").primaryKey(),
@@ -51,9 +52,9 @@ export const organization = pgTable(
       withCheck: sql`true`,
     }),
   ],
-).enableRLS();
+);
 
-export const organization_member = pgTable(
+export const organization_member = pgTable.withRLS(
   "organization_member",
   {
     id: uuid("id").primaryKey(),
@@ -81,14 +82,53 @@ export const organization_member = pgTable(
       withCheck: orgAllowed(table.organization_id),
     }),
   ],
-).enableRLS();
+);
+
+export const organization_member_permission_scope_type = pgEnum(
+  "organization_member_permission_scope_type",
+  MEMBER_PERMISSION_SCOPE_VALUES,
+);
+
+export const organization_member_permission = pgTable.withRLS(
+  "organization_member_permission",
+  {
+    id: uuid("id").primaryKey(),
+    member_id: uuid("member_id")
+      .notNull()
+      .references(() => organization_member.id, { onDelete: "cascade" }),
+    organization_id: uuid("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    scope: organization_member_permission_scope_type("scope").notNull(),
+    created_at: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("organization_member_permission_member_id_scope_uidx").on(
+      table.member_id,
+      table.scope,
+    ),
+    index("organization_member_permission_organization_id_idx").on(
+      table.organization_id,
+    ),
+    index("organization_member_permission_member_id_idx").on(table.member_id),
+    pgPolicy("organization_member_permission_tenant_rls", {
+      as: "permissive",
+      for: "all",
+      to: app_tenant,
+      using: orgAllowed(table.organization_id),
+      withCheck: orgAllowed(table.organization_id),
+    }),
+  ],
+);
 
 export const organization_invitation_status = pgEnum(
   "organization_invitation_status",
   ["pending", "accepted", "declined", "revoked"],
 );
 
-export const organization_invitation = pgTable(
+export const organization_invitation = pgTable.withRLS(
   "organization_invitation",
   {
     id: uuid("id").primaryKey(),
@@ -117,9 +157,9 @@ export const organization_invitation = pgTable(
       withCheck: orgAllowed(table.organization_id),
     }),
   ],
-).enableRLS();
+);
 
-export const active_organization = pgTable("active_organization", {
+export const active_organization = pgTable.withRLS("active_organization", {
   user_id: uuid("user_id")
     .primaryKey()
     .references(() => user.id, { onDelete: "cascade" }).unique(),
@@ -135,4 +175,4 @@ export const active_organization = pgTable("active_organization", {
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
-]).enableRLS();
+]);

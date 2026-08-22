@@ -1,17 +1,23 @@
 import { organization } from "~~/server/schema";
 import { eq } from "drizzle-orm";
 import { withTenantDb } from "~~/server/utils/db";
+import { requireOwner, assertAllowed } from "~~/server/utils/authorization";
+import { denyDeleteOrganization } from "~~/server/utils/permissions";
 
 export default defineEventHandler(async (event) => {
-  const membership = await getOrganizationMembership(event);
+  const membership = await requireOwner(event);
 
-  const organizationId = membership.organization_id;
-  if (!organizationId) {
+  const body = await readBody<{ confirm?: boolean }>(event).catch(() => ({ confirm: false }));
+  if (body.confirm !== true) {
     throw createError({
       statusCode: 400,
-      statusMessage: "Organization ID is required",
+      statusMessage: "Confirmation required: pass { \"confirm\": true } to delete this organization",
     });
   }
+
+  assertAllowed(denyDeleteOrganization(membership));
+
+  const organizationId = membership.organization_id;
 
   await withTenantDb([organizationId], async (tx) => {
     const rows = await tx

@@ -2,6 +2,8 @@ import { organization_member, user } from "~~/server/schema";
 import { withTenantDb } from "~~/server/utils/db";
 import { eq } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
+import { getOrganizationMembership, assertAllowed } from "~~/server/utils/authorization";
+import { denyAddMember } from "~~/server/utils/permissions";
 
 export default defineEventHandler(async (event) => {
   const membership = await getOrganizationMembership(event);
@@ -13,6 +15,8 @@ export default defineEventHandler(async (event) => {
       statusMessage: 'Email is required',
     });
   }
+
+  assertAllowed(denyAddMember(membership));
 
   const result = await withTenantDb([membership.organization_id], async (tx) => {
     const [existingUser] = await tx

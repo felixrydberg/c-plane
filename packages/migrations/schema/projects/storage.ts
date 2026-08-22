@@ -7,7 +7,7 @@ import { region } from "../infrastructure/regions.ts";
 
 export const bucket_status = pgEnum("bucket_status", ["provisioning", "ready", "deleting", "failed"]);
 
-export const bucket = pgTable('bucket', {
+export const bucket = pgTable.withRLS('bucket', {
   id: uuid("id").primaryKey(),
   project_id: uuid("project_id")
     .notNull()
@@ -31,9 +31,9 @@ export const bucket = pgTable('bucket', {
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
-]).enableRLS();
+]);
 
-export const storage_access_token = pgTable("storage_access_token", {
+export const storage_access_token = pgTable.withRLS("storage_access_token", {
   id: uuid("id").primaryKey(),
   organization_id: uuid("organization_id")
     .notNull()
@@ -60,9 +60,9 @@ export const storage_access_token = pgTable("storage_access_token", {
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
-]).enableRLS();
+]);
 
-export const storage_access_token_bucket = pgTable("storage_access_token_bucket", {
+export const storage_access_token_bucket = pgTable.withRLS("storage_access_token_bucket", {
   access_token_id: uuid("access_token_id").notNull(),
   bucket_id: uuid("bucket_id").notNull(),
   organization_id: uuid("organization_id")
@@ -91,4 +91,4 @@ export const storage_access_token_bucket = pgTable("storage_access_token_bucket"
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
-]).enableRLS();
+]);

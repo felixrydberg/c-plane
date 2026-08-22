@@ -28,10 +28,10 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  if (currentMembership.role === "owner" || currentMembership.role === "admin") {
+  if (currentMembership.role === "owner") {
     throw createError({
       statusCode: 403,
-      statusMessage: "Admins and owners cannot leave from this action",
+      statusMessage: "Owners cannot leave; transfer ownership first",
     });
   }
 

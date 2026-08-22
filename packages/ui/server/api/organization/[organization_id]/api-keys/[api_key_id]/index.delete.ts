@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
   const organization_id = params.organization_id as string;
   const api_key_id = params.api_key_id as string;
 
-  await getOrganizationMembership(event, organization_id);
+  await requireScope(event, "api-key:manage", organization_id);
   const deleted = await withTenantDb([organization_id], async (tx) => {
     const [deleted] = await tx
       .delete(api_keys)

@@ -112,6 +112,7 @@ export default defineEventHandler(async (event) => {
     member: {
       id: session.user.id,
       role: "owner",
+      permissions: [],
     },
   };
 });

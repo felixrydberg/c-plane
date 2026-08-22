@@ -3,7 +3,7 @@ import { project, project_environment } from "./index.ts"
 import { organization } from "../tenants/organization.ts";
 import { app_tenant, orgAllowed } from "../rls.ts";
 
-export const postgres_database = pgTable('postgres_database', {
+export const postgres_database = pgTable.withRLS('postgres_database', {
   id: uuid("id").primaryKey(),
   project_id: uuid("project_id")
     .notNull()
@@ -24,9 +24,9 @@ export const postgres_database = pgTable('postgres_database', {
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
-]).enableRLS();
+]);
 
-export const postgres_database_branch = pgTable('postgres_database_branch', {
+export const postgres_database_branch = pgTable.withRLS('postgres_database_branch', {
   id: uuid("id").primaryKey(),
   database_id: uuid("database_id")
     .notNull()
@@ -57,4 +57,4 @@ export const postgres_database_branch = pgTable('postgres_database_branch', {
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
-]).enableRLS();
+]);
