@@ -1,5 +1,6 @@
 export const ICONS = {
   overview: 'i-heroicons:rectangle-group',
+  bolt: 'i-heroicons:bolt',
   containers: 'i-heroicons:cube-transparent',
   databases: 'i-heroicons:circle-stack',
   secrets: 'i-heroicons:lock-closed',
@@ -17,8 +18,12 @@ export const ICONS = {
   check: 'i-heroicons:check',
   refresh: 'i-heroicons:arrow-path',
   download: 'i-heroicons:arrow-down-tray',
+  more: 'i-heroicons:ellipsis-horizontal',
+  calendar: 'i-heroicons:calendar-days',
   link: 'i-heroicons:link',
   arrowTopRight: 'i-heroicons:arrow-top-right-on-square',
+  chevronLeft: 'i-heroicons:chevron-left',
+  chevronRight: 'i-heroicons:chevron-right',
   chevronUpDown: 'i-heroicons:chevron-up-down',
   folderPlus: 'i-heroicons:folder-plus',
   globeAlt: 'i-heroicons:globe-alt',
@@ -26,5 +31,6 @@ export const ICONS = {
   sidebarCloseLeft: 'i-heroicons:arrow-left-end-on-rectangle',
   sidebarCloseLft: 'i-heroicons:arrow-left-end-on-rectangle',
   graph: 'i-material-symbols:graph-1',
+  revision: 'i-heroicons:clock',
   passkey: 'i-heroicons:lock-closed',
 } as const

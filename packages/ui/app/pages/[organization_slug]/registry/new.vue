@@ -39,7 +39,8 @@ async function createRepository() {
 <template>
   <div class="w-full max-w-[1200px] mx-auto">
     <header class="border-b border-default/60 pb-5">
-      <UiBackLink label="Registry" :to="backUrl()" />
+      <UiBackLink label="S2 - Registry" :to="backUrl()" />
+      <UiPageEyebrow label="Storage &amp; Databases" />
       <h1 class="mt-2 text-2xl font-semibold">New Repository</h1>
       <p class="mt-1 text-sm text-muted">Create a private repository in your organization's namespace.</p>
     </header>

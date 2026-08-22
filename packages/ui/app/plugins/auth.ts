@@ -42,6 +42,13 @@ export default defineNuxtPlugin(async () => {
 
   if (import.meta.client) {
     const route = useRoute()
+    const router = useRouter()
+    let currentPath = router.currentRoute.value.path
+    router.beforeEach((to) => {
+      if (to.path === currentPath) return
+      currentPath = to.path
+      store.clearBreadcrumbs()
+    })
     watch([() => route.params.project_id, () => route.params.environment_id, () => store.projects], () => void syncCurrentProjectEnvironments(), { immediate: true })
   }
 })

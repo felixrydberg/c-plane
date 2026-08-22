@@ -204,56 +204,19 @@ const onInvitationUpdated = async () => {
       </div>
 
       <UForm :state="state" :schema="schema" class="space-y-6" @submit.prevent="onCreateOrganization">
-        <UFormField
-          name="name"
-          label="Organization Name"
-          class="space-y-1"
-        >
-          <UInput
-            v-model="state.name"
-            type="text"
-            :placeholder="`${store.user?.name}'s Organization`"
-            class="w-full"
-          />
-          <p class="pt-1 text-xs text-muted">
-            This is the display name your team and customers will see across the app.
-          </p>
+        <UFormField name="name" label="Organization Name" class="space-y-1">
+          <UInput v-model="state.name" type="text" placeholder="Acme" class="w-full" />
+          <p class="pt-1 text-xs text-muted">This is the display name your team and customers will see across the app.</p>
         </UFormField>
 
-        <UFormField
-          name="slug"
-          label="Organization Slug"
-          :error="slugError ? slugError : undefined"
-          class="space-y-1"
-        >
-          <UInput
-            v-model="state.slug"
-            type="text"
-            :placeholder="`${store.user?.name}s-organization`"
-            :loading="slugValidating"
-            class="w-full"
-          />
-          <p class="pt-1 text-xs text-muted">
-            Used in your workspace URL. Keep it short, readable, and unique.
-          </p>
+        <UFormField name="slug" label="Organization Slug" :error="slugError ? slugError : undefined" class="space-y-1">
+          <UInput v-model="state.slug" type="text" placeholder="acme" :loading="slugValidating" class="w-full" />
+          <p class="pt-1 text-xs text-muted">Used in your workspace URL. Keep it short, readable, and unique.</p>
         </UFormField>
 
-        <UFormField
-          name="email"
-          label="Organization Email"
-          :error="emailError ? emailError : undefined"
-          class="space-y-1"
-        >
-          <UInput
-            v-model="state.email"
-            type="email"
-            placeholder="organization@example.com"
-            :loading="emailValidating"
-            class="w-full"
-          />
-          <p class="pt-1 text-xs text-muted">
-            We use this to notify organization admins about important events, alerts, billing updates, and account activity.
-          </p>
+        <UFormField name="email" label="Organization Email" :error="emailError ? emailError : undefined" class="space-y-1">
+          <UInput v-model="state.email" type="email" placeholder="team@acme.com" :loading="emailValidating" class="w-full" />
+          <p class="pt-1 text-xs text-muted">We use this to notify organization admins about important events, alerts, billing updates, and account activity.</p>
         </UFormField>
 
         <div class="rounded-xl border border-default/70 bg-default/50 px-4 py-4">
@@ -265,37 +228,24 @@ const onInvitationUpdated = async () => {
           </ul>
         </div>
 
-        <UButton type="submit" :icon="ICONS.plus" size="lg" class="mt-1 flex w-full justify-center" :loading="isCheckingOut" :disabled="isCreateDisabled">
+        <UButton type="submit" :icon="ICONS.plus" color="primary" variant="frosted" size="lg" class="mt-1 flex w-full justify-center" :loading="isCheckingOut" :disabled="isCreateDisabled">
           Create
         </UButton>
 
-        <UButton
-          v-if="hasPendingInvitations"
-          type="button"
-          :icon="ICONS.members"
-          color="neutral"
-          variant="soft"
-          size="lg"
-          class="w-full flex justify-center"
-          @click="openManageInvites"
-        >
+        <UButton v-if="hasPendingInvitations" type="button" :icon="ICONS.members" color="neutral" variant="soft" size="lg" class="w-full flex justify-center" @click="openManageInvites">
           Manage pending invites ({{ pendingInvitationCount }})
         </UButton>
 
-        <UButton v-if="store.organizations.length > 0" color="neutral" variant="ghost" size="lg" class="w-full justify-center" @click="goBack">
+        <UButton v-if="store.organizations.length > 0" type="button" color="neutral" variant="ghost" size="lg" class="w-full justify-center" @click="goBack">
           Back to Dashboard
         </UButton>
-        <UButton v-else color="neutral" variant="ghost" size="lg" class="w-full justify-center" @click="signOut">
+        <UButton v-else type="button" color="neutral" variant="ghost" size="lg" class="w-full justify-center" @click="signOut">
           Sign Out
         </UButton>
       </UForm>
     </div>
 
-    <UModal
-      v-model:open="manageInvitesOpen"
-      title="Manage Invitations"
-      description="Review your pending organization invitations."
-    >
+    <UModal v-model:open="manageInvitesOpen" title="Manage Invitations" description="Review your pending organization invitations.">
       <template #body>
         <dashboard-invitations @accepted="onInvitationUpdated" @declined="onInvitationUpdated" />
       </template>

@@ -5,6 +5,7 @@ import { ICONS } from '~/utils/icons'
 <template>
   <div class="flex flex-col gap-6 w-full mx-auto max-w-6xl">
     <div>
+      <UiPageEyebrow label="Observe" />
       <h1 class="text-2xl font-semibold">Logs</h1>
       <p class="text-muted text-sm mt-1">View real-time and historical logs across your organization.</p>
     </div>

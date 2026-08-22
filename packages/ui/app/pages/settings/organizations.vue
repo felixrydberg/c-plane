@@ -27,13 +27,13 @@ const tabs = ref([
         <p class="text-sm text-muted">Manage which organization you are currently active in.</p>
       </div>
     </div>
-    <UTabs v-model="tab" :items="tabs" class="min-h-32">
+    <UiTabs v-model="tab" :items="tabs" class="min-h-32">
       <template #organizations>
         <dashboard-organizations />
       </template>
       <template #invitations>
         <dashboard-invitations />
       </template>
-    </UTabs>
+    </UiTabs>
   </div>
 </template>

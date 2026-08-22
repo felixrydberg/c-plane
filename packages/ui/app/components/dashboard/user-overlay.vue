@@ -58,8 +58,10 @@ const items = computed<DropdownMenuItem[][]>(() => ([[{
       color="neutral"
       variant="soft"
       block
+      size="sm"
       :square="collapsed"
-      class="data-[state=open]:bg-elevated"
+      class="min-h-8 border border-default bg-elevated/70 hover:bg-elevated data-[state=open]:bg-elevated"
+      :class="[collapsed && 'size-8']"
       :ui="{
         trailingIcon: 'text-dimmed'
       }"

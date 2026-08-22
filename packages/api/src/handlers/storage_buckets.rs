@@ -30,11 +30,17 @@ pub struct ListBucketsQuery {
 }
 
 #[derive(Serialize, ToSchema)]
+pub struct BucketRegionResponse {
+    pub label: String,
+    pub slug: String,
+}
+
+#[derive(Serialize, ToSchema)]
 pub struct BucketResponse {
     pub id: Uuid,
     pub project_id: Uuid,
     pub name: String,
-    pub region: Uuid,
+    pub region: BucketRegionResponse,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -123,7 +129,10 @@ pub async fn create_bucket(
     .await?;
     scoped.commit().await?;
 
-    Ok((axum::http::StatusCode::CREATED, Json(response(&created))))
+    Ok((
+        axum::http::StatusCode::CREATED,
+        Json(response(&created, &region)),
+    ))
 }
 
 #[utoipa::path(
@@ -152,11 +161,21 @@ pub async fn list_buckets(
     let buckets = bucket::Entity::find()
         .filter(bucket::Column::ProjectId.eq(query.project_id))
         .order_by_asc(bucket::Column::Name)
+        .find_also_related(region::Entity)
         .all(tx)
         .await?;
     scoped.commit().await?;
 
-    Ok(Json(buckets.iter().map(response).collect()))
+    let buckets = buckets
+        .into_iter()
+        .map(|(bucket, region)| {
+            let region =
+                region.ok_or_else(|| AppError::NotFound("Bucket region not found".into()))?;
+            Ok(response(&bucket, &region))
+        })
+        .collect::<Result<Vec<_>, AppError>>()?;
+
+    Ok(Json(buckets))
 }
 
 #[utoipa::path(
@@ -227,12 +246,15 @@ pub async fn delete_bucket(
     Ok(axum::http::StatusCode::NO_CONTENT)
 }
 
-fn response(bucket: &bucket::Model) -> BucketResponse {
+fn response(bucket: &bucket::Model, region: &region::Model) -> BucketResponse {
     BucketResponse {
         id: bucket.id,
         project_id: bucket.project_id,
         name: bucket.name.clone(),
-        region: bucket.region_id,
+        region: BucketRegionResponse {
+            label: region.display_name.clone(),
+            slug: region.slug.clone(),
+        },
     }
 }
 

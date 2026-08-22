@@ -19,7 +19,7 @@ const externalRegistriesUrl = computed(() => orgId.value
 const { data: externalRegistries } = await useFetch(externalRegistriesUrl, { default: () => [] })
 const externalRegistryId = ref('none')
 const externalRegistryItems = computed(() => [
-  { label: 'No managed registry', value: 'none' },
+  { label: 'No external registry', value: 'none' },
   ...externalRegistries.value.map(registry => ({
     label: `${registry.name} — ${registry.host} (${registry.username})`,
     value: registry.id,
@@ -94,6 +94,7 @@ function backUrl() { return `/${route.params.organization_slug}/containers/${pro
   <div class="w-full max-w-[1280px] mx-auto">
     <header class="border-b border-default/60 pb-5">
       <UiBackLink :label="projectName" :to="backUrl()" />
+      <UiPageEyebrow label="Compute" />
       <h1 class="mt-2 text-2xl font-semibold">New Container</h1>
       <p class="mt-1 text-sm text-muted">Deploy a service with one continuous configuration.</p>
     </header>

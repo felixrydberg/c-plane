@@ -5,6 +5,10 @@ import { loadProjectEnvironments } from '~/utils/auth'
 import { syncEnvironment } from '~/utils/environments'
 import { ICONS } from '~/utils/icons'
 
+const props = withDefaults(defineProps<{ collapsed?: boolean }>(), {
+  collapsed: false,
+})
+
 const store = useStore()
 const route = useRoute()
 const router = useRouter()
@@ -48,78 +52,73 @@ const deleteEnvironmentModal = ref(false)
 const renameEnvironmentModal = ref(false)
 const environmentName = ref('')
 const renamingEnvironment = ref(false)
+const revisionContainer = ref<HTMLElement>()
 
 const projectLabel = computed(() => store.project?.name || 'All Projects')
-
-const projectItems = computed<DropdownMenuItem[][]>(() => {
-  if (!store.projects.length) return [[
-    { label: 'No projects available', disabled: true },
-  ], [
-    { label: 'Create Project', icon: ICONS.folderPlus, onSelect() { createProjectModal.value = true } },
-  ]]
-
-  const list: DropdownMenuItem[] = [
-    { label: 'All Projects', icon: ICONS.globeAlt, onSelect() { selectProject(null) } },
-  ]
-  for (const p of store.projects) {
-    list.push({ label: p.name, icon: ICONS.folder, onSelect() { selectProject(p.id) } })
-  }
-
-  const actions: DropdownMenuItem[] = [
-    { label: 'Create Project', icon: ICONS.folderPlus, onSelect() { createProjectModal.value = true } },
-  ]
-  if (store.project) {
-    actions.push({ label: 'Delete Project', icon: 'i-heroicons:trash', color: 'error' as const, onSelect() { deleteProjectModal.value = true } })
-  }
-  return [list, actions]
-})
 
 const environmentLabel = computed(() => {
   if (!store.project) return 'Select environment'
   if (!store.environment) return store.environments.length ? 'Select environment' : 'No environments'
   return store.environment.name
 })
-const environmentItems = computed<DropdownMenuItem[][]>(() => {
-  if (!store.project) return [[{ label: 'Select a project first', disabled: true }]]
-  if (!store.environments.length) return [[
-    { label: 'No environments', disabled: true },
-  ], [
-    { label: 'Create Environment', icon: ICONS.folderPlus, onSelect() { createEnvironmentModal.value = true } },
-  ]]
 
-  const list: DropdownMenuItem[] = store.environments.map(b => ({
-    label: b.name,
-    badges: [
-      ...(b.is_default ? ['Default'] : []),
-      ...(b.is_preview ? ['Preview'] : []),
-    ],
-    onSelect() { selectEnvironment(b) },
-  }))
-  const actions: DropdownMenuItem[] = [
-    { label: 'Create Environment', icon: ICONS.folderPlus, onSelect() { createEnvironmentModal.value = true } },
-  ]
-  if (store.environment) {
-    actions.push({
-      label: 'Rename Environment',
-      icon: ICONS.pencil,
-      onSelect() {
-        environmentName.value = store.environment?.name ?? ''
-        renameEnvironmentModal.value = true
-      },
-    })
-    actions.push({
-      label: 'Delete Environment',
-      icon: 'i-heroicons:trash',
-      color: 'error' as const,
-      disabled: store.environment.is_default,
-      description: store.environment.is_default ? 'Cannot delete the default environment' : undefined,
-      onSelect() {
-        if (!store.environment?.is_default) deleteEnvironmentModal.value = true;
-      },
-    })
-  }
-  return [list, actions]
+const projectMenuItems = computed<DropdownMenuItem[][]>(() => {
+  return [[
+    { label: 'All Projects', onSelect() { void selectProject(null) } },
+    ...store.projects.map(project => ({
+      label: project.name,
+      onSelect() { void selectProject(project.id) },
+    })),
+  ], [
+  { label: 'Create Project', onSelect() { createProjectModal.value = true } },
+  ...(store.project ? [{ label: 'Delete Project', color: 'error' as const, onSelect() { deleteProjectModal.value = true } }] : []),
+  ]]
 })
+
+const environmentMenuItems = computed<DropdownMenuItem[][]>(() => {
+  return [
+    store.environments.map(environment => ({
+      label: environment.name,
+      badges: [
+        ...(environment.is_default ? ['Default'] : []),
+        ...(environment.is_preview ? ['Preview'] : []),
+      ],
+      onSelect() { selectEnvironment(environment) },
+    })),
+    [
+      { label: 'Create Environment', onSelect() { createEnvironmentModal.value = true } },
+      ...(store.environment ? [{
+        label: 'Rename Environment',
+        onSelect() {
+          environmentName.value = store.environment?.name ?? ''
+          renameEnvironmentModal.value = true
+        },
+      }] : []),
+      ...(store.environment ? [{
+        label: 'Delete Environment',
+        color: 'error' as const,
+        disabled: store.environment.is_default,
+        onSelect() {
+          if (!store.environment?.is_default) deleteEnvironmentModal.value = true
+        },
+      }] : []),
+    ],
+  ]
+})
+
+const revisionItems = computed<DropdownMenuItem[][]>(() => [[
+  {
+    label: 'Draft',
+    icon: ICONS.pencil,
+    disabled: !hasDraftRevision.value,
+    onSelect() { setRevisionView(false) },
+  },
+  {
+    label: 'Deployed',
+    icon: ICONS.check,
+    onSelect() { setRevisionView(true) },
+  },
+]])
 
 async function selectProject(projectId: string | null) {
   const slug = store.organization?.slug
@@ -175,6 +174,31 @@ function setRevisionView(viewingDeployed: boolean) {
   if (viewingDeployed) delete query.revision
   else query.revision = store.environment.draft_timeline
   router.push({ query })
+}
+
+function setRevisionHeight(height?: number) {
+  if (revisionContainer.value) revisionContainer.value.style.height = height === undefined ? '' : `${height}px`
+}
+
+function beforeRevisionEnter() {
+  setRevisionHeight(0)
+}
+
+function enterRevision(element: Element) {
+  if (!(element instanceof HTMLElement)) return
+  requestAnimationFrame(() => setRevisionHeight(element.offsetHeight))
+}
+
+function beforeRevisionLeave(element: Element) {
+  if (element instanceof HTMLElement) setRevisionHeight(element.offsetHeight)
+}
+
+function leaveRevision() {
+  requestAnimationFrame(() => setRevisionHeight(0))
+}
+
+function afterRevisionEnter() {
+  setRevisionHeight()
 }
 
 async function onProjectCreated() { await refreshProjects() }
@@ -245,14 +269,26 @@ const graphModalOpen = ref(false)
 </script>
 
 <template>
-  <div class="flex min-w-0 items-center gap-2">
-    <UDropdownMenu size="sm" :items="projectItems" :content="{ align: 'start', collisionPadding: 12 }" :ui="{ content: 'w-(--reka-dropdown-menu-trigger-width)' }" class="shrink-0">
-      <UButton :label="projectLabel" :trailing-icon="ICONS.chevronUpDown" size="sm" color="neutral" variant="soft" class="w-48 justify-between data-[state=open]:bg-elevated" :ui="{ trailingIcon: 'text-dimmed' }" />
+  <div class="min-w-0" :class="props.collapsed ? 'flex flex-col items-center gap-2' : 'space-y-2'">
+    <UDropdownMenu size="sm" :items="projectMenuItems" :content="{ align: 'start', collisionPadding: 12 }" :ui="{ content: 'w-(--reka-dropdown-menu-trigger-width)' }" class="w-full">
+      <UButton
+        :label="props.collapsed ? undefined : projectLabel"
+        :icon="props.collapsed ? ICONS.folder : undefined"
+        :trailing-icon="props.collapsed ? undefined : ICONS.chevronUpDown"
+        :aria-label="props.collapsed ? projectLabel : undefined"
+        :title="props.collapsed ? projectLabel : undefined"
+        :square="props.collapsed"
+        block
+        size="sm"
+        color="neutral"
+        variant="soft"
+        class="min-h-8 border border-default bg-elevated/70 hover:bg-elevated data-[state=open]:bg-elevated"
+        :class="props.collapsed ? 'size-8' : undefined"
+        :ui="{ trailingIcon: 'text-dimmed' }"
+      />
     </UDropdownMenu>
 
-    <USeparator orientation="vertical" class="h-6 shrink-0" />
-
-    <UDropdownMenu size="sm" :items="environmentItems" :content="{ align: 'start', collisionPadding: 12 }" :ui="{ content: 'w-(--reka-dropdown-menu-trigger-width)', itemWrapper: 'self-center' }" class="shrink-0">
+    <UDropdownMenu size="sm" :items="environmentMenuItems" :content="{ align: 'start', collisionPadding: 12 }" :ui="{ content: 'w-(--reka-dropdown-menu-trigger-width)' }" class="w-full">
       <template #item-trailing="{ item }">
         <div v-if="item.badges?.length" class="ml-auto flex items-center gap-1">
           <UBadge v-for="badge in item.badges" :key="badge" :color="badge === 'Preview' ? 'primary' : 'neutral'" variant="soft" size="sm">
@@ -260,15 +296,87 @@ const graphModalOpen = ref(false)
           </UBadge>
         </div>
       </template>
-      <UButton :label="environmentLabel" :trailing-icon="ICONS.chevronUpDown" size="sm" color="neutral" variant="soft" :disabled="!routeProjectId && !store.project" class="w-48 justify-between data-[state=open]:bg-elevated" :ui="{ trailingIcon: 'text-dimmed' }" />
+      <UButton
+        :label="props.collapsed ? undefined : environmentLabel"
+        :icon="props.collapsed ? ICONS.globeAlt : undefined"
+        :trailing-icon="props.collapsed ? undefined : ICONS.chevronUpDown"
+        :aria-label="props.collapsed ? environmentLabel : undefined"
+        :title="props.collapsed ? environmentLabel : undefined"
+        :square="props.collapsed"
+        :disabled="!routeProjectId && !store.project"
+        block
+        size="sm"
+        color="neutral"
+        variant="soft"
+        class="min-h-8 border border-default bg-elevated/70 hover:bg-elevated data-[state=open]:bg-elevated"
+        :class="props.collapsed ? 'size-8' : undefined"
+        :ui="{ trailingIcon: 'text-dimmed' }"
+      />
     </UDropdownMenu>
+
     <template v-if="store.project">
-      <UButton :icon="ICONS.graph" variant="ghost" color="neutral" size="sm" class="shrink-0 rotate-180" aria-label="Environment graph" @click="graphModalOpen = true" />
-      <div class="flex items-center gap-2 text-xs">
-        <span :class="isViewingDeployed ? 'text-muted' : 'font-medium text-default'">Draft</span>
-        <USwitch :model-value="isViewingDeployed" :disabled="!hasDraftRevision" aria-label="View deployed revision" @update:model-value="setRevisionView(Boolean($event))" />
-        <span :class="isViewingDeployed ? 'font-medium text-default' : 'text-muted'">Deployed</span>
+      <div ref="revisionContainer" class="revision-height">
+        <Transition
+          name="revision"
+          @before-enter="beforeRevisionEnter"
+          @enter="enterRevision"
+          @after-enter="afterRevisionEnter"
+          @before-leave="beforeRevisionLeave"
+          @leave="leaveRevision"
+        >
+          <div v-if="store.environment && !props.collapsed" class="space-y-1.5 pt-1">
+            <p class="px-1 text-[10px] font-mono uppercase tracking-[0.08em] text-muted">Revision</p>
+            <div class="grid grid-cols-2 gap-1 rounded-md border border-default bg-elevated/70 p-1">
+              <UButton
+                size="xs"
+                :color="isViewingDeployed ? 'neutral' : 'primary'"
+                :variant="isViewingDeployed ? 'ghost' : 'soft'"
+                :disabled="!hasDraftRevision"
+                class="w-full justify-center"
+                @click="setRevisionView(false)"
+              >
+                Draft
+              </UButton>
+              <UButton
+                size="xs"
+                :color="isViewingDeployed ? 'primary' : 'neutral'"
+                :variant="isViewingDeployed ? 'soft' : 'ghost'"
+                class="w-full justify-center"
+                @click="setRevisionView(true)"
+              >
+                Deployed
+              </UButton>
+            </div>
+          </div>
+        </Transition>
       </div>
+
+      <UDropdownMenu v-if="props.collapsed" size="sm" :items="revisionItems" :content="{ align: 'start', collisionPadding: 12 }" :ui="{ content: 'w-40' }">
+        <UButton
+          :icon="ICONS.revision"
+          :aria-label="isViewingDeployed ? 'Deployed revision' : 'Draft revision'"
+          :title="isViewingDeployed ? 'Deployed revision' : 'Draft revision'"
+          size="sm"
+          color="neutral"
+          variant="soft"
+          square
+          class="size-8 border border-default bg-elevated/70 hover:bg-elevated data-[state=open]:bg-elevated"
+        />
+      </UDropdownMenu>
+
+      <UButton
+        :label="props.collapsed ? undefined : 'Environment graph'"
+        :icon="ICONS.graph"
+        :aria-label="props.collapsed ? 'Environment graph' : undefined"
+        :title="props.collapsed ? 'Environment graph' : undefined"
+        :square="props.collapsed"
+        size="sm"
+        variant="ghost"
+        color="neutral"
+        class="shrink-0"
+        :class="props.collapsed ? 'size-8' : 'min-h-8 w-full justify-start'"
+        @click="graphModalOpen = true"
+      />
     </template>
 
     <DashboardProjectsCreateModal v-model:open="createProjectModal" @created="onProjectCreated" />
@@ -303,3 +411,49 @@ const graphModalOpen = ref(false)
     </UModal>
   </div>
 </template>
+
+<style scoped>
+.revision-height {
+  overflow: hidden;
+  transition: height 180ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.revision-enter-active,
+.revision-leave-active {
+  will-change: opacity, transform;
+  transition-property: opacity, transform;
+  transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.revision-enter-active {
+  transition-duration: 180ms;
+}
+
+.revision-leave-active {
+  transition-duration: 120ms;
+}
+
+.revision-enter-from,
+.revision-leave-to {
+  opacity: 0;
+  transform: translateY(-6px) scaleY(0.96);
+  transform-origin: top;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .revision-height {
+    transition-duration: 120ms;
+  }
+
+  .revision-enter-active,
+  .revision-leave-active {
+    transition-duration: 120ms;
+    transition-property: opacity;
+  }
+
+  .revision-enter-from,
+  .revision-leave-to {
+    transform: none;
+  }
+}
+</style>

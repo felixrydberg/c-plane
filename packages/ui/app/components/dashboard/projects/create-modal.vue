@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Project } from '@cplane/sdk'
 import { getErrorMessage } from '~/utils/errors'
+import { ICONS } from '~/utils/icons'
 
 const store = useStore();
 const open = defineModel<boolean>('open', { required: true });
@@ -52,13 +53,13 @@ async function handleCreate() {
             </p>
           </UFormField>
 
-          <p v-if="error" class="text-sm text-red-500">{{ error }}</p>
+          <p v-if="error" class="text-sm text-error">{{ error }}</p>
 
           <div class="flex justify-end gap-3 pt-2">
-            <UButton variant="ghost" color="neutral" :disabled="loading" @click="open = false">
+            <UButton type="button" variant="ghost" color="neutral" :disabled="loading" @click="open = false">
               Cancel
             </UButton>
-            <UButton type="submit" :loading="loading" :disabled="!name.trim()">
+            <UButton type="submit" :icon="ICONS.plus" color="primary" variant="frosted" :loading="loading" :disabled="!name.trim()">
               Create Project
             </UButton>
           </div>

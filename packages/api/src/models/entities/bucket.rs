@@ -22,11 +22,24 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Project,
+    #[sea_orm(
+        belongs_to = "super::region::Entity",
+        from = "Column::RegionId",
+        to = "super::region::Column::Id",
+        on_delete = "Restrict"
+    )]
+    Region,
 }
 
 impl Related<super::project::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Project.def()
+    }
+}
+
+impl Related<super::region::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Region.def()
     }
 }
 

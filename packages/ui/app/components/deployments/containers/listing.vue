@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import { h } from 'vue'
 import type { Container } from '@cplane/sdk'
-import { ICONS } from '~/utils/icons';
+import type { TableColumn } from '@nuxt/ui'
+import { ICONS } from '~/utils/icons'
 
 type ContainerWithProject = Container & {
-  _projectName?: string;
-  _projectId?: string;
+  _projectName?: string
+  _projectId?: string
 }
 
 const props = defineProps<{
@@ -16,14 +18,20 @@ const props = defineProps<{
   draftRevisionId?: string
   canRemove: boolean
   status: string
-}>();
+  hasError?: boolean
+}>()
 
-const emit = defineEmits<{ refresh: [view: 'draft' | 'deployed'] }>();
+const emit = defineEmits<{ refresh: [view: 'draft' | 'deployed'] }>()
 
-const toast = useToast();
-const deleteTarget = ref<ContainerWithProject | null>(null);
-const removeAsDraft = ref(false);
-const removing = ref(false);
+const toast = useToast()
+const route = useRoute()
+const deleteTarget = ref<ContainerWithProject | null>(null)
+const removeAsDraft = ref(false)
+const removing = ref(false)
+const UButton = resolveComponent('UButton')
+const UDropdownMenu = resolveComponent('UDropdownMenu')
+const NuxtLink = resolveComponent('NuxtLink')
+const NuxtTime = resolveComponent('NuxtTime')
 
 async function confirmDelete() {
   if (!deleteTarget.value || !props.organizationId || !props.draftRevisionId || !deleteTarget.value.id) return
@@ -33,77 +41,117 @@ async function confirmDelete() {
     await $fetch(`/api/cplane/organization/${props.organizationId as ':organization_id'}/containers/${deleteTarget.value.id as ':container_id'}` as const, {
       method: 'DELETE',
       query: { environment_id: props.environmentId ?? undefined, timeline_id: props.draftRevisionId, deploy: deploy || undefined },
-    });
-    toast.add({ title: deploy ? 'Container removed and deployed' : 'Container removed from draft', color: 'success' });
+    })
+    toast.add({ title: deploy ? 'Container removed and deployed' : 'Container removed from draft', color: 'success' })
     deleteTarget.value = null
-    emit('refresh', deploy ? 'deployed' : 'draft');
+    emit('refresh', deploy ? 'deployed' : 'draft')
   } catch {
-    toast.add({ title: deploy ? 'Failed to remove and deploy container' : 'Failed to remove container from draft', color: 'error' });
+    toast.add({ title: deploy ? 'Failed to remove and deploy container' : 'Failed to remove container from draft', color: 'error' })
   } finally {
     removing.value = false
   }
 }
 
+function containerUrl(containerId: string) {
+  return {
+    path: `/${route.params.organization_slug}/containers/${props.projectId}/${props.environmentId}/${containerId}`,
+    query: props.revisionId ? { revision: props.revisionId } : undefined,
+  }
+}
+
+const columns: TableColumn<ContainerWithProject>[] = [
+  {
+    accessorKey: 'name',
+    header: 'Service',
+    cell: ({ row }) => h(NuxtLink, {
+      to: containerUrl(row.original.id),
+      class: 'flex min-w-0 items-center gap-2',
+    }, [
+      h('span', { class: 'truncate font-medium text-primary group-hover:underline group-hover:underline-offset-4' }, row.original.name),
+      row.original.current_version?.public
+        ? h('span', { class: 'shrink-0 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400' }, 'Public')
+        : null,
+    ]),
+  },
+  {
+    id: 'image',
+    header: 'Image',
+    cell: ({ row }) => h('code', { class: 'block max-w-56 truncate text-xs text-muted' }, row.original.current_version?.image ?? 'No version'),
+  },
+  {
+    id: 'replicas',
+    header: 'Replicas',
+    cell: ({ row }) => row.original.current_version?.replica_count ?? 0,
+  },
+  {
+    id: 'port',
+    header: 'Port',
+    cell: ({ row }) => row.original.current_version?.port ?? '—',
+  },
+  {
+    id: 'access',
+    header: 'Access',
+    cell: ({ row }) => row.original.current_version?.public ? 'Public' : 'Private',
+  },
+  {
+    accessorKey: 'updated_at',
+    header: 'Updated',
+    cell: ({ row }) => h(NuxtTime, { datetime: row.original.updated_at, relative: true, class: 'whitespace-nowrap text-xs text-muted' }),
+  },
+  {
+    id: 'actions',
+    header: '',
+    meta: { class: { th: 'text-right', td: 'text-right' } },
+    cell: ({ row }) => props.canRemove
+      ? h('div', { class: 'flex justify-end' }, h(UDropdownMenu, {
+        items: [[{
+          label: 'Remove',
+          icon: ICONS.trash,
+          color: 'error' as const,
+          onSelect: () => { deleteTarget.value = row.original },
+        }]],
+        size: 'sm',
+        content: { align: 'end' },
+      }, {
+        default: () => h(UButton, {
+          icon: ICONS.more,
+          color: 'neutral',
+          variant: 'ghost',
+          size: 'xs',
+          'aria-label': `Actions for ${row.original.name}`,
+          onClick: (event: MouseEvent) => event.stopPropagation(),
+        }),
+      }))
+      : null,
+  },
+]
+
 const deleteModalOpen = computed({
   get: () => !!deleteTarget.value,
-  set: (v) => { if (!v) deleteTarget.value = null },
+  set: (value) => { if (!value) deleteTarget.value = null },
 })
-
 </script>
 
 <template>
-  <div class="overflow-hidden rounded-md border border-dashed border-default bg-transparent">
-    <!-- Loading -->
-    <div v-if="status === 'pending'" class="flex items-center gap-3 py-12 justify-center text-muted text-sm">
-      <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
-      Loading containers&hellip;
-    </div>
-
-    <!-- Empty -->
-    <div v-else-if="containers.length === 0" class="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
-      <div>
-        <p class="text-sm font-medium">No containers in this environment</p>
-        <p class="mt-1 text-sm text-muted">Deploy a container to give this environment a running service.</p>
+  <UiTable
+    :status="status"
+    :items="containers"
+    :columns="columns"
+    disable-header
+    selectable
+    @select="row => navigateTo(containerUrl(row.original.id))"
+  >
+    <template #empty>
+      <div v-if="hasError" class="flex flex-col items-center justify-center gap-3 py-14 text-center">
+        <p class="text-sm text-error">Failed to load containers.</p>
       </div>
-    </div>
-
-    <!-- Container rows -->
-    <template v-else>
-      <div class="hidden grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_90px_90px_100px_110px_auto] gap-4 border-b border-default/60 px-5 py-3 text-[11px] font-medium uppercase tracking-wide text-muted lg:grid">
-        <span>Service</span><span>Image</span><span>Replicas</span><span>Port</span><span>Access</span><span>Updated</span><span />
+      <div v-else class="flex flex-col items-center justify-center gap-3 py-14 text-center">
+        <UIcon :name="ICONS.containers" class="size-10 text-muted" />
+        <p class="text-muted">{{ containers.length ? 'No matching containers.' : 'No containers in this environment.' }}</p>
+        <p v-if="!containers.length" class="text-sm text-dimmed">Deploy a container to give this environment a running service.</p>
       </div>
-      <NuxtLink
-        v-for="c in containers"
-        :key="c.id"
-        :to="{ path: `/${$route.params.organization_slug}/containers/${projectId}/${environmentId}/${c.id}`, query: { revision: revisionId } }"
-        class="group grid w-full gap-3 border-b border-default/30 px-5 py-4 transition-colors hover:bg-elevated/50 last:border-b-0 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_90px_90px_100px_110px_auto] lg:items-center lg:gap-4"
-      >
-        <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-2">
-            <span class="text-sm font-medium truncate">{{ c.name }}</span>
-            <span v-if="c.current_version?.public" class="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">Public</span>
-          </div>
-        </div>
-        <code class="truncate font-mono text-xs text-muted">{{ c.current_version?.image ?? 'No version' }}</code>
-        <span class="font-mono text-xs text-muted">{{ c.current_version?.replica_count ?? 0 }}</span>
-        <span class="font-mono text-xs text-muted">{{ c.current_version?.port ?? '—' }}</span>
-        <span class="text-xs text-muted">{{ c.current_version?.public ? 'Public' : 'Private' }}</span>
-        <span class="shrink-0 text-xs tabular-nums text-muted">
-          <NuxtTime :datetime="c.created_at" relative />
-        </span>
-        <UButton
-          v-if="canRemove"
-          variant="solid"
-          size="xs"
-          color="error"
-          :icon="ICONS.trash"
-          @click.prevent.stop="deleteTarget = c"
-        >
-          Remove
-        </UButton>
-      </NuxtLink>
     </template>
-  </div>
+  </UiTable>
 
   <UModal v-model:open="deleteModalOpen" title="Remove Container">
     <template #body>

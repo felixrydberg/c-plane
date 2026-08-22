@@ -26,7 +26,7 @@ defineProps<{
       class="relative border border-dashed rounded-full flex flex-row items-center whitespace-nowrap transition-all hover:shadow-md overflow-hidden"
       :class="[
         data.environmentLabels.length > 0 ? '' : 'border-default',
-        data.isSelected ? 'ring-2 ring-primary ring-offset-2 ring-offset-default z-10' : '',
+        data.isSelected ? 'ring-2 ring-neutral ring-offset-2 ring-offset-default z-10' : '',
       ]"
       :style="data.environmentLabels.length > 0 ? { borderColor: data.color } : {}"
     >

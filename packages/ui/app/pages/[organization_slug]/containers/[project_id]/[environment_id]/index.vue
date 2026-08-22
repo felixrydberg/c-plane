@@ -29,6 +29,7 @@ const environmentName = computed(() => {
   const list = environmentList.value ?? store.environments
   return list.find(b => b.id === environmentId.value)?.name ?? environmentId.value
 })
+
 const fetchedEnvironment = computed(() =>
   environmentList.value?.find(item => item.id === environmentId.value) ?? null
 )
@@ -48,7 +49,7 @@ const isViewingDraft = computed(() => revisionId.value === environment.value?.dr
     return `/api/cplane/organization/${orgId as ':organization_id'}/containers` as const
   })
 
-  const { data, status, refresh: refreshData } = await useLazyFetch(
+const { data, status, refresh: refreshData } = await useLazyFetch(
   fetchUrl,
   {
     key: 'project-resources',
@@ -61,6 +62,9 @@ const isViewingDraft = computed(() => revisionId.value === environment.value?.dr
   },
 )
 
+const search = ref('')
+const refreshing = ref(false)
+
 const containers = computed<ContainerWithProject[]>(() => {
   return (data.value ?? []).map(c => ({
     ...c,
@@ -68,6 +72,22 @@ const containers = computed<ContainerWithProject[]>(() => {
     _projectId: projectId.value ?? undefined,
   }))
 })
+
+const filteredContainers = computed(() => {
+  const query = search.value.trim().toLowerCase()
+  return query
+    ? containers.value.filter(container => `${container.name} ${container.current_version?.image ?? ''}`.toLowerCase().includes(query))
+    : containers.value
+})
+
+async function reloadContainers() {
+  refreshing.value = true
+  try {
+    await refreshData()
+  } finally {
+    refreshing.value = false
+  }
+}
 
 async function refresh(view: 'draft' | 'deployed') {
   await refreshEnvironments()
@@ -87,11 +107,11 @@ watch(() => store.refreshKey, () => { refreshData() })
 </script>
 
 <template>
-  <div class="flex w-full max-w-[1500px] flex-col gap-5 mx-auto">
+  <div class="flex w-full max-w-375 flex-col gap-5 mx-auto">
     <div class="flex flex-col gap-4 border-b border-default/60 pb-5 sm:flex-row sm:items-end sm:justify-between">
       <div class="min-w-0">
-        <p class="mb-2 truncate text-sm text-muted">{{ projectName }} <span class="mx-1 text-default/30">/</span> {{ environmentName }}</p>
-        <h1 class="text-2xl font-semibold">Containers</h1>
+        <UiPageEyebrow label="Compute" />
+        <h1 class="text-2xl font-semibold">C1 - Containers</h1>
         <p class="mt-1 text-sm text-muted">Runtime services in the {{ isViewingDeployed ? 'deployed' : 'draft' }} revision.</p>
       </div>
       <UButton class="shrink-0" :icon="ICONS.plus" :to="`/${route.params.organization_slug}/containers/${projectId}/${environmentId}/new`">New Container</UButton>
@@ -99,13 +119,31 @@ watch(() => store.refreshKey, () => { refreshData() })
 
     <div class="grid overflow-hidden rounded-md border border-dashed border-default bg-transparent sm:grid-cols-3">
       <div class="px-4 py-3"><p class="text-xs text-muted">Environment</p><p class="mt-1 text-sm font-medium">{{ environmentName }}</p></div>
-      <div class="px-4 py-3"><p class="text-xs text-muted">Containers</p><p class="mt-1 font-mono text-sm">{{ containers.length }}</p></div>
+      <div class="px-4 py-3"><p class="text-xs text-muted">C1 - Containers</p><p class="mt-1 font-mono text-sm">{{ containers.length }}</p></div>
       <div class="px-4 py-3"><p class="text-xs text-muted">{{ isViewingDeployed ? 'Deployed' : 'Draft' }} replicas</p><p class="mt-1 font-mono text-sm">{{ containers.reduce((total, container) => total + (container.current_version?.replica_count ?? 0), 0) }}</p></div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <UInput
+        v-model="search"
+        icon="i-heroicons:magnifying-glass"
+        placeholder="Search containers..."
+        aria-label="Search containers"
+        class="min-w-0 flex-1"
+      />
+      <UButton
+        :icon="ICONS.refresh"
+        variant="ghost"
+        color="neutral"
+        :loading="refreshing"
+        aria-label="Reload containers"
+        @click="reloadContainers"
+      />
     </div>
 
     <DeploymentsContainersListing
       v-if="projectId && environmentId && store.organization"
-      :containers="containers"
+      :containers="filteredContainers"
       :organization-id="store.organization.id"
       :project-id="projectId"
       :environment-id="environmentId"
@@ -113,6 +151,7 @@ watch(() => store.refreshKey, () => { refreshData() })
       :draft-revision-id="environment?.draft_timeline"
       :can-remove="isViewingDraft || isViewingDeployed"
       :status="status"
+      :has-error="status === 'error'"
       @refresh="refresh"
     />
 

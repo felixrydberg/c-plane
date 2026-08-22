@@ -57,7 +57,7 @@ async function revertDraft() {
     <UAlert color="warning" variant="subtle" icon="i-heroicons:exclamation-triangle" title="Draft revision pending deployment" description="Deploy the draft revision to make it live." orientation="horizontal" class="border border-warning/40 bg-warning/15 text-warning-800 dark:border-warning-400/40 dark:bg-warning-950/40 dark:text-warning-200">
       <template #actions>
         <UButton :icon="ICONS.check" color="primary" size="sm" :loading="deploying" @click="deployDraft">Deploy draft revision</UButton>
-        <UButton :icon="ICONS.refresh" color="neutral" size="sm" :loading="reverting" @click="revertDraft">Revert draft to deployed version</UButton>
+        <UButton :icon="ICONS.refresh" variant="ghost" color="neutral" size="sm" :loading="reverting" @click="revertDraft">Revert draft to deployed version</UButton>
       </template>
     </UAlert>
   </div>

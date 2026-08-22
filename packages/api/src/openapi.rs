@@ -184,6 +184,7 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
             crate::utils::pagination::PaginatedResponse<crate::handlers::projects::ProjectResponse>,
             crate::utils::pagination::PaginationMeta,
             crate::handlers::storage_buckets::CreateBucketRequest,
+            crate::handlers::storage_buckets::BucketRegionResponse,
             crate::handlers::storage_buckets::BucketResponse,
             crate::handlers::storage_objects::BucketObjectResponse,
             crate::handlers::storage_objects::BucketObjectsResponse,

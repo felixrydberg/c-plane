@@ -575,14 +575,17 @@ export interface components {
             can_read: boolean;
             can_write: boolean;
         };
+        BucketRegionResponse: {
+            label: string;
+            slug: string;
+        };
         BucketResponse: {
             /** Format: uuid */
             id: string;
             name: string;
             /** Format: uuid */
             project_id: string;
-            /** Format: uuid */
-            region: string;
+            region: components["schemas"]["BucketRegionResponse"];
         };
         ContainerResponse: {
             created_at: string;

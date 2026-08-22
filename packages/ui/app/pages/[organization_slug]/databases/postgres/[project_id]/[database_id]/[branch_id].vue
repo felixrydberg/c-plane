@@ -9,6 +9,7 @@ const store = useStore()
 const route = useRoute()
 const toast = useToast()
 
+const organizationSlug = computed(() => route.params.organization_slug?.toString() || '')
 const orgId = computed(() => store.organization?.id ?? '')
 const projectId = computed(() => route.params.project_id?.toString() || null)
 const databaseId = computed(() => route.params.database_id?.toString() || null)
@@ -58,6 +59,14 @@ const replicas = computed(() => [
     role: 'Read only',
   })),
 ])
+
+watch([dbName, branchName], () => {
+  if (!dbName.value || !branchName.value || !projectId.value || !databaseId.value || !branchId.value || !organizationSlug.value) return
+  store.setBreadcrumbs([
+    { label: 'D1 - Postgres', to: `/${organizationSlug.value}/databases/postgres/${projectId.value}` },
+    { label: `${dbName.value} / ${branchName.value}` },
+  ])
+}, { immediate: true })
 
 async function fetchData() {
   if (!orgId.value || !databaseId.value || !branchId.value || !projectId.value) return
@@ -141,7 +150,7 @@ const connectionString = computed(() => `postgresql://username:password@${dbName
     <div v-if="loading && !dbName" class="flex justify-center py-20"><UIcon name="i-lucide-loader-circle" class="size-5 animate-spin text-muted" /></div>
     <div v-else class="overflow-hidden rounded-lg border border-default/60 bg-default">
       <header class="flex flex-col gap-4 border-b border-default/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div><UiBackLink :label="dbName" :to="backUrl()" /><div class="mt-2 flex items-center gap-2"><h1 class="text-xl font-semibold">{{ dbName }} / {{ branchName }}</h1><UBadge v-if="isDefault" size="sm" variant="soft" color="primary">Default</UBadge></div><p class="mt-1 text-xs text-muted">Postgres database branch</p></div>
+        <div><UiBackLink :label="dbName" :to="backUrl()" /><UiPageEyebrow label="Storage &amp; Databases" /><div class="mt-2 flex items-center gap-2"><h1 class="text-xl font-semibold">{{ dbName }} / {{ branchName }}</h1><UBadge v-if="isDefault" size="sm" variant="soft" color="primary">Default</UBadge></div><p class="mt-1 text-xs text-muted">D1 - Postgres database branch</p></div>
         <UButton :icon="ICONS.plus" :to="`/${route.params.organization_slug}/databases/postgres/${projectId}/new`">New Database</UButton>
       </header>
 
@@ -159,7 +168,7 @@ const connectionString = computed(() => `postgresql://username:password@${dbName
         <main class="min-w-0 px-5 py-4">
           <Transition mode="out-in" enter-active-class="transition-opacity duration-150 ease-out" enter-from-class="opacity-0" leave-active-class="transition-opacity duration-100 ease-in" leave-to-class="opacity-0">
             <div v-if="loading" key="loading" class="flex min-h-64 items-center justify-center"><UIcon name="i-lucide-loader-circle" class="size-5 animate-spin text-muted" /></div>
-            <UTabs v-else key="content" v-model="activeTab" :items="tabs">
+            <UiTabs v-else key="content" v-model="activeTab" :items="tabs">
             <template #overview>
               <div class="space-y-6 pt-4">
                 <div><h2 class="text-base font-semibold">Overview</h2><p class="mt-1 text-sm text-muted">Resource usage for each database replica.</p></div>
@@ -191,7 +200,7 @@ const connectionString = computed(() => `postgresql://username:password@${dbName
             </template>
             <template #connections><div class="py-10"><h2 class="text-sm font-semibold">Connections</h2><p class="mt-2 text-sm text-muted">Connection pooling and credentials will appear here.</p></div></template>
             <template #backups><div class="py-10"><h2 class="text-sm font-semibold">Backups</h2><p class="mt-2 text-sm text-muted">Backup schedules and restore points will appear here.</p></div></template>
-            </UTabs>
+            </UiTabs>
           </Transition>
         </main>
 

@@ -185,12 +185,12 @@ const onCreateKey = async () => {
 </script>
 
 <template>
-  <OrganizationSettingsPage title="Authentication">
+  <OrganizationSettingsPage title="Organization API tokens">
 
     <section class="border-b border-dashed border-default pb-10">
       <div class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 class="text-xl font-normal tracking-[-0.02em]">API keys</h2>
+          <h2 class="text-xl font-normal tracking-[-0.02em]">Organization API tokens</h2>
           <p class="mt-2 text-sm text-muted">Use scoped keys for services and automation.</p>
         </div>
         <UButton :icon="ICONS.plus" color="primary" @click="createModalOpen = true">Create API Key</UButton>

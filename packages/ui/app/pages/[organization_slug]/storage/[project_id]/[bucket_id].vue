@@ -34,6 +34,7 @@ type BucketRow = {
 const store = useStore()
 const route = useRoute()
 const toast = useToast()
+const organizationSlug = computed(() => route.params.organization_slug?.toString() || '')
 const organizationId = computed(() => store.organization?.id || '')
 const projectId = computed(() => route.params.project_id as string)
 const bucketId = computed(() => route.params.bucket_id as string)
@@ -57,6 +58,15 @@ const { data: initialPage, status, error, refresh } = await useFetch<BucketObjec
 })
 
 const bucket = computed(() => buckets.value.find(item => item.id === bucketId.value) as Bucket | undefined)
+
+watch(bucket, () => {
+  if (!bucket.value?.name || !projectId.value || !bucketId.value || !organizationSlug.value) return
+  store.setBreadcrumbs([
+    { label: 'S1 - Object Storage', to: `/${organizationSlug.value}/storage/${projectId.value}` },
+    { label: bucket.value.name },
+  ])
+}, { immediate: true })
+
 const folders = ref<string[]>([])
 const objects = ref<BucketObject[]>([])
 const nextContinuationToken = ref<string | null>(null)
@@ -68,6 +78,7 @@ const refreshing = ref(false)
 const deleteTarget = ref<DeleteTarget | null>(null)
 const deleteModalOpen = ref(false)
 const deleting = ref(false)
+const activeView = ref<'objects' | 'usage'>('objects')
 
 watch(initialPage, (page) => {
   const firstPage = page ?? { folders: [], objects: [], next_continuation_token: null }
@@ -83,16 +94,6 @@ const breadcrumbs = computed(() => {
     prefix: `${parts.slice(0, index + 1).join('/')}/`,
   }))
 })
-
-function backUrl() {
-  return `/${route.params.organization_slug}/storage/${projectId.value}`
-}
-
-function parentPrefix() {
-  const parts = prefix.value.split('/').filter(Boolean)
-  parts.pop()
-  return parts.length ? `${parts.join('/')}/` : ''
-}
 
 async function openPrefix(nextPrefix: string) {
   await navigateTo({ query: nextPrefix ? { prefix: nextPrefix } : {} })
@@ -219,6 +220,8 @@ function formatSize(size: number) {
 
 const UButton = resolveComponent('UButton')
 const UIcon = resolveComponent('UIcon')
+const UDropdownMenu = resolveComponent('UDropdownMenu')
+const NuxtLink = resolveComponent('NuxtLink')
 const rows = computed<BucketRow[]>(() => [
   ...folders.value.map(key => ({
     type: 'folder' as const,
@@ -237,6 +240,32 @@ const rows = computed<BucketRow[]>(() => [
   })),
 ])
 
+const viewTabs = [
+  { label: 'Objects', value: 'objects', slot: 'objects' },
+  { label: 'Usage', value: 'usage', slot: 'usage' },
+]
+const usageSummary = [
+  { label: 'Average Storage', value: '0 B' },
+  { label: 'Data Retrieved', value: '0 B' },
+  { label: 'Class A Operations', value: '0' },
+  { label: 'Class B Operations', value: '0' },
+  { label: 'Request Distribution', value: '0' },
+]
+const usagePanels = [
+  { label: 'Average Storage', values: [{ label: 'Total', value: '0 B', color: 'bg-neutral-400' }] },
+  { label: 'Data Retrieved', values: [{ label: 'Total', value: '0 B', color: 'bg-neutral-400' }] },
+  { label: 'Class A Operations', values: [{ label: 'Total', value: '0', color: 'bg-neutral-400' }] },
+  { label: 'Class B Operations', values: [{ label: 'Total', value: '0', color: 'bg-neutral-400' }] },
+]
+
+const objectStats = computed(() => [
+  { label: 'Region', value: bucket.value ? `${bucket.value.region.label} (${bucket.value.region.slug})` : '—' },
+  { label: 'Objects', value: String(objects.value.length) },
+  { label: 'Listed Size', value: formatSize(objects.value.reduce((total, object) => total + object.size, 0)) },
+  { label: 'Class A Operations', value: '0' },
+  { label: 'Class B Operations', value: '0' },
+])
+
 const columns: TableColumn<BucketRow>[] = [
   {
     accessorKey: 'name',
@@ -244,16 +273,15 @@ const columns: TableColumn<BucketRow>[] = [
     cell: ({ row }) => {
       const item = row.original
       if (item.type === 'folder') {
-        return h('button', {
-          type: 'button',
-          class: 'flex min-w-0 items-center gap-2 text-left hover:text-default',
-          onClick: () => openPrefix(item.key),
+        return h(NuxtLink, {
+          to: { query: { prefix: item.key } },
+          class: 'flex min-w-0 items-center gap-2 text-left text-primary hover:underline hover:underline-offset-4',
         }, [
           h(UIcon, { name: ICONS.folder, class: 'size-4 shrink-0 text-muted' }),
-          h('span', { class: 'truncate' }, item.name),
+          h('span', { class: 'truncate font-medium' }, item.name),
         ])
       }
-      return h('span', { class: 'font-mono text-xs break-all' }, item.name)
+      return h('span', { class: 'break-all font-mono text-xs text-default' }, item.name)
     },
   },
   {
@@ -267,82 +295,166 @@ const columns: TableColumn<BucketRow>[] = [
   {
     accessorKey: 'size',
     header: 'Size',
-    meta: { class: { th: 'hidden sm:table-cell text-right', td: 'hidden sm:table-cell text-right' } },
+    meta: { class: { th: 'hidden sm:table-cell', td: 'hidden sm:table-cell' } },
     cell: ({ row }) => row.original.size === null ? '—' : formatSize(row.original.size),
   },
   {
     id: 'actions',
-    header: 'Actions',
+    header: '',
     meta: { class: { th: 'text-right', td: 'text-right' } },
     cell: ({ row }) => {
       const item = row.original
-      const buttons = item.type === 'folder'
-        ? [h(UButton, {
+      const items = item.type === 'folder'
+        ? [[{
+            label: 'Delete',
             icon: ICONS.trash,
-            color: 'error',
-            size: 'xs',
-            onClick: () => confirmDelete('folder', item.key),
-          }, { default: () => 'Delete' })]
-        : [
-            h(UButton, {
-              icon: ICONS.download,
-              color: 'neutral',
-              size: 'xs',
-              loading: downloading.value === item.key,
-              onClick: () => download(item.object!),
-            }, { default: () => 'Download' }),
-            h(UButton, {
-              icon: ICONS.trash,
-              color: 'error',
-              size: 'xs',
-              loading: deleting.value && deleteTarget.value?.key === item.key,
-              onClick: () => confirmDelete('object', item.key),
-            }, { default: () => 'Delete' }),
-          ]
-      return h('div', { class: 'flex justify-end gap-2' }, buttons)
+            color: 'error' as const,
+            onSelect: () => confirmDelete('folder', item.key),
+          }]]
+        : [[{
+            label: 'Download',
+            icon: ICONS.download,
+            loading: downloading.value === item.key,
+            onSelect: () => download(item.object!),
+          }], [{
+            label: 'Delete',
+            icon: ICONS.trash,
+            color: 'error' as const,
+            onSelect: () => confirmDelete('object', item.key),
+          }]]
+      return h('div', { class: 'flex justify-end' }, h(UDropdownMenu, {
+        items,
+        size: 'sm',
+        content: { align: 'end' },
+      }, {
+        default: () => h(UButton, {
+          icon: ICONS.more,
+          color: 'neutral',
+          variant: 'ghost',
+          size: 'xs',
+        }),
+      }))
     },
   },
 ]
 </script>
 
 <template>
-  <div class="flex w-full max-w-[1500px] flex-col gap-5 mx-auto">
+  <div class="flex w-full max-w-6xl flex-col gap-5 mx-auto">
     <div class="border-b border-default/60 pb-5">
-      <UiBackLink label="Buckets" :to="backUrl()" />
-      <div class="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 class="text-2xl font-semibold">{{ bucket?.name || 'Bucket objects' }}</h1>
-          <div class="mt-2 flex flex-wrap items-center gap-1 text-sm text-muted">
-            <button class="hover:text-default" @click="openPrefix('')">{{ bucket?.name || 'Bucket' }}</button>
-            <template v-for="item in breadcrumbs" :key="item.prefix">
-              <span>/</span><button class="hover:text-default" @click="openPrefix(item.prefix)">{{ item.name }}</button>
+      <UiPageEyebrow label="Storage &amp; Databases" />
+      <h1 class="mt-1 text-2xl font-semibold">{{ bucket?.name ?? 'Bucket' }}</h1>
+      <p class="mt-1 text-sm text-muted">S1 - Object Storage bucket.</p>
+    </div>
+    <UiTabs v-model="activeView" :items="viewTabs">
+      <template #objects>
+        <div class="space-y-4 pt-4">
+          <div class="grid gap-x-8 gap-y-4 border-y border-default/60 py-4 sm:grid-cols-2 lg:grid-cols-5">
+            <div v-for="stat in objectStats" :key="stat.label">
+              <p class="text-xs text-muted">{{ stat.label }}</p>
+              <p class="mt-1 text-base font-semibold">{{ stat.value }}</p>
+            </div>
+          </div>
+
+          <nav v-if="bucket?.name" aria-label="Bucket path" class="flex min-w-0 items-center justify-between gap-3 text-sm text-muted">
+            <div class="flex min-w-0 flex-wrap items-center gap-1">
+              <button v-if="breadcrumbs.length" type="button" class="underline underline-offset-2 hover:text-default" @click="openPrefix('')">{{ bucket.name }}</button>
+              <span v-else>{{ bucket.name }}</span>
+              <span>/</span>
+              <template v-for="item in breadcrumbs" :key="item.prefix">
+                <span>{{ item.name }}</span>
+                <span>/</span>
+              </template>
+            </div>
+            <UButton :icon="ICONS.refresh" variant="ghost" color="neutral" :loading="refreshing" aria-label="Reload objects" @click="reloadObjects" />
+          </nav>
+
+          <div v-if="status === 'pending'" class="flex items-center justify-center py-14 text-sm text-muted">Loading objects…</div>
+          <div v-else-if="error" class="flex flex-col items-center justify-center gap-3 py-14 text-center">
+            <p class="text-sm text-muted">Unable to load this bucket.</p>
+            <UButton :icon="ICONS.refresh" variant="ghost" color="neutral" :loading="refreshing" aria-label="Retry loading objects" @click="reloadObjects" />
+          </div>
+          <UiTable v-else :status="status" :items="rows" :columns="columns" disable-header>
+            <template #empty>
+              <div class="flex flex-col items-center justify-center gap-3 py-14 text-center">
+                <UIcon :name="ICONS.folder" class="size-10 text-muted" />
+                <p class="text-muted">This folder is empty.</p>
+              </div>
             </template>
+          </UiTable>
+          <div v-if="pageNumber > 1 || nextContinuationToken" class="flex justify-center pt-1">
+            <nav aria-label="Object pages" class="inline-flex items-center rounded-lg border border-default/60 bg-elevated/20 p-1 shadow-sm">
+              <UButton
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                :leading-icon="ICONS.chevronLeft"
+                class="min-w-22 justify-center"
+                :disabled="loadingPage || pageNumber === 1"
+                @click="goToPage(pageNumber - 1)"
+              >
+                Previous
+              </UButton>
+              <span aria-current="page" class="mx-1 min-w-18 rounded-md border border-default/60 bg-default/10 px-3 py-1.5 text-center text-xs font-medium text-muted">
+                Page {{ pageNumber }}
+              </span>
+              <UButton
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                :trailing-icon="ICONS.chevronRight"
+                class="min-w-18 justify-center"
+                :loading="loadingPage"
+                :disabled="!nextContinuationToken"
+                @click="goToPage(pageNumber + 1)"
+              >
+                Next
+              </UButton>
+            </nav>
           </div>
         </div>
-        <div class="flex flex-wrap gap-2">
-          <UButton :icon="ICONS.refresh" color="neutral" :loading="refreshing" aria-label="Reload objects" @click="reloadObjects" />
-        </div>
-      </div>
-    </div>
+      </template>
 
-    <div v-if="status === 'pending'" class="flex items-center justify-center py-14 text-sm text-muted">Loading objects…</div>
-    <div v-else-if="error" class="flex flex-col items-center justify-center gap-3 py-14 text-center">
-      <p class="text-sm text-muted">Unable to load this bucket.</p>
-      <UButton :icon="ICONS.refresh" color="neutral" :loading="refreshing" aria-label="Retry loading objects" @click="reloadObjects" />
-    </div>
-    <UiTable v-else :status="status" :items="rows" :columns="columns" disable-header>
-      <template #empty>
-        <div class="flex flex-col items-center justify-center gap-3 py-14 text-center">
-          <UIcon :name="ICONS.folder" class="size-10 text-muted" />
-          <p class="text-muted">This folder is empty.</p>
+      <template #usage>
+        <div class="space-y-5 pt-4">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 class="text-base font-semibold">Usage</h2>
+              <p class="mt-1 text-sm text-muted">Storage and request activity for this bucket.</p>
+            </div>
+            <UButton :icon="ICONS.calendar" color="neutral" variant="outline">Last 24 hours</UButton>
+          </div>
+          <dl class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <div v-for="stat in usageSummary" :key="stat.label" class="rounded-lg border border-default/60 bg-default px-4 py-3">
+              <dt class="text-xs text-muted">{{ stat.label }}</dt>
+              <dd class="mt-1 text-xl font-semibold">{{ stat.value }}</dd>
+            </div>
+          </dl>
+          <div class="grid gap-4 lg:grid-cols-2">
+            <section v-for="panel in usagePanels" :key="panel.label" class="overflow-hidden rounded-lg border border-default/60 bg-default">
+              <div class="border-b border-default/60 bg-elevated/20 px-4 py-2.5">
+                <h3 class="text-sm font-medium text-muted">{{ panel.label }}</h3>
+              </div>
+              <div class="p-4">
+                <div class="border-b border-default/60 pb-4">
+                  <div v-for="value in panel.values" :key="value.label" class="min-w-0">
+                    <div class="flex items-center gap-2 text-xs text-muted">
+                      <span class="size-2 rounded-full" :class="value.color" />
+                      <span class="truncate">{{ value.label }}</span>
+                    </div>
+                    <p class="mt-1 font-medium">{{ value.value }}</p>
+                  </div>
+                </div>
+                <div class="usage-plot mt-4 flex min-h-52 items-center justify-center rounded-md border border-dashed border-default/60 px-6 text-center">
+                  <p class="text-sm text-muted">No data is available for this time range</p>
+                </div>
+              </div>
+            </section>
+          </div>
+          <p class="text-xs text-muted">Usage metrics are placeholders until the storage service exposes bucket-level telemetry.</p>
         </div>
       </template>
-    </UiTable>
-    <div v-if="pageNumber > 1 || nextContinuationToken" class="flex items-center justify-center gap-3">
-      <UButton color="neutral" variant="ghost" :disabled="loadingPage || pageNumber === 1" @click="goToPage(pageNumber - 1)">Previous</UButton>
-      <span class="text-sm text-muted">Page {{ pageNumber }}</span>
-      <UButton color="neutral" variant="ghost" :loading="loadingPage" :disabled="!nextContinuationToken" @click="goToPage(pageNumber + 1)">Next</UButton>
-    </div>
+    </UiTabs>
 
     <UModal v-model:open="deleteModalOpen" :title="deleteTarget?.type === 'folder' ? 'Delete folder' : 'Delete object'" :description="deleteTarget?.type === 'folder' ? 'This deletes every object under the folder prefix.' : 'This permanently deletes the object.'">
       <template #body>

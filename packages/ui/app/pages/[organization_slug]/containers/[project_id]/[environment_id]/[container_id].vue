@@ -11,6 +11,7 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 
+const organizationSlug = computed(() => route.params.organization_slug?.toString() || '')
 const orgId = computed(() => store.organization?.id ?? '')
 const projectId = computed(() => route.params.project_id?.toString() || null)
 const environmentId = computed(() => route.params.environment_id?.toString() || null)
@@ -20,7 +21,7 @@ const externalRegistriesUrl = computed(() => orgId.value
   : '')
 const { data: externalRegistries } = await useFetch(externalRegistriesUrl, { default: () => [] })
 const externalRegistryItems = computed(() => [
-  { label: 'No managed registry', value: 'none' },
+  { label: 'No external registry', value: 'none' },
   ...externalRegistries.value.map(registry => ({
     label: `${registry.name} — ${registry.host} (${registry.username})`,
     value: registry.id,
@@ -53,17 +54,9 @@ const revisionView = computed<'synced' | 'deployed' | 'draft' | 'historical'>(()
 
 const activeTab = ref('overview')
 const tabs = [
-  { label: 'Overview', value: 'overview', slot: 'overview' },
+  { label: 'Usage', value: 'overview', slot: 'overview' },
   { label: 'Configuration', value: 'configuration', slot: 'configuration' },
 ]
-
-  const listUrl = computed(() => orgId.value && projectId.value && environmentId.value
-  ? `/api/cplane/organization/${orgId.value as ':organization_id'}/containers` as const
-    : '')
-const { data: containerList } = await useFetch(listUrl, {
-  query: { project_id: projectId, environment_id: environmentId, timeline_id: selectedTimelineId },
-  immediate: !!listUrl.value,
-})
 
 const name = ref('')
 const image = ref('')
@@ -81,6 +74,14 @@ const loadError = ref('')
 const forking = ref(false)
 const deployingRevision = ref(false)
 const recentActivity = ref<{ refresh: () => Promise<void> } | null>(null)
+
+watch(name, () => {
+  if (!name.value || !containerId.value || !organizationSlug.value) return
+  store.setBreadcrumbs([
+    { label: 'C1 - Containers', to: backUrl() },
+    { label: name.value },
+  ])
+}, { immediate: true })
 
 async function fetchContainer() {
   if (!orgId.value || !containerId.value || !environmentId.value || !selectedTimelineId.value) {
@@ -263,48 +264,37 @@ watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged(
     <div v-else-if="loadError" class="rounded-lg border border-default/60 bg-default p-8 text-center">
       <p class="text-sm font-medium">Container unavailable</p>
       <p class="mt-1 text-sm text-muted">{{ loadError }}</p>
-      <UButton class="mt-5" color="neutral" :to="backUrl()">Back to containers</UButton>
+      <UButton class="mt-5" color="neutral" :to="backUrl()">Back to C1 - Containers</UButton>
     </div>
 
     <div v-else class="overflow-hidden rounded-lg border border-default/60 bg-default">
       <header class="flex flex-col gap-4 border-b border-default/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div class="min-w-0">
           <UiBackLink :label="projectName" :to="backUrl()" />
+          <UiPageEyebrow label="Compute" />
           <div class="mt-2 flex flex-wrap items-center gap-2">
             <h1 class="truncate text-xl font-semibold">{{ name }}</h1>
-            <span class="font-mono text-xs text-muted">{{ image }}</span>
-            <span class="text-xs text-muted">&middot; Port {{ port ?? 'none' }}</span>
-            <span class="text-xs text-muted">&middot; {{ replicaCount }} replica{{ replicaCount === 1 ? '' : 's' }}</span>
+            <UBadge :color="revisionView === 'draft' ? 'warning' : 'success'" variant="soft" size="sm">
+              {{ revisionView === 'draft' ? 'Draft' : revisionView === 'historical' ? 'Historical' : 'Deployed' }}
+            </UBadge>
           </div>
+          <p class="mt-1 text-xs text-muted">{{ environment?.name ?? environmentId }} · {{ image }} · Port {{ port ?? 'none' }} · {{ replicaCount }} replica{{ replicaCount === 1 ? '' : 's' }}</p>
         </div>
-        <UButton :icon="ICONS.plus" :to="`/${route.params.organization_slug}/containers/${projectId}/${environmentId}/new`">New Container</UButton>
       </header>
 
-      <div class="grid min-h-[720px] xl:grid-cols-[300px_minmax(0,1fr)_280px]">
-        <aside class="border-b border-default/60 p-4 xl:border-b-0 xl:border-r">
-          <p class="text-sm font-semibold">Containers</p>
-          <p class="mt-1 text-xs text-muted">{{ containerList?.length ?? 0 }} in this environment</p>
-          <nav class="mt-4 space-y-1" aria-label="Environment containers">
-            <NuxtLink
-              v-for="container in containerList"
-              :key="container.id"
-              :to="{ path: `/${route.params.organization_slug}/containers/${projectId}/${environmentId}/${container.id}`, query: { revision: selectedTimelineId } }"
-              class="block rounded-md px-3 py-3 transition-colors"
-              :class="{'bg-elevated text-highlighted': container.id === containerId}"
-            >
-              <p class="truncate text-sm font-medium">{{ container.name }}</p>
-              <p class="mt-1 truncate font-mono text-[11px] text-muted">{{ container.current_version?.image ?? 'No version' }}</p>
-            </NuxtLink>
-          </nav>
-        </aside>
-
+      <div class="grid min-h-180 xl:grid-cols-[minmax(0,1fr)_280px]">
         <main class="min-w-0 px-5 py-4">
-          <UTabs v-model="activeTab" :items="tabs">
+          <UiTabs v-model="activeTab" :items="tabs">
             <template #overview>
               <div class="space-y-6 pt-4">
                 <div>
-                  <h2 class="text-base font-semibold">Overview</h2>
-                  <p class="mt-1 text-sm text-muted">Runtime usage for this container.</p>
+                  <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <h2 class="text-base font-semibold">Usage</h2>
+                      <p class="mt-1 text-sm text-muted">Runtime usage for this container.</p>
+                    </div>
+                    <UButton :icon="ICONS.calendar" color="neutral" variant="outline">Last 24 hours</UButton>
+                  </div>
                 </div>
 
                 <div v-if="revisionView === 'draft' || revisionView === 'historical'" class="rounded-md border border-dashed border-default p-5">
@@ -313,31 +303,36 @@ watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged(
                 </div>
 
                 <template v-else>
-                <section v-for="metric in ['CPU Usage', 'RAM Usage']" :key="metric" class="border-b border-default/60 pb-6">
-                  <div class="flex items-center justify-between gap-4">
-                    <h3 class="text-sm font-semibold">{{ metric }}</h3>
-                    <span class="font-mono text-xs text-muted">Usage &middot; Request &middot; Limit</span>
-                  </div>
-                  <div class="mt-4 flex min-h-48 flex-col items-center justify-center rounded-md bg-elevated/30 px-6 text-center">
-                    <UIcon name="i-heroicons:chart-bar" class="size-6 text-muted" />
-                    <p class="mt-3 text-sm font-medium">Telemetry connection pending</p>
-                    <p class="mt-1 text-sm text-muted">Metrics will appear here once telemetry is available.</p>
-                  </div>
-                </section>
-
-                <dl class="grid gap-px overflow-hidden rounded-md bg-default/60 sm:grid-cols-2 lg:grid-cols-4">
-                  <div
-                    v-for="stat in [
-                    ['Replicas', replicaCount, `Current revision: ${replicaCount}`],
+                <dl class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <div v-for="stat in [
+                    ['Replicas', replicaCount, 'Current revision'],
                     ['Restart Count', '—', 'Metrics unavailable'],
                     ['CPU (Current)', '—', 'Metrics unavailable'],
                     ['RAM (Current)', '—', 'Metrics unavailable'],
-                  ]" :key="String(stat[0])" class="bg-default px-4 py-3">
+                  ]" :key="String(stat[0])" class="rounded-lg border border-default/60 bg-default px-4 py-3">
                     <dt class="text-xs text-muted">{{ stat[0] }}</dt>
-                    <dd class="mt-1 text-lg font-semibold">{{ stat[1] }}</dd>
+                    <dd class="mt-1 text-xl font-semibold">{{ stat[1] }}</dd>
                     <p class="mt-1 text-[11px] text-muted">{{ stat[2] }}</p>
                   </div>
                 </dl>
+
+                <section v-for="metric in ['CPU Usage', 'RAM Usage']" :key="metric" class="overflow-hidden rounded-lg border border-default/60 bg-default">
+                  <div class="border-b border-default/60 bg-elevated/20 px-4 py-2.5">
+                    <div class="flex items-center justify-between gap-4">
+                      <h3 class="text-sm font-medium text-muted">{{ metric }}</h3>
+                      <span class="font-mono text-xs text-muted">Usage · Request · Limit</span>
+                    </div>
+                  </div>
+                  <div class="p-4">
+                    <div class="flex min-h-40 items-center justify-center rounded-md border border-dashed border-default/60 px-6 text-center">
+                      <div>
+                        <UIcon name="i-heroicons:chart-bar" class="size-6 text-muted" />
+                        <p class="mt-3 text-sm font-medium">Telemetry connection pending</p>
+                        <p class="mt-1 text-sm text-muted">Metrics will appear here once telemetry is available.</p>
+                      </div>
+                    </div>
+                  </div>
+                </section>
                 </template>
               </div>
             </template>
@@ -399,7 +394,7 @@ watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged(
                 </div>
               </div>
             </template>
-          </UTabs>
+          </UiTabs>
         </main>
 
         <DeploymentsRecentActivity v-if="orgId && projectId && containerId" ref="recentActivity" :organization-id="orgId" :project-id="projectId" :environment-id="environmentId" event-type-prefix="container" :target-id="containerId" />

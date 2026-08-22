@@ -3,6 +3,8 @@ import { loadProjectEnvironments } from '~/utils/auth'
 import { ICONS } from '~/utils/icons'
 
 const store = useStore()
+const route = useRoute()
+const router = useRouter()
 const selectingProjectId = ref<string>()
 const error = ref('')
 
@@ -14,6 +16,12 @@ async function selectProject(projectId: string) {
 
   try {
     await loadProjectEnvironments(projectId)
+
+    const organizationPath = `/${route.params.organization_slug}`
+    const currentPath = route.path.replace(/\/+$/, '')
+    if (currentPath !== organizationPath) {
+      await router.push(`${currentPath}/${projectId}`)
+    }
   } catch {
     error.value = 'Could not load this project’s environments. Select it again to retry.'
   } finally {
@@ -23,69 +31,44 @@ async function selectProject(projectId: string) {
 </script>
 
 <template>
-  <div class="project-selection mx-auto flex min-h-0 w-full max-w-4xl items-start justify-center px-6 py-4 pb-10">
-    <section class="project-selection__panel w-full overflow-hidden rounded-md border border-dashed border-default bg-transparent">
-      <header class="project-selection__header border-b border-default px-6 py-6 sm:px-8">
-        <p class="font-space-mono text-[11px] uppercase tracking-[0.08em] text-primary">Workspace / Projects</p>
-        <h1 class="mt-3 text-3xl font-normal tracking-[-0.04em] sm:text-4xl">Select a project</h1>
-        <p class="mt-3 max-w-xl text-sm leading-relaxed text-muted">
-          Choose the project you want to work in, then C-Plane will load its environments and resources.
-        </p>
-      </header>
+  <div class="flex w-full max-w-375 flex-col gap-4 mx-auto">
+    <header class="border-b border-default/60 pb-5">
+      <p class="font-mono text-[10px] uppercase tracking-[0.08em] text-muted">Workspace / Projects</p>
+      <h1 class="mt-2 text-2xl font-semibold">Select a project to continue</h1>
+      <p class="mt-1 max-w-xl text-sm leading-relaxed text-muted">The view you’re trying to access is project-scoped. Select a project to load its environments and resources.</p>
+    </header>
 
-      <div class="project-selection__projects px-6 py-6 sm:px-8">
-        <p class="font-space-mono text-[10px] uppercase tracking-[0.08em] text-muted">Quick select</p>
-        <div class="mt-3 grid gap-2 sm:grid-cols-2">
-          <UButton
-            v-for="project in store.projects"
-            :key="project.id"
-            :icon="ICONS.folder"
-            :trailing-icon="ICONS.arrowTopRight"
-            color="neutral"
-            variant="ghost"
-            block
-            :loading="selectingProjectId === project.id"
-            :disabled="Boolean(selectingProjectId)"
-            class="w-full justify-start rounded-none border-b border-default/25 px-4 py-3 last:border-b-0"
-            @click="selectProject(project.id)"
-          >
-            {{ project.name }}
-          </UButton>
-        </div>
-        <p v-if="error" class="mt-3 text-sm text-error" role="alert">{{ error }}</p>
+    <section class="overflow-hidden rounded-lg border border-default/60 bg-default">
+      <div class="flex items-center justify-between gap-3 border-b border-default/60 bg-elevated/40 px-4 py-3">
+        <h2 class="text-sm font-semibold">Projects</h2>
+        <span class="text-xs text-muted">{{ store.projects.length }}</span>
       </div>
+
+      <div v-if="store.projects.length">
+        <UButton
+          v-for="project in store.projects"
+          :key="project.id"
+          :icon="ICONS.folder"
+          :trailing-icon="ICONS.chevronRight"
+          :label="project.name"
+          color="neutral"
+          variant="soft"
+          block
+          :loading="selectingProjectId === project.id"
+          :disabled="Boolean(selectingProjectId)"
+          class="min-h-12 w-full justify-between rounded-none border-b border-default/60 bg-transparent px-4 py-3 text-left last:border-b-0 hover:bg-elevated"
+          :ui="{ leadingIcon: 'text-dimmed', trailingIcon: 'text-dimmed' }"
+          @click="selectProject(project.id)"
+        />
+      </div>
+
+      <div v-else class="px-4 py-10 text-center">
+        <UIcon :name="ICONS.folder" class="size-8 text-muted" aria-hidden="true" />
+        <p class="mt-3 font-medium">No projects available</p>
+        <p class="mt-1 text-sm text-muted">Create a project to start working in C-Plane.</p>
+      </div>
+
+      <p v-if="error" class="border-t border-error/20 bg-error/5 px-4 py-3 text-sm text-error" role="alert">{{ error }}</p>
     </section>
   </div>
 </template>
-
-<style scoped>
-.project-selection__panel {
-  animation: project-selection-enter 480ms cubic-bezier(0.23, 1, 0.32, 1) both;
-}
-
-.project-selection__header,
-.project-selection__projects {
-  animation: project-selection-rise 420ms cubic-bezier(0.23, 1, 0.32, 1) both;
-}
-
-.project-selection__header { animation-delay: 80ms; }
-.project-selection__projects { animation-delay: 150ms; }
-
-@keyframes project-selection-enter {
-  from { opacity: 0; transform: scale(0.985); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-@keyframes project-selection-rise {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .project-selection__panel,
-  .project-selection__header,
-  .project-selection__projects {
-    animation: none;
-  }
-}
-</style>

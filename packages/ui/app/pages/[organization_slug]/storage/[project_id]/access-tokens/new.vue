@@ -50,8 +50,9 @@ async function createToken() {
   <div class="w-full max-w-[1200px] mx-auto">
     <header class="border-b border-default/60 pb-5">
       <UiBackLink label="Access tokens" :to="backUrl()" />
+      <UiPageEyebrow label="Storage &amp; Databases" />
       <h1 class="mt-2 text-2xl font-semibold">{{ created ? 'Save Access Token' : 'New Access Token' }}</h1>
-      <p class="mt-1 text-sm text-muted">{{ created ? 'Copy the secret now. It will not be shown again.' : 'Create credentials for S3 clients in this project.' }}</p>
+        <p class="mt-1 text-sm text-muted">{{ created ? 'Copy the secret now. It will not be shown again.' : 'Create credentials for S3 clients in this project.' }}</p>
     </header>
 
     <section v-if="created" class="space-y-5 py-8 max-w-3xl">

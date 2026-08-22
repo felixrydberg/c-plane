@@ -20,9 +20,9 @@ export default defineAppConfig({
         { color: 'secondary', variant: 'frosted', class: '[--button-frosted-color:var(--ui-secondary)] focus-visible:outline-secondary/25' },
         { color: 'success', variant: 'frosted', class: '[--button-frosted-color:var(--ui-success)] focus-visible:outline-success/25' },
         { color: 'info', variant: 'frosted', class: '[--button-frosted-color:var(--ui-info)] focus-visible:outline-info/25' },
-        { color: 'warning', variant: 'frosted', class: '[--button-frosted-color:var(--ui-warning)] text-inverted focus-visible:outline-warning/25' },
+        { color: 'warning', variant: 'frosted', class: '[--button-frosted-color:var(--ui-warning)] focus-visible:outline-warning/25' },
         { color: 'error', variant: 'frosted', class: '[--button-frosted-color:var(--ui-error)] focus-visible:outline-error/25' },
-        { color: 'neutral', variant: 'frosted', class: '[--button-frosted-color:var(--ui-color-neutral-700)] text-inverted focus-visible:outline-inverted/25 dark:[--button-frosted-color:var(--ui-color-neutral-300)]' },
+        { color: 'neutral', variant: 'frosted', class: '[--button-frosted-color:var(--ui-color-neutral-300)] focus-visible:outline-inverted/25 dark:[--button-frosted-color:var(--ui-color-neutral-900)]' },
       ],
       defaultVariants: {
         variant: 'frosted',
@@ -46,6 +46,11 @@ export default defineAppConfig({
     input: {
       defaultVariants: {
         variant: 'outline',
+      }
+    },
+    tabs: {
+      defaultVariants: {
+        variant: 'pill'
       }
     },
     selectMenu: {

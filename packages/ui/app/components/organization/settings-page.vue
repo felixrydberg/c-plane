@@ -5,8 +5,8 @@ defineProps<{ title: string }>()
 <template>
   <div class="mx-auto flex w-full max-w-6xl flex-col gap-8">
     <div class="border-b border-default pb-6">
-      <p class="font-space-mono text-[11px] uppercase tracking-[0.08em] text-muted">Organization settings</p>
-      <h1 class="mt-2 text-4xl font-normal tracking-[-0.04em]">{{ title }}</h1>
+      <UiPageEyebrow label="Manage organization" />
+      <h1 class="mt-1 text-2xl font-semibold">{{ title }}</h1>
     </div>
 
     <OrganizationSettingsTabs />

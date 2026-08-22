@@ -73,6 +73,11 @@ Use these icon keys from `~/utils/icons`:
 | `check` | `i-heroicons:check` | Confirm / Save |
 | `refresh` | `i-heroicons:arrow-path` | Retry / Refresh |
 | `download` | `i-heroicons:arrow-down-tray` | Download |
+| `more` | `i-heroicons:ellipsis-horizontal` | More actions |
+| `calendar` | `i-heroicons:calendar-days` | Date range |
+| `chevronLeft` | `i-heroicons:chevron-left` | Previous / back navigation |
+| `chevronRight` | `i-heroicons:chevron-right` | Next / forward navigation |
+| `revision` | `i-heroicons:clock` | Draft / deployed revision control |
 
 Add new keys to `packages/ui/app/utils/icons.ts` and register them here.
 

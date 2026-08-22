@@ -82,7 +82,7 @@ async function retryLoadProjectEnvironments() {
               autofocus
               class="w-full"
             />
-            <UButton class="whitespace-nowrap" type="submit" :icon="ICONS.plus" :loading="loading" :disabled="!name.trim() || Boolean(createdProject)">
+            <UButton class="whitespace-nowrap" type="submit" :icon="ICONS.plus" color="primary" variant="frosted" :loading="loading" :disabled="!name.trim() || Boolean(createdProject)">
               Create project
             </UButton>
           </div>

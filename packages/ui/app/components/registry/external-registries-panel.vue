@@ -90,7 +90,7 @@ async function submit() {
 </script>
 
 <template>
-  <section class="space-y-3 border-t border-default/60 pt-5">
+  <section class="space-y-3 pt-5">
     <div class="flex items-center justify-between gap-3">
       <div>
         <h2 class="text-lg font-semibold">External registries</h2>

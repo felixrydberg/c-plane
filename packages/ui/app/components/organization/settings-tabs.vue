@@ -6,7 +6,7 @@ const base = computed(() => `/${store.organization?.slug}/settings`)
 const links = computed(() => [
   { label: 'General', to: base.value },
   { label: 'Members', to: `${base.value}/members` },
-  { label: 'Authentication', to: `${base.value}/authentication` },
+  { label: 'Organization API tokens', to: `${base.value}/authentication` },
   { label: 'Audit log', to: `${base.value}/audit-log` },
 ])
 </script>
