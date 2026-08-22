@@ -190,7 +190,7 @@ const onUserAuthenticated = async () => {
     const redirect = getQueryValue(route.query.redirect);
     const path = redirectTo ?? (redirect ? decodeURIComponent(redirect) : `/${store.organization?.slug}`);
 
-    if (path.startsWith('/api/')) {
+    if (path.startsWith('/ui-api/')) {
       window.location.assign(path);
       return;
     }

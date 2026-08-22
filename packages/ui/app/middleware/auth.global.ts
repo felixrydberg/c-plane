@@ -32,7 +32,7 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   const organizationOnboardingPath = organization?.slug && `/${organization.slug}/onboarding`;
   if (store.session && store.user && organization && organizationOnboardingPath && !store.projects.length && to.path !== organizationOnboardingPath) {
     const organizationId = organization.id
-    const { data } = await useFetch<typeof store.projects>(`/api/cplane/organization/${organizationId as ':organization_id'}/projects` as const, {
+    const { data } = await useCplaneFetch<typeof store.projects>(`/api/organization/${organizationId as ':organization_id'}/projects` as const, {
       default: () => [],
     })
     if (store.organization?.id !== organizationId) return

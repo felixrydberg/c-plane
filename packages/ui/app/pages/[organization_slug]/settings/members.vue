@@ -17,7 +17,7 @@ const offset = ref(0);
 const search = ref('');
 
 const { data, status, refresh } = await useFetch(
-  () => `/api/organization/${store.organization?.id as ':organization_id'}/members`,
+  () => `/ui-api/organization/${store.organization?.id as ':organization_id'}/members`,
   {
     query: {
       limit,
@@ -91,7 +91,7 @@ const onDeleteMember = async () => {
     if (!selectedMemberToDelete.value) return;
 
     await $fetch(
-      `/api/organization/${store.organization?.id as ':organization_id'}/members/${selectedMemberToDelete.value.id as ':member_id'}`,
+      `/ui-api/organization/${store.organization?.id as ':organization_id'}/members/${selectedMemberToDelete.value.id as ':member_id'}`,
       {
         method: 'DELETE',
       }
@@ -131,7 +131,7 @@ const addMemberState = reactive<Partial<AddMemberSchema>>({
 const onAddMember = async () => {
   isAdding.value = true;
   try {
-    await $fetch(`/api/organization/${store.organization?.id as ':organization_id'}/members`, {
+    await $fetch(`/ui-api/organization/${store.organization?.id as ':organization_id'}/members`, {
       method: 'POST',
       body: {
         email: addMemberState.email,

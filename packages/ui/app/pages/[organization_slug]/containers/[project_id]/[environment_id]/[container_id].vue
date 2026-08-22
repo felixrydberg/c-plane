@@ -16,9 +16,9 @@ const projectId = computed(() => route.params.project_id?.toString() || null)
 const environmentId = computed(() => route.params.environment_id?.toString() || null)
 const containerId = computed(() => route.params.container_id?.toString() || null)
 const externalRegistriesUrl = computed(() => orgId.value
-  ? `/api/cplane/organization/${orgId.value as ':organization_id'}/registry/external-registries` as const
+  ? `/api/organization/${orgId.value as ':organization_id'}/registry/external-registries` as const
   : '')
-const { data: externalRegistries } = await useFetch(externalRegistriesUrl, { default: () => [] })
+const { data: externalRegistries } = await useCplaneFetch(externalRegistriesUrl, { default: () => [] })
 const externalRegistryItems = computed(() => [
   { label: 'No managed registry', value: 'none' },
   ...externalRegistries.value.map(registry => ({
@@ -29,9 +29,9 @@ const externalRegistryItems = computed(() => [
 
 const projectName = computed(() => store.projects.find(p => p.id === projectId.value)?.name ?? projectId.value ?? '')
 const environmentsUrl = computed(() => orgId.value && projectId.value
-  ? `/api/cplane/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/environments` as const
+  ? `/api/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/environments` as const
   : '')
-const { data: environmentList, refresh: refreshEnvironmentList } = await useFetch(environmentsUrl, {
+const { data: environmentList, refresh: refreshEnvironmentList } = await useCplaneFetch(environmentsUrl, {
   immediate: computed(() => !!environmentsUrl.value),
 })
 const environment = computed(() =>
@@ -58,9 +58,9 @@ const tabs = [
 ]
 
   const listUrl = computed(() => orgId.value && projectId.value && environmentId.value
-  ? `/api/cplane/organization/${orgId.value as ':organization_id'}/containers` as const
+  ? `/api/organization/${orgId.value as ':organization_id'}/containers` as const
     : '')
-const { data: containerList } = await useFetch(listUrl, {
+const { data: containerList } = await useCplaneFetch(listUrl, {
   query: { project_id: projectId, environment_id: environmentId, timeline_id: selectedTimelineId },
   immediate: !!listUrl.value,
 })
@@ -90,8 +90,8 @@ async function fetchContainer() {
   loading.value = true
   loadError.value = ''
   try {
-    const url = `/api/cplane/organization/${orgId.value as ':organization_id'}/containers/${containerId.value as ':container_id'}` as const
-    const c = await $fetch(url, { query: { environment_id: environmentId.value, timeline_id: selectedTimelineId.value } })
+    const url = `/api/organization/${orgId.value as ':organization_id'}/containers/${containerId.value as ':container_id'}` as const
+    const c = await cplaneFetch(url, { query: { environment_id: environmentId.value, timeline_id: selectedTimelineId.value } })
     name.value = c.name
     if (c.current_version) {
       image.value = c.current_version.image
@@ -135,7 +135,7 @@ async function save(autoDeploy: boolean) {
       env[row.key] = row.value
     }
 
-    await $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/containers/${containerId.value as ':container_id'}` as const, {
+    await cplaneFetch(`/api/organization/${orgId.value as ':organization_id'}/containers/${containerId.value as ':container_id'}` as const, {
           method: 'PATCH',
           query: { environment_id: environmentId.value, timeline_id: selectedTimelineId.value },
         body: {
@@ -175,8 +175,8 @@ async function forkRevision() {
   if (!orgId.value || !projectId.value || !environment.value || !selectedTimelineId.value) return
   forking.value = true
   try {
-    await $fetch(
-      `/api/cplane/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/environments/${environment.value.id as ':environment_id'}` as const,
+    await cplaneFetch(
+      `/api/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/environments/${environment.value.id as ':environment_id'}` as const,
       { method: 'PATCH', body: { draft_timeline_id: selectedTimelineId.value } },
     )
     await loadProjectEnvironments(projectId.value, environmentId.value)
@@ -194,8 +194,8 @@ async function deployRevision() {
   if (!orgId.value || !projectId.value || !environment.value || !selectedTimelineId.value) return
   deployingRevision.value = true
   try {
-    await $fetch(
-      `/api/cplane/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/environments/${environment.value.id as ':environment_id'}` as const,
+    await cplaneFetch(
+      `/api/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/environments/${environment.value.id as ':environment_id'}` as const,
       { method: 'PATCH', body: { deployed_timeline_id: selectedTimelineId.value } },
     )
     await loadProjectEnvironments(projectId.value, environmentId.value)
@@ -231,7 +231,7 @@ async function refreshLatest() {
   if (!orgId.value || !containerId.value || !environmentId.value || !selectedTimelineId.value || hasChanges.value) return
   refreshing.value = true
   try {
-    await $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/containers/${containerId.value as ':container_id'}/deploy` as const, {
+    await cplaneFetch(`/api/organization/${orgId.value as ':organization_id'}/containers/${containerId.value as ':container_id'}/deploy` as const, {
       query: { environment_id: environmentId.value, timeline_id: selectedTimelineId.value },
       method: 'POST',
     })

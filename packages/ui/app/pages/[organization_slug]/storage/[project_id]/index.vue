@@ -9,12 +9,12 @@ const organizationId = computed(() => store.organization?.id || '')
 const projectId = computed(() => route.params.project_id as string)
 const projectName = computed(() => store.projects.find(project => project.id === projectId.value)?.name ?? projectId.value)
 const bucketsUrl = computed(() => organizationId.value
-  ? `/api/cplane/organization/${organizationId.value as ':organization_id'}/storage/buckets` as const
+  ? `/api/organization/${organizationId.value as ':organization_id'}/storage/buckets` as const
   : '')
 const selectedBucket = ref<Bucket | null>(null)
 const deleteModalOpen = ref(false)
 const deleting = ref(false)
-const { data: buckets, refresh: refreshBuckets } = await useFetch(bucketsUrl, {
+const { data: buckets, refresh: refreshBuckets } = await useCplaneFetch(bucketsUrl, {
   default: () => [],
   query: { project_id: projectId },
 })
@@ -28,7 +28,7 @@ async function deleteBucket() {
   if (!selectedBucket.value || !organizationId.value) return
   deleting.value = true
   try {
-    await $fetch(`/api/cplane/organization/${organizationId.value as ':organization_id'}/storage/buckets/${selectedBucket.value.id as ':bucket_id'}` as const, { method: 'DELETE' })
+    await cplaneFetch(`/api/organization/${organizationId.value as ':organization_id'}/storage/buckets/${selectedBucket.value.id as ':bucket_id'}` as const, { method: 'DELETE' })
     toast.add({ title: 'Bucket deleted', color: 'success' })
     deleteModalOpen.value = false
     selectedBucket.value = null

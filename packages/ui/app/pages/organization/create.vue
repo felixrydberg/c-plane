@@ -38,7 +38,7 @@ const emailError = ref<string | null>(null);
 const agreedToTerms = ref(false);
 const manageInvitesOpen = ref(false);
 
-const { data: pendingInvitations, refresh: refreshPendingInvitations } = await useFetch('/api/user/invitations', {
+const { data: pendingInvitations, refresh: refreshPendingInvitations } = await useFetch('/ui-api/user/invitations', {
   query: {
     status: 'pending',
     limit: 1,
@@ -73,7 +73,7 @@ const validateSlug = async (slug: string) => {
 
   slugValidating.value = true;
   try {
-    const data = await $fetch("/api/organization/validate-slug", {
+    const data = await $fetch("/ui-api/organization/validate-slug", {
       method: "POST",
       body: { slug },
     });
@@ -99,7 +99,7 @@ const validateEmail = async (email: string) => {
 
   emailValidating.value = true;
   try {
-    const data = await $fetch("/api/organization/validate-email", {
+    const data = await $fetch("/ui-api/organization/validate-email", {
       method: "POST",
       body: { email },
     });
@@ -150,7 +150,7 @@ const onCreateOrganization = async () => {
   
   isCheckingOut.value = true;
   try {
-    const data = await $fetch<Organization>("/api/organization", {
+    const data = await $fetch<Organization>("/ui-api/organization", {
       method: "POST",
       body: {
         name: state.name,

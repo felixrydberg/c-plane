@@ -11,6 +11,7 @@ pub struct Config {
     pub redis_url: String,
     pub service_token: String,
     pub storage_endpoint_url: String,
+    pub storage_internal_url: String,
     pub registry_token_ttl_seconds: u64,
 }
 
@@ -42,6 +43,8 @@ pub fn load_config() -> Result<Config, AppError> {
     }
     let storage_endpoint_url =
         env::var("STORAGE_ENDPOINT_URL").unwrap_or_else(|_| "http://localhost:8081".to_string());
+    let storage_internal_url =
+        env::var("STORAGE_INTERNAL_URL").unwrap_or_else(|_| storage_endpoint_url.clone());
     let registry_token_ttl_seconds = env::var("REGISTRY_TOKEN_TTL_SECONDS")
         .unwrap_or_else(|_| "60".to_string())
         .parse()
@@ -67,6 +70,7 @@ pub fn load_config() -> Result<Config, AppError> {
         redis_url,
         service_token,
         storage_endpoint_url,
+        storage_internal_url,
         registry_token_ttl_seconds,
     })
 }

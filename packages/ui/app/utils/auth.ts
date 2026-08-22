@@ -15,6 +15,7 @@ export const createClient = () => {
 
   return createAuthClient({
     baseURL: url,
+    basePath: "/ui-api/auth",
     fetchOptions,
     plugins: [ 
       inferAdditionalFields<typeof auth>(),
@@ -36,8 +37,7 @@ export async function loadProjectEnvironments(projectId: string, environmentId?:
   const project = store.projects.find(project => project.id === projectId)
   if (!project) return
 
-  const requestFetch = import.meta.server ? useRequestFetch() : $fetch
-  const response = await requestFetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${project.id as ':project_id'}/environments` as const)
+  const response = await cplaneFetch(`/api/organization/${store.organization.id as ':organization_id'}/projects/${project.id as ':project_id'}/environments` as const)
   const environments = response
   const environment = environments.find(environment => environment.id === environmentId) ?? environments.find(environment => environment.is_default) ?? environments[0] ?? null
 
@@ -55,7 +55,7 @@ export const getSession = async (cache: boolean = true) => {
   const router = useRouter();
   const nuxtApp = useNuxtApp();
   const requestFetch: InternalFetch | null = import.meta.server
-    ? (useRequestFetch() as unknown as InternalFetch)
+    ? (cplaneFetch as unknown as InternalFetch)
     : null;
   try {
     const client = createClient();
@@ -90,19 +90,19 @@ export const getSession = async (cache: boolean = true) => {
     if (user) {
       try {
         const orgResponse = import.meta.server
-          ? await requestFetch!<typeof store.organization>("/api/organization/active", {
+          ? await requestFetch!<typeof store.organization>("/ui-api/organization/active", {
             method: "GET"
           })
-          : await $fetch("/api/organization/active", {
+          : await cplaneFetch("/ui-api/organization/active", {
             method: "GET",
             credentials: "include"
           });
         store.setOrganization(orgResponse || null)
         const organizations = import.meta.server
-          ? await requestFetch!<{ data?: typeof store.organizations }>("/api/organization", {
+          ? await requestFetch!<{ data?: typeof store.organizations }>("/ui-api/organization", {
             method: "GET"
           })
-          : await $fetch<{ data?: typeof store.organizations }>("/api/organization", {
+          : await cplaneFetch<{ data?: typeof store.organizations }>("/ui-api/organization", {
             method: "GET",
             credentials: "include"
           });
@@ -155,14 +155,14 @@ export const setOrganization = async (id: string, redirect: string = '/') => {
   const store = useStore();
   const router = useRouter();
   const requestFetch: InternalFetch | null = import.meta.server
-    ? (useRequestFetch() as unknown as InternalFetch)
+    ? (cplaneFetch as unknown as InternalFetch)
     : null;
 
   try {
     type OrgResponse = typeof store.organization & { projects?: Project[] };
     const data = import.meta.server
-      ? await requestFetch!<OrgResponse>(`/api/organization/${id as ':organization_id'}`)
-      : await $fetch<OrgResponse>(`/api/organization/${id as ':organization_id'}`, {
+      ? await requestFetch!<OrgResponse>(`/ui-api/organization/${id as ':organization_id'}`)
+      : await cplaneFetch<OrgResponse>(`/ui-api/organization/${id as ':organization_id'}`, {
         credentials: "include"
       });
 
@@ -171,14 +171,14 @@ export const setOrganization = async (id: string, redirect: string = '/') => {
     }
 
     if (import.meta.server) {
-      await requestFetch!('/api/organization/active', {
+      await requestFetch!('/ui-api/organization/active', {
         method: 'POST',
         body: {
           organization_id: id
         }
       });
     } else {
-      await $fetch('/api/organization/active', {
+      await cplaneFetch('/ui-api/organization/active', {
         method: 'POST',
         body: {
           organization_id: id

@@ -4,14 +4,14 @@ import { ICONS } from '~/utils/icons'
 const props = defineProps<{ organizationId: string }>()
 const route = useRoute()
 const toast = useToast()
-const endpoint = computed(() => `/api/cplane/organization/${props.organizationId as ':organization_id'}/registry/access-tokens` as const)
-const { data: tokens, refresh } = await useFetch(endpoint, { default: () => [] })
+const endpoint = computed(() => `/api/organization/${props.organizationId as ':organization_id'}/registry/access-tokens` as const)
+const { data: tokens, refresh } = await useCplaneFetch(endpoint, { default: () => [] })
 const revokingId = ref('')
 
 async function revoke(token: NonNullable<typeof tokens.value>[number]) {
   revokingId.value = token.id
   try {
-    await $fetch(`/api/cplane/organization/${props.organizationId as ':organization_id'}/registry/access-tokens/${token.id as ':token_id'}` as const, { method: 'DELETE' })
+    await cplaneFetch(`/api/organization/${props.organizationId as ':organization_id'}/registry/access-tokens/${token.id as ':token_id'}` as const, { method: 'DELETE' })
     await refresh()
   } catch {
     toast.add({ title: 'Could not revoke token', color: 'error' })

@@ -306,7 +306,7 @@ async fn storage_request<T: Serialize>(path: &str, body: T) -> Result<reqwest::R
         .storage_client
         .post(format!(
             "{}/{}",
-            state.config.storage_endpoint_url.trim_end_matches('/'),
+            state.config.storage_internal_url.trim_end_matches('/'),
             path
         ))
         .header("x-cplane-token", &state.config.service_token)

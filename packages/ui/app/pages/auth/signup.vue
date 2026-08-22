@@ -50,7 +50,7 @@
       const redirect = getQueryValue(route.query.redirect)
       const path = redirectTo ?? (redirect ? decodeURIComponent(redirect) : '/organization/create')
 
-      if (path.startsWith('/api/')) {
+      if (path.startsWith('/ui-api/')) {
         window.location.assign(path)
         return
       }
@@ -133,7 +133,7 @@
 
     passkeyLoading.value = true
     try {
-      const { context } = await $fetch<{ context: string }>('/api/passkey/registration-context', {
+      const { context } = await $fetch<{ context: string }>('/ui-api/passkey/registration-context', {
         method: 'POST',
         body: { name: state.name, email: state.email },
       })

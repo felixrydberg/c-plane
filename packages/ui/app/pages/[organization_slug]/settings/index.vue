@@ -25,7 +25,7 @@ const isSaving = ref(false)
 const onSettingsSubmit = async (event: FormSubmitEvent<SettingsSchema>) => {
   isSaving.value = true
   try {
-    const updated = await $fetch(`/api/organization/${store.organization?.id as ':organization_id'}/name`, {
+    const updated = await $fetch(`/ui-api/organization/${store.organization?.id as ':organization_id'}/name`, {
       method: 'PUT',
       body: {
         name: event.data.name,
@@ -78,7 +78,7 @@ const onDeleteOrgSubmit = async () => {
       throw new Error('No organization selected')
     }
 
-    await $fetch(`/api/organization/${store.organization.id as ':organization_id'}`, {
+    await $fetch(`/ui-api/organization/${store.organization.id as ':organization_id'}`, {
       method: 'DELETE'
     })
 

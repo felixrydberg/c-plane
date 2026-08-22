@@ -9,10 +9,10 @@ const props = defineProps<{
 }>()
 
 const endpoint = computed(() => props.organizationId && props.projectId
-  ? `/api/cplane/organization/${props.organizationId as ':organization_id'}/events` as const
+  ? `/api/organization/${props.organizationId as ':organization_id'}/events` as const
   : '')
 
-const { data: activity, status, refresh } = await useFetch(endpoint, {
+const { data: activity, status, refresh } = await useCplaneFetch(endpoint, {
   query: computed(() => ({
     project_id: props.projectId,
     environment_id: props.environmentId || undefined,

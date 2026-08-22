@@ -28,19 +28,19 @@ const projectId = computed(() => route.params.project_id as string)
 const bucketId = computed(() => route.params.bucket_id as string)
 const prefix = computed(() => typeof route.query.prefix === 'string' ? route.query.prefix : '')
 const bucketsUrl = computed(() => organizationId.value
-  ? `/api/cplane/organization/${organizationId.value as ':organization_id'}/storage/buckets` as const
+  ? `/api/organization/${organizationId.value as ':organization_id'}/storage/buckets` as const
   : '')
 const objectsUrl = computed(() => organizationId.value
-  ? `/api/cplane/organization/${organizationId.value as ':organization_id'}/storage/buckets/${bucketId.value as ':bucket_id'}/objects` as const
+  ? `/api/organization/${organizationId.value as ':organization_id'}/storage/buckets/${bucketId.value as ':bucket_id'}/objects` as const
   : '')
 const downloadUrl = computed(() => organizationId.value
-  ? `/api/cplane/organization/${organizationId.value as ':organization_id'}/storage/buckets/${bucketId.value as ':bucket_id'}/objects/download` as const
+  ? `/api/organization/${organizationId.value as ':organization_id'}/storage/buckets/${bucketId.value as ':bucket_id'}/objects/download` as const
   : '')
-const { data: buckets } = await useFetch(bucketsUrl, {
+const { data: buckets } = await useCplaneFetch(bucketsUrl, {
   default: () => [],
   query: { project_id: projectId },
 })
-const { data: initialPage, status, error, refresh } = await useFetch<BucketObjectsPage>(objectsUrl, {
+const { data: initialPage, status, error, refresh } = await useCplaneFetch<BucketObjectsPage>(objectsUrl, {
   default: () => ({ folders: [], objects: [], next_continuation_token: null }),
   query: () => ({ prefix: prefix.value || undefined }),
 })
@@ -88,7 +88,7 @@ async function loadMore() {
   if (!nextContinuationToken.value || loadingMore.value) return
   loadingMore.value = true
   try {
-    const page = await $fetch<BucketObjectsPage>(objectsUrl.value, {
+    const page = await cplaneFetch<BucketObjectsPage>(objectsUrl.value, {
       query: { prefix: prefix.value || undefined, continuation_token: nextContinuationToken.value },
     })
     folders.value.push(...page.folders)
@@ -136,7 +136,7 @@ async function deleteSelected() {
       : { key: deleteTarget.value.key }
     let continuationToken: string | undefined
     do {
-      const response = await $fetch<{ next_continuation_token?: string | null }>(objectsUrl.value, {
+      const response = await cplaneFetch<{ next_continuation_token?: string | null }>(objectsUrl.value, {
         method: 'DELETE',
         query: { ...query, continuation_token: continuationToken },
       })
@@ -162,7 +162,7 @@ async function deleteSelected() {
 async function download(object: BucketObject) {
   downloading.value = object.key
   try {
-    const blob = await $fetch<Blob>(downloadUrl.value, { query: { key: object.key }, responseType: 'blob' })
+    const blob = await cplaneFetch<Blob>(downloadUrl.value, { query: { key: object.key }, responseType: 'blob' })
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
     anchor.href = url

@@ -17,7 +17,7 @@ const limit = 10;
 const offset = ref(0);
 
 const { data, status, refresh } = await useFetch(
-  `/api/organization/${store.organization.id as ':organization_id'}/api-keys`,
+  `/ui-api/organization/${store.organization.id as ':organization_id'}/api-keys`,
   {
     query: {
       limit,
@@ -120,7 +120,7 @@ const onDeleteKey = async () => {
 
   isDeleting.value = true;
   try {
-    await $fetch(`/api/organization/${store.organization?.id as ':organization_id'}/api-keys/${selectedKeyToDelete.value.id as ':api_key_id'}`, {
+    await $fetch(`/ui-api/organization/${store.organization?.id as ':organization_id'}/api-keys/${selectedKeyToDelete.value.id as ':api_key_id'}`, {
       method: 'DELETE'
     });
 
@@ -162,7 +162,7 @@ const onCreateKey = async () => {
   }
   isCreating.value = true;
   try {
-    const key = await $fetch<{ id: string; key: string }>(`/api/organization/${store.organization?.id as ':organization_id'}/api-keys`, {
+    const key = await $fetch<{ id: string; key: string }>(`/ui-api/organization/${store.organization?.id as ':organization_id'}/api-keys`, {
       method: 'POST',
       body: { name: createState.name, expires_at: createState.expires_at, scopes: createScopes.value }
     });

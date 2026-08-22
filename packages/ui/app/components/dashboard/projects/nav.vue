@@ -35,7 +35,7 @@ const hasDraftRevision = computed(() =>
 // Refresh only needed after create/delete.
 async function refreshProjects() {
   if (!store.organization?.id) return
-  const { data } = await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects` as const)
+  const { data } = await cplaneFetch(`/api/organization/${store.organization.id as ':organization_id'}/projects` as const)
   if (data) {
     store.projects = data
   }
@@ -198,8 +198,8 @@ async function onRenameEnvironment() {
 
   renamingEnvironment.value = true
   try {
-    const updated = await $fetch(
-      `/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${store.environment.id as ':environment_id'}` as const,
+    const updated = await cplaneFetch(
+      `/api/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${store.environment.id as ':environment_id'}` as const,
       { method: 'PATCH', body: { name: environmentName.value.trim() } },
     )
     syncEnvironment(store, updated)
@@ -215,7 +215,7 @@ async function onRenameEnvironment() {
 async function onConfirmDeleteEnvironment() {
   if (!store.organization?.id || !store.project?.id || !store.environment) return;
   try {
-    await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${store.environment.id as ':environment_id'}` as const, { method: 'DELETE' });
+    await cplaneFetch(`/api/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${store.environment.id as ':environment_id'}` as const, { method: 'DELETE' });
     toast.add({ title: 'Environment removed', color: 'success' });
     deleteEnvironmentModal.value = false;
     store.environment = null;
