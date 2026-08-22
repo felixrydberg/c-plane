@@ -20,7 +20,7 @@ use crate::{
     },
 };
 
-use super::databases::{verify_org_access, verify_project_in_org};
+use super::databases::{verify_org_access, verify_org_owner, verify_project_in_org};
 
 const BUCKET_PREFIX: &str = "cp-";
 
@@ -178,6 +178,7 @@ pub async fn delete_bucket(
     Path((organization_id, bucket_id)): Path<(Uuid, Uuid)>,
 ) -> Result<axum::http::StatusCode, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
+    verify_org_owner(&tenant_db, organization_id)?;
     let providers = crate::state::get_app_state().s3_providers;
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();

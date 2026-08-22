@@ -5,6 +5,7 @@ import { ICONS } from '~/utils/icons'
 const store = useStore()
 const route = useRoute()
 const toast = useToast()
+const isOwner = computed(() => store.organization?.member?.role === 'owner')
 const organizationId = computed(() => store.organization?.id || '')
 const projectId = computed(() => route.params.project_id as string)
 const projectName = computed(() => store.projects.find(project => project.id === projectId.value)?.name ?? projectId.value)
@@ -58,11 +59,11 @@ async function deleteBucket() {
         <div><h2 class="font-semibold">{{ bucket.name }}</h2></div>
         <div class="flex gap-2">
           <UButton :icon="ICONS.folder" color="neutral" variant="solid" size="sm" :to="`/${route.params.organization_slug}/storage/${projectId}/${bucket.id}`">View objects</UButton>
-          <UButton :icon="ICONS.trash" color="error" size="sm" @click="confirmDelete(bucket)">Delete</UButton>
+          <UButton v-if="isOwner" :icon="ICONS.trash" color="error" size="sm" @click="confirmDelete(bucket)">Delete</UButton>
         </div>
       </div>
     </section>
-    <UModal v-model:open="deleteModalOpen" title="Delete bucket" description="This deletes the physical provider bucket and its logical record. The bucket must be empty.">
+    <UModal v-if="isOwner" v-model:open="deleteModalOpen" title="Delete bucket" description="This deletes the physical provider bucket and its logical record. The bucket must be empty.">
       <template #body>
         <div class="space-y-4">
           <p class="text-sm">Are you sure you want to delete <strong>{{ selectedBucket?.name }}</strong>?</p>

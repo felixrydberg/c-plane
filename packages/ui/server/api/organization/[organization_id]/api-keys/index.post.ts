@@ -2,10 +2,11 @@ import type { api_key_scopes_type } from "~~/server/schema";
 import { api_keys, api_key_scopes } from "~~/server/schema";
 import { uuidv7 } from "uuidv7";
 import { withTenantDb } from "~~/server/utils/db";
+import { requireOwner } from "~~/server/utils/authorization";
 import { API_KEY_SCOPE_VALUES } from "@cplane/migrations/utils";
 
 export default defineEventHandler(async (event) => {
-  const membership = await getOrganizationMembership(event);
+  const membership = await requireOwner(event);
 
   const body = await readBody(event);
   const { name, scopes, expires_at, allowed_ips } = body as { name: string; scopes: Record<string, boolean>; expires_at?: number | null; allowed_ips?: string | null };

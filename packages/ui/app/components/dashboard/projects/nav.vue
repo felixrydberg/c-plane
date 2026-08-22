@@ -9,6 +9,7 @@ const store = useStore()
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
+const isOwner = computed(() => store.organization?.member?.role === 'owner')
 
 const routeProjectId = computed(() => route.params.project_id as string | undefined)
 const routeEnvironmentId = computed(() => route.params.environment_id as string | undefined)
@@ -68,7 +69,7 @@ const projectItems = computed<DropdownMenuItem[][]>(() => {
   const actions: DropdownMenuItem[] = [
     { label: 'Create Project', icon: ICONS.folderPlus, onSelect() { createProjectModal.value = true } },
   ]
-  if (store.project) {
+  if (store.project && isOwner.value) {
     actions.push({ label: 'Delete Project', icon: 'i-heroicons:trash', color: 'error' as const, onSelect() { deleteProjectModal.value = true } })
   }
   return [list, actions]
@@ -111,8 +112,8 @@ const environmentItems = computed<DropdownMenuItem[][]>(() => {
       label: 'Delete Environment',
       icon: 'i-heroicons:trash',
       color: 'error' as const,
-      disabled: store.environment.is_default,
-      description: store.environment.is_default ? 'Cannot delete the default environment' : undefined,
+      disabled: !isOwner.value || store.environment.is_default,
+      description: !isOwner.value ? 'Owner role required' : store.environment.is_default ? 'Cannot delete the default environment' : undefined,
       onSelect() {
         if (!store.environment?.is_default) deleteEnvironmentModal.value = true;
       },

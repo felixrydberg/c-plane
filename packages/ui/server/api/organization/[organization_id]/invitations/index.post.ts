@@ -3,6 +3,7 @@ import { withTenantDb } from "~~/server/utils/db";
 import { and, eq } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import { logEvent } from "~~/server/utils/events";
+import { requireOwner } from "~~/server/utils/authorization";
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{
@@ -14,20 +15,19 @@ export default defineEventHandler(async (event) => {
   const { email, role, organization_id } = body;
   const inviteEmail = email.trim().toLowerCase();
 
-  if (!email || !inviteEmail) {
+  const validRoles = ["member", "admin", "owner"] as const;
+  const inviteRole = validRoles.includes(role as (typeof validRoles)[number])
+    ? (role as (typeof validRoles)[number])
+    : null;
+
+  if (!email || !inviteEmail || !inviteRole) {
     throw createError({
       statusCode: 400,
-      statusMessage: "Email is required",
+      statusMessage: "Valid email and role (member | admin | owner) are required",
     });
   }
 
-  const membership = await getOrganizationMembership(event);
-  if (!membership) {
-    throw createError({
-      statusCode: 403,
-      statusMessage: "Membership required",
-    });
-  }
+  const membership = await requireOwner(event, organization_id);
 
   if (membership.organization_id !== organization_id) {
     throw createError({
@@ -79,7 +79,7 @@ export default defineEventHandler(async (event) => {
         id: invitationId,
         organization_id: organization_id,
         email: inviteEmail,
-        role,
+        role: inviteRole,
         status: "pending",
         expires_at: expiresAt,
         inviter_id: membership.user_id,

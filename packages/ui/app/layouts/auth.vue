@@ -18,6 +18,8 @@ const draftRevisionQuery = computed(() => {
     : ''
 })
 
+const isOwner = computed(() => store.organization?.member?.role === 'owner');
+
 const items = computed<NavigationMenuItem[]>(() => [
   {
     label: 'Overview',
@@ -80,24 +82,24 @@ const items = computed<NavigationMenuItem[]>(() => [
     type: "label",
     label: 'Settings',
   },
-      {
+      ...(isOwner.value ? [{
         label: 'General',
         icon: ICONS.general,
         to: `/${store.organization?.slug}/settings`,
         exact: true,
-      },
+      }] : []),
       {
         label: 'Members',
         icon: ICONS.members,
         to: `/${store.organization?.slug}/settings/members`,
         exact: true,
       },
-      {
+      ...(isOwner.value ? [{
         label: 'Authentication',
         icon: ICONS.authentication,
         to: `/${store.organization?.slug}/settings/authentication`,
         exact: true,
-      },
+      }] : []),
       {
         label: 'Audit Log',
         icon: ICONS.logs,

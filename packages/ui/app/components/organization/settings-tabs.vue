@@ -2,11 +2,12 @@
 const store = useStore()
 const route = useRoute()
 const base = computed(() => `/${store.organization?.slug}/settings`)
+const isOwner = computed(() => store.organization?.member?.role === 'owner')
 
 const links = computed(() => [
-  { label: 'General', to: base.value },
+  ...(isOwner.value ? [{ label: 'General', to: base.value }] : []),
   { label: 'Members', to: `${base.value}/members` },
-  { label: 'Authentication', to: `${base.value}/authentication` },
+  ...(isOwner.value ? [{ label: 'Authentication', to: `${base.value}/authentication` }] : []),
   { label: 'Audit log', to: `${base.value}/audit-log` },
 ])
 </script>

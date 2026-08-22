@@ -2,7 +2,7 @@ import { withTenantDb } from "~~/server/utils/db";
 import type { api_key_scopes_type } from "~~/server/schema";
 import { api_keys, api_key_scopes } from "~~/server/schema";
 import { eq, and, notInArray } from "drizzle-orm";
-import { getOrganizationMembership } from "~~/server/utils/authorization";
+import { requireOwner } from "~~/server/utils/authorization";
 import { uuidv7 } from "uuidv7";
 import { API_KEY_SCOPE_VALUES } from "@cplane/migrations/utils";
 
@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
   const organization_id = params.organization_id as string;
   const api_key_id = params.api_key_id as string;
 
-  await getOrganizationMembership(event, organization_id);
+  await requireOwner(event, organization_id);
 
   const body = await readBody(event);
   const { name, scopes, allowed_ips } = body as { name: string; scopes: Record<string, boolean>; allowed_ips?: string | null };
