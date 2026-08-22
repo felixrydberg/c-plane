@@ -53,10 +53,12 @@ const renamingEnvironment = ref(false)
 const projectLabel = computed(() => store.project?.name || 'All Projects')
 
 const projectItems = computed<DropdownMenuItem[][]>(() => {
-  if (!store.projects.length) return [[
+  if (!store.projects.length) return isOwner.value ? [[
     { label: 'No projects available', disabled: true },
   ], [
     { label: 'Create Project', icon: ICONS.folderPlus, onSelect() { createProjectModal.value = true } },
+  ]] : [[
+    { label: 'No projects available', disabled: true },
   ]]
 
   const list: DropdownMenuItem[] = [
@@ -66,13 +68,14 @@ const projectItems = computed<DropdownMenuItem[][]>(() => {
     list.push({ label: p.name, icon: ICONS.folder, onSelect() { selectProject(p.id) } })
   }
 
-  const actions: DropdownMenuItem[] = [
-    { label: 'Create Project', icon: ICONS.folderPlus, onSelect() { createProjectModal.value = true } },
-  ]
+  const actions: DropdownMenuItem[] = []
+  if (isOwner.value) {
+    actions.push({ label: 'Create Project', icon: ICONS.folderPlus, onSelect() { createProjectModal.value = true } })
+  }
   if (store.project && isOwner.value) {
     actions.push({ label: 'Delete Project', icon: 'i-heroicons:trash', color: 'error' as const, onSelect() { deleteProjectModal.value = true } })
   }
-  return [list, actions]
+  return actions.length ? [list, actions] : [list]
 })
 
 const environmentLabel = computed(() => {
@@ -82,10 +85,12 @@ const environmentLabel = computed(() => {
 })
 const environmentItems = computed<DropdownMenuItem[][]>(() => {
   if (!store.project) return [[{ label: 'Select a project first', disabled: true }]]
-  if (!store.environments.length) return [[
+  if (!store.environments.length) return isOwner.value ? [[
     { label: 'No environments', disabled: true },
   ], [
     { label: 'Create Environment', icon: ICONS.folderPlus, onSelect() { createEnvironmentModal.value = true } },
+  ]] : [[
+    { label: 'No environments', disabled: true },
   ]]
 
   const list: DropdownMenuItem[] = store.environments.map(b => ({
@@ -96,18 +101,21 @@ const environmentItems = computed<DropdownMenuItem[][]>(() => {
     ],
     onSelect() { selectEnvironment(b) },
   }))
-  const actions: DropdownMenuItem[] = [
-    { label: 'Create Environment', icon: ICONS.folderPlus, onSelect() { createEnvironmentModal.value = true } },
-  ]
+  const actions: DropdownMenuItem[] = []
+  if (isOwner.value) {
+    actions.push({ label: 'Create Environment', icon: ICONS.folderPlus, onSelect() { createEnvironmentModal.value = true } })
+  }
   if (store.environment) {
-    actions.push({
-      label: 'Rename Environment',
-      icon: ICONS.pencil,
-      onSelect() {
-        environmentName.value = store.environment?.name ?? ''
-        renameEnvironmentModal.value = true
-      },
-    })
+    if (isOwner.value) {
+      actions.push({
+        label: 'Rename Environment',
+        icon: ICONS.pencil,
+        onSelect() {
+          environmentName.value = store.environment?.name ?? ''
+          renameEnvironmentModal.value = true
+        },
+      })
+    }
     actions.push({
       label: 'Delete Environment',
       icon: 'i-heroicons:trash',
@@ -119,7 +127,7 @@ const environmentItems = computed<DropdownMenuItem[][]>(() => {
       },
     })
   }
-  return [list, actions]
+  return actions.length ? [list, actions] : [list]
 })
 
 async function selectProject(projectId: string | null) {

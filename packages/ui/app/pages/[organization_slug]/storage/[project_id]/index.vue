@@ -48,7 +48,7 @@ async function deleteBucket() {
       <div><h1 class="text-2xl font-semibold">Storage</h1><p class="text-muted text-sm mt-1">Buckets for {{ projectName }}.</p></div>
       <div class="flex flex-wrap justify-end gap-2">
         <UButton :icon="ICONS.authentication" color="neutral" variant="solid" :to="`/${route.params.organization_slug}/storage/${projectId}/access-tokens`">Manage access tokens</UButton>
-        <UButton :icon="ICONS.plus" color="primary" :to="`/${route.params.organization_slug}/storage/${projectId}/new`">New bucket</UButton>
+        <UButton v-if="isOwner" :icon="ICONS.plus" color="primary" :to="`/${route.params.organization_slug}/storage/${projectId}/new`">New bucket</UButton>
       </div>
     </div>
     <div v-if="!buckets.length" class="flex flex-col items-center justify-center py-14 gap-3 text-center rounded-lg border border-dashed border-default bg-transparent">

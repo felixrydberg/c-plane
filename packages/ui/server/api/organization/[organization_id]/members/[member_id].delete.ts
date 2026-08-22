@@ -1,6 +1,6 @@
 import { organization_member } from "~~/server/schema";
 import { withTenantDb } from "~~/server/utils/db";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { requireOwner } from "~~/server/utils/authorization";
 
 export default defineEventHandler(async (event) => {
@@ -15,6 +15,17 @@ export default defineEventHandler(async (event) => {
   }
 
   const deletedMember = await withTenantDb([membership.organization_id], async (tx) => {
+    const owners = await tx
+      .select({ id: organization_member.id })
+      .from(organization_member)
+      .where(
+        and(
+          eq(organization_member.organization_id, membership.organization_id),
+          eq(organization_member.role, "owner")
+        )
+      )
+      .for("update");
+
     const [target] = await tx
       .select()
       .from(organization_member)
@@ -31,16 +42,8 @@ export default defineEventHandler(async (event) => {
     }
 
     if (target.role === "owner") {
-      const ownerCount = await tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(organization_member)
-        .where(
-          and(
-            eq(organization_member.organization_id, membership.organization_id),
-            eq(organization_member.role, "owner")
-          )
-        );
-      if ((ownerCount[0]?.count ?? 0) <= 1) {
+      const ownerCount = owners.length;
+      if (ownerCount <= 1) {
         throw createError({
           statusCode: 409,
           statusMessage: "Cannot remove the last owner of an organization",
