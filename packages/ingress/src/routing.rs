@@ -21,31 +21,15 @@ pub struct Upstreams {
 }
 
 #[derive(Clone, Debug)]
-pub enum Authority {
-    Exact(String),
-    Suffix(String),
-}
+pub struct Authority(String);
 
 impl Authority {
     pub fn exact(value: String) -> Self {
-        Self::Exact(normalize_authority(&value))
-    }
-
-    pub fn suffix(value: String) -> Self {
-        Self::Suffix(value.trim().trim_start_matches('.').to_ascii_lowercase())
+        Self(normalize_authority(&value))
     }
 
     fn matches(&self, authority: &str) -> bool {
-        let authority = normalize_authority(authority);
-        match self {
-            Self::Exact(expected) => authority == *expected,
-            Self::Suffix(suffix) => {
-                let host = host_without_port(&authority);
-                host.len() > suffix.len()
-                    && host.ends_with(suffix)
-                    && host.as_bytes()[host.len() - suffix.len() - 1] == b'.'
-            }
-        }
+        normalize_authority(authority) == self.0
     }
 }
 
@@ -145,14 +129,6 @@ fn normalize_authority(value: &str) -> String {
     value.trim().trim_end_matches('.').to_ascii_lowercase()
 }
 
-fn host_without_port(authority: &str) -> &str {
-    authority
-        .strip_prefix('[')
-        .and_then(|value| value.split_once(']').map(|(host, _)| host))
-        .or_else(|| authority.split_once(':').map(|(host, _)| host))
-        .unwrap_or(authority)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -161,10 +137,7 @@ mod tests {
         Router::new(Authorities {
             platform: vec![Authority::exact("app.example.com".into())],
             api: vec![Authority::exact("api.example.com".into())],
-            storage: vec![
-                Authority::exact("storage.example.com".into()),
-                Authority::suffix("storage.example.com".into()),
-            ],
+            storage: vec![Authority::exact("storage.example.com".into())],
             registry: vec![Authority::exact("registry.example.com".into())],
         })
     }
@@ -194,14 +167,14 @@ mod tests {
     }
 
     #[test]
-    fn storage_supports_virtual_host_buckets() {
+    fn storage_requires_the_exact_authority() {
         let router = router();
         assert_eq!(
-            router.route("bucket.storage.example.com", "/object", &Method::GET),
+            router.route("storage.example.com", "/bucket/object", &Method::GET),
             proxy("storage", Service::Storage, TrafficClass::Storage)
         );
         assert_eq!(
-            router.route("notstorage.example.com", "/object", &Method::GET),
+            router.route("bucket.storage.example.com", "/object", &Method::GET),
             Decision::Misdirected
         );
     }

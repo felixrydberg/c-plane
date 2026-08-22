@@ -39,11 +39,7 @@ impl Config {
             authorities: Authorities {
                 platform: authorities("INGRESS_PLATFORM_HOSTS", "localhost:3000")?,
                 api: authorities("INGRESS_API_HOSTS", "localhost:8080")?,
-                storage: authorities_with_suffixes(
-                    "INGRESS_STORAGE_HOSTS",
-                    "localhost:8081",
-                    "INGRESS_STORAGE_HOST_SUFFIXES",
-                )?,
+                storage: authorities("INGRESS_STORAGE_HOSTS", "localhost:8081")?,
                 registry: authorities("INGRESS_REGISTRY_HOSTS", "localhost:5000")?,
             },
             upstreams: Upstreams {
@@ -108,16 +104,6 @@ fn authorities(name: &str, default: &str) -> Result<Vec<Authority>, String> {
         .into_iter()
         .map(Authority::exact)
         .collect())
-}
-
-fn authorities_with_suffixes(
-    exact_name: &str,
-    exact_default: &str,
-    suffix_name: &str,
-) -> Result<Vec<Authority>, String> {
-    let mut values = authorities(exact_name, exact_default)?;
-    values.extend(csv(suffix_name, "").into_iter().map(Authority::suffix));
-    Ok(values)
 }
 
 fn upstream(name: &str, default: &str) -> Result<SocketAddr, String> {
