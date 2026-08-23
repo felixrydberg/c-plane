@@ -2,6 +2,7 @@ import { withTenantDb } from "~~/server/utils/db";
 import { organization, organization_member } from "~~/server/schema";
 import { eq, and } from "drizzle-orm";
 import { logEvent } from "~~/server/utils/events";
+import { requireOwner } from "~~/server/utils/authorization";
 import z from "zod";
 
 const renameOrganizationSchema = z.object({
@@ -9,7 +10,7 @@ const renameOrganizationSchema = z.object({
 });
 
 export default defineEventHandler(async (event) => {
-  const membership = await getOrganizationMembership(event);
+  const membership = await requireOwner(event);
 
   const body = await readBody(event);
   const parsed = renameOrganizationSchema.safeParse(body);

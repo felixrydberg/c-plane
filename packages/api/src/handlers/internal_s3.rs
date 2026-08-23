@@ -100,7 +100,10 @@ async fn validate_cached_token(
         (Some(organization_id), Some(project_id)) => {
             let tenant = TenantDatabase::new(
                 state.tenant_db,
-                OrganizationContext { allowed_organizations: vec![organization_id] },
+                OrganizationContext {
+                    allowed_organizations: vec![organization_id],
+                    ..Default::default()
+                },
             );
             let scoped = tenant.begin_scoped_transaction().await?;
             let row = scoped
@@ -147,7 +150,10 @@ async fn resolve_uncached(
                 .ok_or_else(|| AppError::Unauthorized("Invalid S3 access key".into()))?;
             let tenant = TenantDatabase::new(
                 state.tenant_db,
-                OrganizationContext { allowed_organizations: vec![organization_id] },
+                OrganizationContext {
+                    allowed_organizations: vec![organization_id],
+                    ..Default::default()
+                },
             );
             let scoped = tenant.begin_scoped_transaction().await?;
             let tx = scoped.connection();

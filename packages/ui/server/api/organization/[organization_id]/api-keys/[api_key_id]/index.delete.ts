@@ -1,13 +1,14 @@
 import { and, eq } from "drizzle-orm";
 import { api_keys } from "~~/server/schema";
 import { withTenantDb } from "~~/server/utils/db";
+import { requireOwner } from "~~/server/utils/authorization";
 
 export default defineEventHandler(async (event) => {
   const params = getRouterParams(event);
   const organization_id = params.organization_id as string;
   const api_key_id = params.api_key_id as string;
 
-  await getOrganizationMembership(event, organization_id);
+  await requireOwner(event, organization_id);
   const deleted = await withTenantDb([organization_id], async (tx) => {
     const [deleted] = await tx
       .delete(api_keys)

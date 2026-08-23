@@ -28,6 +28,8 @@ fn reqwest_client() -> &'static Client {
 #[derive(Clone, Debug)]
 pub struct RequestAuthContext {
     pub actor_id: Uuid,
+    /// Session users only: organization id -> role. API keys carry no member
+    /// role; their access is limited by scopes instead.
     roles: HashMap<Uuid, Role>,
 }
 
@@ -93,6 +95,11 @@ where
                 (
                     OrganizationContext {
                         allowed_organizations: vec![api_key.organization_id],
+                        // Keys act with full org privileges; scopes are their limit.
+                        organization_roles: HashMap::from([(
+                            api_key.organization_id,
+                            "owner".to_string(),
+                        )]),
                     },
                     RequestAuthContext {
                         actor_id: api_key.id,
@@ -127,8 +134,14 @@ where
                 (
                     OrganizationContext {
                         allowed_organizations: memberships
-                            .into_iter()
-                            .map(|(organization_id, _)| organization_id)
+                            .iter()
+                            .map(|(organization_id, _)| *organization_id)
+                            .collect(),
+                        // Raw better-auth strings for verify_org_owner-style
+                        // checks; parsed ranks live on request_auth.roles.
+                        organization_roles: memberships
+                            .iter()
+                            .map(|(organization_id, role)| (*organization_id, role.clone()))
                             .collect(),
                     },
                     request_auth,
@@ -232,18 +245,16 @@ async fn resolve_user_memberships(
         .await
         .map_err(|err| AppError::Internal(err.to_string()))?;
 
-    let mut memberships = Vec::with_capacity(rows.len());
-    for row in rows {
-        let organization_id = row
-            .try_get::<Uuid>("", "organization_id")
-            .map_err(|err| AppError::Internal(err.to_string()))?;
-        let role = row
-            .try_get::<String>("", "role")
-            .map_err(|err| AppError::Internal(err.to_string()))?;
-        memberships.push((organization_id, role));
-    }
-
-    Ok(memberships)
+    rows.iter()
+        .map(|row| {
+            Ok((
+                row.try_get::<Uuid>("", "organization_id")
+                    .map_err(|err| AppError::Internal(err.to_string()))?,
+                row.try_get::<String>("", "role")
+                    .map_err(|err| AppError::Internal(err.to_string()))?,
+            ))
+        })
+        .collect()
 }
 
 async fn resolve_api_key(
