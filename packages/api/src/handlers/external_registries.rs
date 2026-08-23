@@ -13,7 +13,10 @@ use crate::{
     state::get_app_state,
 };
 
-use super::{databases::{verify_org_access, verify_org_owner}, registry_access_tokens::record_event};
+use super::{
+    databases::{verify_org_access, verify_org_owner},
+    registry_access_tokens::record_event,
+};
 
 const DEPENDENCY_CONSTRAINT: &str = "container_version_external_registry_fk";
 const NAME_CONSTRAINT: &str = "external_registry_organization_name_uidx";

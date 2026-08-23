@@ -108,6 +108,16 @@ pub fn verify_org_owner(tenant_db: &TenantDatabase, org_id: Uuid) -> Result<(), 
 }
 
 fn require_role(context: &OrganizationContext, org_id: Uuid) -> Result<(), AppError> {
+    if let Some(api_key_organization_id) = context.api_key_organization_id {
+        return if api_key_organization_id == org_id {
+            Ok(())
+        } else {
+            Err(AppError::Forbidden(
+                "API key is not owned by this organization".into(),
+            ))
+        };
+    }
+
     match context.organization_roles.get(&org_id).map(String::as_str) {
         Some("owner") => Ok(()),
         _ => Err(AppError::Forbidden(
@@ -136,7 +146,21 @@ mod tests {
             organization_roles: role
                 .map(|r| HashMap::from([(org_id, r.to_string())]))
                 .unwrap_or_default(),
+            api_key_organization_id: None,
         }
+    }
+
+    #[test]
+    fn api_key_organization_ownership_is_checked_separately_from_member_roles() {
+        let org = Uuid::new_v4();
+        let context = OrganizationContext {
+            allowed_organizations: vec![org],
+            organization_roles: HashMap::from([(Uuid::new_v4(), "owner".to_string())]),
+            api_key_organization_id: Some(org),
+        };
+
+        assert!(require_role(&context, org).is_ok());
+        assert!(require_role(&context, Uuid::new_v4()).is_err());
     }
 
     #[test]

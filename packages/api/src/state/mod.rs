@@ -18,6 +18,7 @@ pub struct AppDatabase(pub DatabaseConnection);
 pub struct OrganizationContext {
     pub allowed_organizations: Vec<Uuid>,
     pub organization_roles: HashMap<Uuid, String>,
+    pub api_key_organization_id: Option<Uuid>,
 }
 
 #[derive(Clone)]
