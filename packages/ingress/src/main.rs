@@ -15,7 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = Server::new(Some(Opt::parse_args()))?;
     server.bootstrap();
 
-    let mut proxy = http_proxy_service(&server.configuration, Ingress::new(config));
+    let mut proxy = http_proxy_service(&server.configuration, Ingress::new(config)?);
     for address in &listen {
         proxy.add_tcp(address);
     }

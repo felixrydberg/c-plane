@@ -30,14 +30,13 @@ export const createClient = () => {
 export type ClientType = ReturnType<typeof createClient>
 type InternalFetch = <T = unknown>(url: string, options?: Record<string, unknown>) => Promise<T>;
 
-export async function loadProjectEnvironments(projectId: string, environmentId?: string) {
-  const store = useStore()
+export async function loadProjectEnvironments(projectId: string, environmentId?: string, requestFetch = cplaneFetch, store = useStore()) {
   if (!store.organization?.id) return
 
   const project = store.projects.find(project => project.id === projectId)
   if (!project) return
 
-  const response = await cplaneFetch(`/api/organization/${store.organization.id as ':organization_id'}/projects/${project.id as ':project_id'}/environments` as const)
+  const response = await requestFetch(`/api/organization/${store.organization.id as ':organization_id'}/projects/${project.id as ':project_id'}/environments` as const)
   const environments = response
   const environment = environments.find(environment => environment.id === environmentId) ?? environments.find(environment => environment.is_default) ?? environments[0] ?? null
 
@@ -55,7 +54,7 @@ export const getSession = async (cache: boolean = true) => {
   const router = useRouter();
   const nuxtApp = useNuxtApp();
   const requestFetch: InternalFetch | null = import.meta.server
-    ? (cplaneFetch as unknown as InternalFetch)
+    ? (useCplaneRequestFetch() as unknown as InternalFetch)
     : null;
   try {
     const client = createClient();
@@ -155,7 +154,7 @@ export const setOrganization = async (id: string, redirect: string = '/') => {
   const store = useStore();
   const router = useRouter();
   const requestFetch: InternalFetch | null = import.meta.server
-    ? (cplaneFetch as unknown as InternalFetch)
+    ? (useCplaneRequestFetch() as unknown as InternalFetch)
     : null;
 
   try {

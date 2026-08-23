@@ -35,8 +35,11 @@ least:
 Validate that durable/main branches cannot disable backups. Preview branches
 may disable them only when product policy permits recreating the branch.
 
-Never store database passwords or Storage secret values in these records. Store
-references to OpenBao-managed values.
+Never store database passwords, derived Storage secret values, or SSE-C keys in
+these records. Store application-secret and encryption-key references where
+required. The branch's backup access key is derived from its immutable identity
+and credential generation as described in [Postgres Backup Storage
+Isolation](postgres-backup-storage.md).
 
 ## 3. Render One Database Branch
 
@@ -66,26 +69,27 @@ Map branch settings as follows:
 | Private | ClusterIP service only |
 
 Each region has one Postgres backup Storage bucket. Give every database branch
-an opaque prefix within it, such as `postgres/{database_branch_id}/`, and mint
-one credential restricted to that prefix. Inject only that access-key pair and
-the internal Storage API endpoint into Barman; never inject regional provider
-credentials or an SSE-C key. Storage resolves the credential's
-organization-and-region encryption-key reference itself. Set the immutable
-branch cluster name through the Barman plugin's
+an opaque prefix within it, such as
+`postgres/{organization_id}/{database_id}/{database_branch_id}/`, and derive one
+credential restricted to that prefix. Inject only that access-key pair and the
+internal Storage API endpoint into Barman; never inject regional provider
+credentials or an SSE-C key. Do not persist the derived secret in OpenBao.
+Storage resolves the credential's organization-and-region encryption-key
+reference itself. Set the immutable branch cluster name through the Barman plugin's
 `serverName` parameter when reading a source; do not set the compatibility-only
 `serverName` field in the `ObjectStore` configuration.
 
 Some CNPG integrations require Kubernetes `Secret` references. Where workload
-identity is unavailable, the cluster agent may materialize the minimum
-operator-scoped secret from OpenBao, own its rotation, and exclude its value
-from control-plane state and rendered payload history.
+identity is unavailable, the control plane issues the derived branch pair and
+the cluster agent materializes the minimum operator-scoped Kubernetes `Secret`.
+Exclude its value from control-plane state, logs, and rendered payload history.
 
 ## 4. Create a Main Branch
 
 1. Allocate an immutable database-branch ID, CloudNativePG name, backup prefix,
-   and credential ID.
+   and credential generation.
 2. Select a healthy database-capable cluster in the requested region.
-3. Mint the Storage credential, then render `ObjectStore`, its secret,
+3. Derive the Storage credential, then render `ObjectStore`, its secret,
    `ScheduledBackup`, and an `initdb`
    CloudNativePG `Cluster`.
 4. Wait for the primary and requested replicas to become healthy.
@@ -132,8 +136,8 @@ compatible.
 
 ### Object-Store Path
 
-1. Mint a temporary read-only credential for the source prefix and reference
-   its Storage-backed Barman object store as an external cluster.
+1. Issue a temporary derived read-only credential for the source prefix and
+   reference its Storage-backed Barman object store as an external cluster.
 2. Render `bootstrap.recovery` with the latest target or an explicit timestamp
    or LSN.
 3. Restore the selected base backup and replay archived WAL.

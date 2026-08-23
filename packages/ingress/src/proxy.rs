@@ -9,6 +9,7 @@ use crate::{
     config::Config,
     identity::{ClientIdentity, network_key, unspecified},
     limit::{LocalLimiter, Permit, RejectionKind},
+    metrics::{Metrics, RequestMetrics},
     routing::{Decision, RouteMatch, Router},
 };
 
@@ -17,6 +18,7 @@ pub struct Ingress {
     router: Router,
     identity: ClientIdentity,
     limiter: LocalLimiter,
+    metrics: Metrics,
 }
 
 pub struct RequestContext {
@@ -24,22 +26,25 @@ pub struct RequestContext {
     client: IpAddr,
     authority: String,
     _permit: Option<Permit>,
+    metrics: RequestMetrics,
 }
 
 impl Ingress {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: Config) -> prometheus::Result<Self> {
         let router = Router::new(config.authorities.clone());
         let identity = ClientIdentity::new(
             config.client_ip_header.clone(),
             config.trusted_proxies.clone(),
         );
         let limiter = LocalLimiter::new(config.limits.mode);
-        Self {
+        let metrics = Metrics::register(prometheus::default_registry())?;
+        Ok(Self {
             config: Arc::new(config),
             router,
             identity,
             limiter,
-        }
+            metrics,
+        })
     }
 }
 
@@ -53,6 +58,7 @@ impl ProxyHttp for Ingress {
             client: unspecified(),
             authority: String::new(),
             _permit: None,
+            metrics: self.metrics.start_request(),
         }
     }
 
@@ -95,12 +101,25 @@ impl ProxyHttp for Ingress {
             }
         };
 
+        ctx.route = Some(route);
         match self
             .limiter
             .check(route.class, client, self.config.policy(route.class))
         {
-            Ok(permit) => ctx._permit = Some(permit),
+            Ok(permit) => {
+                if let Some(exceeded) = permit.exceeded() {
+                    self.metrics.record_limit_exceeded(
+                        route,
+                        exceeded.kind,
+                        self.config.limits.mode,
+                    );
+                }
+                ctx._permit = Some(permit);
+            }
             Err(rejection) => {
+                self.metrics
+                    .record_limit_exceeded(route, rejection.kind, self.config.limits.mode);
+                self.metrics.record_rejection(route, rejection.kind);
                 let (status, body) = match rejection.kind {
                     RejectionKind::RateLimit => {
                         (429, b"{\"error\":\"rate limit exceeded\"}".as_slice())
@@ -113,7 +132,6 @@ impl ProxyHttp for Ingress {
                 return Ok(true);
             }
         }
-        ctx.route = Some(route);
         Ok(false)
     }
 
@@ -169,6 +187,16 @@ impl ProxyHttp for Ingress {
         let status = session
             .response_written()
             .map_or(0, |response| response.status.as_u16());
+        self.metrics.record(
+            &ctx.metrics,
+            ctx.route,
+            status,
+            session.body_bytes_read() as u64,
+            session.body_bytes_sent() as u64,
+        );
+        if let Some(error) = error {
+            self.metrics.record_proxy_error(ctx.route, error);
+        }
         if let Some(route) = ctx.route {
             tracing::info!(
                 route = route.id,

@@ -10,14 +10,17 @@ services:
     environment:
       INGRESS_LISTEN: 0.0.0.0:3000,0.0.0.0:8080,0.0.0.0:8081,0.0.0.0:5000
       INGRESS_MANAGEMENT_LISTEN: 0.0.0.0:9090
-      INGRESS_PLATFORM_HOSTS: localhost:3000
-      INGRESS_API_HOSTS: localhost:8080
-      INGRESS_STORAGE_HOSTS: localhost:8081
-      INGRESS_REGISTRY_HOSTS: localhost:5000
+      INGRESS_PLATFORM_HOSTS: ${INGRESS_PLATFORM_HOSTS:-localhost:3000}
+      INGRESS_API_HOSTS: ${INGRESS_API_HOSTS:-localhost:8080}
+      INGRESS_STORAGE_HOSTS: ${INGRESS_STORAGE_HOSTS:-localhost:8081}
+      INGRESS_REGISTRY_HOSTS: ${INGRESS_REGISTRY_HOSTS:-localhost:5000}
       INGRESS_UI_UPSTREAM: ui:3000
       INGRESS_API_UPSTREAM: api:8080
       INGRESS_STORAGE_UPSTREAM: storage:8081
       INGRESS_REGISTRY_UPSTREAM: registry:5000
+      INGRESS_FORWARDED_PROTO: ${INGRESS_FORWARDED_PROTO:-http}
+      INGRESS_CLIENT_IP_HEADER: ${INGRESS_CLIENT_IP_HEADER:-}
+      INGRESS_TRUSTED_PROXY_CIDRS: ${INGRESS_TRUSTED_PROXY_CIDRS:-}
       INGRESS_RATE_MODE: ${INGRESS_RATE_MODE:-observe}
       RUST_LOG: ${INGRESS_LOG:-c_plane_ingress=info}
     depends_on:
@@ -49,7 +52,8 @@ services:
       OPENBAO_ROLE_ID: ${OPENBAO_API_ROLE_ID:-}
       OPENBAO_SECRET_ID: ${OPENBAO_API_SECRET_ID:-}
       REDIS_URL: redis://valkey:6379
-      STORAGE_ENDPOINT_URL: ${STORAGE_ENDPOINT_URL:-http://localhost:8081}
+      INGRESS_FORWARDED_PROTO: ${INGRESS_FORWARDED_PROTO:-http}
+      INGRESS_STORAGE_HOSTS: ${INGRESS_STORAGE_HOSTS:-localhost:8081}
       STORAGE_INTERNAL_URL: http://storage:8081
       REGISTRY_HOST: ${REGISTRY_HOST:-localhost:5000}
       REGISTRY_INTERNAL_URL: ${REGISTRY_INTERNAL_URL:-http://registry:5000}
@@ -282,7 +286,6 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
-    profiles: ["cloudflare-dev"]
     depends_on:
       - ingress
 

@@ -8,7 +8,13 @@
 !packages/api/Cargo.toml
 !packages/api/src
 !packages/api/src/main.rs
+!packages/ingress
+!packages/ingress/**
 !packages/storage
 !packages/storage/**
+!packages/worker
+!packages/worker/**
 !packages/control-plane
 !packages/control-plane/**
+!packages/lib
+!packages/lib/**

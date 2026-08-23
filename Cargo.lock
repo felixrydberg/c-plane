@@ -985,6 +985,7 @@ dependencies = [
  "ipnet",
  "pingora",
  "pingora-limits",
+ "prometheus",
  "tracing",
  "tracing-subscriber",
 ]

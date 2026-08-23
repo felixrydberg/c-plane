@@ -21,14 +21,20 @@ pub enum TrafficClass {
 
 impl fmt::Display for TrafficClass {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(match self {
+        formatter.write_str(self.as_str())
+    }
+}
+
+impl TrafficClass {
+    pub const fn as_str(self) -> &'static str {
+        match self {
             Self::Auth => "auth",
             Self::Ui => "ui",
             Self::ApiRead => "api_read",
             Self::ApiWrite => "api_write",
             Self::Storage => "storage",
             Self::Registry => "registry",
-        })
+        }
     }
 }
 
@@ -37,6 +43,16 @@ pub enum LimitMode {
     Off,
     Observe,
     Enforce,
+}
+
+impl LimitMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Observe => "observe",
+            Self::Enforce => "enforce",
+        }
+    }
 }
 
 impl FromStr for LimitMode {
@@ -112,12 +128,22 @@ pub struct LocalLimiter {
 pub struct Permit {
     class: Option<TrafficClass>,
     counts: Arc<Mutex<HashMap<TrafficClass, usize>>>,
+    exceeded: Option<Rejection>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RejectionKind {
     RateLimit,
     Saturated,
+}
+
+impl RejectionKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::RateLimit => "rate_limit",
+            Self::Saturated => "saturated",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -183,6 +209,7 @@ impl LocalLimiter {
                 drop(Permit {
                     class: Some(class),
                     counts: self.in_flight.clone(),
+                    exceeded: None,
                 });
                 return Err(rejection);
             }
@@ -192,6 +219,7 @@ impl LocalLimiter {
         Ok(Permit {
             class: Some(class),
             counts: self.in_flight.clone(),
+            exceeded,
         })
     }
 }
@@ -201,7 +229,12 @@ impl Permit {
         Self {
             class: None,
             counts,
+            exceeded: None,
         }
+    }
+
+    pub const fn exceeded(&self) -> Option<Rejection> {
+        self.exceeded
     }
 }
 
@@ -286,11 +319,17 @@ mod tests {
         let client = "192.0.2.1".parse().unwrap();
         let policy = LimitPolicy::new(100, 100, 0);
 
-        drop(
-            limiter
-                .check(TrafficClass::ApiRead, client, policy)
-                .unwrap(),
+        let permit = limiter
+            .check(TrafficClass::ApiRead, client, policy)
+            .unwrap();
+        assert_eq!(
+            permit.exceeded(),
+            Some(Rejection {
+                kind: RejectionKind::Saturated,
+                retry_after_seconds: 1,
+            })
         );
+        drop(permit);
         drop(
             limiter
                 .check(TrafficClass::ApiRead, client, policy)

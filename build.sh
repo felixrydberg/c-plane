@@ -30,6 +30,52 @@ set_env() {
   fi
 }
 
+configure_preset() {
+  read -r -p "Use a public domain for ingress? [y/N]: " use_domain
+  case "$use_domain" in
+    y|Y|yes|YES|Yes)
+      domain="$(env_value CPLANE_DOMAIN)"
+      if [ -n "$domain" ]; then
+        read -r -p "Public domain [$domain]: " entered_domain
+        domain="${entered_domain:-$domain}"
+      else
+        read -r -p "Public domain (for example: example.com): " domain
+      fi
+      if [ -z "$domain" ]; then
+        echo "A public domain is required when domain ingress is enabled" >&2
+        exit 2
+      fi
+      if ! printf '%s\n' "$domain" | grep -Eq '^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$'; then
+        echo "The domain must be a hostname without a scheme, port, path, or trailing dot" >&2
+        exit 2
+      fi
+      set_env CPLANE_DOMAIN "$domain"
+      set_env NUXT_AUTH_BASE_URL "https://$domain"
+      set_env INGRESS_PLATFORM_HOSTS "$domain"
+      set_env INGRESS_API_HOSTS "api.$domain"
+      set_env INGRESS_STORAGE_HOSTS "storage.$domain"
+      set_env INGRESS_REGISTRY_HOSTS "registry.$domain"
+      set_env INGRESS_FORWARDED_PROTO https
+      set_env REGISTRY_HOST "registry.$domain"
+      set_env REGISTRY_INTERNAL_URL http://registry:5000
+      set_env REGISTRY_TOKEN_REALM "https://api.$domain/api/registry/token"
+      ;;
+    *)
+      set_env NUXT_AUTH_BASE_URL http://localhost:3000
+      set_env INGRESS_PLATFORM_HOSTS localhost:3000
+      set_env INGRESS_API_HOSTS localhost:8080
+      set_env INGRESS_STORAGE_HOSTS localhost:8081
+      set_env INGRESS_REGISTRY_HOSTS localhost:5000
+      set_env INGRESS_FORWARDED_PROTO http
+      set_env REGISTRY_HOST localhost:5000
+      set_env REGISTRY_INTERNAL_URL http://registry:5000
+      set_env REGISTRY_TOKEN_REALM http://localhost:8080/api/registry/token
+      ;;
+  esac
+}
+
+configure_preset
+
 ensure_secret() {
   value="$(env_value "$1")"
   case "$value" in
@@ -69,9 +115,6 @@ done
 ensure_registry_token_secret
 ensure_secret REGISTRY_STORAGE_S3_ACCESSKEY 16
 ensure_secret REGISTRY_STORAGE_S3_GC_ACCESSKEY 16
-case "$(env_value STORAGE_ENDPOINT_URL)" in
-  ""|http://localhost:8081) set_env STORAGE_ENDPOINT_URL http://storage:8081 ;;
-esac
 [ -n "$(env_value REGISTRY_HOST)" ] || set_env REGISTRY_HOST localhost:5000
 [ -n "$(env_value REGISTRY_STORAGE_S3_REGION)" ] || set_env REGISTRY_STORAGE_S3_REGION us-east-1
 [ -n "$(env_value REGISTRY_STORAGE_S3_BUCKET)" ] || set_env REGISTRY_STORAGE_S3_BUCKET cplane-registry
@@ -79,6 +122,9 @@ esac
 case "$(env_value REGISTRY_TOKEN_REALM)" in
   ""|http://localhost:3000/api/backend/registry/token) set_env REGISTRY_TOKEN_REALM http://localhost:8080/api/registry/token ;;
 esac
+for key in OPENBAO_ROOT_TOKEN OPENBAO_UNSEAL_KEY; do
+  [ -n "$(env_value "$key")" ] || set_env "$key" generated-by-bao-operator-init
+done
 
 compose=(docker compose --env-file .env -f "$compose_file")
 

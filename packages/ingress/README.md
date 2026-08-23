@@ -58,3 +58,19 @@ Request rates are local per-client guardrails and return `429` in enforce mode. 
 Client IP headers are ignored unless both `INGRESS_CLIENT_IP_HEADER` and `INGRESS_TRUSTED_PROXY_CIDRS` are set. The configured header must contain exactly one IP address.
 
 See `config.rs` for the full environment-variable list and defaults.
+
+## Metrics
+
+Prometheus metrics are served on `INGRESS_MANAGEMENT_LISTEN` (`0.0.0.0:9090` by default):
+
+- `cplane_ingress_requests_total` — completed requests by route, traffic class, and status
+- `cplane_ingress_request_duration_seconds` — request latency by route and traffic class
+- `cplane_ingress_body_bytes_total` — request and response body bytes by route and traffic class
+- `cplane_ingress_requests_in_flight` — requests currently being handled
+- `cplane_ingress_rejections_total` — enforced local limit rejections by class and reason
+- `cplane_ingress_limit_exceeded_total` — local limit exceedances in observe and enforce modes
+- `cplane_ingress_proxy_errors_total` — fatal proxy errors by route, source, and stable error kind
+
+Request-duration histogram buckets extend to five minutes for storage, registry, and upgraded connections.
+
+Set `INGRESS_MANAGEMENT_LISTEN` to an empty value to disable the management listener.

@@ -118,8 +118,8 @@ impl InternalStorage {
             .credentials
             .provider(bucket.provider_id)
             .await
-            .map_err(|error| {
-                tracing::error!(%error, provider_id = %bucket.provider_id, "storage provider resolution failed");
+            .map_err(|_error| {
+                tracing::error!(provider_id = %bucket.provider_id, "storage provider resolution failed");
                 StatusCode::BAD_GATEWAY
             })?;
         let region = provider
@@ -173,7 +173,7 @@ pub async fn list_objects(
             let status = error
                 .raw_response()
                 .map(|response| response.status().as_u16());
-            tracing::error!(%error, organization_id = %request.bucket.organization_id, bucket_id = %request.bucket.bucket_id, operation = "ListObjectsV2", "storage gateway operation failed");
+            tracing::error!(status = ?status, organization_id = %request.bucket.organization_id, bucket_id = %request.bucket.bucket_id, operation = "ListObjectsV2", "storage gateway operation failed");
             if status == Some(StatusCode::NOT_FOUND.as_u16()) {
                 StatusCode::NOT_FOUND
             } else {
@@ -223,7 +223,7 @@ pub async fn download_object(
             let status = error
                 .raw_response()
                 .map(|response| response.status().as_u16());
-            tracing::error!(%error, organization_id = %request.bucket.organization_id, bucket_id = %request.bucket.bucket_id, operation = "GetObject", "storage gateway operation failed");
+            tracing::error!(status = ?status, organization_id = %request.bucket.organization_id, bucket_id = %request.bucket.bucket_id, operation = "GetObject", "storage gateway operation failed");
             if status == Some(StatusCode::NOT_FOUND.as_u16()) {
                 StatusCode::NOT_FOUND
             } else {
@@ -274,8 +274,8 @@ pub async fn delete_objects(
             .key(key)
             .send()
             .await
-            .map_err(|error| {
-                tracing::error!(%error, organization_id = %request.bucket.organization_id, bucket_id = %request.bucket.bucket_id, operation = "DeleteObject", "storage gateway operation failed");
+            .map_err(|_error| {
+                tracing::error!(organization_id = %request.bucket.organization_id, bucket_id = %request.bucket.bucket_id, operation = "DeleteObject", "storage gateway operation failed");
                 StatusCode::BAD_GATEWAY
             })?;
         DeletePrefixResult {
@@ -286,6 +286,7 @@ pub async fn delete_objects(
         delete_prefix(
             &client,
             &request.bucket.physical_bucket_name,
+            request.bucket.bucket_id,
             &prefix,
             request.continuation_token,
         )
@@ -312,6 +313,7 @@ struct DeletePrefixResult {
 async fn delete_prefix(
     client: &aws_sdk_s3::Client,
     bucket: &str,
+    bucket_id: Uuid,
     prefix: &str,
     continuation_token: Option<String>,
 ) -> Result<DeletePrefixResult, StatusCode> {
@@ -328,8 +330,8 @@ async fn delete_prefix(
             .set_continuation_token(continuation_token)
             .send()
             .await
-            .map_err(|error| {
-                tracing::error!(%error, bucket, prefix, operation = "ListObjectsV2", "storage gateway operation failed while deleting prefix");
+            .map_err(|_error| {
+                tracing::error!(bucket_id = %bucket_id, prefix, operation = "ListObjectsV2", "storage gateway operation failed while deleting prefix");
                 StatusCode::BAD_GATEWAY
             })?;
 
@@ -341,8 +343,8 @@ async fn delete_prefix(
                 ObjectIdentifier::builder()
                     .key(key)
                     .build()
-                    .map_err(|error| {
-                        tracing::error!(%error, bucket, prefix, operation = "DeleteObjects", "failed to build object delete request");
+                    .map_err(|_error| {
+                        tracing::error!(bucket_id = %bucket_id, prefix, operation = "DeleteObjects", "failed to build object delete request");
                         StatusCode::BAD_GATEWAY
                     })
             })
@@ -354,8 +356,8 @@ async fn delete_prefix(
                 .set_objects(Some(identifiers))
                 .quiet(true)
                 .build()
-                .map_err(|error| {
-                    tracing::error!(%error, bucket, prefix, operation = "DeleteObjects", "failed to build object delete request");
+                .map_err(|_error| {
+                    tracing::error!(bucket_id = %bucket_id, prefix, operation = "DeleteObjects", "failed to build object delete request");
                     StatusCode::BAD_GATEWAY
                 })?;
             let response = client
@@ -364,12 +366,12 @@ async fn delete_prefix(
                 .delete(delete)
                 .send()
                 .await
-                .map_err(|error| {
-                    tracing::error!(%error, bucket, prefix, operation = "DeleteObjects", "storage gateway operation failed");
+                .map_err(|_error| {
+                    tracing::error!(bucket_id = %bucket_id, prefix, operation = "DeleteObjects", "storage gateway operation failed");
                     StatusCode::BAD_GATEWAY
                 })?;
             if !response.errors().is_empty() {
-                tracing::error!(bucket, prefix, errors = ?response.errors(), operation = "DeleteObjects", "storage provider returned delete errors");
+                tracing::error!(bucket_id = %bucket_id, prefix, error_count = response.errors().len(), operation = "DeleteObjects", "storage provider returned delete errors");
                 return Err(StatusCode::BAD_GATEWAY);
             }
             deleted += batch_size;
