@@ -1,15 +1,17 @@
-use axum::extract::{ConnectInfo, FromRequestParts, MatchedPath};
+use axum::extract::{ConnectInfo, FromRequestParts};
 use axum::http::request::Parts;
 use reqwest::Client;
 use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
+use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, SocketAddr};
+use std::sync::OnceLock;
 use std::time::Duration;
-use std::{collections::HashSet, sync::OnceLock};
 use uuid::Uuid;
 
 use crate::errors::AppError;
+use crate::middleware::scoped::{self, Role, RouteGuard};
 use crate::state::{AppDatabase, OrganizationContext, TenantDatabase, get_app_state};
 
 fn reqwest_client() -> &'static Client {
@@ -26,200 +28,7 @@ fn reqwest_client() -> &'static Client {
 #[derive(Clone, Debug)]
 pub struct RequestAuthContext {
     pub actor_id: Uuid,
-    api_key_scopes: Option<HashSet<String>>,
-}
-
-impl RequestAuthContext {
-    pub fn require_scope(&self, scope: &str) -> Result<(), AppError> {
-        if self
-            .api_key_scopes
-            .as_ref()
-            .is_none_or(|scopes| scopes.contains(scope))
-        {
-            return Ok(());
-        }
-
-        Err(AppError::Forbidden(format!(
-            "API key is missing required scope: {scope}"
-        )))
-    }
-}
-
-pub(crate) fn required_scope(method: &str, path: &str) -> Option<&'static str> {
-    Some(match (method, path) {
-        ("GET", "/api/organization/{organization_id}/regions") => "region:read",
-        ("GET", "/api/organization/{organization_id}/projects") => "project:read",
-        ("POST", "/api/organization/{organization_id}/projects") => "project:create",
-        ("GET", "/api/organization/{organization_id}/projects/{project_id}") => "project:read",
-        ("DELETE", "/api/organization/{organization_id}/projects/{project_id}") => "project:delete",
-        ("GET", "/api/organization/{organization_id}/environments") => "project:read",
-        ("GET", "/api/organization/{organization_id}/projects/{project_id}/environments") => {
-            "project:read"
-        }
-        ("POST", "/api/organization/{organization_id}/projects/{project_id}/environments") => {
-            "project:manage"
-        }
-        (
-            "PATCH",
-            "/api/organization/{organization_id}/projects/{project_id}/environments/{environment_id}",
-        ) => "project:manage",
-        (
-            "DELETE",
-            "/api/organization/{organization_id}/projects/{project_id}/environments/{environment_id}",
-        ) => "project:manage",
-        ("GET", "/api/organization/{organization_id}/projects/{project_id}/timelines") => {
-            "timeline:read"
-        }
-        (
-            "GET",
-            "/api/organization/{organization_id}/projects/{project_id}/timelines/{timeline_id}",
-        ) => "timeline:read",
-        ("GET", "/api/organization/{organization_id}/events") => "event:read",
-        ("GET", "/api/organization/{organization_id}/containers") => "container:read",
-        ("POST", "/api/organization/{organization_id}/containers") => "container:create",
-        ("GET", "/api/organization/{organization_id}/containers/{container_id}") => {
-            "container:read"
-        }
-        ("PATCH", "/api/organization/{organization_id}/containers/{container_id}") => {
-            "container:update"
-        }
-        ("POST", "/api/organization/{organization_id}/containers/{container_id}/deploy") => {
-            "container:update"
-        }
-        ("DELETE", "/api/organization/{organization_id}/containers/{container_id}") => {
-            "container:delete"
-        }
-        ("GET", "/api/organization/{organization_id}/databases/postgres") => {
-            "database:postgres:read"
-        }
-        ("POST", "/api/organization/{organization_id}/databases/postgres") => {
-            "database:postgres:create"
-        }
-        ("GET", "/api/organization/{organization_id}/databases/postgres/{database_id}") => {
-            "database:postgres:read"
-        }
-        ("PATCH", "/api/organization/{organization_id}/databases/postgres/{database_id}") => {
-            "database:postgres:update"
-        }
-        ("DELETE", "/api/organization/{organization_id}/databases/postgres/{database_id}") => {
-            "database:postgres:delete"
-        }
-        (
-            "GET",
-            "/api/organization/{organization_id}/databases/postgres/{database_id}/branches",
-        ) => "database:postgres:read",
-        (
-            "POST",
-            "/api/organization/{organization_id}/databases/postgres/{database_id}/branches",
-        ) => "database:postgres:manage",
-        (
-            "PATCH",
-            "/api/organization/{organization_id}/databases/postgres/{database_id}/branches/{branch_id}",
-        ) => "database:postgres:manage",
-        (
-            "DELETE",
-            "/api/organization/{organization_id}/databases/postgres/{database_id}/branches/{branch_id}",
-        ) => "database:postgres:manage",
-        (
-            "GET",
-            "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens",
-        ) => "access-token:read",
-        (
-            "POST",
-            "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens",
-        ) => "access-token:create",
-        (
-            "GET",
-            "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}",
-        ) => "access-token:read",
-        (
-            "PATCH",
-            "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}",
-        ) => "access-token:update",
-        (
-            "DELETE",
-            "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}",
-        ) => "access-token:delete",
-        ("GET", "/api/organization/{organization_id}/storage/buckets") => "bucket:read",
-        ("POST", "/api/organization/{organization_id}/storage/buckets") => "bucket:create",
-        ("DELETE", "/api/organization/{organization_id}/storage/buckets/{bucket_id}") => {
-            "bucket:delete"
-        }
-        ("GET", "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects") => {
-            "bucket:read"
-        }
-        ("DELETE", "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects") => {
-            "bucket:delete"
-        }
-        (
-            "GET",
-            "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects/download",
-        ) => "bucket:read",
-        ("GET", "/api/organization/{organization_id}/registry/repositories") => "registry:read",
-        ("POST", "/api/organization/{organization_id}/registry/repositories") => "registry:create",
-        ("DELETE", "/api/organization/{organization_id}/registry/repositories/{repository_id}") => {
-            "registry:delete"
-        }
-        ("GET", "/api/organization/{organization_id}/registry/external-registries") => {
-            "registry:read"
-        }
-        ("POST", "/api/organization/{organization_id}/registry/external-registries") => {
-            "registry:create"
-        }
-        (
-            "PATCH",
-            "/api/organization/{organization_id}/registry/external-registries/{registry_id}",
-        ) => "registry:update",
-        (
-            "POST",
-            "/api/organization/{organization_id}/registry/external-registries/{registry_id}/rotate-token",
-        ) => "registry:update",
-        (
-            "DELETE",
-            "/api/organization/{organization_id}/registry/external-registries/{registry_id}",
-        ) => "registry:delete",
-        ("GET", "/api/organization/{organization_id}/registry/access-tokens") => {
-            "access-token:read"
-        }
-        ("POST", "/api/organization/{organization_id}/registry/access-tokens") => {
-            "access-token:create"
-        }
-        ("GET", "/api/organization/{organization_id}/registry/access-tokens/{token_id}") => {
-            "access-token:read"
-        }
-        ("PATCH", "/api/organization/{organization_id}/registry/access-tokens/{token_id}") => {
-            "access-token:update"
-        }
-        ("DELETE", "/api/organization/{organization_id}/registry/access-tokens/{token_id}") => {
-            "access-token:delete"
-        }
-        _ => return None,
-    })
-}
-
-/// Routes reachable by API keys without any scope. Everything else must either
-/// appear in `required_scope` or API keys are denied (fail-closed).
-const PUBLIC_API_ROUTES: &[(&str, &str)] = &[
-    ("GET", "/health"),
-    ("GET", "/api/registry/token"),
-    (
-        "GET",
-        "/api/organization/{organization_id}/registry/maintenance",
-    ),
-];
-
-fn api_key_scope_requirement(
-    method: &str,
-    path: &str,
-) -> Result<Option<&'static str>, AppError> {
-    if PUBLIC_API_ROUTES.contains(&(method, path)) {
-        return Ok(None);
-    }
-    required_scope(method, path).map(Some).ok_or_else(|| {
-        AppError::Forbidden(format!(
-            "API keys cannot access {method} {path}: no scope is registered for this route"
-        ))
-    })
+    roles: HashMap<Uuid, Role>,
 }
 
 fn ip_allowed(allowed_ips: Option<&str>, peer_ip: Option<IpAddr>) -> bool {
@@ -264,10 +73,8 @@ where
     type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        let matched_path = parts
-            .extensions
-            .get::<MatchedPath>()
-            .map(|path| path.as_str().to_owned());
+        let guard = parts.extensions.get::<RouteGuard>().copied();
+        let request_path = parts.uri.path().to_owned();
         let peer_ip = parts
             .extensions
             .get::<ConnectInfo<SocketAddr>>()
@@ -276,52 +83,57 @@ where
         let identity_db = state.identity_db;
         let tenant_db_conn = state.tenant_db;
 
-        let (organization_context, request_auth) = if let Some(raw_api_key) =
-            extract_api_key_from_parts(parts).map(str::to_owned)
-        {
-            let api_key: ApiKeyLookup = resolve_api_key(&identity_db, &raw_api_key, peer_ip)
-                .await?
-                .ok_or_else(|| AppError::Unauthorized("Invalid API key".to_string()))?;
-            let request_auth = RequestAuthContext {
-                actor_id: api_key.id,
-                api_key_scopes: Some(api_key.scopes),
-            };
-            if let Some(path) = matched_path.as_deref() {
-                if let Some(scope) = api_key_scope_requirement(parts.method.as_str(), path)? {
-                    request_auth.require_scope(scope)?;
+        let (organization_context, request_auth) =
+            if let Some(raw_api_key) = extract_api_key_from_parts(parts).map(str::to_owned) {
+                // Routes without a declared scope deny API keys (fail-closed).
+                let api_key: ApiKeyLookup = resolve_api_key(&identity_db, &raw_api_key, peer_ip)
+                    .await?
+                    .ok_or_else(|| AppError::Unauthorized("Invalid API key".to_string()))?;
+                scoped::check_api_key(guard, &api_key.scopes)?;
+                (
+                    OrganizationContext {
+                        allowed_organizations: vec![api_key.organization_id],
+                    },
+                    RequestAuthContext {
+                        actor_id: api_key.id,
+                        roles: HashMap::new(),
+                    },
+                )
+            } else {
+                let cookie_header = parts
+                    .headers
+                    .get("cookie")
+                    .and_then(|h| h.to_str().ok())
+                    .ok_or_else(|| AppError::Unauthorized("Missing session cookie".to_string()))?;
+                let actor_id = resolve_user_from_cookie(cookie_header).await?;
+                let memberships = resolve_user_memberships(&identity_db, actor_id).await?;
+
+                if memberships.is_empty() {
+                    return Err(AppError::Forbidden(
+                        "User has no organization access".to_string(),
+                    ));
                 }
-            }
-            (
-                OrganizationContext {
-                    allowed_organizations: vec![api_key.organization_id],
-                },
-                request_auth,
-            )
-        } else {
-            let cookie_header = parts
-                .headers
-                .get("cookie")
-                .and_then(|h| h.to_str().ok())
-                .ok_or_else(|| AppError::Unauthorized("Missing session cookie".to_string()))?;
-            let actor_id = resolve_user_from_cookie(cookie_header).await?;
-            let allowed_organizations = resolve_user_organizations(&identity_db, actor_id).await?;
 
-            if allowed_organizations.is_empty() {
-                return Err(AppError::Forbidden(
-                    "User has no organization access".to_string(),
-                ));
-            }
+                let mut roles = HashMap::with_capacity(memberships.len());
+                for (organization_id, role) in &memberships {
+                    roles.insert(*organization_id, Role::parse(role));
+                }
+                let request_auth = RequestAuthContext { actor_id, roles };
 
-            (
-                OrganizationContext {
-                    allowed_organizations,
-                },
-                RequestAuthContext {
-                    actor_id,
-                    api_key_scopes: None,
-                },
-            )
-        };
+                if let Some(guard) = guard {
+                    scoped::check_role(guard, &request_path, &request_auth.roles)?;
+                }
+
+                (
+                    OrganizationContext {
+                        allowed_organizations: memberships
+                            .into_iter()
+                            .map(|(organization_id, _)| organization_id)
+                            .collect(),
+                    },
+                    request_auth,
+                )
+            };
 
         let tenant_db = TenantDatabase::new(tenant_db_conn, organization_context);
 
@@ -406,29 +218,32 @@ fn hash_api_key(raw_api_key: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
-async fn resolve_user_organizations(
+async fn resolve_user_memberships(
     app_db: &AppDatabase,
     actor_id: Uuid,
-) -> Result<Vec<Uuid>, AppError> {
+) -> Result<Vec<(Uuid, String)>, AppError> {
     let rows = app_db
         .0
         .query_all(Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
-            "SELECT organization_id FROM organization_member WHERE user_id = $1",
+            "SELECT organization_id, role FROM organization_member WHERE user_id = $1",
             vec![actor_id.into()],
         ))
         .await
         .map_err(|err| AppError::Internal(err.to_string()))?;
 
-    let mut organizations = Vec::with_capacity(rows.len());
+    let mut memberships = Vec::with_capacity(rows.len());
     for row in rows {
-        let org_id = row
+        let organization_id = row
             .try_get::<Uuid>("", "organization_id")
             .map_err(|err| AppError::Internal(err.to_string()))?;
-        organizations.push(org_id);
+        let role = row
+            .try_get::<String>("", "role")
+            .map_err(|err| AppError::Internal(err.to_string()))?;
+        memberships.push((organization_id, role));
     }
 
-    Ok(organizations)
+    Ok(memberships)
 }
 
 async fn resolve_api_key(
@@ -483,349 +298,29 @@ async fn resolve_api_key(
 
 #[cfg(test)]
 mod tests {
-    use super::RequestAuthContext;
-    use std::collections::HashSet;
+    use super::ip_allowed;
     use std::net::IpAddr;
-    use uuid::Uuid;
-
-    #[test]
-    fn unlisted_routes_are_denied_for_api_keys() {
-        assert!(super::api_key_scope_requirement("GET", "/health").unwrap().is_none());
-        assert!(
-            super::api_key_scope_requirement("GET", "/api/registry/token")
-                .unwrap()
-                .is_none()
-        );
-        assert_eq!(
-            super::api_key_scope_requirement(
-                "GET",
-                "/api/organization/{organization_id}/containers"
-            )
-            .unwrap(),
-            Some("container:read")
-        );
-        // Not in the scope table and not public -> denied, not silently allowed.
-        assert!(super::api_key_scope_requirement("DELETE", "/some/future/route").is_err());
-    }
 
     #[test]
     fn ip_allowlist_is_enforced() {
         let ip = |s: &str| s.parse::<IpAddr>().unwrap();
 
         // Empty/missing allowlist allows everything.
-        assert!(super::ip_allowed(None, Some(ip("1.2.3.4"))));
-        assert!(super::ip_allowed(Some(""), Some(ip("1.2.3.4"))));
-        assert!(super::ip_allowed(Some("  "), Some(ip("1.2.3.4"))));
+        assert!(ip_allowed(None, Some(ip("1.2.3.4"))));
+        assert!(ip_allowed(Some(""), Some(ip("1.2.3.4"))));
+        assert!(ip_allowed(Some("  "), Some(ip("1.2.3.4"))));
 
         let list = "192.168.1.1, 10.0.0.1";
-        assert!(super::ip_allowed(Some(list), Some(ip("10.0.0.1"))));
-        assert!(!super::ip_allowed(Some(list), Some(ip("10.0.0.2"))));
+        assert!(ip_allowed(Some(list), Some(ip("10.0.0.1"))));
+        assert!(!ip_allowed(Some(list), Some(ip("10.0.0.2"))));
 
         // No peer IP (e.g. unix socket / test harness) with an allowlist -> deny.
-        assert!(!super::ip_allowed(Some(list), None));
+        assert!(!ip_allowed(Some(list), None));
 
         // Malformed entries are ignored, valid ones still match.
-        assert!(super::ip_allowed(Some("not-an-ip, 10.0.0.1"), Some(ip("10.0.0.1"))));
-    }
-
-    #[test]
-    fn api_key_scope_checks_fail_closed_while_sessions_bypass_them() {
-        let session = RequestAuthContext {
-            actor_id: Uuid::nil(),
-            api_key_scopes: None,
-        };
-        assert!(session.require_scope("project:delete").is_ok());
-
-        let scoped_key = RequestAuthContext {
-            actor_id: Uuid::nil(),
-            api_key_scopes: Some(HashSet::from(["project:read".into()])),
-        };
-        assert!(scoped_key.require_scope("project:read").is_ok());
-        assert!(scoped_key.require_scope("project:delete").is_err());
-    }
-
-    #[test]
-    fn every_protected_route_has_its_exact_scope() {
-        let expected = [
-            (
-                "GET",
-                "/api/organization/{organization_id}/regions",
-                "region:read",
-            ),
-            (
-                "GET",
-                "/api/organization/{organization_id}/projects",
-                "project:read",
-            ),
-            (
-                "POST",
-                "/api/organization/{organization_id}/projects",
-                "project:create",
-            ),
-            (
-                "GET",
-                "/api/organization/{organization_id}/projects/{project_id}",
-                "project:read",
-            ),
-            (
-                "DELETE",
-                "/api/organization/{organization_id}/projects/{project_id}",
-                "project:delete",
-            ),
-            (
-                "GET",
-                "/api/organization/{organization_id}/environments",
-                "project:read",
-            ),
-            (
-                "GET",
-                "/api/organization/{organization_id}/projects/{project_id}/environments",
-                "project:read",
-            ),
-            (
-                "POST",
-                "/api/organization/{organization_id}/projects/{project_id}/environments",
-                "project:manage",
-            ),
-            (
-                "PATCH",
-                "/api/organization/{organization_id}/projects/{project_id}/environments/{environment_id}",
-                "project:manage",
-            ),
-            (
-                "DELETE",
-                "/api/organization/{organization_id}/projects/{project_id}/environments/{environment_id}",
-                "project:manage",
-            ),
-            (
-                "GET",
-                "/api/organization/{organization_id}/projects/{project_id}/timelines",
-                "timeline:read",
-            ),
-            (
-                "GET",
-                "/api/organization/{organization_id}/projects/{project_id}/timelines/{timeline_id}",
-                "timeline:read",
-            ),
-            (
-                "GET",
-                "/api/organization/{organization_id}/events",
-                "event:read",
-            ),
-            (
-                "GET",
-                "/api/organization/{organization_id}/containers",
-                "container:read",
-            ),
-            (
-                "POST",
-                "/api/organization/{organization_id}/containers",
-                "container:create",
-            ),
-            (
-                "GET",
-                "/api/organization/{organization_id}/containers/{container_id}",
-                "container:read",
-            ),
-            (
-                "PATCH",
-                "/api/organization/{organization_id}/containers/{container_id}",
-                "container:update",
-            ),
-            (
-                "POST",
-                "/api/organization/{organization_id}/containers/{container_id}/deploy",
-                "container:update",
-            ),
-            (
-                "DELETE",
-                "/api/organization/{organization_id}/containers/{container_id}",
-                "container:delete",
-            ),
-            (
-                "GET",
-                "/api/organization/{organization_id}/databases/postgres",
-                "database:postgres:read",
-            ),
-            (
-                "POST",
-                "/api/organization/{organization_id}/databases/postgres",
-                "database:postgres:create",
-            ),
-            (
-                "GET",
-                "/api/organization/{organization_id}/databases/postgres/{database_id}",
-                "database:postgres:read",
-            ),
-            (
-                "PATCH",
-                "/api/organization/{organization_id}/databases/postgres/{database_id}",
-                "database:postgres:update",
-            ),
-            (
-                "DELETE",
-                "/api/organization/{organization_id}/databases/postgres/{database_id}",
-                "database:postgres:delete",
-            ),
-            (
-                "GET",
-                "/api/organization/{organization_id}/databases/postgres/{database_id}/branches",
-                "database:postgres:read",
-            ),
-            (
-                "POST",
-                "/api/organization/{organization_id}/databases/postgres/{database_id}/branches",
-                "database:postgres:manage",
-            ),
-            (
-                "PATCH",
-                "/api/organization/{organization_id}/databases/postgres/{database_id}/branches/{branch_id}",
-                "database:postgres:manage",
-            ),
-            (
-                "DELETE",
-                "/api/organization/{organization_id}/databases/postgres/{database_id}/branches/{branch_id}",
-                "database:postgres:manage",
-            ),
-            (
-                "GET",
-                "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens",
-                "access-token:read",
-            ),
-            (
-                "POST",
-                "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens",
-                "access-token:create",
-            ),
-            (
-                "GET",
-                "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}",
-                "access-token:read",
-            ),
-            (
-                "PATCH",
-                "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}",
-                "access-token:update",
-            ),
-            (
-                "DELETE",
-                "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}",
-                "access-token:delete",
-            ),
-            (
-                "GET",
-                "/api/organization/{organization_id}/storage/buckets",
-                "bucket:read",
-            ),
-            (
-                "POST",
-                "/api/organization/{organization_id}/storage/buckets",
-                "bucket:create",
-            ),
-            (
-                "DELETE",
-                "/api/organization/{organization_id}/storage/buckets/{bucket_id}",
-                "bucket:delete",
-            ),
-            (
-                "GET",
-                "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects",
-                "bucket:read",
-            ),
-            (
-                "GET",
-                "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects/download",
-                "bucket:read",
-            ),
-            (
-                "DELETE",
-                "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects",
-                "bucket:delete",
-            ),
-            (
-                "GET",
-                "/api/organization/{organization_id}/registry/repositories",
-                "registry:read",
-            ),
-            (
-                "POST",
-                "/api/organization/{organization_id}/registry/repositories",
-                "registry:create",
-            ),
-            (
-                "DELETE",
-                "/api/organization/{organization_id}/registry/repositories/{repository_id}",
-                "registry:delete",
-            ),
-            (
-                "GET",
-                "/api/organization/{organization_id}/registry/external-registries",
-                "registry:read",
-            ),
-            (
-                "POST",
-                "/api/organization/{organization_id}/registry/external-registries",
-                "registry:create",
-            ),
-            (
-                "PATCH",
-                "/api/organization/{organization_id}/registry/external-registries/{registry_id}",
-                "registry:update",
-            ),
-            (
-                "POST",
-                "/api/organization/{organization_id}/registry/external-registries/{registry_id}/rotate-token",
-                "registry:update",
-            ),
-            (
-                "DELETE",
-                "/api/organization/{organization_id}/registry/external-registries/{registry_id}",
-                "registry:delete",
-            ),
-            (
-                "GET",
-                "/api/organization/{organization_id}/registry/access-tokens",
-                "access-token:read",
-            ),
-            (
-                "POST",
-                "/api/organization/{organization_id}/registry/access-tokens",
-                "access-token:create",
-            ),
-            (
-                "GET",
-                "/api/organization/{organization_id}/registry/access-tokens/{token_id}",
-                "access-token:read",
-            ),
-            (
-                "PATCH",
-                "/api/organization/{organization_id}/registry/access-tokens/{token_id}",
-                "access-token:update",
-            ),
-            (
-                "DELETE",
-                "/api/organization/{organization_id}/registry/access-tokens/{token_id}",
-                "access-token:delete",
-            ),
-        ];
-
-        for (method, path, scope) in expected {
-            assert_eq!(
-                super::required_scope(method, path),
-                Some(scope),
-                "{method} {path}"
-            );
-        }
-
-        for (method, path) in [
-            ("GET", "/health"),
-            ("GET", "/api/registry/token"),
-            (
-                "GET",
-                "/api/organization/{organization_id}/registry/maintenance",
-            ),
-        ] {
-            assert_eq!(super::required_scope(method, path), None, "{method} {path}");
-        }
+        assert!(ip_allowed(
+            Some("not-an-ip, 10.0.0.1"),
+            Some(ip("10.0.0.1"))
+        ));
     }
 }
