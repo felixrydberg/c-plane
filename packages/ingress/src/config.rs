@@ -106,15 +106,17 @@ fn authorities(name: &str, default: &str) -> Result<Vec<Authority>, String> {
         .collect())
 }
 
-fn upstream(name: &str, default: &str) -> Result<SocketAddr, String> {
-    use std::net::ToSocketAddrs;
-
+fn upstream(name: &str, default: &str) -> Result<String, String> {
     let address = value(name, default);
-    address
-        .to_socket_addrs()
-        .map_err(|error| format!("could not resolve {name}={address:?}: {error}"))?
-        .next()
-        .ok_or_else(|| format!("{name}={address:?} did not resolve to an address"))
+    let valid = address.parse::<SocketAddr>().is_ok()
+        || address
+            .rsplit_once(':')
+            .is_some_and(|(host, port)| !host.is_empty() && port.parse::<u16>().is_ok());
+    if valid {
+        Ok(address)
+    } else {
+        Err(format!("invalid {name}={address:?}; expected host:port"))
+    }
 }
 
 fn policy(name: &str, default: LimitPolicy) -> Result<LimitPolicy, String> {
@@ -141,12 +143,12 @@ fn policy(name: &str, default: LimitPolicy) -> Result<LimitPolicy, String> {
 }
 
 impl Upstreams {
-    pub fn get(&self, service: Service) -> SocketAddr {
+    pub fn get(&self, service: Service) -> &str {
         match service {
-            Service::Ui => self.ui,
-            Service::Api => self.api,
-            Service::Storage => self.storage,
-            Service::Registry => self.registry,
+            Service::Ui => &self.ui,
+            Service::Api => &self.api,
+            Service::Storage => &self.storage,
+            Service::Registry => &self.registry,
         }
     }
 }

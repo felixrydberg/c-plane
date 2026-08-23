@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-
 use http::Method;
 
 use crate::{config::Authorities, limit::TrafficClass};
@@ -14,10 +12,10 @@ pub enum Service {
 
 #[derive(Clone, Debug)]
 pub struct Upstreams {
-    pub ui: SocketAddr,
-    pub api: SocketAddr,
-    pub storage: SocketAddr,
-    pub registry: SocketAddr,
+    pub ui: String,
+    pub api: String,
+    pub storage: String,
+    pub registry: String,
 }
 
 #[derive(Clone, Debug)]

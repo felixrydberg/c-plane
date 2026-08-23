@@ -1,4 +1,7 @@
-use std::{net::IpAddr, sync::Arc};
+use std::{
+    net::{IpAddr, ToSocketAddrs},
+    sync::Arc,
+};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -143,7 +146,23 @@ impl ProxyHttp for Ingress {
         let route = ctx
             .route
             .expect("upstream_peer called before route selection");
-        let address = self.config.upstreams.get(route.service);
+        let upstream = self.config.upstreams.get(route.service);
+        let address = upstream
+            .to_socket_addrs()
+            .map_err(|error| {
+                Error::because(
+                    ErrorType::ConnectError,
+                    format!("could not resolve upstream {upstream:?}"),
+                    error,
+                )
+            })?
+            .next()
+            .ok_or_else(|| {
+                Error::explain(
+                    ErrorType::ConnectError,
+                    format!("upstream {upstream:?} did not resolve"),
+                )
+            })?;
         Ok(Box::new(HttpPeer::new(address, false, String::new())))
     }
 

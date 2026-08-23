@@ -41,7 +41,7 @@ export default defineEventHandler(async (event) => {
 
   let projects: Project[] = [];
   try {
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:8080';
+    const backendUrl = useRuntimeConfig().backendUrl;
     const headers = getRequestHeaders(event);
     const response = await $fetch(`${backendUrl}/api/organization/${organizationId}/projects`, {
       headers: headers as Record<string, string>,
