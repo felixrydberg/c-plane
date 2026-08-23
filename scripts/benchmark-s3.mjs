@@ -19,7 +19,6 @@ const iterations = 1
 const concurrency = 1
 const payloadBytes = 1024
 const timeoutMs = 10_000
-const debugHeadObject = true
 
 const client = new S3Client({
   accessKeyId: accessKey,
@@ -72,15 +71,6 @@ async function worker(workerNumber) {
     try {
       const objectCreated = await measure('put-object', () => request(() => client.write(key, payload)))
       if (objectCreated) {
-        if (debugHeadObject) {
-          console.error(JSON.stringify({
-            client: 'Bun.S3Client',
-            method: 'HEAD via Bun.S3Client.exists',
-            endpoint: endpoint.origin,
-            bucket,
-            objectKey: key,
-          }, null, 2))
-        }
         await measure('head-object', async () => {
           const exists = await request(() => client.exists(key))
           if (!exists) throw new Error('object does not exist')

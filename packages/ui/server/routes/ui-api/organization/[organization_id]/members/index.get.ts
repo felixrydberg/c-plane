@@ -1,12 +1,12 @@
 import { organization_member, user } from "~~/server/schema";
 import { withTenantDb } from "~~/server/utils/db";
 import { eq, and, or, ilike, count, ne } from "drizzle-orm";
+import { pagination } from "~~/server/utils/pagination";
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event);
   const search = query.search as string | undefined;
-  const limit = Math.min(parseInt(query.limit as string) || 50, 100);
-  const offset = parseInt(query.offset as string) || 0;
+  const { limit, offset } = pagination(query);
   const excludeRequester = query.excludeRequester === "true" || query.excludeRequester === true;
   const excludeIds = typeof query.excludeIds === 'string' 
     ? query.excludeIds.split(',').filter(Boolean)

@@ -1,14 +1,14 @@
 import { getIdentityDb } from "~~/server/utils/db";
 import { organization_invitation, organization, user } from "~~/server/schema";
 import { eq, and, or, ilike, count } from "drizzle-orm";
+import { pagination } from "~~/server/utils/pagination";
 
 export default defineEventHandler(async (event) => {
   const session = await requireSession(event);
 
   const query = getQuery(event);
   const search = query.search as string | undefined;
-  const limit = Math.min(parseInt(query.limit as string) || 50, 100);
-  const offset = parseInt(query.offset as string) || 0;
+  const { limit, offset } = pagination(query);
   const statusParam = query.status as string | undefined;
 
   const validStatuses = ['pending', 'accepted', 'declined', 'revoked'] as const;
@@ -18,17 +18,18 @@ export default defineEventHandler(async (event) => {
 
   const identityDb = getIdentityDb();
 
-  const getWhere = () => {
-    if (status) {
-      return and(
-        eq(organization_invitation.email, session.user.email),
-        eq(organization_invitation.status, status)
-      );
-    }
-    return eq(organization_invitation.email, session.user.email);
-  }
+  const where = and(
+    eq(organization_invitation.email, session.user.email),
+    status ? eq(organization_invitation.status, status) : undefined,
+    search
+      ? or(
+          ilike(organization_invitation.email, `%${search}%`),
+          ilike(user.name, `%${search}%`),
+        )
+      : undefined,
+  );
 
-  let invitationsQuery = identityDb
+  const invitationsQuery = identityDb
     .select({
       id: organization_invitation.id,
       email: organization_invitation.email,
@@ -51,41 +52,16 @@ export default defineEventHandler(async (event) => {
     .from(organization_invitation)
     .innerJoin(user, eq(organization_invitation.inviter_id, user.id))
     .innerJoin(organization, eq(organization_invitation.organization_id, organization.id))
-    .where(getWhere())
+    .where(where)
     .$dynamic();
-
-  if (search) {
-    invitationsQuery = invitationsQuery.where(
-      and(
-        eq(organization_invitation.email, session.user.email),
-        or(
-          ilike(organization_invitation.email, `%${search}%`),
-          ilike(user.name, `%${search}%`)
-        )
-      )
-    );
-  }
 
   const invitations = await invitationsQuery.limit(limit).offset(offset);
-  let countQuery = identityDb
+  const countQuery = identityDb
     .select({ count: count() })
     .from(organization_invitation)
-    .where(eq(organization_invitation.email, session.user.email))
+    .innerJoin(user, eq(organization_invitation.inviter_id, user.id))
+    .where(where)
     .$dynamic();
-
-  if (search) {
-    countQuery = countQuery
-      .innerJoin(user, eq(organization_invitation.inviter_id, user.id))
-      .where(
-        and(
-          eq(organization_invitation.email, session.user.email),
-          or(
-            ilike(organization_invitation.email, `%${search}%`),
-            ilike(user.name, `%${search}%`)
-          )
-        )
-      );
-  }
 
   const totalResult = await countQuery;
   const total = totalResult[0]?.count || 0;

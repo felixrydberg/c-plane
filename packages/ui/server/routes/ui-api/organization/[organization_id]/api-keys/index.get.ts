@@ -2,6 +2,7 @@ import { withTenantDb } from "~~/server/utils/db";
 import { api_keys } from "~~/server/schema";
 import { eq } from "drizzle-orm";
 import { getOrganizationMembership } from "~~/server/utils/authorization";
+import { pagination } from "~~/server/utils/pagination";
 
 export default defineEventHandler(async (event) => {
   const params = getRouterParams(event);
@@ -10,8 +11,7 @@ export default defineEventHandler(async (event) => {
   await getOrganizationMembership(event, organization_id);
 
   const query = getQuery(event);
-  const limit = Math.min(parseInt(query.limit as string) || 50, 100);
-  const offset = parseInt(query.offset as string) || 0;
+  const { limit, offset } = pagination(query);
 
   const { keys, totalResult } = await withTenantDb([organization_id], async (tx) => {
     const keys = await tx

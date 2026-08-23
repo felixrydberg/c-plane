@@ -26,7 +26,10 @@ async function assertPasswordIsNotCompromised(password: string) {
 
   const compromised = range
     .split(/\r?\n/)
-    .some(line => line.split(":")[0]?.toUpperCase() === hash.slice(5))
+    .some(line => {
+      const [suffix, count] = line.split(":")
+      return suffix?.toUpperCase() === hash.slice(5) && Number.parseInt(count ?? "", 10) > 0
+    })
 
   if (compromised) {
     throw createError({ statusCode: 400, statusMessage: compromisedPasswordMessage })

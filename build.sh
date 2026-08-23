@@ -61,6 +61,10 @@ configure_preset() {
       set_env REGISTRY_TOKEN_REALM "https://api.$domain/api/registry/token"
       ;;
     *)
+      if [ "$mode" = prod ]; then
+        echo "Production requires a public domain for ingress" >&2
+        exit 2
+      fi
       set_env NUXT_AUTH_BASE_URL http://localhost:3000
       set_env INGRESS_PLATFORM_HOSTS localhost:3000
       set_env INGRESS_API_HOSTS localhost:8080
@@ -122,10 +126,6 @@ ensure_secret REGISTRY_STORAGE_S3_GC_ACCESSKEY 16
 case "$(env_value REGISTRY_TOKEN_REALM)" in
   ""|http://localhost:3000/api/backend/registry/token) set_env REGISTRY_TOKEN_REALM http://localhost:8080/api/registry/token ;;
 esac
-for key in OPENBAO_ROOT_TOKEN OPENBAO_UNSEAL_KEY; do
-  [ -n "$(env_value "$key")" ] || set_env "$key" generated-by-bao-operator-init
-done
-
 compose=(docker compose --env-file .env -f "$compose_file")
 
 echo "Starting Postgres, Valkey, and OpenBao..."
@@ -134,9 +134,18 @@ run_quiet "${compose[@]}" up -d --wait postgresd valkey openbao
 bao_status="$("${compose[@]}" exec -T -e BAO_ADDR=http://127.0.0.1:8200 openbao bao status -format=json 2>/dev/null || true)"
 if ! printf '%s' "$bao_status" | grep -Eq '"initialized"[[:space:]]*:[[:space:]]*true'; then
   echo "Initializing OpenBao..."
-  bao_init="$("${compose[@]}" exec -T -e BAO_ADDR=http://127.0.0.1:8200 openbao bao operator init -key-shares=1 -key-threshold=1)"
-  set_env OPENBAO_UNSEAL_KEY "$(printf '%s\n' "$bao_init" | sed -n 's/^Unseal Key 1: //p')"
-  set_env OPENBAO_ROOT_TOKEN "$(printf '%s\n' "$bao_init" | sed -n 's/^Initial Root Token: //p')"
+  if ! bao_init="$("${compose[@]}" exec -T -e BAO_ADDR=http://127.0.0.1:8200 openbao bao operator init -key-shares=1 -key-threshold=1)"; then
+    echo "OpenBao initialization failed" >&2
+    exit 1
+  fi
+  bao_unseal_key="$(printf '%s\n' "$bao_init" | sed -n 's/^Unseal Key 1: //p')"
+  bao_root_token="$(printf '%s\n' "$bao_init" | sed -n 's/^Initial Root Token: //p')"
+  if [ -z "$bao_unseal_key" ] || [ -z "$bao_root_token" ]; then
+    echo "OpenBao initialization returned incomplete credentials" >&2
+    exit 1
+  fi
+  set_env OPENBAO_UNSEAL_KEY "$bao_unseal_key"
+  set_env OPENBAO_ROOT_TOKEN "$bao_root_token"
 else
   bao_unseal_key="$(env_value OPENBAO_UNSEAL_KEY)"
   bao_root_token="$(env_value OPENBAO_ROOT_TOKEN)"

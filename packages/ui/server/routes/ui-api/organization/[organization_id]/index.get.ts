@@ -42,9 +42,9 @@ export default defineEventHandler(async (event) => {
   let projects: Project[] = [];
   try {
     const backendUrl = useRuntimeConfig().backendUrl;
-    const headers = getRequestHeaders(event);
+    const cookie = getRequestHeader(event, "cookie");
     const response = await $fetch(`${backendUrl}/api/organization/${organizationId}/projects`, {
-      headers: headers as Record<string, string>,
+      headers: cookie ? { cookie } : {},
     });
     projects = (response as any)?.data ?? [];
   } catch {

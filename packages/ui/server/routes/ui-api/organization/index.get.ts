@@ -1,12 +1,12 @@
 import { organization, organization_member } from "~~/server/schema";
 import { getIdentityDb } from "~~/server/utils/db";
 import { ilike, count, eq, and, or } from "drizzle-orm";
+import { pagination } from "~~/server/utils/pagination";
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event);
   const search = query.search as string | undefined;
-  const limit = Math.min(parseInt(query.limit as string) || 50, 100);
-  const offset = parseInt(query.offset as string) || 0;
+  const { limit, offset } = pagination(query);
 
   const session = await requireSession(event);
   const identityDb = getIdentityDb();

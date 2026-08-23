@@ -1,4 +1,6 @@
-use http::Method;
+use std::str::FromStr;
+
+use http::{Method, uri::Authority as HttpAuthority};
 
 use crate::{config::Authorities, limit::TrafficClass};
 
@@ -19,15 +21,20 @@ pub struct Upstreams {
 }
 
 #[derive(Clone, Debug)]
-pub struct Authority(String);
+pub struct Authority {
+    host: String,
+    port: Option<u16>,
+}
 
 impl Authority {
     pub fn exact(value: String) -> Self {
-        Self(normalize_authority(&value))
+        let (host, port) = split_authority(&value);
+        Self { host, port }
     }
 
     fn matches(&self, authority: &str) -> bool {
-        normalize_authority(authority) == self.0
+        let (host, port) = split_authority(authority);
+        self.host == host && self.port.is_none_or(|expected| port == Some(expected))
     }
 }
 
@@ -123,7 +130,14 @@ fn api_class(method: &Method) -> TrafficClass {
     }
 }
 
-fn normalize_authority(value: &str) -> String {
+fn split_authority(value: &str) -> (String, Option<u16>) {
+    if let Ok(authority) = HttpAuthority::from_str(value.trim()) {
+        return (normalize_host(authority.host()), authority.port_u16());
+    }
+    (normalize_host(value), None)
+}
+
+fn normalize_host(value: &str) -> String {
     value.trim().trim_end_matches('.').to_ascii_lowercase()
 }
 
@@ -174,6 +188,19 @@ mod tests {
         assert_eq!(
             router.route("bucket.storage.example.com", "/object", &Method::GET),
             Decision::Misdirected
+        );
+    }
+
+    #[test]
+    fn portless_authorities_accept_host_headers_with_ports() {
+        let router = router();
+        assert_eq!(
+            router.route("app.example.com:443", "/", &Method::GET),
+            proxy("platform.ui", Service::Ui, TrafficClass::Ui)
+        );
+        assert_eq!(
+            Authority::exact("localhost:3000".into()).matches("localhost:8080"),
+            false
         );
     }
 

@@ -13,8 +13,8 @@ export default defineEventHandler(async (event) => {
 
   await requireOwner(event, organization_id);
 
-  const body = await readBody(event);
-  const { name, scopes, allowed_ips } = body as { name: string; scopes: Record<string, boolean>; allowed_ips?: string | null };
+  const body = await readBody<{ name?: string; scopes: Record<string, boolean>; allowed_ips?: string | null }>(event);
+  const { name, scopes, allowed_ips } = body;
 
   if (!scopes || typeof scopes !== "object" || Array.isArray(scopes)) {
     throw createError({
@@ -59,10 +59,17 @@ export default defineEventHandler(async (event) => {
       });
     }
 
+    const values: { name?: string; allowed_ips?: string | null } = {};
     if (name && typeof name === "string") {
+      values.name = name;
+    }
+    if (Object.hasOwn(body, "allowed_ips")) {
+      values.allowed_ips = allowed_ips ?? null;
+    }
+    if (Object.keys(values).length > 0) {
       await tx
         .update(api_keys)
-        .set({ name, allowed_ips: allowed_ips ?? null })
+        .set(values)
         .where(
           and(
             eq(api_keys.id, api_key_id),

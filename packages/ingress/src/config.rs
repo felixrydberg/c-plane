@@ -28,11 +28,16 @@ pub struct Authorities {
 
 impl Config {
     pub fn from_env() -> Result<Self, String> {
+        let listen = csv(
+            "INGRESS_LISTEN",
+            "0.0.0.0:3000,0.0.0.0:8080,0.0.0.0:8081,0.0.0.0:5000",
+        );
+        if listen.is_empty() {
+            return Err("INGRESS_LISTEN must contain at least one address".to_owned());
+        }
+
         Ok(Self {
-            listen: csv(
-                "INGRESS_LISTEN",
-                "0.0.0.0:3000,0.0.0.0:8080,0.0.0.0:8081,0.0.0.0:5000",
-            ),
+            listen,
             forwarded_proto: value("INGRESS_FORWARDED_PROTO", "http"),
             client_ip_header: optional("INGRESS_CLIENT_IP_HEADER"),
             trusted_proxies: parse_csv("INGRESS_TRUSTED_PROXY_CIDRS")?,
