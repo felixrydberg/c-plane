@@ -15,7 +15,13 @@ export default defineEventHandler(async (event) => {
 
   const { keys, totalResult } = await withTenantDb([organization_id], async (tx) => {
     const keys = await tx
-      .select()
+      .select({
+        id: api_keys.id,
+        name: api_keys.name,
+        created_at: api_keys.created_at,
+        expires_at: api_keys.expires_at,
+        allowed_ips: api_keys.allowed_ips,
+      })
       .from(api_keys)
       .where(eq(api_keys.organization_id, organization_id))
       .limit(limit)

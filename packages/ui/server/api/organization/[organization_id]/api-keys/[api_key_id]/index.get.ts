@@ -11,7 +11,13 @@ export default defineEventHandler(async (event) => {
   await getOrganizationMembership(event, organization_id);
   const { key, scopes } = await withTenantDb([organization_id], async (tx) => {
     const result = await tx
-      .select()
+      .select({
+        id: api_keys.id,
+        name: api_keys.name,
+        created_at: api_keys.created_at,
+        expires_at: api_keys.expires_at,
+        allowed_ips: api_keys.allowed_ips,
+      })
       .from(api_keys)
       .where(
         and(

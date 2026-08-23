@@ -3,6 +3,7 @@ import { api_keys, api_key_scopes } from "~~/server/schema";
 import { uuidv7 } from "uuidv7";
 import { withTenantDb } from "~~/server/utils/db";
 import { API_KEY_SCOPE_VALUES } from "@cplane/migrations/utils";
+import { generateSecret, hashApiKey } from "~~/server/utils/api-keys";
 
 export default defineEventHandler(async (event) => {
   const membership = await getOrganizationMembership(event);
@@ -89,7 +90,11 @@ export default defineEventHandler(async (event) => {
     }, false, {}, tx);
 
     return {
-      ...insertedKey,
+      id: insertedKey.id,
+      name: insertedKey.name,
+      created_at: insertedKey.created_at,
+      expires_at: insertedKey.expires_at ?? null,
+      allowed_ips: insertedKey.allowed_ips ?? null,
       key, // Return the raw key only on creation
     };
   });

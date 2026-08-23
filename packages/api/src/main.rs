@@ -49,9 +49,12 @@ async fn main() -> Result<(), AppError> {
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
         .map_err(|err| AppError::Internal(err.to_string()))?;
-    axum::serve(listener, app)
-        .await
-        .map_err(|err| AppError::Internal(err.to_string()))?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .await
+    .map_err(|err| AppError::Internal(err.to_string()))?;
 
     Ok(())
 }

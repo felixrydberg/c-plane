@@ -108,7 +108,13 @@ export default defineEventHandler(async (event) => {
     }
 
     const updated = await tx
-      .select()
+      .select({
+        id: api_keys.id,
+        name: api_keys.name,
+        created_at: api_keys.created_at,
+        expires_at: api_keys.expires_at,
+        allowed_ips: api_keys.allowed_ips,
+      })
       .from(api_keys)
       .where(eq(api_keys.id, api_key_id))
       .limit(1);
