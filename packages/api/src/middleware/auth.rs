@@ -1,4 +1,5 @@
-use axum::extract::{ConnectInfo, FromRequestParts};
+use axum::RequestPartsExt;
+use axum::extract::{ConnectInfo, FromRequestParts, Path};
 use axum::http::request::Parts;
 use reqwest::Client;
 use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
@@ -76,7 +77,15 @@ where
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         let guard = parts.extensions.get::<RouteGuard>().copied();
-        let request_path = parts.uri.path().to_owned();
+        let organization_id = parts
+            .extract::<Path<HashMap<String, String>>>()
+            .await
+            .ok()
+            .and_then(|Path(params)| {
+                params
+                    .get("organization_id")
+                    .and_then(|value| value.parse().ok())
+            });
         let peer_ip = parts
             .extensions
             .get::<ConnectInfo<SocketAddr>>()
@@ -95,11 +104,8 @@ where
                 (
                     OrganizationContext {
                         allowed_organizations: vec![api_key.organization_id],
-                        // Keys act with full org privileges; scopes are their limit.
-                        organization_roles: HashMap::from([(
-                            api_key.organization_id,
-                            "owner".to_string(),
-                        )]),
+                        organization_roles: HashMap::new(),
+                        api_key_organization_id: Some(api_key.organization_id),
                     },
                     RequestAuthContext {
                         actor_id: api_key.id,
@@ -128,7 +134,7 @@ where
                 let request_auth = RequestAuthContext { actor_id, roles };
 
                 if let Some(guard) = guard {
-                    scoped::check_role(guard, &request_path, &request_auth.roles)?;
+                    scoped::check_role(guard, organization_id, &request_auth.roles)?;
                 }
 
                 (
@@ -143,6 +149,7 @@ where
                             .iter()
                             .map(|(organization_id, role)| (*organization_id, role.clone()))
                             .collect(),
+                        api_key_organization_id: None,
                     },
                     request_auth,
                 )

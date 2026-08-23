@@ -33,6 +33,7 @@ async fn main() -> Result<(), AppError> {
         let output_path = args
             .next()
             .ok_or_else(|| AppError::Internal("--openapi requires an output path".into()))?;
+        let _ = routes::create_routes();
         let document = serde_json::to_vec_pretty(&openapi::ApiDoc::openapi())
             .map_err(|err| AppError::Internal(err.to_string()))?;
         std::fs::write(output_path, document).map_err(|err| AppError::Internal(err.to_string()))?;

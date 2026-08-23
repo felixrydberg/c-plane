@@ -94,7 +94,7 @@ pub fn create_routes() -> Router {
                 scoped::delete(
                     projects::delete_environment,
                     "project:manage",
-                    Role::Member,
+                    Role::Owner,
                 ),
             ],
         )
@@ -163,7 +163,7 @@ pub fn create_routes() -> Router {
             "/api/organization/{organization_id}/databases/postgres/{database_id}/branches/{branch_id}",
             [
                 scoped::patch(postgres_databases::update_database_branch, "database:postgres:manage", Role::Member),
-                scoped::delete(postgres_databases::delete_database_branch, "database:postgres:manage", Role::Member),
+                scoped::delete(postgres_databases::delete_database_branch, "database:postgres:delete", Role::Admin),
             ],
         )
         .scoped_route(
@@ -257,7 +257,7 @@ pub fn create_routes() -> Router {
 #[cfg(test)]
 mod tests {
     use super::create_routes;
-    use crate::middleware::scoped::registered_scope;
+    use crate::middleware::scoped::{Role, registered_min_role, registered_scope};
 
     /// Every guarded (method, path) must declare exactly the scope it had
     /// before scopes moved onto route declarations.
@@ -268,271 +268,328 @@ mod tests {
                 "GET",
                 "/api/organization/{organization_id}/regions",
                 "region:read",
+                Role::Member,
             ),
             (
                 "GET",
                 "/api/organization/{organization_id}/projects",
                 "project:read",
+                Role::Member,
             ),
             (
                 "POST",
                 "/api/organization/{organization_id}/projects",
                 "project:create",
+                Role::Member,
             ),
             (
                 "GET",
                 "/api/organization/{organization_id}/projects/{project_id}",
                 "project:read",
+                Role::Member,
             ),
             (
                 "DELETE",
                 "/api/organization/{organization_id}/projects/{project_id}",
                 "project:delete",
+                Role::Owner,
             ),
             (
                 "GET",
                 "/api/organization/{organization_id}/environments",
                 "project:read",
+                Role::Member,
             ),
             (
                 "GET",
                 "/api/organization/{organization_id}/projects/{project_id}/environments",
                 "project:read",
+                Role::Member,
             ),
             (
                 "POST",
                 "/api/organization/{organization_id}/projects/{project_id}/environments",
                 "project:manage",
+                Role::Member,
             ),
             (
                 "PATCH",
                 "/api/organization/{organization_id}/projects/{project_id}/environments/{environment_id}",
                 "project:manage",
+                Role::Member,
             ),
             (
                 "DELETE",
                 "/api/organization/{organization_id}/projects/{project_id}/environments/{environment_id}",
                 "project:manage",
+                Role::Owner,
             ),
             (
                 "GET",
                 "/api/organization/{organization_id}/projects/{project_id}/timelines",
                 "timeline:read",
+                Role::Member,
             ),
             (
                 "GET",
                 "/api/organization/{organization_id}/projects/{project_id}/timelines/{timeline_id}",
                 "timeline:read",
+                Role::Member,
             ),
             (
                 "GET",
                 "/api/organization/{organization_id}/events",
                 "event:read",
+                Role::Member,
             ),
             (
                 "GET",
                 "/api/organization/{organization_id}/containers",
                 "container:read",
+                Role::Member,
             ),
             (
                 "POST",
                 "/api/organization/{organization_id}/containers",
                 "container:create",
+                Role::Member,
             ),
             (
                 "GET",
                 "/api/organization/{organization_id}/containers/{container_id}",
                 "container:read",
+                Role::Member,
             ),
             (
                 "PATCH",
                 "/api/organization/{organization_id}/containers/{container_id}",
                 "container:update",
+                Role::Member,
             ),
             (
                 "POST",
                 "/api/organization/{organization_id}/containers/{container_id}/deploy",
                 "container:update",
+                Role::Member,
             ),
             (
                 "DELETE",
                 "/api/organization/{organization_id}/containers/{container_id}",
                 "container:delete",
+                Role::Admin,
             ),
             (
                 "GET",
                 "/api/organization/{organization_id}/databases/postgres",
                 "database:postgres:read",
+                Role::Member,
             ),
             (
                 "POST",
                 "/api/organization/{organization_id}/databases/postgres",
                 "database:postgres:create",
+                Role::Member,
             ),
             (
                 "GET",
                 "/api/organization/{organization_id}/databases/postgres/{database_id}",
                 "database:postgres:read",
+                Role::Member,
             ),
             (
                 "PATCH",
                 "/api/organization/{organization_id}/databases/postgres/{database_id}",
                 "database:postgres:update",
+                Role::Member,
             ),
             (
                 "DELETE",
                 "/api/organization/{organization_id}/databases/postgres/{database_id}",
                 "database:postgres:delete",
+                Role::Admin,
             ),
             (
                 "GET",
                 "/api/organization/{organization_id}/databases/postgres/{database_id}/branches",
                 "database:postgres:read",
+                Role::Member,
             ),
             (
                 "POST",
                 "/api/organization/{organization_id}/databases/postgres/{database_id}/branches",
                 "database:postgres:manage",
+                Role::Member,
             ),
             (
                 "PATCH",
                 "/api/organization/{organization_id}/databases/postgres/{database_id}/branches/{branch_id}",
                 "database:postgres:manage",
+                Role::Member,
             ),
             (
                 "DELETE",
                 "/api/organization/{organization_id}/databases/postgres/{database_id}/branches/{branch_id}",
-                "database:postgres:manage",
+                "database:postgres:delete",
+                Role::Admin,
             ),
             (
                 "GET",
                 "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens",
                 "access-token:read",
+                Role::Member,
             ),
             (
                 "POST",
                 "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens",
                 "access-token:create",
+                Role::Member,
             ),
             (
                 "GET",
                 "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}",
                 "access-token:read",
+                Role::Member,
             ),
             (
                 "PATCH",
                 "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}",
                 "access-token:update",
+                Role::Member,
             ),
             (
                 "DELETE",
                 "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens/{token_id}",
                 "access-token:delete",
+                Role::Admin,
             ),
             (
                 "GET",
                 "/api/organization/{organization_id}/storage/buckets",
                 "bucket:read",
+                Role::Member,
             ),
             (
                 "POST",
                 "/api/organization/{organization_id}/storage/buckets",
                 "bucket:create",
+                Role::Member,
             ),
             (
                 "DELETE",
                 "/api/organization/{organization_id}/storage/buckets/{bucket_id}",
                 "bucket:delete",
+                Role::Admin,
             ),
             (
                 "GET",
                 "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects",
                 "bucket:read",
+                Role::Member,
             ),
             (
                 "DELETE",
                 "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects",
                 "bucket:delete",
+                Role::Admin,
             ),
             (
                 "GET",
                 "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects/download",
                 "bucket:read",
+                Role::Member,
             ),
             (
                 "GET",
                 "/api/organization/{organization_id}/registry/repositories",
                 "registry:read",
+                Role::Member,
             ),
             (
                 "POST",
                 "/api/organization/{organization_id}/registry/repositories",
                 "registry:create",
+                Role::Member,
             ),
             (
                 "DELETE",
                 "/api/organization/{organization_id}/registry/repositories/{repository_id}",
                 "registry:delete",
+                Role::Admin,
             ),
             (
                 "GET",
                 "/api/organization/{organization_id}/registry/external-registries",
                 "registry:read",
+                Role::Member,
             ),
             (
                 "POST",
                 "/api/organization/{organization_id}/registry/external-registries",
                 "registry:create",
+                Role::Member,
             ),
             (
                 "PATCH",
                 "/api/organization/{organization_id}/registry/external-registries/{registry_id}",
                 "registry:update",
+                Role::Member,
             ),
             (
                 "POST",
                 "/api/organization/{organization_id}/registry/external-registries/{registry_id}/rotate-token",
                 "registry:update",
+                Role::Member,
             ),
             (
                 "DELETE",
                 "/api/organization/{organization_id}/registry/external-registries/{registry_id}",
                 "registry:delete",
+                Role::Admin,
             ),
             (
                 "GET",
                 "/api/organization/{organization_id}/registry/access-tokens",
                 "access-token:read",
+                Role::Member,
             ),
             (
                 "POST",
                 "/api/organization/{organization_id}/registry/access-tokens",
                 "access-token:create",
+                Role::Member,
             ),
             (
                 "GET",
                 "/api/organization/{organization_id}/registry/access-tokens/{token_id}",
                 "access-token:read",
+                Role::Member,
             ),
             (
                 "PATCH",
                 "/api/organization/{organization_id}/registry/access-tokens/{token_id}",
                 "access-token:update",
+                Role::Member,
             ),
             (
                 "DELETE",
                 "/api/organization/{organization_id}/registry/access-tokens/{token_id}",
                 "access-token:delete",
+                Role::Admin,
             ),
         ];
 
         let _ = create_routes();
 
-        for (method, path, scope) in expected {
+        for (method, path, scope, min_role) in expected {
             assert_eq!(
                 registered_scope(method, path),
                 Some(scope),
                 "{method} {path}"
+            );
+            assert_eq!(
+                registered_min_role(method, path),
+                Some(min_role),
+                "{method} {path} minimum role"
             );
         }
 
@@ -540,6 +597,10 @@ mod tests {
         assert_eq!(
             registered_scope("HEAD", "/api/organization/{organization_id}/regions"),
             Some("region:read")
+        );
+        assert_eq!(
+            registered_min_role("HEAD", "/api/organization/{organization_id}/regions"),
+            Some(Role::Member)
         );
         assert_eq!(registered_scope("GET", "/health"), None);
         assert_eq!(registered_scope("GET", "/api/registry/token"), None);

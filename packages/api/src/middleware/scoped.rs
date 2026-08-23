@@ -93,7 +93,8 @@ impl<S: Clone + Send + Sync + 'static> ScopedRouter<S> for axum::Router<S> {
     fn scoped_route(self, path: &'static str, specs: impl IntoIterator<Item = Scoped<S>>) -> Self {
         let mut router: Option<MethodRouter<S>> = None;
         for spec in specs {
-            register_policy(spec.method, path, spec.guard.scope);
+            register_policy(spec.method, path, spec.guard.scope, spec.guard.min_role)
+                .unwrap_or_else(|err| panic!("{err}"));
             let routed = spec.router.layer(Extension(spec.guard));
             router = Some(match router {
                 Some(built) => built.merge(routed),
@@ -107,20 +108,34 @@ impl<S: Clone + Send + Sync + 'static> ScopedRouter<S> for axum::Router<S> {
     }
 }
 
-fn policies() -> &'static Mutex<Vec<(&'static str, &'static str, &'static str)>> {
-    static POLICIES: OnceLock<Mutex<Vec<(&'static str, &'static str, &'static str)>>> =
-        OnceLock::new();
+type RegisteredPolicy = (&'static str, &'static str, &'static str, Role);
+
+fn policies() -> &'static Mutex<Vec<RegisteredPolicy>> {
+    static POLICIES: OnceLock<Mutex<Vec<RegisteredPolicy>>> = OnceLock::new();
     POLICIES.get_or_init(|| Mutex::new(Vec::new()))
 }
 
-fn register_policy(method: &'static str, path: &'static str, scope: &'static str) {
+fn register_policy(
+    method: &'static str,
+    path: &'static str,
+    scope: &'static str,
+    min_role: Role,
+) -> Result<(), AppError> {
     let mut policies = policies().lock().unwrap();
-    if !policies
+    if let Some((_, _, registered_scope, registered_min_role)) = policies
         .iter()
-        .any(|(m, p, s)| *m == method && *p == path && *s == scope)
+        .find(|(m, p, _, _)| *m == method && *p == path)
     {
-        policies.push((method, path, scope));
+        if *registered_scope != scope || *registered_min_role != min_role {
+            return Err(AppError::Conflict(format!(
+                "Conflicting route policy for {method} {path}"
+            )));
+        }
+        return Ok(());
     }
+
+    policies.push((method, path, scope, min_role));
+    Ok(())
 }
 
 pub(crate) fn registered_scope(method: &str, path: &str) -> Option<&'static str> {
@@ -129,13 +144,24 @@ pub(crate) fn registered_scope(method: &str, path: &str) -> Option<&'static str>
         .lock()
         .unwrap()
         .iter()
-        .find(|(m, p, _)| *m == method && *p == path)
-        .map(|(_, _, s)| *s)
+        .find(|(m, p, _, _)| *m == method && *p == path)
+        .map(|(_, _, scope, _)| *scope)
+}
+
+#[cfg(test)]
+pub(crate) fn registered_min_role(method: &str, path: &str) -> Option<Role> {
+    let method = if method == "HEAD" { "GET" } else { method };
+    policies()
+        .lock()
+        .unwrap()
+        .iter()
+        .find(|(m, p, _, _)| *m == method && *p == path)
+        .map(|(_, _, _, min_role)| *min_role)
 }
 
 #[cfg(test)]
 pub(crate) fn seed_policy_for_tests(method: &'static str, path: &'static str, scope: &'static str) {
-    register_policy(method, path, scope);
+    register_policy(method, path, scope, Role::Member).unwrap();
 }
 
 pub fn check_api_key(
@@ -161,16 +187,12 @@ pub fn role_sufficient(member_role: Option<Role>, min_role: Role) -> bool {
     member_role.is_some_and(|role| role >= min_role)
 }
 
-fn organization_id_from_path(path: &str) -> Option<uuid::Uuid> {
-    path.split('/').nth(3).and_then(|s| s.parse().ok())
-}
-
 pub fn check_role(
     guard: RouteGuard,
-    request_path: &str,
+    organization_id: Option<uuid::Uuid>,
     roles: &HashMap<uuid::Uuid, Role>,
 ) -> Result<(), AppError> {
-    let Some(organization_id) = organization_id_from_path(request_path) else {
+    let Some(organization_id) = organization_id else {
         return Err(AppError::Forbidden(
             "Route has no organization context".into(),
         ));
@@ -230,10 +252,26 @@ mod tests {
     }
 
     #[test]
-    fn organization_id_is_read_from_the_fourth_segment() {
+    fn check_role_fails_closed_without_a_route_organization() {
         let org = uuid::Uuid::new_v4();
-        let path = format!("/api/organization/{org}/projects");
-        assert_eq!(super::organization_id_from_path(&path), Some(org));
-        assert_eq!(super::organization_id_from_path("/health"), None);
+        let roles = HashMap::from([(org, Role::Owner)]);
+        let guard = RouteGuard {
+            scope: "project:delete",
+            min_role: Role::Owner,
+        };
+
+        assert!(check_role(guard, Some(org), &roles).is_ok());
+        assert!(check_role(guard, None, &roles).is_err());
+    }
+
+    #[test]
+    fn conflicting_policy_is_rejected_and_existing_scope_is_preserved() {
+        let path = "/test/conflicting-policy";
+        assert!(register_policy("GET", path, "scope:one", Role::Member).is_ok());
+
+        let error = register_policy("GET", path, "scope:two", Role::Member).unwrap_err();
+        assert!(matches!(error, AppError::Conflict(_)));
+        assert_eq!(registered_scope("GET", path), Some("scope:one"));
+        assert_eq!(registered_min_role("GET", path), Some(Role::Member));
     }
 }
