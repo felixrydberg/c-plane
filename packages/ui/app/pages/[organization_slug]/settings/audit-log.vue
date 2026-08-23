@@ -18,8 +18,8 @@ if (!store.organization?.id) {
 }
 
 const NuxtTime = resolveComponent('NuxtTime')
-const endpoint = `/api/cplane/organization/${store.organization.id as ':organization_id'}/events` as const
-const { data: events, status } = await useFetch<AuditEvent[]>(endpoint, {
+const endpoint = `/api/organization/${store.organization.id as ':organization_id'}/events` as const
+const { data: events, status } = await useCplaneFetch<AuditEvent[]>(endpoint, {
   query: { limit: 50 },
   default: () => [],
 })

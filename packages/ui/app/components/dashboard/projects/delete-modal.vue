@@ -28,7 +28,7 @@ async function handleDelete() {
   error.value = '';
   try {
     const projectId = store.project.id
-    await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${projectId as ':project_id'}` as const, { method: 'DELETE' });
+    await cplaneFetch(`/api/organization/${store.organization.id as ':organization_id'}/projects/${projectId as ':project_id'}` as const, { method: 'DELETE' });
     store.projects = store.projects.filter(project => project.id !== projectId)
     store.project = null;
     store.environment = null;

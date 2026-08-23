@@ -6,8 +6,8 @@ import { getErrorMessage } from '~/utils/errors'
 const props = defineProps<{ organizationId: string }>()
 const toast = useToast()
 const isOwner = computed(() => useStore().organization?.member?.role === 'owner')
-const endpoint = computed(() => `/api/cplane/organization/${props.organizationId as ':organization_id'}/registry/external-registries` as const)
-const { data: registries, refresh } = await useFetch(endpoint, { default: () => [] })
+const endpoint = computed(() => `/api/organization/${props.organizationId as ':organization_id'}/registry/external-registries` as const)
+const { data: registries, refresh } = await useCplaneFetch(endpoint, { default: () => [] })
 
 const modal = ref<'create' | 'rename' | 'rotate' | 'delete' | null>(null)
 const selected = ref<ExternalRegistry | null>(null)
@@ -55,7 +55,7 @@ async function submit() {
   loading.value = true
   try {
     if (modal.value === 'create') {
-      await $fetch(endpoint.value, {
+      await cplaneFetch(endpoint.value, {
         method: 'POST',
         body: {
           name: name.value,
@@ -66,11 +66,11 @@ async function submit() {
         },
       })
     } else if (modal.value === 'rename' && selected.value) {
-      await $fetch(`${endpoint.value}/${selected.value.id as ':registry_id'}` as const, { method: 'PATCH', body: { name: name.value } })
+      await cplaneFetch(`${endpoint.value}/${selected.value.id as ':registry_id'}` as const, { method: 'PATCH', body: { name: name.value } })
     } else if (modal.value === 'rotate' && selected.value) {
-      await $fetch(`${endpoint.value}/${selected.value.id as ':registry_id'}/rotate-token` as const, { method: 'POST', body: { token: token.value } })
+      await cplaneFetch(`${endpoint.value}/${selected.value.id as ':registry_id'}/rotate-token` as const, { method: 'POST', body: { token: token.value } })
     } else if (modal.value === 'delete' && selected.value) {
-      await $fetch(`${endpoint.value}/${selected.value.id as ':registry_id'}` as const, { method: 'DELETE' })
+      await cplaneFetch(`${endpoint.value}/${selected.value.id as ':registry_id'}` as const, { method: 'DELETE' })
     }
     toast.add({ title: modal.value === 'delete' ? 'External registry deleted' : 'External registry saved', color: 'success' })
     closeModal()

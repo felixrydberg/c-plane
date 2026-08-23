@@ -5,14 +5,14 @@ const props = defineProps<{ organizationId: string; projectId: string }>()
 const route = useRoute()
 const toast = useToast()
 const isOwner = computed(() => useStore().organization?.member?.role === 'owner')
-const endpoint = computed(() => `/api/cplane/organization/${props.organizationId as ':organization_id'}/projects/${props.projectId as ':project_id'}/storage/access-tokens` as const)
-const { data: tokens, refresh } = await useFetch(endpoint, { default: () => [] })
+const endpoint = computed(() => `/api/organization/${props.organizationId as ':organization_id'}/projects/${props.projectId as ':project_id'}/storage/access-tokens` as const)
+const { data: tokens, refresh } = await useCplaneFetch(endpoint, { default: () => [] })
 const revokingId = ref('')
 
 async function revoke(token: NonNullable<typeof tokens.value>[number]) {
   revokingId.value = token.id
   try {
-    await $fetch(`/api/cplane/organization/${props.organizationId as ':organization_id'}/projects/${props.projectId as ':project_id'}/storage/access-tokens/${token.id as ':token_id'}` as const, { method: 'DELETE' })
+    await cplaneFetch(`/api/organization/${props.organizationId as ':organization_id'}/projects/${props.projectId as ':project_id'}/storage/access-tokens/${token.id as ':token_id'}` as const, { method: 'DELETE' })
     await refresh()
   } catch { toast.add({ title: 'Could not revoke token', color: 'error' }) }
   finally { revokingId.value = '' }

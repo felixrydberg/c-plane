@@ -16,8 +16,8 @@ async function fetchAll() {
   if (!orgId.value || !projectId.value) return
   status.value = 'pending'
   try {
-    databases.value = await $fetch(
-      `/api/cplane/organization/${orgId.value as ':organization_id'}/databases/postgres` as const,
+    databases.value = await cplaneFetch(
+      `/api/organization/${orgId.value as ':organization_id'}/databases/postgres` as const,
       { query: { project_id: projectId.value } }
     )
     status.value = databases.value.length > 0 ? 'success' : 'idle'

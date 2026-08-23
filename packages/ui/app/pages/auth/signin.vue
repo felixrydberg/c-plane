@@ -191,7 +191,7 @@ const onUserAuthenticated = async () => {
     const fallbackPath = store.organization?.slug ? `/${store.organization.slug}` : '/organization/create';
     const path = redirectTo ?? (redirect ? decodeURIComponent(redirect) : fallbackPath);
 
-    if (path.startsWith('/api/')) {
+    if (path.startsWith('/ui-api/')) {
       window.location.assign(path);
       return;
     }

@@ -10,9 +10,12 @@ creates the local configuration and secrets, initializes OpenBao, runs the
 migrations, and prompts for the first S3 provider:
 
 ```bash
-./install.sh dev
-# or
-./install.sh prod
+bash build.sh dev
+# The script asks whether ingress should use a public domain.
+# Answer "no" for local development without subdomains.
+
+bash build.sh prod
+# Answer "yes", then enter the public domain when prompted.
 ```
 
 After the first start, run the environment you want:
