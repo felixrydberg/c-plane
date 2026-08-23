@@ -5,6 +5,7 @@ import { getErrorMessage } from '~/utils/errors'
 
 const props = defineProps<{ organizationId: string }>()
 const toast = useToast()
+const isOwner = computed(() => useStore().organization?.member?.role === 'owner')
 const endpoint = computed(() => `/api/cplane/organization/${props.organizationId as ':organization_id'}/registry/external-registries` as const)
 const { data: registries, refresh } = await useFetch(endpoint, { default: () => [] })
 
@@ -96,7 +97,7 @@ async function submit() {
         <h2 class="text-lg font-semibold">External registries</h2>
         <p class="mt-1 text-sm text-muted">Reusable credentials for private OCI registries.</p>
       </div>
-      <UButton :icon="ICONS.plus" color="primary" @click="openCreate">Add registry</UButton>
+      <UButton v-if="isOwner" :icon="ICONS.plus" color="primary" @click="openCreate">Add registry</UButton>
     </div>
 
     <div v-if="!registries.length" class="rounded-lg border border-dashed border-default py-10 text-center text-sm text-muted">
@@ -111,7 +112,7 @@ async function submit() {
             <td class="p-3 font-mono text-xs">{{ registry.host }}</td>
             <td class="p-3">{{ registry.username }}</td>
             <td class="p-3">
-              <div class="flex justify-end gap-2">
+              <div v-if="isOwner" class="flex justify-end gap-2">
                 <UButton :icon="ICONS.pencil" color="neutral" variant="solid" size="sm" @click="openAction('rename', registry)">Rename</UButton>
                 <UButton :icon="ICONS.refresh" color="neutral" variant="solid" size="sm" @click="openAction('rotate', registry)">Rotate token</UButton>
                 <UButton :icon="ICONS.trash" color="error" size="sm" @click="openAction('delete', registry)">Delete</UButton>

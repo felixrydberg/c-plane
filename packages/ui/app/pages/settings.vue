@@ -6,7 +6,7 @@
     {
       label: "Back",
       icon: "i-heroicons:arrow-left",
-      to: `/${store.organization?.slug}`,
+      to: store.organization?.slug ? `/${store.organization.slug}` : '/organization/create',
       onSelect: () => {
         router.back()
       }

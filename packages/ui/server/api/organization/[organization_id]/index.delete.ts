@@ -1,9 +1,10 @@
 import { organization } from "~~/server/schema";
 import { eq } from "drizzle-orm";
 import { withTenantDb } from "~~/server/utils/db";
+import { requireOwner } from "~~/server/utils/authorization";
 
 export default defineEventHandler(async (event) => {
-  const membership = await getOrganizationMembership(event);
+  const membership = await requireOwner(event);
 
   const organizationId = membership.organization_id;
   if (!organizationId) {

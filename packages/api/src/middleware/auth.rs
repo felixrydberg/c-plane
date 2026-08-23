@@ -6,7 +6,7 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
-use std::{collections::HashSet, sync::OnceLock};
+use std::{collections::HashMap, collections::HashSet, sync::OnceLock};
 use uuid::Uuid;
 
 use crate::errors::AppError;
@@ -294,6 +294,10 @@ where
             (
                 OrganizationContext {
                     allowed_organizations: vec![api_key.organization_id],
+                    organization_roles: HashMap::from([(
+                        api_key.organization_id,
+                        "owner".to_string(),
+                    )]),
                 },
                 request_auth,
             )
@@ -304,17 +308,23 @@ where
                 .and_then(|h| h.to_str().ok())
                 .ok_or_else(|| AppError::Unauthorized("Missing session cookie".to_string()))?;
             let actor_id = resolve_user_from_cookie(cookie_header).await?;
-            let allowed_organizations = resolve_user_organizations(&identity_db, actor_id).await?;
+            let memberships = resolve_user_organizations(&identity_db, actor_id).await?;
 
-            if allowed_organizations.is_empty() {
+            if memberships.is_empty() {
                 return Err(AppError::Forbidden(
                     "User has no organization access".to_string(),
                 ));
             }
 
+            let (allowed_organizations, organization_roles) = memberships
+                .into_iter()
+                .map(|(org_id, role)| (org_id, (org_id, role)))
+                .unzip();
+
             (
                 OrganizationContext {
                     allowed_organizations,
+                    organization_roles,
                 },
                 RequestAuthContext {
                     actor_id,
@@ -409,26 +419,27 @@ fn hash_api_key(raw_api_key: &str) -> String {
 async fn resolve_user_organizations(
     app_db: &AppDatabase,
     actor_id: Uuid,
-) -> Result<Vec<Uuid>, AppError> {
+) -> Result<Vec<(Uuid, String)>, AppError> {
     let rows = app_db
         .0
         .query_all(Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
-            "SELECT organization_id FROM organization_member WHERE user_id = $1",
+            "SELECT organization_id, role FROM organization_member WHERE user_id = $1",
             vec![actor_id.into()],
         ))
         .await
         .map_err(|err| AppError::Internal(err.to_string()))?;
 
-    let mut organizations = Vec::with_capacity(rows.len());
-    for row in rows {
-        let org_id = row
-            .try_get::<Uuid>("", "organization_id")
-            .map_err(|err| AppError::Internal(err.to_string()))?;
-        organizations.push(org_id);
-    }
-
-    Ok(organizations)
+    rows.iter()
+        .map(|row| {
+            Ok((
+                row.try_get::<Uuid>("", "organization_id")
+                    .map_err(|err| AppError::Internal(err.to_string()))?,
+                row.try_get::<String>("", "role")
+                    .map_err(|err| AppError::Internal(err.to_string()))?,
+            ))
+        })
+        .collect()
 }
 
 async fn resolve_api_key(

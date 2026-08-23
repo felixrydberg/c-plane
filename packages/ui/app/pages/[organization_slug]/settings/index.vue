@@ -7,6 +7,7 @@ import { ICONS } from '~/utils/icons'
 const store = useStore();
 const toast = useToast();
 const router = useRouter();
+const isOwner = computed(() => store.organization?.member?.role === 'owner');
 
 if (!store.organization?.id) {
   throw createError('Organization not found in store')
@@ -129,9 +130,9 @@ const onDeleteOrgSubmit = async () => {
       </div>
       <div>
         <UFormField name="name" label="Organization name" required>
-          <UInput v-model="settings.name" autocomplete="off" class="w-full" />
+          <UInput v-model="settings.name" autocomplete="off" class="w-full" :disabled="!isOwner" />
         </UFormField>
-        <div class="mt-6 flex justify-end">
+        <div v-if="isOwner" class="mt-6 flex justify-end">
           <UButton form="org-settings" :icon="ICONS.check" color="primary" type="submit" :loading="isSaving">
             Save changes
           </UButton>
@@ -139,7 +140,7 @@ const onDeleteOrgSubmit = async () => {
       </div>
     </UForm>
 
-    <section class="grid gap-8 border-b border-dashed border-error/50 pb-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+    <section v-if="isOwner" class="grid gap-8 border-b border-dashed border-error/50 pb-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
       <div>
         <h2 class="text-xl font-normal tracking-[-0.02em] text-error">Danger zone</h2>
         <p class="mt-2 max-w-sm text-sm text-muted">Irreversible actions for this organization.</p>

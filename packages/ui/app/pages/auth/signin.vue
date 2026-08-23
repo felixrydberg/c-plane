@@ -188,7 +188,8 @@ const onUserAuthenticated = async () => {
     await getSession();
     const redirectTo = getQueryValue(route.query.redirectTo);
     const redirect = getQueryValue(route.query.redirect);
-    const path = redirectTo ?? (redirect ? decodeURIComponent(redirect) : `/${store.organization?.slug}`);
+    const fallbackPath = store.organization?.slug ? `/${store.organization.slug}` : '/organization/create';
+    const path = redirectTo ?? (redirect ? decodeURIComponent(redirect) : fallbackPath);
 
     if (path.startsWith('/api/')) {
       window.location.assign(path);
@@ -196,7 +197,7 @@ const onUserAuthenticated = async () => {
     }
 
     if (path === "/") {
-      await router.push(`/${store.organization?.slug}`);
+      await router.push(fallbackPath);
     } else {
       await router.push(path);
     }

@@ -13,7 +13,7 @@ use crate::{
     state::get_app_state,
 };
 
-use super::{databases::verify_org_access, registry_access_tokens::record_event};
+use super::{databases::{verify_org_access, verify_org_owner}, registry_access_tokens::record_event};
 
 const DEPENDENCY_CONSTRAINT: &str = "container_version_external_registry_fk";
 const NAME_CONSTRAINT: &str = "external_registry_organization_name_uidx";
@@ -99,6 +99,7 @@ pub async fn create_external_registry(
     Json(body): Json<CreateExternalRegistryRequest>,
 ) -> Result<(StatusCode, Json<ExternalRegistryResponse>), AppError> {
     verify_org_access(&tenant_db, organization_id)?;
+    verify_org_owner(&tenant_db, organization_id)?;
     let name = required(body.name, "Name")?;
     let host = trusted_registry_host(body.provider, body.host.as_deref())?;
     let username = required(body.username, "Username")?;
@@ -164,6 +165,7 @@ pub async fn rename_external_registry(
     Json(body): Json<RenameExternalRegistryRequest>,
 ) -> Result<Json<ExternalRegistryResponse>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
+    verify_org_owner(&tenant_db, organization_id)?;
     let name = required(body.name, "Name")?;
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
@@ -203,6 +205,7 @@ pub async fn rotate_external_registry_token(
     Json(body): Json<RotateExternalRegistryTokenRequest>,
 ) -> Result<StatusCode, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
+    verify_org_owner(&tenant_db, organization_id)?;
     let token = required_secret(body.token)?;
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
@@ -236,6 +239,7 @@ pub async fn delete_external_registry(
     Path((organization_id, registry_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
+    verify_org_owner(&tenant_db, organization_id)?;
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
     let registry = find_registry(tx, organization_id, registry_id).await?;
