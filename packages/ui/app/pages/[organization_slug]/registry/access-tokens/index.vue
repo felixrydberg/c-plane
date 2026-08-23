@@ -4,6 +4,7 @@ import { ICONS } from '~/utils/icons'
 const store = useStore()
 const route = useRoute()
 const organizationId = computed(() => store.organization?.id ?? '')
+const isOwner = computed(() => store.organization?.member?.role === 'owner')
 </script>
 
 <template>
@@ -15,7 +16,7 @@ const organizationId = computed(() => store.organization?.id ?? '')
           <h1 class="mt-2 text-xl font-semibold">Access Tokens</h1>
           <p class="mt-1 text-xs text-muted">Credentials for container clients and CI pipelines in this organization.</p>
         </div>
-        <UButton :icon="ICONS.plus" color="primary" :to="`/${route.params.organization_slug}/registry/access-tokens/new`">New Access Token</UButton>
+        <UButton v-if="isOwner" :icon="ICONS.plus" color="primary" :to="`/${route.params.organization_slug}/registry/access-tokens/new`">New Access Token</UButton>
       </header>
       <div class="p-5">
         <RegistryAccessTokensPanel v-if="organizationId" :organization-id="organizationId" />

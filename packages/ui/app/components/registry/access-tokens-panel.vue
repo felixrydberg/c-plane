@@ -4,6 +4,7 @@ import { ICONS } from '~/utils/icons'
 const props = defineProps<{ organizationId: string }>()
 const route = useRoute()
 const toast = useToast()
+const isOwner = computed(() => useStore().organization?.member?.role === 'owner')
 const endpoint = computed(() => `/api/organization/${props.organizationId as ':organization_id'}/registry/access-tokens` as const)
 const { data: tokens, refresh } = await useCplaneFetch(endpoint, { default: () => [] })
 const revokingId = ref('')
@@ -35,7 +36,7 @@ async function revoke(token: NonNullable<typeof tokens.value>[number]) {
             <td class="p-3">{{ token.name }}</td>
             <td class="p-3">{{ new Date(token.created_at).toLocaleDateString() }}</td>
             <td class="p-3 text-right">
-              <div class="flex justify-end gap-2">
+              <div v-if="isOwner" class="flex justify-end gap-2">
                 <UButton :icon="ICONS.pencil" color="neutral" variant="solid" size="sm" :to="`/${route.params.organization_slug}/registry/access-tokens/${token.id}`">Edit</UButton>
                 <UButton :icon="ICONS.trash" color="error" size="sm" :loading="revokingId === token.id" @click="revoke(token)">Revoke</UButton>
               </div>

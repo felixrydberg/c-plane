@@ -7,7 +7,7 @@ use utoipa::openapi::{
 };
 use utoipa::{Modify, OpenApi};
 
-use crate::middleware::auth::required_scope;
+use crate::middleware::scoped::registered_scope;
 
 struct SecurityAddon;
 
@@ -69,7 +69,7 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
         return;
     };
 
-    if let Some(scope) = required_scope(if method == "HEAD" { "GET" } else { method }, path) {
+    if let Some(scope) = registered_scope(method, path) {
         operation.security = Some(vec![utoipa::openapi::security::SecurityRequirement::new(
             "apiKey",
             Vec::<String>::new(),
@@ -233,6 +233,11 @@ mod tests {
 
     #[test]
     fn head_reuses_get_scope() {
+        crate::middleware::scoped::seed_policy_for_tests(
+            "GET",
+            "/api/organization/{organization_id}/regions",
+            "region:read",
+        );
         let mut operation = Operation::default();
 
         document_scope(

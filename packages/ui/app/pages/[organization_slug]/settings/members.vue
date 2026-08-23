@@ -5,6 +5,7 @@ import * as z from 'zod';
 import { ICONS } from '~/utils/icons'
 
 const store = useStore();
+const isOwner = computed(() => store.organization?.member?.role === 'owner');
 
 if (!store.organization?.id) {
   throw createError('Organization not found in store');
@@ -70,20 +71,23 @@ const columns: TableColumn<Member>[] = [
   },
 ];
 
-const getContextMenuItems = (row: TableRow<Member>) => [
-  {
-    type: 'label' as const,
-    label: 'Actions',
-  },
-  {
-    label: 'Remove Member',
-    color: 'error' as const,
-    onSelect: () => {
-      selectedMemberToDelete.value = row.original;
-      deleteModalOpen.value = true;
+const getContextMenuItems = (row: TableRow<Member>) => {
+  if (!isOwner.value) return [];
+  return [
+    {
+      type: 'label' as const,
+      label: 'Actions',
     },
-  },
-];
+    {
+      label: 'Remove Member',
+      color: 'error' as const,
+      onSelect: () => {
+        selectedMemberToDelete.value = row.original;
+        deleteModalOpen.value = true;
+      },
+    },
+  ];
+};
 
 const onDeleteMember = async () => {
   isRemoving.value = true;
@@ -131,16 +135,18 @@ const addMemberState = reactive<Partial<AddMemberSchema>>({
 const onAddMember = async () => {
   isAdding.value = true;
   try {
-    await $fetch(`/ui-api/organization/${store.organization?.id as ':organization_id'}/members`, {
+    await $fetch(`/ui-api/organization/${store.organization?.id as ':organization_id'}/invitations`, {
       method: 'POST',
       body: {
         email: addMemberState.email,
+        role: 'member',
+        organization_id: store.organization?.id,
       },
     });
 
     toast.add({
       title: 'Success',
-      description: 'Member added successfully',
+      description: 'Invitation sent successfully',
       color: 'success',
     });
 
@@ -169,7 +175,7 @@ const onAddMember = async () => {
           <h2 class="text-xl font-normal tracking-[-0.02em]">Organization members</h2>
           <p class="mt-2 text-sm text-muted">Search and manage member access.</p>
         </div>
-        <UButton :icon="ICONS.plus" color="primary" @click="addModalOpen = true">Add Member</UButton>
+        <UButton v-if="isOwner" :icon="ICONS.plus" color="primary" @click="addModalOpen = true">Add Member</UButton>
       </div>
       <div class="mt-8">
         <UiTable

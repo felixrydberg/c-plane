@@ -1,6 +1,7 @@
 import { organization_invitation } from "~~/server/schema";
 import { withTenantDb } from "~~/server/utils/db";
 import { eq, and } from "drizzle-orm";
+import { requireOwner } from "~~/server/utils/authorization";
 
 export default defineEventHandler(async (event) => {
   const params = getRouterParams(event);
@@ -14,7 +15,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const membership = await getOrganizationMembership(event);
+  const membership = await requireOwner(event, organizationId);
   if (membership.organization_id !== organizationId) {
     throw createError({
       statusCode: 403,

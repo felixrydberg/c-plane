@@ -5,6 +5,7 @@ import * as z from 'zod';
 import { ICONS } from '~/utils/icons'
 
 const store = useStore();
+const isOwner = computed(() => store.organization?.member?.role === 'owner');
 
 if (!store.organization?.id) {
   throw createError('Organization not found in store');
@@ -93,27 +94,32 @@ const columns: TableColumn<ApiKey>[] = [
   },
 ];
 
-const getContextMenuItems = (row: TableRow<ApiKey>) => [
-  {
-    type: 'label' as const,
-    label: 'Actions'
-  },
-  {
-    label: 'View Details',
-    onSelect: () => {
-      selectedApiKeyId.value = row.original.id;
-      detailsModalOpen.value = true;
+const getContextMenuItems = (row: TableRow<ApiKey>) => {
+  const items = [
+    {
+      type: 'label' as const,
+      label: 'Actions'
+    },
+    {
+      label: 'View Details',
+      onSelect: () => {
+        selectedApiKeyId.value = row.original.id;
+        detailsModalOpen.value = true;
+      }
     }
-  },
-  {
-    label: 'Delete',
-    color: 'error' as const,
-    onSelect: () => {
-      selectedKeyToDelete.value = row.original;
-      deleteModalOpen.value = true;
-    }
+  ];
+  if (isOwner.value) {
+    items.push({
+      label: 'Delete',
+      color: 'error' as const,
+      onSelect: () => {
+        selectedKeyToDelete.value = row.original;
+        deleteModalOpen.value = true;
+      }
+    });
   }
-];
+  return items;
+};
 
 const onDeleteKey = async () => {
   if (!selectedKeyToDelete.value) return;
@@ -193,7 +199,7 @@ const onCreateKey = async () => {
           <h2 class="text-xl font-normal tracking-[-0.02em]">API keys</h2>
           <p class="mt-2 text-sm text-muted">Use scoped keys for services and automation.</p>
         </div>
-        <UButton :icon="ICONS.plus" color="primary" @click="createModalOpen = true">Create API Key</UButton>
+        <UButton v-if="isOwner" :icon="ICONS.plus" color="primary" @click="createModalOpen = true">Create API Key</UButton>
       </div>
       <div class="mt-8">
         <UiTable

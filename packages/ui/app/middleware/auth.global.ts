@@ -46,4 +46,11 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   if (!store.session && !store.user) {
     return navigateTo('/auth/signin?redirect=' + encodeURIComponent(to.fullPath));
   }
+
+  const isOrgSettingsOwnerPage = /^\/[^/]+\/settings$/.test(to.path)
+    || /^\/[^/]+\/settings\/authentication/.test(to.path);
+  if (isOrgSettingsOwnerPage && store.organization?.member?.role !== 'owner') {
+    const slug = store.organization?.slug;
+    return navigateTo(slug ? `/${slug}/settings/members` : '/organization/create');
+  }
 });

@@ -2,10 +2,12 @@ import type { api_key_scopes_type } from "~~/server/schema";
 import { api_keys, api_key_scopes } from "~~/server/schema";
 import { uuidv7 } from "uuidv7";
 import { withTenantDb } from "~~/server/utils/db";
+import { requireOwner } from "~~/server/utils/authorization";
 import { API_KEY_SCOPE_VALUES } from "@cplane/migrations/utils";
+import { generateSecret, hashApiKey } from "~~/server/utils/api-keys";
 
 export default defineEventHandler(async (event) => {
-  const membership = await getOrganizationMembership(event);
+  const membership = await requireOwner(event);
 
   const body = await readBody(event);
   const { name, scopes, expires_at, allowed_ips } = body as { name: string; scopes: Record<string, boolean>; expires_at?: number | null; allowed_ips?: string | null };
@@ -89,7 +91,11 @@ export default defineEventHandler(async (event) => {
     }, false, {}, tx);
 
     return {
-      ...insertedKey,
+      id: insertedKey.id,
+      name: insertedKey.name,
+      created_at: insertedKey.created_at,
+      expires_at: insertedKey.expires_at ?? null,
+      allowed_ips: insertedKey.allowed_ips ?? null,
       key, // Return the raw key only on creation
     };
   });
