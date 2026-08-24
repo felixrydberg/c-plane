@@ -410,6 +410,7 @@ pub async fn list_containers(
     }
 
     let containers = container::Entity::find()
+        .filter(container::Column::OrganizationId.eq(organization_id))
         .order_by_asc(container::Column::Name)
         .all(tx)
         .await?;

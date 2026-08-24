@@ -139,10 +139,17 @@ where
 
                 (
                     OrganizationContext {
-                        allowed_organizations: memberships
-                            .iter()
-                            .map(|(organization_id, _)| *organization_id)
-                            .collect(),
+                        // Scope tenant queries to the organization in the
+                        // request path, not every org the user belongs to.
+                        // Falls back to full memberships only when the route
+                        // has no {organization_id} segment.
+                        allowed_organizations: match organization_id {
+                            Some(path_org) => vec![path_org],
+                            None => memberships
+                                .iter()
+                                .map(|(organization_id, _)| *organization_id)
+                                .collect(),
+                        },
                         // Raw better-auth strings for verify_org_owner-style
                         // checks; parsed ranks live on request_auth.roles.
                         organization_roles: memberships
