@@ -367,22 +367,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/organization/{organization_id}/registry/maintenance": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["maintenance_status"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/organization/{organization_id}/registry/repositories": {
         parameters: {
             query?: never;
@@ -471,6 +455,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["storage_download_bucket_object"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/registry/maintenance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["maintenance_status"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2517,29 +2517,6 @@ export interface operations {
             };
         };
     };
-    maintenance_status: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Organization ID */
-                organization_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Registry maintenance state */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RegistryMaintenanceResponse"];
-                };
-            };
-        };
-    };
     list_repositories: {
         parameters: {
             query?: never;
@@ -2932,6 +2909,26 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    maintenance_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Registry maintenance state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistryMaintenanceResponse"];
+                };
             };
         };
     };

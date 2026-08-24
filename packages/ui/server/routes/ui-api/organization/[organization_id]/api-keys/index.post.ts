@@ -43,6 +43,13 @@ export default defineEventHandler(async (event) => {
     });
   }
 
+  if (expires_at != null && (!Number.isInteger(expires_at) || expires_at < 1 || expires_at > 1200)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "Expiration must be a whole number of months between 1 and 1200",
+    });
+  }
+
   const organization_id = membership.organization_id;
   const api_key = await withTenantDb([organization_id], async (tx) => {
     const key = generateSecret();

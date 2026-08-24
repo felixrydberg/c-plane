@@ -39,7 +39,7 @@ pub fn create_routes() -> Router {
         .route("/health", get(health_check))
         .route("/api/registry/token", get(registry::issue_token))
         .route(
-            "/api/organization/{organization_id}/registry/maintenance",
+            "/api/registry/maintenance",
             get(registry::maintenance_status),
         )
         .scoped_route(
@@ -604,5 +604,9 @@ mod tests {
         );
         assert_eq!(registered_scope("GET", "/health"), None);
         assert_eq!(registered_scope("GET", "/api/registry/token"), None);
+        assert_eq!(
+            registered_scope("GET", "/api/registry/maintenance"),
+            None
+        );
     }
 }
