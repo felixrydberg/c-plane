@@ -17,7 +17,7 @@ use crate::{
     state::get_app_state,
 };
 
-use super::databases::{verify_org_access, verify_project_in_org};
+use super::databases::{verify_org_access, verify_org_owner, verify_project_in_org};
 
 const ACCESS_KEY_PREFIX: &str = "CP";
 
@@ -84,6 +84,7 @@ pub async fn create_access_token(
     Json(body): Json<CreateAccessTokenRequest>,
 ) -> Result<(axum::http::StatusCode, Json<CreatedAccessTokenResponse>), AppError> {
     verify_org_access(&tenant_db, organization_id)?;
+    verify_org_owner(&tenant_db, organization_id)?;
     let name = body.name.trim();
     if name.is_empty() || name.len() > 100 {
         return Err(AppError::Conflict(
@@ -290,6 +291,7 @@ pub async fn update_access_token(
     Json(body): Json<UpdateAccessTokenRequest>,
 ) -> Result<axum::http::StatusCode, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
+    verify_org_owner(&tenant_db, organization_id)?;
     if !valid_bucket_permissions(&body.bucket_permissions) {
         return Err(AppError::Conflict("Invalid bucket permissions".into()));
     }
@@ -364,6 +366,7 @@ pub async fn revoke_access_token(
     Path((organization_id, project_id, token_id)): Path<(Uuid, Uuid, Uuid)>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
+    verify_org_owner(&tenant_db, organization_id)?;
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
     verify_project_in_org(tx, project_id, organization_id).await?;

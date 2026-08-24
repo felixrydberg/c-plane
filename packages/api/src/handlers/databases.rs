@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::errors::AppError;
 use crate::models::entities::project;
-use crate::state::TenantDatabase;
+use crate::state::{OrganizationContext, TenantDatabase};
 
 #[derive(Deserialize, ToSchema)]
 pub struct CreateDatabaseRequest {
@@ -102,15 +102,73 @@ pub fn verify_org_access(tenant_db: &TenantDatabase, org_id: Uuid) -> Result<(),
     Ok(())
 }
 
+pub fn verify_org_owner(tenant_db: &TenantDatabase, org_id: Uuid) -> Result<(), AppError> {
+    verify_org_access(tenant_db, org_id)?;
+    require_role(&tenant_db.context, org_id)
+}
+
+fn require_role(context: &OrganizationContext, org_id: Uuid) -> Result<(), AppError> {
+    if let Some(api_key_organization_id) = context.api_key_organization_id {
+        return if api_key_organization_id == org_id {
+            Ok(())
+        } else {
+            Err(AppError::Forbidden(
+                "API key is not owned by this organization".into(),
+            ))
+        };
+    }
+
+    match context.organization_roles.get(&org_id).map(String::as_str) {
+        Some("owner") => Ok(()),
+        _ => Err(AppError::Forbidden(
+            "Organization owner role required".into(),
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::validate_backup_retention_days;
+    use super::{require_role, validate_backup_retention_days};
+    use crate::state::OrganizationContext;
+    use std::collections::HashMap;
+    use uuid::Uuid;
 
     #[test]
     fn backup_retention_must_be_positive_when_enabled() {
         assert!(validate_backup_retention_days(None).is_ok());
         assert!(validate_backup_retention_days(Some(1)).is_ok());
         assert!(validate_backup_retention_days(Some(0)).is_err());
+    }
+
+    fn context_with(org_id: Uuid, role: Option<&str>) -> OrganizationContext {
+        OrganizationContext {
+            allowed_organizations: vec![org_id],
+            organization_roles: role
+                .map(|r| HashMap::from([(org_id, r.to_string())]))
+                .unwrap_or_default(),
+            api_key_organization_id: None,
+        }
+    }
+
+    #[test]
+    fn api_key_organization_ownership_is_checked_separately_from_member_roles() {
+        let org = Uuid::new_v4();
+        let context = OrganizationContext {
+            allowed_organizations: vec![org],
+            organization_roles: HashMap::from([(Uuid::new_v4(), "owner".to_string())]),
+            api_key_organization_id: Some(org),
+        };
+
+        assert!(require_role(&context, org).is_ok());
+        assert!(require_role(&context, Uuid::new_v4()).is_err());
+    }
+
+    #[test]
+    fn owner_role_passes_and_member_or_absent_role_fails() {
+        let org = Uuid::new_v4();
+        assert!(require_role(&context_with(org, Some("owner")), org).is_ok());
+        assert!(require_role(&context_with(org, Some("member")), org).is_err());
+        assert!(require_role(&context_with(org, None), org).is_err());
     }
 }
 

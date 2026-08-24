@@ -30,7 +30,7 @@ async function confirmDelete() {
   const deploy = !removeAsDraft.value
   removing.value = true
   try {
-    await $fetch(`/api/cplane/organization/${props.organizationId as ':organization_id'}/containers/${deleteTarget.value.id as ':container_id'}` as const, {
+    await cplaneFetch(`/api/organization/${props.organizationId as ':organization_id'}/containers/${deleteTarget.value.id as ':container_id'}` as const, {
       method: 'DELETE',
       query: { environment_id: props.environmentId ?? undefined, timeline_id: props.draftRevisionId, deploy: deploy || undefined },
     });

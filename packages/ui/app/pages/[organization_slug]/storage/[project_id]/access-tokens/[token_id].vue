@@ -11,14 +11,14 @@ const tokenId = computed(() => route.params.token_id?.toString() ?? '')
 const grants = ref<Record<string, BucketPermission>>({})
 const loading = ref(false)
 const bucketsUrl = computed(() => orgId.value && projectId.value
-  ? `/api/cplane/organization/${orgId.value as ':organization_id'}/storage/buckets` as const
+  ? `/api/organization/${orgId.value as ':organization_id'}/storage/buckets` as const
   : '')
 const tokenUrl = computed(() => orgId.value && projectId.value && tokenId.value
-  ? `/api/cplane/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/storage/access-tokens/${tokenId.value as ':token_id'}` as const
+  ? `/api/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/storage/access-tokens/${tokenId.value as ':token_id'}` as const
   : '')
 const [{ data: buckets }, { data: token }] = await Promise.all([
-  useFetch(bucketsUrl, { default: () => [], query: { project_id: projectId } }),
-  useFetch(tokenUrl),
+  useCplaneFetch(bucketsUrl, { default: () => [], query: { project_id: projectId } }),
+  useCplaneFetch(tokenUrl),
 ])
 
 watch([buckets, token], ([items, accessToken]) => {
@@ -36,7 +36,7 @@ async function save() {
   if (!tokenUrl.value || !selectedPermissions.value.length) return
   loading.value = true
   try {
-    await $fetch(tokenUrl.value, { method: 'PATCH', body: { bucket_permissions: selectedPermissions.value } })
+    await cplaneFetch(tokenUrl.value, { method: 'PATCH', body: { bucket_permissions: selectedPermissions.value } })
     toast.add({ title: 'Access token updated', color: 'success' })
     await navigateTo(backUrl())
   } catch {

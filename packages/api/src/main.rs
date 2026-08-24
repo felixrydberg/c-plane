@@ -33,6 +33,7 @@ async fn main() -> Result<(), AppError> {
         let output_path = args
             .next()
             .ok_or_else(|| AppError::Internal("--openapi requires an output path".into()))?;
+        let _ = routes::create_routes();
         let document = serde_json::to_vec_pretty(&openapi::ApiDoc::openapi())
             .map_err(|err| AppError::Internal(err.to_string()))?;
         std::fs::write(output_path, document).map_err(|err| AppError::Internal(err.to_string()))?;
@@ -49,9 +50,12 @@ async fn main() -> Result<(), AppError> {
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
         .map_err(|err| AppError::Internal(err.to_string()))?;
-    axum::serve(listener, app)
-        .await
-        .map_err(|err| AppError::Internal(err.to_string()))?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .await
+    .map_err(|err| AppError::Internal(err.to_string()))?;
 
     Ok(())
 }

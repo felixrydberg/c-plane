@@ -4,14 +4,15 @@ import { ICONS } from '~/utils/icons'
 const props = defineProps<{ organizationId: string; projectId: string }>()
 const route = useRoute()
 const toast = useToast()
-const endpoint = computed(() => `/api/cplane/organization/${props.organizationId as ':organization_id'}/projects/${props.projectId as ':project_id'}/storage/access-tokens` as const)
-const { data: tokens, refresh } = await useFetch(endpoint, { default: () => [] })
+const isOwner = computed(() => useStore().organization?.member?.role === 'owner')
+const endpoint = computed(() => `/api/organization/${props.organizationId as ':organization_id'}/projects/${props.projectId as ':project_id'}/storage/access-tokens` as const)
+const { data: tokens, refresh } = await useCplaneFetch(endpoint, { default: () => [] })
 const revokingId = ref('')
 
 async function revoke(token: NonNullable<typeof tokens.value>[number]) {
   revokingId.value = token.id
   try {
-    await $fetch(`/api/cplane/organization/${props.organizationId as ':organization_id'}/projects/${props.projectId as ':project_id'}/storage/access-tokens/${token.id as ':token_id'}` as const, { method: 'DELETE' })
+    await cplaneFetch(`/api/organization/${props.organizationId as ':organization_id'}/projects/${props.projectId as ':project_id'}/storage/access-tokens/${token.id as ':token_id'}` as const, { method: 'DELETE' })
     await refresh()
   } catch { toast.add({ title: 'Could not revoke token', color: 'error' }) }
   finally { revokingId.value = '' }
@@ -25,7 +26,7 @@ async function revoke(token: NonNullable<typeof tokens.value>[number]) {
     </div>
     <div v-else class="overflow-hidden border border-default rounded-lg">
       <table class="w-full text-sm"><thead class="bg-elevated text-left"><tr><th class="p-3">Name</th><th class="p-3">Access key ID</th><th class="p-3">Created</th><th class="p-3" /></tr></thead>
-        <tbody><tr v-for="token in tokens" :key="token.id" class="border-t border-default"><td class="p-3">{{ token.name }}</td><td class="p-3 font-mono">{{ token.access_key_id }}</td><td class="p-3">{{ new Date(token.created_at).toLocaleDateString() }}</td><td class="p-3 text-right"><div class="flex justify-end gap-2"><UButton :icon="ICONS.pencil" color="neutral" variant="solid" size="sm" :to="`/${route.params.organization_slug}/storage/${projectId}/access-tokens/${token.id}`">Edit</UButton><UButton :icon="ICONS.trash" color="error" size="sm" :loading="revokingId === token.id" @click="revoke(token)">Revoke</UButton></div></td></tr></tbody>
+        <tbody><tr v-for="token in tokens" :key="token.id" class="border-t border-default"><td class="p-3">{{ token.name }}</td><td class="p-3 font-mono">{{ token.access_key_id }}</td><td class="p-3">{{ new Date(token.created_at).toLocaleDateString() }}</td><td class="p-3 text-right"><div v-if="isOwner" class="flex justify-end gap-2"><UButton :icon="ICONS.pencil" color="neutral" variant="solid" size="sm" :to="`/${route.params.organization_slug}/storage/${projectId}/access-tokens/${token.id}`">Edit</UButton><UButton :icon="ICONS.trash" color="error" size="sm" :loading="revokingId === token.id" @click="revoke(token)">Revoke</UButton></div></td></tr></tbody>
       </table>
     </div>
   </section>

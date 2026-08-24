@@ -74,3 +74,14 @@ export async function getOrganizationMembership(event: H3Event, organization_id?
 
   return userMembership
 }
+
+export async function requireOwner(event: H3Event, organization_id?: string) {
+  const membership = await getOrganizationMembership(event, organization_id);
+  if (membership.role !== "owner") {
+    throw createError({
+      statusCode: 403,
+      statusMessage: "Organization owner role required",
+    });
+  }
+  return membership;
+}

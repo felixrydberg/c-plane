@@ -31,7 +31,7 @@ const onProfileSubmit = async (event: FormSubmitEvent<ProfileSchema>) => {
     isProfileLoading.value = true;
     
     if (event.data.name !== store.user?.name) {
-      await $fetch('/api/user/profile', {
+      await $fetch('/ui-api/user/profile', {
         method: 'PATCH',
         body: {
           name: event.data.name
@@ -80,7 +80,7 @@ const isPasswordLoading = ref(false)
 const isPasskeyLoading = ref(false)
 type PasskeySummary = { id: string; name: string | null; createdAt: string }
 type PasskeyResponse = { passkeys: PasskeySummary[]; hasAlternativeAuth: boolean; hasPassword: boolean }
-const { data: passkeyResources, refresh: refreshPasskeys } = await useFetch<PasskeyResponse>('/api/user/passkeys', {
+const { data: passkeyResources, refresh: refreshPasskeys } = await useFetch<PasskeyResponse>('/ui-api/user/passkeys', {
   default: () => ({ passkeys: [], hasAlternativeAuth: false, hasPassword: false }),
 })
 const passkeys = computed(() => passkeyResources.value?.passkeys ?? [])
@@ -154,7 +154,7 @@ const onSetPassword = async () => {
     setPasswordError.value = undefined
     isPasswordLoading.value = true
 
-    await $fetch('/api/user/password', {
+    await $fetch('/ui-api/user/password', {
       method: 'POST',
       body: { newPassword: setPasswordState.password },
     })
@@ -216,7 +216,7 @@ const onRemovePasskey = async () => {
 
   deletingPasskeyId.value = passkey.id
   try {
-    await $fetch(`/api/user/passkeys/${passkey.id}`, { method: 'DELETE' })
+    await $fetch(`/ui-api/user/passkeys/${passkey.id}`, { method: 'DELETE' })
     await refreshPasskeys()
     removePasskeyModal.value = false
     passkeyToRemove.value = null

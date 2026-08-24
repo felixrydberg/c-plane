@@ -19,8 +19,8 @@ const projectName = computed(() =>
   store.projects.find(p => p.id === projectId.value)?.name ?? projectId.value ?? ''
 )
 
-const { data: environmentList, refresh: refreshEnvironments } = await useFetch(
-  () => orgId.value && projectId.value ? `/api/cplane/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/environments` as const : '',
+const { data: environmentList, refresh: refreshEnvironments } = await useCplaneFetch(
+  () => orgId.value && projectId.value ? `/api/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/environments` as const : '',
   { immediate: computed(() => !!(orgId.value && projectId.value)) },
 )
 
@@ -45,10 +45,10 @@ const isViewingDraft = computed(() => revisionId.value === environment.value?.dr
   const fetchUrl = computed(() => {
     const orgId = store.organization?.id
     if (!orgId || !projectId.value || !environmentId.value) return ''
-    return `/api/cplane/organization/${orgId as ':organization_id'}/containers` as const
+    return `/api/organization/${orgId as ':organization_id'}/containers` as const
   })
 
-  const { data, status, refresh: refreshData } = await useLazyFetch(
+  const { data, status, refresh: refreshData } = await useLazyCplaneFetch(
   fetchUrl,
   {
     key: 'project-resources',

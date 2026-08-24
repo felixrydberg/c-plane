@@ -194,9 +194,9 @@ impl S3ProviderClient {
         } else {
             request.send().await
         };
-        result.map_err(|error| {
-            tracing::error!(%error, %provider_id, bucket_name, "S3 provider bucket creation failed");
-            AppError::Internal(format!("S3 provider bucket creation failed: {error}"))
+        result.map_err(|_error| {
+            tracing::error!(%provider_id, "S3 provider bucket creation failed");
+            AppError::Internal("S3 provider bucket creation failed".into())
         })?;
         Ok(())
     }
@@ -216,9 +216,9 @@ impl S3ProviderClient {
             .bucket(bucket_name)
             .send()
             .await
-            .map_err(|error| {
-                tracing::error!(%error, %provider_id, bucket_name, "S3 provider bucket deletion failed");
-                AppError::Conflict(format!("S3 provider bucket deletion failed: {error}"))
+            .map_err(|_error| {
+                tracing::error!(%provider_id, "S3 provider bucket deletion failed");
+                AppError::Conflict("S3 provider bucket deletion failed".into())
             })?;
         Ok(())
     }

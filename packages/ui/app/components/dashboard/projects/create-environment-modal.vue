@@ -43,7 +43,7 @@ async function fetchTimelines() {
   if (!store.organization?.id || !store.project?.id) return;
   timelinesLoading.value = true;
   try {
-    timelines.value = await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/timelines` as const);
+    timelines.value = await cplaneFetch(`/api/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/timelines` as const);
   } catch {
     timelines.value = [];
     error.value = 'Unable to load revisions. Close and reopen this dialog to retry.';
@@ -84,8 +84,8 @@ async function handleCreate() {
       body.parent_timeline_id = selectedTimelineId.value;
     }
 
-    const created = await $fetch(
-      `/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments` as const,
+    const created = await cplaneFetch(
+      `/api/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments` as const,
       { method: 'POST', body }
     );
 
