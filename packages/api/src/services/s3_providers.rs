@@ -170,6 +170,13 @@ impl S3ProviderClient {
         Ok(())
     }
 
+    pub async fn delete_bucket_sse_key(&self, bucket_id: Uuid) -> Result<(), AppError> {
+        self.secrets
+            .delete(&format!("storage/sse-c/{bucket_id}"))
+            .await?;
+        Ok(())
+    }
+
     pub async fn create_bucket(
         &self,
         provider_id: Uuid,

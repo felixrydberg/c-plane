@@ -23,6 +23,7 @@ use crate::{
 use super::databases::{verify_org_access, verify_org_owner, verify_project_in_org};
 
 const BUCKET_PREFIX: &str = "cp-";
+const BUCKET_NAME_CONSTRAINT: &str = "bucket_name_idx";
 
 #[derive(Deserialize)]
 pub struct ListBucketsQuery {
@@ -73,14 +74,6 @@ pub async fn create_bucket(
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
     verify_project_in_org(tx, body.project_id, organization_id).await?;
-    if bucket::Entity::find()
-        .filter(bucket::Column::Name.eq(&name))
-        .one(tx)
-        .await?
-        .is_some()
-    {
-        return Err(AppError::Conflict("Bucket name is already reserved".into()));
-    }
     let region = region::Entity::find_by_id(body.region)
         .filter(region::Column::Status.eq(RegionStatus::Active))
         .filter(region::Column::RoutingMode.ne(RegionRoutingMode::Disabled))
@@ -93,37 +86,52 @@ pub async fn create_bucket(
 
     let bucket_id = Uuid::new_v4();
     let physical_bucket_name = physical_bucket_name(bucket_id);
+
+    let created = async {
+        let created = bucket::ActiveModel {
+            id: Set(bucket_id),
+            project_id: Set(body.project_id),
+            organization_id: Set(organization_id),
+            region_id: Set(body.region),
+            name: Set(name.clone()),
+        }
+        .insert(tx)
+        .await
+        .map_err(map_bucket_write_error)?;
+        crate::services::events::record(
+            tx,
+            organization_id,
+            body.project_id,
+            "bucket:created",
+            json!({ "summary": format!("Created bucket '{name}'"), "target_id": created.id }),
+            auth.actor_id,
+        )
+        .await?;
+        Ok::<_, AppError>(created)
+    }
+    .await?;
+
     providers
         .create_bucket(provider_id, &physical_bucket_name)
         .await?;
     if let Err(error) = providers.ensure_bucket_sse_key(bucket_id).await {
-        let _ = providers
-            .delete_bucket(provider_id, &physical_bucket_name)
-            .await;
+        return Err(error);
+    }
+    if let Err(error) = scoped.commit().await {
+        let _ = providers.delete_bucket(provider_id, &physical_bucket_name).await;
+        let _ = providers.delete_bucket_sse_key(bucket_id).await;
         return Err(error);
     }
 
-    let created = bucket::ActiveModel {
-        id: Set(bucket_id),
-        project_id: Set(body.project_id),
-        organization_id: Set(organization_id),
-        region_id: Set(body.region),
-        name: Set(name.clone()),
-    }
-    .insert(tx)
-    .await?;
-    crate::services::events::record(
-        tx,
-        organization_id,
-        body.project_id,
-        "bucket:created",
-        json!({ "summary": format!("Created bucket '{name}'"), "target_id": created.id }),
-        auth.actor_id,
-    )
-    .await?;
-    scoped.commit().await?;
-
     Ok((axum::http::StatusCode::CREATED, Json(response(&created))))
+}
+
+fn map_bucket_write_error(error: sea_orm::DbErr) -> AppError {
+    if error.to_string().contains(BUCKET_NAME_CONSTRAINT) {
+        AppError::Conflict("Bucket name is already reserved".into())
+    } else {
+        error.into()
+    }
 }
 
 #[utoipa::path(
@@ -169,7 +177,6 @@ pub async fn list_buckets(
     responses(
         (status = 204, description = "Bucket deleted"),
         (status = 404, description = "Bucket or region not found"),
-        (status = 409, description = "Provider bucket could not be deleted"),
     ),
     tag = "storage",
 )]
@@ -207,9 +214,6 @@ pub async fn delete_bucket(
         .map(|row| row.try_get("", "access_key_id"))
         .collect::<Result<Vec<String>, _>>()?;
 
-    providers
-        .delete_bucket(provider_id, &physical_bucket_name(bucket.id))
-        .await?;
     bucket::Entity::delete_by_id(bucket.id).exec(tx).await?;
     crate::services::events::record(
         tx,
@@ -221,6 +225,10 @@ pub async fn delete_bucket(
     )
     .await?;
     scoped.commit().await?;
+    if let Err(error) = providers.delete_bucket(provider_id, &physical_bucket_name(bucket.id)).await {
+        tracing::warn!(%error, %bucket_id, "provider bucket deletion failed after DB commit");
+    }
+    let _ = providers.delete_bucket_sse_key(bucket.id).await;
     if let Err(error) = providers.invalidate_access_token_caches(&access_keys).await {
         tracing::warn!(%error, %bucket_id, "bucket cache invalidation failed after deletion");
     }

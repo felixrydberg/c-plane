@@ -146,7 +146,7 @@ async fn claim_job(
 ) -> Result<Option<Job>> {
     let row = database
         .query_one(statement(
-            "WITH candidate AS (SELECT id FROM worker_job WHERE queue_name=ANY(string_to_array($1, ',')) AND ((status='queued' AND available_at<=NOW()) OR (status='running' AND lease_expires_at<NOW())) ORDER BY created_at, id FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE worker_job job SET status='running', attempts=job.attempts+1, locked_by=$2, lease_expires_at=NOW()+INTERVAL '30 seconds', started_at=COALESCE(job.started_at, NOW()), updated_at=NOW() FROM candidate WHERE job.id=candidate.id RETURNING job.id, job.queue_name, job.job_type, job.attempts, job.max_attempts",
+            "WITH candidate AS (SELECT id FROM worker_queue WHERE queue_name=ANY(string_to_array($1, ',')) AND ((status='queued' AND available_at<=NOW()) OR (status='running' AND lease_expires_at<NOW())) ORDER BY created_at, id FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE worker_queue job SET status='running', attempts=job.attempts+1, locked_by=$2, lease_expires_at=NOW()+INTERVAL '30 seconds', started_at=COALESCE(job.started_at, NOW()), updated_at=NOW() FROM candidate WHERE job.id=candidate.id RETURNING job.id, job.queue_name, job.job_type, job.attempts, job.max_attempts",
             vec![queues.to_owned().into(), consumer.to_owned().into()],
         ))
         .await?;
@@ -190,7 +190,7 @@ async fn run_with_lease(
 async fn renew_lease(database: &DatabaseConnection, job_id: Uuid, consumer: &str) -> Result<bool> {
     let result = database
         .execute(statement(
-            "UPDATE worker_job SET lease_expires_at=NOW()+INTERVAL '30 seconds', updated_at=NOW() WHERE id=$1::uuid AND status='running' AND locked_by=$2",
+            "UPDATE worker_queue SET lease_expires_at=NOW()+INTERVAL '30 seconds', updated_at=NOW() WHERE id=$1::uuid AND status='running' AND locked_by=$2",
             vec![job_id.into(), consumer.to_owned().into()],
         ))
         .await?;
@@ -245,7 +245,7 @@ async fn set_registry_phase(
 ) -> Result<()> {
     let result = database
         .execute(statement(
-            "UPDATE registry_maintenance maintenance SET phase=$3, updated_at=NOW() WHERE service='distribution' AND active_job_id=$1::uuid AND EXISTS (SELECT 1 FROM worker_job job WHERE job.id=$1::uuid AND job.status='running' AND job.locked_by=$2 AND job.lease_expires_at>NOW())",
+            "UPDATE registry_maintenance maintenance SET phase=$3, updated_at=NOW() WHERE service='distribution' AND active_job_id=$1::uuid AND EXISTS (SELECT 1 FROM worker_queue job WHERE job.id=$1::uuid AND job.status='running' AND job.locked_by=$2 AND job.lease_expires_at>NOW())",
             vec![job_id.into(), consumer.to_owned().into(), phase.to_owned().into()],
         ))
         .await?;
@@ -274,7 +274,7 @@ async fn finish_job(
     let transaction = database.begin().await?;
     let updated = transaction
         .execute(statement(
-            "UPDATE worker_job SET status=$3, last_error=$4, locked_by=NULL, lease_expires_at=NULL, finished_at=NOW(), updated_at=NOW() WHERE id=$1::uuid AND status='running' AND locked_by=$2",
+            "UPDATE worker_queue SET status=$3, last_error=$4, locked_by=NULL, lease_expires_at=NULL, finished_at=NOW(), updated_at=NOW() WHERE id=$1::uuid AND status='running' AND locked_by=$2",
             vec![job.id.into(), consumer.to_owned().into(), status.into(), last_error.clone().into()],
         ))
         .await?;

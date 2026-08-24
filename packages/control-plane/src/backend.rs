@@ -703,7 +703,7 @@ pub mod server {
             .map_err(CapturedError::from_display)?;
         transaction
             .execute(statement(
-                "INSERT INTO worker_job (id, queue_name, job_type, dedupe_key, payload) VALUES ($1::uuid, 'maintenance', 'registry_gc', 'registry_gc', '{}'::jsonb)",
+                "INSERT INTO worker_queue (id, queue_name, job_type, dedupe_key, payload) VALUES ($1::uuid, 'maintenance', 'registry_gc', 'registry_gc', '{}'::jsonb)",
                 vec![job_id.into()],
             ))
             .await
@@ -724,7 +724,7 @@ pub mod server {
             &transaction,
             headers,
             "enqueue",
-            "worker_job",
+            "worker_queue",
             Some(&job_id.to_string()),
             json!({"queue": "maintenance", "job_type": "registry_gc"}),
         )
@@ -786,43 +786,67 @@ pub mod server {
             validate_choice(provider_type, &["aws_s3", "cloudflare_r2"], "provider type")?;
         let endpoint_url = required(endpoint_url, "endpoint URL")?;
         let provider_region = required(provider_region, "provider region")?;
-        let previous_credentials = openbao_read(&id).await?;
-        if let Some(replacement) = credentials.as_ref() {
-            openbao_write(&id, replacement).await?;
-        }
-        let database_result: Result<()> = async {
+        let mut previous_credentials = None;
+        let result: Result<()> = async {
             let tx = database()
                 .await?
                 .begin()
                 .await
                 .map_err(CapturedError::from_display)?;
-            let result = tx.execute(statement("UPDATE s3_providers SET provider_type=$2::s3_provider_type, endpoint_url=$3, provider_region=$4, is_active=$5, updated_at=now() WHERE id=$1::uuid", vec![id.clone().into(), provider_type.clone().into(), endpoint_url.clone().into(), provider_region.clone().into(), is_active.into()])).await.map_err(CapturedError::from_display)?;
-            if result.rows_affected() == 0 {
+            let locked = tx
+                .execute(statement(
+                    "SELECT id FROM s3_providers WHERE id=$1::uuid FOR UPDATE",
+                    vec![id.clone().into()],
+                ))
+                .await
+                .map_err(CapturedError::from_display)?;
+            if locked.rows_affected() == 0 {
                 return Err(CapturedError::msg("S3 provider not found"));
             }
+            previous_credentials = Some(openbao_read(&id).await?);
+            if let Some(replacement) = credentials.as_ref() {
+                openbao_write(&id, replacement).await?;
+            }
+            tx.execute(statement("UPDATE s3_providers SET provider_type=$2::s3_provider_type, endpoint_url=$3, provider_region=$4, is_active=$5, updated_at=now() WHERE id=$1::uuid", vec![id.clone().into(), provider_type.clone().into(), endpoint_url.clone().into(), provider_region.clone().into(), is_active.into()])).await.map_err(CapturedError::from_display)?;
             audit(&tx, headers, "update", "s3_provider", Some(&id), json!({"provider_type": provider_type, "endpoint_url": endpoint_url, "provider_region": provider_region, "is_active": is_active, "credentials_rotated": credentials.is_some()})).await?;
             tx.commit().await.map_err(CapturedError::from_display)?;
             Ok(())
-        }.await;
-        if let Err(error) = database_result {
-            if credentials.is_some() {
-                let _ = openbao_write(&id, &previous_credentials).await;
-            }
-            let _ = invalidate_provider_credentials(&id).await;
-            return Err(error);
         }
-        invalidate_provider_credentials(&id).await
+        .await;
+        match result {
+            Ok(()) => invalidate_provider_credentials(&id).await,
+            Err(error) => {
+                if credentials.is_some()
+                    && let Some(previous) = previous_credentials.as_ref()
+                {
+                    let _ = openbao_write(&id, previous).await;
+                }
+                let _ = invalidate_provider_credentials(&id).await;
+                Err(error)
+            }
+        }
     }
 
     pub async fn delete_s3_provider(headers: &HeaderMap, id: String) -> Result<()> {
-        let old = openbao_read(&id).await?;
-        openbao_delete(&id).await?;
+        let mut old_credentials = None;
         let result = async {
             let tx = database()
                 .await?
                 .begin()
                 .await
                 .map_err(CapturedError::from_display)?;
+            let locked = tx
+                .execute(statement(
+                    "SELECT id FROM s3_providers WHERE id=$1::uuid FOR UPDATE",
+                    vec![id.clone().into()],
+                ))
+                .await
+                .map_err(CapturedError::from_display)?;
+            if locked.rows_affected() == 0 {
+                return Err(CapturedError::msg("S3 provider not found"));
+            }
+            old_credentials = Some(openbao_read(&id).await?);
+            openbao_delete(&id).await?;
             let deleted = tx
                 .execute(statement(
                     "DELETE FROM s3_providers WHERE id=$1::uuid",
@@ -839,7 +863,9 @@ pub mod server {
         }
         .await;
         if let Err(error) = result {
-            let _ = openbao_write(&id, &old).await;
+            if let Some(old) = old_credentials.as_ref() {
+                let _ = openbao_write(&id, old).await;
+            }
             return Err(error);
         }
         invalidate_provider_credentials(&id).await

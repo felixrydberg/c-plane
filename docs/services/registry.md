@@ -70,7 +70,7 @@ still own its lease.
 
 ## GC worker
 
-`worker_job` stores durable `registry_gc` jobs. Worker replicas claim jobs with
+`worker_queue` stores durable `registry_gc` jobs. Worker replicas claim jobs with
 `FOR UPDATE SKIP LOCKED`, so replicas process different runs without a central
 coordinator.
 

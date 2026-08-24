@@ -225,8 +225,8 @@ pub async fn rotate_external_registry_token(
         json!({"summary": format!("Rotated token for external registry '{registry_name}'"), "target_id": registry_id}),
     )
     .await?;
-    store_secret(organization_id, registry_id, &token).await?;
     scoped.commit().await?;
+    store_secret(organization_id, registry_id, &token).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

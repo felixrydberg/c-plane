@@ -5,8 +5,6 @@ import { organization } from "../tenants/organization.ts";
 import { app_tenant, orgAllowed } from "../rls.ts";
 import { region } from "../infrastructure/regions.ts";
 
-export const bucket_status = pgEnum("bucket_status", ["provisioning", "ready", "deleting", "failed"]);
-
 export const bucket = pgTable('bucket', {
   id: uuid("id").primaryKey(),
   project_id: uuid("project_id")
@@ -17,7 +15,6 @@ export const bucket = pgTable('bucket', {
     .references(() => organization.id, { onDelete: "cascade" }),
   region_id: uuid("region_id").notNull().references(() => region.id, { onDelete: "restrict" }),
   name: text("name").notNull(),
-  status: bucket_status("status").notNull().default("provisioning"),
 }, (table) => [
   uniqueIndex("bucket_name_idx").on(table.name),
   unique("bucket_id_organization_id_uidx").on(table.id, table.organization_id),
