@@ -158,10 +158,7 @@ const items = computed<NavigationMenuItem[]>(() => [
         <dashboard-projects-nav />
       </div>
 
-      <DashboardRegistryMaintenanceAlert
-        v-if="store.organization"
-        :organization-id="store.organization.id"
-      />
+      <DashboardRegistryMaintenanceAlert />
       <DashboardProjectsDeploymentAlert v-if="store.environment" />
 
       <div class="flex-1 bg-default px-6 py-6 lg:px-8">

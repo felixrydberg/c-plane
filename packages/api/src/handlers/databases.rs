@@ -93,6 +93,62 @@ pub fn validate_backup_retention_days(retention_days: Option<i32>) -> Result<(),
     Ok(())
 }
 
+fn cpu_cores(value: &str) -> Result<f64, AppError> {
+    let cores: f64 = value
+        .trim()
+        .parse()
+        .map_err(|_| AppError::BadRequest("CPU must be a number of cores".into()))?;
+    if !cores.is_finite() || cores <= 0.0 || cores > 64.0 {
+        return Err(AppError::BadRequest(
+            "CPU must be between 0 and 64 cores".into(),
+        ));
+    }
+    Ok(cores)
+}
+
+pub fn validate_cpu(value: &str) -> Result<(), AppError> {
+    cpu_cores(value).map(|_| ())
+}
+
+pub fn validate_ram(value: &str) -> Result<(), AppError> {
+    let mib = value
+        .trim()
+        .strip_suffix("Mi")
+        .map(str::to_owned)
+        .unwrap_or_else(|| value.trim().to_owned());
+    let mib: i64 = mib
+        .parse()
+        .map_err(|_| AppError::BadRequest("RAM must be a number of mebibytes".into()))?;
+    if mib <= 0 || mib > 65536 {
+        return Err(AppError::BadRequest(
+            "RAM must be between 1 and 65536 MiB".into(),
+        ));
+    }
+    Ok(())
+}
+
+pub fn validate_read_replicas(read_replicas: i32) -> Result<(), AppError> {
+    if !(0..=64).contains(&read_replicas) {
+        return Err(AppError::BadRequest(
+            "Read replicas must be between 0 and 64".into(),
+        ));
+    }
+    Ok(())
+}
+
+pub fn validate_autoscaling(min_cpu: Option<&str>, max_cpu: Option<&str>) -> Result<(), AppError> {
+    let min_cpu = min_cpu.map(cpu_cores).transpose()?;
+    let max_cpu = max_cpu.map(cpu_cores).transpose()?;
+    if let (Some(min), Some(max)) = (min_cpu, max_cpu)
+        && min > max
+    {
+        return Err(AppError::BadRequest(
+            "autoscaling_min_cpu must not exceed autoscaling_max_cpu".into(),
+        ));
+    }
+    Ok(())
+}
+
 pub fn verify_org_access(tenant_db: &TenantDatabase, org_id: Uuid) -> Result<(), AppError> {
     if !tenant_db.context.allowed_organizations.contains(&org_id) {
         return Err(AppError::Forbidden(
@@ -169,6 +225,34 @@ mod tests {
         assert!(require_role(&context_with(org, Some("owner")), org).is_ok());
         assert!(require_role(&context_with(org, Some("member")), org).is_err());
         assert!(require_role(&context_with(org, None), org).is_err());
+    }
+
+    #[test]
+    fn sizing_validators_reject_garbage() {
+        use super::{validate_autoscaling, validate_cpu, validate_ram, validate_read_replicas};
+
+        assert!(validate_cpu("0.5").is_ok());
+        assert!(validate_cpu(" 2 ").is_ok());
+        assert!(validate_cpu("").is_err());
+        assert!(validate_cpu("big").is_err());
+        assert!(validate_cpu("-1").is_err());
+        assert!(validate_cpu("65").is_err());
+
+        assert!(validate_ram("1024Mi").is_ok());
+        assert!(validate_ram("1024").is_ok());
+        assert!(validate_ram("0").is_err());
+        assert!(validate_ram("1GiB").is_err());
+        assert!(validate_ram("65537").is_err());
+
+        assert!(validate_read_replicas(0).is_ok());
+        assert!(validate_read_replicas(-1).is_err());
+
+        assert!(validate_autoscaling(Some("0.25"), Some("2")).is_ok());
+        assert!(validate_autoscaling(Some("2"), Some("0.25")).is_err());
+        assert!(validate_autoscaling(Some("2"), None).is_ok());
+        assert!(validate_autoscaling(Some("not-a-cpu"), None).is_err());
+        assert!(validate_autoscaling(None, Some("NaN")).is_err());
+        assert!(validate_autoscaling(Some("65"), None).is_err());
     }
 }
 

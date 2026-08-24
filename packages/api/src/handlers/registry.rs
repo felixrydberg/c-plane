@@ -44,16 +44,13 @@ pub struct RegistryMaintenanceResponse {
 
 #[utoipa::path(
     get,
-    path = "/api/organization/{organization_id}/registry/maintenance",
-    params(("organization_id" = Uuid, Path, description = "Organization ID")),
+    path = "/api/registry/maintenance",
     responses(
         (status = 200, description = "Registry maintenance state", body = RegistryMaintenanceResponse),
     ),
     tag = "registry",
 )]
-pub async fn maintenance_status(
-    Path(_organization_id): Path<Uuid>,
-) -> Result<Json<RegistryMaintenanceResponse>, AppError> {
+pub async fn maintenance_status() -> Result<Json<RegistryMaintenanceResponse>, AppError> {
     let row = registry_maintenance_row().await?;
     let phase: String = row.try_get("", "phase").map_err(maintenance_error)?;
     let started_at = row

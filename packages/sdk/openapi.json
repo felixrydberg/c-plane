@@ -850,7 +850,7 @@
             "apiKey": []
           }
         ],
-        "x-cplane-required-scope": "database:postgres:manage"
+        "x-cplane-required-scope": "database:postgres:delete"
       },
       "patch": {
         "tags": [
@@ -2528,38 +2528,6 @@
         "x-cplane-required-scope": "registry:update"
       }
     },
-    "/api/organization/{organization_id}/registry/maintenance": {
-      "get": {
-        "tags": [
-          "registry"
-        ],
-        "operationId": "maintenance_status",
-        "parameters": [
-          {
-            "name": "organization_id",
-            "in": "path",
-            "description": "Organization ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Registry maintenance state",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RegistryMaintenanceResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/organization/{organization_id}/registry/repositories": {
       "get": {
         "tags": [
@@ -3094,6 +3062,26 @@
           }
         ],
         "x-cplane-required-scope": "bucket:read"
+      }
+    },
+    "/api/registry/maintenance": {
+      "get": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "maintenance_status",
+        "responses": {
+          "200": {
+            "description": "Registry maintenance state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryMaintenanceResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/registry/token": {
