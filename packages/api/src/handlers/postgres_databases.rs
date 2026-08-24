@@ -4,9 +4,9 @@ use uuid::Uuid;
 
 use super::databases::{
     CreateDatabaseBranchRequest, CreateDatabaseRequest, DatabaseBranchResponse, DatabaseResponse,
-    ListDatabasesQuery, UpdateDatabaseBranchRequest, UpdateDatabaseRequest,
-    validate_autoscaling, validate_backup_retention_days, validate_cpu, validate_ram,
-    validate_read_replicas, verify_org_access, verify_project_in_org,
+    ListDatabasesQuery, UpdateDatabaseBranchRequest, UpdateDatabaseRequest, validate_autoscaling,
+    validate_backup_retention_days, validate_cpu, validate_ram, validate_read_replicas,
+    verify_org_access, verify_project_in_org,
 };
 use crate::errors::AppError;
 use crate::middleware::auth::AuthContext;
@@ -538,10 +538,10 @@ pub async fn create_database_branch(
     if let Some(read_replicas) = read_replicas {
         validate_read_replicas(read_replicas)?;
     }
-    if let (Some(min), Some(max)) = (autoscaling_min_cpu.as_deref(), autoscaling_max_cpu.as_deref())
-    {
-        validate_autoscaling(Some(min), Some(max))?;
-    }
+    validate_autoscaling(
+        autoscaling_min_cpu.as_deref(),
+        autoscaling_max_cpu.as_deref(),
+    )?;
 
     let id = Uuid::new_v4();
     let row: postgres_database_branch::Model = postgres_database_branch::ActiveModel {

@@ -136,12 +136,11 @@ pub fn validate_read_replicas(read_replicas: i32) -> Result<(), AppError> {
     Ok(())
 }
 
-pub fn validate_autoscaling(
-    min_cpu: Option<&str>,
-    max_cpu: Option<&str>,
-) -> Result<(), AppError> {
+pub fn validate_autoscaling(min_cpu: Option<&str>, max_cpu: Option<&str>) -> Result<(), AppError> {
+    let min_cpu = min_cpu.map(cpu_cores).transpose()?;
+    let max_cpu = max_cpu.map(cpu_cores).transpose()?;
     if let (Some(min), Some(max)) = (min_cpu, max_cpu)
-        && cpu_cores(min)? > cpu_cores(max)?
+        && min > max
     {
         return Err(AppError::BadRequest(
             "autoscaling_min_cpu must not exceed autoscaling_max_cpu".into(),
@@ -251,6 +250,9 @@ mod tests {
         assert!(validate_autoscaling(Some("0.25"), Some("2")).is_ok());
         assert!(validate_autoscaling(Some("2"), Some("0.25")).is_err());
         assert!(validate_autoscaling(Some("2"), None).is_ok());
+        assert!(validate_autoscaling(Some("not-a-cpu"), None).is_err());
+        assert!(validate_autoscaling(None, Some("NaN")).is_err());
+        assert!(validate_autoscaling(Some("65"), None).is_err());
     }
 }
 
