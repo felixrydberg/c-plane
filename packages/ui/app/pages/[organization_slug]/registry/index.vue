@@ -12,10 +12,10 @@ const organizationId = computed(() => store.organization?.id ?? '')
 const organizationSlug = computed(() => store.organization?.slug ?? '')
 const registryHost = computed(() => config.public.registryHost)
 const repositoriesUrl = computed(() => organizationId.value
-  ? `/api/cplane/organization/${organizationId.value as ':organization_id'}/registry/repositories` as const
+  ? `/api/organization/${organizationId.value as ':organization_id'}/registry/repositories` as const
   : '')
 const toast = useToast()
-const { data: repositories, refresh: refreshRepositories } = await useFetch(repositoriesUrl, { default: () => [] })
+const { data: repositories, refresh: refreshRepositories } = await useCplaneFetch(repositoriesUrl, { default: () => [] })
 const selectedRepository = ref<Repository | null>(null)
 const deleteModalOpen = ref(false)
 const deleting = ref(false)
@@ -29,7 +29,7 @@ async function deleteRepository() {
   if (!selectedRepository.value || !organizationId.value) return
   deleting.value = true
   try {
-    await $fetch(`/api/cplane/organization/${organizationId.value as ':organization_id'}/registry/repositories/${selectedRepository.value.id as ':repository_id'}` as const, { method: 'DELETE' })
+    await cplaneFetch(`/api/organization/${organizationId.value as ':organization_id'}/registry/repositories/${selectedRepository.value.id as ':repository_id'}` as const, { method: 'DELETE' })
     toast.add({ title: 'Repository and images deleted', color: 'success' })
     deleteModalOpen.value = false
     selectedRepository.value = null

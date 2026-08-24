@@ -6,6 +6,7 @@ use sea_orm::{
     ConnectOptions, ConnectionTrait, Database, DatabaseBackend, DatabaseConnection,
     DatabaseTransaction, Statement, TransactionTrait,
 };
+use std::collections::HashMap;
 use std::sync::OnceLock;
 use std::{process, time::Duration};
 use uuid::Uuid;
@@ -13,9 +14,11 @@ use uuid::Uuid;
 #[derive(Clone)]
 pub struct AppDatabase(pub DatabaseConnection);
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct OrganizationContext {
     pub allowed_organizations: Vec<Uuid>,
+    pub organization_roles: HashMap<Uuid, String>,
+    pub api_key_organization_id: Option<Uuid>,
 }
 
 #[derive(Clone)]

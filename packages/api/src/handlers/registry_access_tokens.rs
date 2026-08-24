@@ -20,7 +20,7 @@ use crate::{
     },
 };
 
-use super::databases::verify_org_access;
+use super::databases::{verify_org_access, verify_org_owner};
 
 #[derive(Clone, Deserialize, Serialize, ToSchema)]
 pub struct RepositoryPermissionRequest {
@@ -81,6 +81,7 @@ pub async fn create_access_token(
     Json(body): Json<CreateRegistryAccessTokenRequest>,
 ) -> Result<(StatusCode, Json<CreatedRegistryAccessTokenResponse>), AppError> {
     verify_org_access(&tenant_db, organization_id)?;
+    verify_org_owner(&tenant_db, organization_id)?;
     let name = body.name.trim();
     if name.is_empty() || name.len() > 100 {
         return Err(AppError::Conflict(
@@ -235,6 +236,7 @@ pub async fn update_access_token(
     Json(body): Json<UpdateRegistryAccessTokenRequest>,
 ) -> Result<StatusCode, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
+    verify_org_owner(&tenant_db, organization_id)?;
     if !valid_permissions(&body.repository_permissions) {
         return Err(AppError::Conflict(
             "Select at least one valid repository permission".into(),
@@ -282,6 +284,7 @@ pub async fn revoke_access_token(
     Path((organization_id, token_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
+    verify_org_owner(&tenant_db, organization_id)?;
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
     let token = active_token(tx, organization_id, token_id).await?;

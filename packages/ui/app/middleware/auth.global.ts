@@ -32,7 +32,7 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   const organizationOnboardingPath = organization?.slug && `/${organization.slug}/onboarding`;
   if (store.session && store.user && organization && organizationOnboardingPath && !store.projects.length && to.path !== organizationOnboardingPath) {
     const organizationId = organization.id
-    const { data } = await useFetch<typeof store.projects>(`/api/cplane/organization/${organizationId as ':organization_id'}/projects` as const, {
+    const { data } = await useCplaneFetch<typeof store.projects>(`/api/organization/${organizationId as ':organization_id'}/projects` as const, {
       default: () => [],
     })
     if (store.organization?.id !== organizationId) return
@@ -45,5 +45,12 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
 
   if (!store.session && !store.user) {
     return navigateTo('/auth/signin?redirect=' + encodeURIComponent(to.fullPath));
+  }
+
+  const isOrgSettingsOwnerPage = /^\/[^/]+\/settings$/.test(to.path)
+    || /^\/[^/]+\/settings\/authentication/.test(to.path);
+  if (isOrgSettingsOwnerPage && store.organization?.member?.role !== 'owner') {
+    const slug = store.organization?.slug;
+    return navigateTo(slug ? `/${slug}/settings/members` : '/organization/create');
   }
 });

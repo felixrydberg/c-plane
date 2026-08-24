@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use super::databases::verify_org_access;
+use super::databases::{verify_org_access, verify_org_owner};
 use crate::errors::AppError;
 use crate::middleware::auth::AuthContext;
 use crate::models::entities::{
@@ -355,6 +355,7 @@ pub async fn delete_project(
     Path((organization_id, project_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
+    verify_org_owner(&tenant_db, organization_id)?;
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
@@ -886,6 +887,7 @@ pub async fn delete_environment(
     Path((organization_id, project_id, environment_id)): Path<(Uuid, Uuid, Uuid)>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
+    verify_org_owner(&tenant_db, organization_id)?;
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();

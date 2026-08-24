@@ -24,8 +24,8 @@ durability layer. S3 backups remain the whole-cluster recovery source.
 
 ## Rules
 
-- C-Plane mints scoped Storage credentials for cluster workloads. Cluster agents
-  inject those credentials; workloads reach the regional Storage API, which
-  alone uses backend credentials.
+- C-Plane issues derived, scoped Storage credentials for cluster workloads.
+  Cluster agents inject those credentials; workloads reach the regional
+  Storage API, which alone uses backend credentials.
 - Changing a region's backend requires a data migration — it is not a live operation.
 - No cluster owns object storage. Destroying a cluster does not destroy data.

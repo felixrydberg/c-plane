@@ -92,23 +92,36 @@ export const acceptInvitationAndActivateOrganization = async (
     const [updated] = await tx
       .update(organization_invitation)
       .set({ status: "accepted" })
-      .where(eq(organization_invitation.id, invitation.id))
+      .where(
+        and(
+          eq(organization_invitation.id, invitation.id),
+          eq(organization_invitation.status, "pending"),
+        ),
+      )
       .returning();
 
     if (!updated) {
+      const [current] = await tx
+        .select()
+        .from(organization_invitation)
+        .where(eq(organization_invitation.id, invitation.id))
+        .limit(1);
+      if (current?.status === "accepted") {
+        return [current];
+      }
       throw createError({
-        statusCode: 500,
-        statusMessage: "Failed to accept invitation"
-      })
+        statusCode: 409,
+        statusMessage: "Invitation has already been processed",
+      });
     }
 
     await tx
       .insert(organization_member)
       .values({
         id: uuidv7(),
-        organization_id: invitation.organization_id,
-        user_id: session.user.id,
-        role: invitation.role,
+      organization_id: updated.organization_id,
+      user_id: session.user.id,
+      role: updated.role,
       })
       .onConflictDoNothing({
         target: [organization_member.user_id, organization_member.organization_id],
@@ -127,7 +140,7 @@ export const acceptInvitationAndActivateOrganization = async (
         },
       });
 
-    await logEvent(invitation.organization_id, "organization:invitation_accepted", {
+    await logEvent(updated.organization_id, "organization:invitation_accepted", {
       id: updated.id,
       organization_id: updated.organization_id,
       email: updated.email,

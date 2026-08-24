@@ -9,7 +9,7 @@ export type SdkOptions = {
 
 export const createRawClient = (options: SdkOptions = {}) =>
   createClient<paths>({
-    baseUrl: options.baseUrl ?? '/api/cplane/',
+    baseUrl: options.baseUrl ?? '',
     credentials: 'include',
     headers: options.headers,
     fetch: options.fetch,

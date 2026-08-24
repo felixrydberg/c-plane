@@ -5,8 +5,9 @@ import { getErrorMessage } from '~/utils/errors'
 
 const props = defineProps<{ organizationId: string }>()
 const toast = useToast()
-const endpoint = computed(() => `/api/cplane/organization/${props.organizationId as ':organization_id'}/registry/external-registries` as const)
-const { data: registries, refresh } = await useFetch(endpoint, { default: () => [] })
+const isOwner = computed(() => useStore().organization?.member?.role === 'owner')
+const endpoint = computed(() => `/api/organization/${props.organizationId as ':organization_id'}/registry/external-registries` as const)
+const { data: registries, refresh } = await useCplaneFetch(endpoint, { default: () => [] })
 
 const modal = ref<'create' | 'rename' | 'rotate' | 'delete' | null>(null)
 const selected = ref<ExternalRegistry | null>(null)
@@ -54,7 +55,7 @@ async function submit() {
   loading.value = true
   try {
     if (modal.value === 'create') {
-      await $fetch(endpoint.value, {
+      await cplaneFetch(endpoint.value, {
         method: 'POST',
         body: {
           name: name.value,
@@ -65,11 +66,11 @@ async function submit() {
         },
       })
     } else if (modal.value === 'rename' && selected.value) {
-      await $fetch(`${endpoint.value}/${selected.value.id as ':registry_id'}` as const, { method: 'PATCH', body: { name: name.value } })
+      await cplaneFetch(`${endpoint.value}/${selected.value.id as ':registry_id'}` as const, { method: 'PATCH', body: { name: name.value } })
     } else if (modal.value === 'rotate' && selected.value) {
-      await $fetch(`${endpoint.value}/${selected.value.id as ':registry_id'}/rotate-token` as const, { method: 'POST', body: { token: token.value } })
+      await cplaneFetch(`${endpoint.value}/${selected.value.id as ':registry_id'}/rotate-token` as const, { method: 'POST', body: { token: token.value } })
     } else if (modal.value === 'delete' && selected.value) {
-      await $fetch(`${endpoint.value}/${selected.value.id as ':registry_id'}` as const, { method: 'DELETE' })
+      await cplaneFetch(`${endpoint.value}/${selected.value.id as ':registry_id'}` as const, { method: 'DELETE' })
     }
     toast.add({ title: modal.value === 'delete' ? 'External registry deleted' : 'External registry saved', color: 'success' })
     closeModal()
@@ -96,7 +97,7 @@ async function submit() {
         <h2 class="text-lg font-semibold">External registries</h2>
         <p class="mt-1 text-sm text-muted">Reusable credentials for private OCI registries.</p>
       </div>
-      <UButton :icon="ICONS.plus" color="primary" @click="openCreate">Add registry</UButton>
+      <UButton v-if="isOwner" :icon="ICONS.plus" color="primary" @click="openCreate">Add registry</UButton>
     </div>
 
     <div v-if="!registries.length" class="rounded-lg border border-dashed border-default py-10 text-center text-sm text-muted">
@@ -111,7 +112,7 @@ async function submit() {
             <td class="p-3 font-mono text-xs">{{ registry.host }}</td>
             <td class="p-3">{{ registry.username }}</td>
             <td class="p-3">
-              <div class="flex justify-end gap-2">
+              <div v-if="isOwner" class="flex justify-end gap-2">
                 <UButton :icon="ICONS.pencil" color="neutral" variant="solid" size="sm" @click="openAction('rename', registry)">Rename</UButton>
                 <UButton :icon="ICONS.refresh" color="neutral" variant="solid" size="sm" @click="openAction('rotate', registry)">Rotate token</UButton>
                 <UButton :icon="ICONS.trash" color="error" size="sm" @click="openAction('delete', registry)">Delete</UButton>
