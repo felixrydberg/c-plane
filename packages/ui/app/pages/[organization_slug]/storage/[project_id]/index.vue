@@ -5,16 +5,17 @@ import { ICONS } from '~/utils/icons'
 const store = useStore()
 const route = useRoute()
 const toast = useToast()
+const isOwner = computed(() => store.organization?.member?.role === 'owner')
 const organizationId = computed(() => store.organization?.id || '')
 const projectId = computed(() => route.params.project_id as string)
 const projectName = computed(() => store.projects.find(project => project.id === projectId.value)?.name ?? projectId.value)
 const bucketsUrl = computed(() => organizationId.value
-  ? `/api/cplane/organization/${organizationId.value as ':organization_id'}/storage/buckets` as const
+  ? `/api/organization/${organizationId.value as ':organization_id'}/storage/buckets` as const
   : '')
 const selectedBucket = ref<Bucket | null>(null)
 const deleteModalOpen = ref(false)
 const deleting = ref(false)
-const { data: buckets, refresh: refreshBuckets } = await useFetch(bucketsUrl, {
+const { data: buckets, refresh: refreshBuckets } = await useCplaneFetch(bucketsUrl, {
   default: () => [],
   query: { project_id: projectId },
 })
@@ -28,7 +29,7 @@ async function deleteBucket() {
   if (!selectedBucket.value || !organizationId.value) return
   deleting.value = true
   try {
-    await $fetch(`/api/cplane/organization/${organizationId.value as ':organization_id'}/storage/buckets/${selectedBucket.value.id as ':bucket_id'}` as const, { method: 'DELETE' })
+    await cplaneFetch(`/api/organization/${organizationId.value as ':organization_id'}/storage/buckets/${selectedBucket.value.id as ':bucket_id'}` as const, { method: 'DELETE' })
     toast.add({ title: 'Bucket deleted', color: 'success' })
     deleteModalOpen.value = false
     selectedBucket.value = null
@@ -47,7 +48,7 @@ async function deleteBucket() {
       <div><h1 class="text-2xl font-semibold">Storage</h1><p class="text-muted text-sm mt-1">Buckets for {{ projectName }}.</p></div>
       <div class="flex flex-wrap justify-end gap-2">
         <UButton :icon="ICONS.authentication" color="neutral" variant="solid" :to="`/${route.params.organization_slug}/storage/${projectId}/access-tokens`">Manage access tokens</UButton>
-        <UButton :icon="ICONS.plus" color="primary" :to="`/${route.params.organization_slug}/storage/${projectId}/new`">New bucket</UButton>
+        <UButton v-if="isOwner" :icon="ICONS.plus" color="primary" :to="`/${route.params.organization_slug}/storage/${projectId}/new`">New bucket</UButton>
       </div>
     </div>
     <div v-if="!buckets.length" class="flex flex-col items-center justify-center py-14 gap-3 text-center rounded-lg border border-dashed border-default bg-transparent">
@@ -58,11 +59,11 @@ async function deleteBucket() {
         <div><h2 class="font-semibold">{{ bucket.name }}</h2></div>
         <div class="flex gap-2">
           <UButton :icon="ICONS.folder" color="neutral" variant="solid" size="sm" :to="`/${route.params.organization_slug}/storage/${projectId}/${bucket.id}`">View objects</UButton>
-          <UButton :icon="ICONS.trash" color="error" size="sm" @click="confirmDelete(bucket)">Delete</UButton>
+          <UButton v-if="isOwner" :icon="ICONS.trash" color="error" size="sm" @click="confirmDelete(bucket)">Delete</UButton>
         </div>
       </div>
     </section>
-    <UModal v-model:open="deleteModalOpen" title="Delete bucket" description="This deletes the physical provider bucket and its logical record. The bucket must be empty.">
+    <UModal v-if="isOwner" v-model:open="deleteModalOpen" title="Delete bucket" description="This deletes the physical provider bucket and its logical record. The bucket must be empty.">
       <template #body>
         <div class="space-y-4">
           <p class="text-sm">Are you sure you want to delete <strong>{{ selectedBucket?.name }}</strong>?</p>

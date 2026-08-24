@@ -115,7 +115,7 @@ async function selectRevision(revisionId: string) {
   selectedTimelineData.value = null;
 
   try {
-    const data = await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/timelines/${revisionId as ':timeline_id'}` as const);
+    const data = await cplaneFetch(`/api/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/timelines/${revisionId as ':timeline_id'}` as const);
     selectedTimelineData.value = {
       id: data.id,
       environment_id: data.environment_id ?? null,
@@ -171,8 +171,8 @@ async function onConfirmRenameEnvironment() {
 
   renamingEnvironment.value = true;
   try {
-    const updated = await $fetch(
-      `/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${renameEnvironmentId.value as ':environment_id'}` as const,
+    const updated = await cplaneFetch(
+      `/api/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${renameEnvironmentId.value as ':environment_id'}` as const,
       { method: 'PATCH', body: { name: renameEnvironmentName.value.trim() } }
     );
     syncEnvironment(store, updated);
@@ -189,7 +189,7 @@ async function onConfirmRenameEnvironment() {
 async function onConfirmRemoveEnvironment() {
   if (!store.organization?.id || !store.project?.id || !removeEnvironmentId.value) return;
   try {
-    await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${removeEnvironmentId.value as ':environment_id'}` as const, { method: 'DELETE' });
+    await cplaneFetch(`/api/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${removeEnvironmentId.value as ':environment_id'}` as const, { method: 'DELETE' });
     toast.add({ title: 'Environment removed', color: 'success' });
     const deletedId = removeEnvironmentId.value;
     removeModalOpen.value = false;
@@ -214,7 +214,7 @@ async function onEnvironmentCreated(environment: Environment) {
 async function onSelectRepointEnvironment() {
   if (!store.organization?.id || !store.project?.id || !repointEnvironmentId.value) return;
   try {
-    await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${repointEnvironmentId.value as ':environment_id'}` as const, { method: 'PATCH', body: { draft_timeline_id: repointRevisionId.value, deployed_timeline_id: repointRevisionId.value } });
+    await cplaneFetch(`/api/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${repointEnvironmentId.value as ':environment_id'}` as const, { method: 'PATCH', body: { draft_timeline_id: repointRevisionId.value, deployed_timeline_id: repointRevisionId.value } });
     toast.add({ title: 'Environment repointed', color: 'success' });
     store.refreshKey++;
     repointModalOpen.value = false;
@@ -241,14 +241,14 @@ async function loadGraph(preserveSelection = false) {
   }
 
   try {
-    const environments = await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments` as const);
+    const environments = await cplaneFetch(`/api/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments` as const);
 
     allEnvironments.value = environments;
 
     const isDefaultMap = new Map<string, boolean>();
     environments.forEach(b => isDefaultMap.set(b.id, b.is_default));
 
-    const allTimelines = await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/timelines` as const);
+    const allTimelines = await cplaneFetch(`/api/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/timelines` as const);
 
     const environmentTimelines = new Map<string, TimelineRevision[]>();
     for (const t of allTimelines) {

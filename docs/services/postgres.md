@@ -59,6 +59,18 @@ be recreated from their parent.
 Postgres `wal_keep_size` and replication-slot retention are internal replication
 settings. They are not the user-facing backup-retention control.
 
+## Backup Storage Isolation
+
+Each region has one physical Postgres backup bucket and one backing-provider
+credential. The Storage API alone holds that credential. Every database branch
+uses a derived Storage API credential restricted to its immutable prefix, while
+Storage encrypts its objects with the owning organization's regional SSE-C key.
+
+This avoids per-branch buckets and OpenBao access-key entries without exposing
+one organization's backups to another branch or organization. See [Postgres
+Backup Storage Isolation](postgres-backup-storage.md) for credential derivation,
+encryption, threat boundaries, and required Storage API enforcement.
+
 ## Branch Creation
 
 C-Plane explicitly chooses the fastest valid source. CloudNativePG does not

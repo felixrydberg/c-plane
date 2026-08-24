@@ -15,7 +15,7 @@ const state = reactive<Schema>({ name: '' })
 const onSubmit = async (event: FormSubmitEvent<Schema>) => {
   loading.value = true
   try {
-    const user = await $fetch<{ name: string }>('/api/user/profile', { method: 'PATCH', body: { name: event.data.name } })
+    const user = await $fetch<{ name: string }>('/ui-api/user/profile', { method: 'PATCH', body: { name: event.data.name } })
     if (store.user) store.user.name = user.name
     const session = await getSession(false)
     if (!session || !store.session || !store.user?.name?.trim() || route.path !== '/onboarding/username') return
