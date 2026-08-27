@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "bb00708d-109e-4eca-bc02-6c367ca5e66c",
+  "id": "eb55ea1b-d849-4168-b54a-2191fa098b33",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
@@ -56,15 +56,6 @@
         "deleting"
       ],
       "name": "foundation_bucket_status",
-      "entityType": "enums",
-      "schema": "public"
-    },
-    {
-      "values": [
-        "aws_s3",
-        "cloudflare_r2"
-      ],
-      "name": "s3_provider_type",
       "entityType": "enums",
       "schema": "public"
     },
@@ -1220,14 +1211,14 @@
       "table": "s3_providers"
     },
     {
-      "type": "s3_provider_type",
-      "typeSchema": "public",
+      "type": "text",
+      "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "provider_type",
+      "name": "name",
       "entityType": "columns",
       "schema": "public",
       "table": "s3_providers"
@@ -5007,7 +4998,7 @@
       "nameExplicit": true,
       "columns": [
         {
-          "value": "provider_type",
+          "value": "name",
           "isExpression": false,
           "asc": true,
           "nullsFirst": false,
@@ -5019,7 +5010,7 @@
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "s3_providers_provider_type_idx",
+      "name": "s3_providers_name_idx",
       "entityType": "indexes",
       "schema": "public",
       "table": "s3_providers"
@@ -7136,14 +7127,16 @@
       "table": "bucket"
     },
     {
-      "nameExplicit": false,
+      "nameExplicit": true,
       "columns": [
-        "credential_id"
+        "credential_id",
+        "organization_id"
       ],
       "schemaTo": "public",
       "tableTo": "credential",
       "columnsTo": [
-        "id"
+        "id",
+        "organization_id"
       ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
@@ -7257,12 +7250,14 @@
     {
       "nameExplicit": true,
       "columns": [
-        "secret_id"
+        "secret_id",
+        "organization_id"
       ],
       "schemaTo": "public",
       "tableTo": "secret",
       "columnsTo": [
-        "id"
+        "id",
+        "organization_id"
       ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
@@ -8538,6 +8533,18 @@
       ],
       "nullsNotDistinct": true,
       "name": "secret_id_scope_organization_uidx",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "secret"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "id",
+        "organization_id"
+      ],
+      "nullsNotDistinct": true,
+      "name": "secret_id_organization_id_uidx",
       "entityType": "uniques",
       "schema": "public",
       "table": "secret"

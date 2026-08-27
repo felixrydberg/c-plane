@@ -3,7 +3,6 @@ CREATE TYPE "cluster_ingress_endpoint_health_status" AS ENUM('healthy', 'degrade
 CREATE TYPE "cluster_provider" AS ENUM('aws', 'gcp', 'azure', 'metal');--> statement-breakpoint
 CREATE TYPE "cluster_status" AS ENUM('pending', 'bootstrapping', 'healthy', 'draining', 'offline', 'removed');--> statement-breakpoint
 CREATE TYPE "foundation_bucket_status" AS ENUM('active', 'deleting');--> statement-breakpoint
-CREATE TYPE "s3_provider_type" AS ENUM('aws_s3', 'cloudflare_r2');--> statement-breakpoint
 CREATE TYPE "region_routing_mode" AS ENUM('active', 'draining', 'disabled');--> statement-breakpoint
 CREATE TYPE "region_status" AS ENUM('active', 'inactive', 'maintenance');--> statement-breakpoint
 CREATE TYPE "secret_scope" AS ENUM('platform', 'tenant');--> statement-breakpoint
@@ -104,7 +103,7 @@ CREATE TABLE "bucket_grant" (
 ALTER TABLE "bucket_grant" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "s3_providers" (
 	"id" uuid PRIMARY KEY,
-	"provider_type" "s3_provider_type" NOT NULL,
+	"name" text NOT NULL,
 	"endpoint_url" text NOT NULL,
 	"provider_region" text NOT NULL,
 	"credential_secret_id" uuid NOT NULL,
@@ -160,6 +159,7 @@ CREATE TABLE "secret" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "secret_id_scope_organization_uidx" UNIQUE NULLS NOT DISTINCT("id","scope","organization_id"),
+	CONSTRAINT "secret_id_organization_id_uidx" UNIQUE NULLS NOT DISTINCT("id","organization_id"),
 	CONSTRAINT "secret_scope_organization_check" CHECK ((
     ("scope" = 'platform' and "organization_id" is null)
     or ("scope" = 'tenant' and "organization_id" is not null)
@@ -516,7 +516,7 @@ CREATE UNIQUE INDEX "bucket_grant_credential_bucket_prefix_uidx" ON "bucket_gran
 CREATE INDEX "bucket_grant_credential_id_idx" ON "bucket_grant" ("credential_id");--> statement-breakpoint
 CREATE INDEX "bucket_grant_bucket_id_idx" ON "bucket_grant" ("bucket_id");--> statement-breakpoint
 CREATE INDEX "bucket_grant_organization_id_idx" ON "bucket_grant" ("organization_id");--> statement-breakpoint
-CREATE INDEX "s3_providers_provider_type_idx" ON "s3_providers" ("provider_type");--> statement-breakpoint
+CREATE INDEX "s3_providers_name_idx" ON "s3_providers" ("name");--> statement-breakpoint
 CREATE INDEX "s3_providers_is_active_idx" ON "s3_providers" ("is_active");--> statement-breakpoint
 CREATE UNIQUE INDEX "s3_providers_credential_secret_id_uidx" ON "s3_providers" ("credential_secret_id");--> statement-breakpoint
 CREATE INDEX "s3_providers_mirror_provider_id_idx" ON "s3_providers" ("mirror_provider_id");--> statement-breakpoint
@@ -612,14 +612,14 @@ ALTER TABLE "cluster_ingress_endpoints" ADD CONSTRAINT "cluster_ingress_endpoint
 ALTER TABLE "cluster_join_credentials" ADD CONSTRAINT "cluster_join_credentials_cluster_id_clusters_id_fkey" FOREIGN KEY ("cluster_id") REFERENCES "clusters"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "bucket" ADD CONSTRAINT "bucket_region_id_regions_id_fkey" FOREIGN KEY ("region_id") REFERENCES "regions"("id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "bucket" ADD CONSTRAINT "bucket_sse_secret_id_secret_id_fkey" FOREIGN KEY ("sse_secret_id") REFERENCES "secret"("id") ON DELETE RESTRICT;--> statement-breakpoint
-ALTER TABLE "bucket_grant" ADD CONSTRAINT "bucket_grant_credential_id_credential_id_fkey" FOREIGN KEY ("credential_id") REFERENCES "credential"("id") ON DELETE CASCADE;--> statement-breakpoint
+ALTER TABLE "bucket_grant" ADD CONSTRAINT "bucket_grant_credential_id_credential_id_fkey" FOREIGN KEY ("credential_id","organization_id") REFERENCES "credential"("id","organization_id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "bucket_grant" ADD CONSTRAINT "bucket_grant_bucket_id_fk" FOREIGN KEY ("bucket_id") REFERENCES "bucket"("id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "s3_providers" ADD CONSTRAINT "s3_providers_credential_secret_id_fk" FOREIGN KEY ("credential_secret_id") REFERENCES "secret"("id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "s3_providers" ADD CONSTRAINT "s3_providers_mirror_provider_id_fk" FOREIGN KEY ("mirror_provider_id") REFERENCES "s3_providers"("id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "regions" ADD CONSTRAINT "regions_s3_provider_id_s3_providers_id_fkey" FOREIGN KEY ("s3_provider_id") REFERENCES "s3_providers"("id") ON DELETE SET NULL;--> statement-breakpoint
 ALTER TABLE "registry_storage" ADD CONSTRAINT "registry_storage_provider_id_s3_providers_id_fkey" FOREIGN KEY ("provider_id") REFERENCES "s3_providers"("id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "credential" ADD CONSTRAINT "credential_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
-ALTER TABLE "credential" ADD CONSTRAINT "credential_secret_id_fk" FOREIGN KEY ("secret_id") REFERENCES "secret"("id") ON DELETE RESTRICT;--> statement-breakpoint
+ALTER TABLE "credential" ADD CONSTRAINT "credential_secret_id_fk" FOREIGN KEY ("secret_id","organization_id") REFERENCES "secret"("id","organization_id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "secret" ADD CONSTRAINT "secret_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "registry_maintenance" ADD CONSTRAINT "registry_maintenance_active_job_id_worker_queue_id_fkey" FOREIGN KEY ("active_job_id") REFERENCES "worker_queue"("id") ON DELETE SET NULL;--> statement-breakpoint
 ALTER TABLE "worker_queue" ADD CONSTRAINT "worker_queue_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint

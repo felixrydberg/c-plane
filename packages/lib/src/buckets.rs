@@ -121,12 +121,17 @@ pub mod credentials {
     }
 
     pub async fn delete<C: ConnectionTrait>(connection: &C, id: Uuid) -> Result<()> {
-        connection
+        let result = connection
             .execute(statement(
                 "WITH deleted_credential AS (DELETE FROM credential WHERE id=$1 RETURNING secret_id) DELETE FROM secret USING deleted_credential WHERE secret.id=deleted_credential.secret_id",
                 vec![id.into()],
             ))
             .await?;
+        if result.rows_affected() == 0 {
+            return Err(Box::new(sea_orm::DbErr::RecordNotFound(
+                "Credential not found".to_owned(),
+            )));
+        }
         Ok(())
     }
 
@@ -135,22 +140,32 @@ pub mod credentials {
         id: Uuid,
         ciphertext: &str,
     ) -> Result<()> {
-        connection
+        let result = connection
             .execute(statement(
                 "UPDATE secret SET ciphertext=$2, updated_at=NOW() WHERE id=(SELECT secret_id FROM credential WHERE id=$1)",
                 vec![id.into(), ciphertext.to_owned().into()],
             ))
             .await?;
+        if result.rows_affected() == 0 {
+            return Err(Box::new(sea_orm::DbErr::RecordNotFound(
+                "Credential not found".to_owned(),
+            )));
+        }
         Ok(())
     }
 
     pub async fn rename<C: ConnectionTrait>(connection: &C, id: Uuid, name: &str) -> Result<()> {
-        connection
+        let result = connection
             .execute(statement(
                 "UPDATE credential SET access_key_id=$2, updated_at=NOW() WHERE id=$1",
                 vec![id.into(), name.to_owned().into()],
             ))
             .await?;
+        if result.rows_affected() == 0 {
+            return Err(Box::new(sea_orm::DbErr::RecordNotFound(
+                "Credential not found".to_owned(),
+            )));
+        }
         Ok(())
     }
 

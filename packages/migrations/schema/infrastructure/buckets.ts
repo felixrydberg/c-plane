@@ -39,7 +39,7 @@ export const bucket = pgTable.withRLS("bucket", {
 
 export const bucket_grant = pgTable.withRLS("bucket_grant", {
   id: uuid("id").primaryKey(),
-  credential_id: uuid("credential_id").notNull().references(() => credential.id, { onDelete: "cascade" }),
+  credential_id: uuid("credential_id").notNull(),
   bucket_id: uuid("bucket_id").notNull(),
   organization_id: uuid("organization_id"),
   prefix: text("prefix").notNull().default(""),
@@ -54,6 +54,11 @@ export const bucket_grant = pgTable.withRLS("bucket_grant", {
     table.bucket_id,
     table.prefix,
   ),
+  foreignKey({
+    columns: [table.credential_id, table.organization_id],
+    foreignColumns: [credential.id, credential.organization_id],
+    name: "bucket_grant_credential_id_credential_id_fkey",
+  }).onDelete("cascade"),
   foreignKey({
     columns: [table.bucket_id],
     foreignColumns: [bucket.id],
