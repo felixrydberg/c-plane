@@ -1,10 +1,10 @@
 use crate::errors::AppError;
-use aws_sdk_s3::{
-    config::{BehaviorVersion, Credentials, Region},
-    types::{BucketLocationConstraint, CreateBucketConfiguration},
+use aws_sdk_s3::config::{BehaviorVersion, Credentials, Region};
+use lib::{
+    buckets,
+    cache::S3_PROVIDER_CREDENTIAL_CACHE_PREFIX,
+    secrets::{self, Client, PLATFORM_KEY},
 };
-use base64::{Engine, engine::general_purpose::STANDARD};
-use lib::{cache::S3_PROVIDER_CREDENTIAL_CACHE_PREFIX, secrets::Secrets};
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -28,7 +28,7 @@ pub struct S3ProviderCredentials {
     pub session_token: Option<String>,
     pub endpoint_url: String,
     pub provider_region: Option<String>,
-    pub provider_type: String,
+    pub name: String,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -40,20 +40,15 @@ pub struct S3AccessKeySecret {
     pub secret_access_key: String,
 }
 
-#[derive(Deserialize, Serialize)]
-struct BucketKey {
-    key: String,
-}
-
 #[derive(Clone)]
 pub struct S3ProviderClient {
     database: DatabaseConnection,
-    secrets: Secrets,
+    secrets: Client,
     redis_url: String,
 }
 
 impl S3ProviderClient {
-    pub fn new(database: DatabaseConnection, secrets: Secrets, redis_url: String) -> Self {
+    pub fn new(database: DatabaseConnection, secrets: Client, redis_url: String) -> Self {
         Self {
             database,
             secrets,
@@ -83,23 +78,22 @@ impl S3ProviderClient {
             .database
             .query_one(Statement::from_sql_and_values(
                 DatabaseBackend::Postgres,
-                "SELECT endpoint_url, provider_region, provider_type::text FROM s3_providers WHERE id=$1 AND is_active=true",
+                "SELECT s3_providers.name, s3_providers.endpoint_url, s3_providers.provider_region, secret.ciphertext FROM s3_providers JOIN secret ON secret.id=s3_providers.credential_secret_id WHERE s3_providers.id=$1 AND s3_providers.is_active=true AND secret.scope='platform'::secret_scope AND secret.organization_id IS NULL",
                 vec![provider_id.into()],
             ))
             .await?
             .ok_or_else(|| AppError::NotFound("S3 provider not found".into()))?;
-        let secret = self
-            .secrets
-            .get::<S3ProviderSecret>(&format!("platform/s3/providers/{provider_id}"))
-            .await?
-            .ok_or_else(|| AppError::NotFound("S3 provider credentials not found".into()))?;
+        let ciphertext: String = row.try_get("", "ciphertext")?;
+        let plaintext = secrets::decrypt(&self.secrets, PLATFORM_KEY, &ciphertext).await?;
+        let secret: S3ProviderSecret = serde_json::from_slice(&plaintext)
+            .map_err(|error| AppError::Internal(error.to_string()))?;
         let credentials = S3ProviderCredentials {
             access_key_id: secret.access_key_id,
             secret_access_key: secret.secret_access_key,
             session_token: secret.session_token,
             endpoint_url: row.try_get("", "endpoint_url")?,
             provider_region: row.try_get("", "provider_region")?,
-            provider_type: row.try_get("", "provider_type")?,
+            name: row.try_get("", "name")?,
         };
         redis::cmd("SETEX")
             .arg(cache_key)
@@ -116,111 +110,58 @@ impl S3ProviderClient {
 
     pub async fn access_key(
         &self,
-        access_key: &str,
+        _access_key: &str,
     ) -> Result<Option<S3AccessKeySecret>, AppError> {
-        Ok(self
-            .secrets
-            .get(&format!("platform/s3/access-keys/{access_key}"))
-            .await?)
+        Ok(None)
     }
 
     pub async fn store_access_key(
         &self,
-        access_key: &str,
-        secret: &S3AccessKeySecret,
+        _access_key: &str,
+        _secret: &S3AccessKeySecret,
     ) -> Result<(), AppError> {
-        self.secrets
-            .set(&format!("platform/s3/access-keys/{access_key}"), secret)
-            .await?;
-        Ok(())
+        pending_secret_migration()
     }
 
     pub async fn delete_access_key(&self, access_key: &str) -> Result<(), AppError> {
         self.invalidate_access_token_cache(access_key).await?;
-        self.secrets
-            .delete(&format!("platform/s3/access-keys/{access_key}"))
-            .await?;
         Ok(())
     }
 
-    pub async fn bucket_key(&self, bucket_id: Uuid) -> Result<String, AppError> {
-        self.secrets
-            .get::<BucketKey>(&format!("storage/sse-c/{bucket_id}"))
-            .await?
-            .map(|secret| secret.key)
-            .ok_or_else(|| AppError::NotFound("Bucket encryption key not found".into()))
+    pub async fn bucket_key(&self, _bucket_id: Uuid) -> Result<String, AppError> {
+        pending_secret_migration()
     }
 
-    pub async fn ensure_bucket_sse_key(&self, bucket_id: Uuid) -> Result<(), AppError> {
-        let path = format!("storage/sse-c/{bucket_id}");
-        if self.secrets.get::<BucketKey>(&path).await?.is_none() {
-            let mut raw = [0; 32];
-            getrandom::fill(&mut raw).map_err(|error| {
-                AppError::Internal(format!("Failed to generate bucket key: {error}"))
-            })?;
-            self.secrets
-                .set(
-                    &path,
-                    &BucketKey {
-                        key: STANDARD.encode(raw),
-                    },
-                )
-                .await?;
-        }
-        Ok(())
+    pub async fn ensure_bucket_sse_key(&self, _bucket_id: Uuid) -> Result<(), AppError> {
+        pending_secret_migration()
     }
 
-    pub async fn create_bucket(
-        &self,
-        provider_id: Uuid,
-        bucket_name: &str,
-    ) -> Result<(), AppError> {
+    pub async fn create_bucket(&self, provider_id: Uuid, bucket_id: Uuid) -> Result<(), AppError> {
         let provider = self.credentials(provider_id).await?;
         let region = provider
             .provider_region
             .clone()
             .unwrap_or_else(|| "us-east-1".into());
         let client = aws_sdk_s3::Client::from_conf(s3_config(&provider, &region));
-        let request = client.create_bucket().bucket(bucket_name);
-        let result = if provider.provider_type == "aws_s3" && region != "us-east-1" {
-            request
-                .create_bucket_configuration(
-                    CreateBucketConfiguration::builder()
-                        .location_constraint(BucketLocationConstraint::from(region.as_str()))
-                        .build(),
-                )
-                .send()
-                .await
-        } else {
-            request.send().await
-        };
-        result.map_err(|_error| {
-            tracing::error!(%provider_id, "S3 provider bucket creation failed");
-            AppError::Internal("S3 provider bucket creation failed".into())
-        })?;
-        Ok(())
+        buckets::create(&client, Some(region.as_str()), bucket_id)
+            .await
+            .map_err(|error| {
+                tracing::error!(%provider_id, %error, "S3 provider bucket creation failed");
+                AppError::Internal("S3 provider bucket creation failed".into())
+            })
     }
 
-    pub async fn delete_bucket(
-        &self,
-        provider_id: Uuid,
-        bucket_name: &str,
-    ) -> Result<(), AppError> {
+    pub async fn delete_bucket(&self, provider_id: Uuid, bucket_id: Uuid) -> Result<(), AppError> {
         let provider = self.credentials(provider_id).await?;
         let region = provider
             .provider_region
             .clone()
             .unwrap_or_else(|| "us-east-1".into());
-        aws_sdk_s3::Client::from_conf(s3_config(&provider, &region))
-            .delete_bucket()
-            .bucket(bucket_name)
-            .send()
-            .await
-            .map_err(|_error| {
-                tracing::error!(%provider_id, "S3 provider bucket deletion failed");
-                AppError::Conflict("S3 provider bucket deletion failed".into())
-            })?;
-        Ok(())
+        let client = aws_sdk_s3::Client::from_conf(s3_config(&provider, &region));
+        buckets::delete(&client, bucket_id).await.map_err(|error| {
+            tracing::error!(%provider_id, %error, "S3 provider bucket deletion failed");
+            AppError::Conflict("S3 provider bucket deletion failed".into())
+        })
     }
 
     pub async fn invalidate_access_token_cache(&self, access_key: &str) -> Result<(), AppError> {
@@ -255,6 +196,13 @@ impl S3ProviderClient {
             .map_err(|error| AppError::Internal(error.to_string()))?;
         Ok(())
     }
+}
+
+// ponytail: fail closed until these callers use Transit-backed Postgres rows.
+fn pending_secret_migration<T>() -> Result<T, AppError> {
+    Err(AppError::ServiceUnavailable(
+        "Secret storage migration is not complete".into(),
+    ))
 }
 
 fn s3_config(provider: &S3ProviderCredentials, region: &str) -> aws_sdk_s3::Config {

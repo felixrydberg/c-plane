@@ -1,7 +1,7 @@
-path "cplane/data/platform/s3/providers/*" {
-  capabilities = ["create", "update", "read", "delete"]
+path "transit/encrypt/platform" {
+  capabilities = ["update"]
 }
 
-path "cplane/metadata/platform/s3/providers/*" {
-  capabilities = ["delete"]
+path "transit/decrypt/platform" {
+  capabilities = ["update"]
 }

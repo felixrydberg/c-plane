@@ -8,10 +8,7 @@ use serde_json::json;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{
-    errors::AppError, middleware::auth::AuthContext, models::entities::external_registry,
-    state::get_app_state,
-};
+use crate::{errors::AppError, middleware::auth::AuthContext, models::entities::external_registry};
 
 use super::{
     databases::{verify_org_access, verify_org_owner},
@@ -140,12 +137,7 @@ pub async fn create_external_registry(
 
     match result {
         Ok(created) => Ok((StatusCode::CREATED, Json(response(&created)))),
-        Err(error) => {
-            if let Err(cleanup_error) = delete_secret(organization_id, registry_id).await {
-                tracing::warn!(%cleanup_error, %organization_id, %registry_id, "failed to clean up external registry secret after create failure");
-            }
-            Err(error)
-        }
+        Err(error) => Err(error),
     }
 }
 
@@ -259,9 +251,6 @@ pub async fn delete_external_registry(
     )
     .await?;
     scoped.commit().await?;
-    if let Err(error) = delete_secret(organization_id, registry_id).await {
-        tracing::warn!(%error, %organization_id, %registry_id, "failed to delete external registry secret");
-    }
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -330,47 +319,23 @@ fn valid_dns_label(value: &str) -> bool {
             .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
-struct ExternalRegistrySecret {
-    token: String,
-}
-
-fn secret_path(organization_id: Uuid, registry_id: Uuid) -> String {
-    format!("organizations/{organization_id}/registries/{registry_id}")
-}
-
 async fn store_secret(
-    organization_id: Uuid,
-    registry_id: Uuid,
-    token: &str,
+    _organization_id: Uuid,
+    _registry_id: Uuid,
+    _token: &str,
 ) -> Result<(), AppError> {
-    get_app_state()
-        .secrets
-        .set(
-            &secret_path(organization_id, registry_id),
-            &ExternalRegistrySecret {
-                token: token.into(),
-            },
-        )
-        .await?;
-    Ok(())
+    pending_secret_migration()
 }
 
-pub async fn load_secret(organization_id: Uuid, registry_id: Uuid) -> Result<String, AppError> {
-    get_app_state()
-        .secrets
-        .get::<ExternalRegistrySecret>(&secret_path(organization_id, registry_id))
-        .await?
-        .map(|secret| secret.token)
-        .ok_or_else(|| AppError::Conflict("External registry credentials are unavailable".into()))
+pub async fn load_secret(_organization_id: Uuid, _registry_id: Uuid) -> Result<String, AppError> {
+    pending_secret_migration()
 }
 
-async fn delete_secret(organization_id: Uuid, registry_id: Uuid) -> Result<(), AppError> {
-    get_app_state()
-        .secrets
-        .delete(&secret_path(organization_id, registry_id))
-        .await?;
-    Ok(())
+// ponytail: fail closed until external registry tokens use Postgres Secret rows.
+fn pending_secret_migration<T>() -> Result<T, AppError> {
+    Err(AppError::ServiceUnavailable(
+        "Secret storage migration is not complete".into(),
+    ))
 }
 
 fn required(value: String, name: &str) -> Result<String, AppError> {

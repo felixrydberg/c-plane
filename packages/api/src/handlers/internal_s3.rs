@@ -170,7 +170,7 @@ async fn resolve_uncached(
             let rows = tx
                 .query_all(Statement::from_sql_and_values(
                     DatabaseBackend::Postgres,
-                    "SELECT permission.bucket_id, permission.can_read, permission.can_write, bucket.name AS bucket_name, region.slug AS region_slug, provider.id AS provider_id, CONCAT('cp-', REPLACE(bucket.id::text, '-', '')) AS physical_bucket_name FROM storage_access_token_bucket permission JOIN bucket ON bucket.id=permission.bucket_id JOIN regions region ON region.id=bucket.region_id JOIN s3_providers provider ON provider.id=region.s3_provider_id WHERE permission.access_token_id=$1 AND bucket.project_id=$2 AND provider.is_active=true",
+                    "SELECT permission.bucket_id, permission.can_read, permission.can_write, storage.name AS bucket_name, region.slug AS region_slug, provider.id AS provider_id, CONCAT('cp-', REPLACE(storage.id::text, '-', '')) AS physical_bucket_name FROM storage_access_token_bucket permission JOIN storage ON storage.id=permission.bucket_id JOIN regions region ON region.id=storage.region_id JOIN s3_providers provider ON provider.id=region.s3_provider_id WHERE permission.access_token_id=$1 AND storage.project_id=$2 AND provider.is_active=true",
                     vec![secret.credential_id.into(), project_id.into()],
                 ))
                 .await?;

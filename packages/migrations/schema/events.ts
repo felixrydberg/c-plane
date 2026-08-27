@@ -4,7 +4,7 @@ import type { EventType } from "../utils/event-types.ts";
 export type { EventType } from "../utils/event-types.ts";
 import { app_tenant, orgAllowed } from "./rls.ts";
 
-export const event = pgTable("event", {
+export const event = pgTable.withRLS("event", {
   id: uuid("id").primaryKey(),
   organization_id: uuid("organization_id")
   .notNull()
@@ -26,4 +26,4 @@ export const event = pgTable("event", {
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
-]).enableRLS();
+]);

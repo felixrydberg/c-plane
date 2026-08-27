@@ -763,11 +763,13 @@ async fn update_container_with_options(
 
     let latest_version = match new_version {
         Some(v) => Some(v),
-        None => container_version::Entity::find()
-            .filter(container_version::Column::ContainerId.eq(container_id))
-            .order_by_desc(container_version::Column::Version)
-            .one(tx)
-            .await?,
+        None => {
+            container_version::Entity::find()
+                .filter(container_version::Column::ContainerId.eq(container_id))
+                .order_by_desc(container_version::Column::Version)
+                .one(tx)
+                .await?
+        }
     };
 
     scoped.commit().await?;

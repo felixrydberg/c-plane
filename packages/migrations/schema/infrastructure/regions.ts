@@ -6,7 +6,7 @@ import { app_tenant } from "../rls.ts";
 export const region_status = pgEnum("region_status", ["active", "inactive", "maintenance"]);
 export const region_routing_mode = pgEnum("region_routing_mode", ["active", "draining", "disabled"]);
 
-export const region = pgTable("regions", {
+export const region = pgTable.withRLS("regions", {
   id: uuid("id").primaryKey(),
   slug: text("slug").notNull().unique(),
   display_name: text("display_name").notNull(),
@@ -26,4 +26,4 @@ export const region = pgTable("regions", {
     to: app_tenant,
     using: sql`true`,
   }),
-]).enableRLS();
+]);

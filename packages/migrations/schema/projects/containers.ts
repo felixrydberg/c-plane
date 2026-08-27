@@ -5,7 +5,7 @@ import { region } from '../infrastructure/regions.ts';
 import { app_tenant, orgAllowed } from '../rls.ts';
 import { external_registry } from '../tenants/registry.ts';
 
-export const container = pgTable('container', {
+export const container = pgTable.withRLS('container', {
   id: uuid("id").primaryKey(),
   project_id: uuid("project_id")
     .notNull()
@@ -29,9 +29,9 @@ export const container = pgTable('container', {
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
-]).enableRLS();
+]);
 
-export const container_version = pgTable('container_version', {
+export const container_version = pgTable.withRLS('container_version', {
   id: uuid("id").primaryKey(),
   container_id: uuid("container_id")
     .notNull()
@@ -69,4 +69,4 @@ export const container_version = pgTable('container_version', {
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
-]).enableRLS();
+]);

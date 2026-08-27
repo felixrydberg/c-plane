@@ -3573,12 +3573,16 @@ dependencies = [
 name = "lib"
 version = "0.1.0"
 dependencies = [
+ "aws-sdk-s3",
  "axum",
+ "base64",
  "reqwest 0.12.28",
+ "sea-orm",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

@@ -1,7 +1,7 @@
 use crate::config::{Config, load_config};
 use crate::errors::AppError;
 use crate::services::s3_providers::S3ProviderClient;
-use lib::secrets::Secrets;
+use lib::secrets::Client;
 use sea_orm::{
     ConnectOptions, ConnectionTrait, Database, DatabaseBackend, DatabaseConnection,
     DatabaseTransaction, Statement, TransactionTrait,
@@ -96,7 +96,6 @@ pub struct State {
     pub identity_db: AppDatabase,
     pub tenant_db: DatabaseConnection,
     pub config: Config,
-    pub secrets: Secrets,
     pub s3_providers: S3ProviderClient,
     pub storage_client: reqwest::Client,
 }
@@ -108,7 +107,7 @@ pub async fn create_app_state() -> Result<State, AppError> {
     let identity_db = connect_database(&config.identity_database_url, "app_identity").await?;
     let tenant_db = connect_database(&config.tenant_database_url, "app_tenant").await?;
 
-    let secrets = Secrets::from_env()?;
+    let secrets = Client::from_env()?;
     let s3_providers =
         S3ProviderClient::new(tenant_db.clone(), secrets.clone(), config.redis_url.clone());
     let storage_client = reqwest::Client::builder()
@@ -120,7 +119,6 @@ pub async fn create_app_state() -> Result<State, AppError> {
         identity_db: AppDatabase(identity_db),
         tenant_db,
         config,
-        secrets,
         s3_providers,
         storage_client,
     };

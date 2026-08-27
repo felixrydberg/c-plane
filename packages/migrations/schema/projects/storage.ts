@@ -5,9 +5,9 @@ import { organization } from "../tenants/organization.ts";
 import { app_tenant, orgAllowed } from "../rls.ts";
 import { region } from "../infrastructure/regions.ts";
 
-export const bucket_status = pgEnum("bucket_status", ["provisioning", "ready", "deleting", "failed"]);
+export const storage_status = pgEnum("storage_status", ["provisioning", "ready", "deleting", "failed"]);
 
-export const bucket = pgTable('bucket', {
+export const storage = pgTable.withRLS('storage', {
   id: uuid("id").primaryKey(),
   project_id: uuid("project_id")
     .notNull()
@@ -17,23 +17,23 @@ export const bucket = pgTable('bucket', {
     .references(() => organization.id, { onDelete: "cascade" }),
   region_id: uuid("region_id").notNull().references(() => region.id, { onDelete: "restrict" }),
   name: text("name").notNull(),
-  status: bucket_status("status").notNull().default("provisioning"),
+  status: storage_status("status").notNull().default("provisioning"),
 }, (table) => [
-  uniqueIndex("bucket_name_idx").on(table.name),
-  unique("bucket_id_organization_id_uidx").on(table.id, table.organization_id),
-  index("bucket_project_id_idx").on(table.project_id),
-  index("bucket_organization_id_idx").on(table.organization_id),
-  index("bucket_region_id_idx").on(table.region_id),
-  pgPolicy("bucket_tenant_rls", {
+  uniqueIndex("storage_name_idx").on(table.name),
+  unique("storage_id_organization_id_uidx").on(table.id, table.organization_id),
+  index("storage_project_id_idx").on(table.project_id),
+  index("storage_organization_id_idx").on(table.organization_id),
+  index("storage_region_id_idx").on(table.region_id),
+  pgPolicy("storage_tenant_rls", {
     as: "permissive",
     for: "all",
     to: app_tenant,
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
-]).enableRLS();
+]);
 
-export const storage_access_token = pgTable("storage_access_token", {
+export const storage_access_token = pgTable.withRLS("storage_access_token", {
   id: uuid("id").primaryKey(),
   organization_id: uuid("organization_id")
     .notNull()
@@ -60,9 +60,9 @@ export const storage_access_token = pgTable("storage_access_token", {
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
-]).enableRLS();
+]);
 
-export const storage_access_token_bucket = pgTable("storage_access_token_bucket", {
+export const storage_access_token_bucket = pgTable.withRLS("storage_access_token_bucket", {
   access_token_id: uuid("access_token_id").notNull(),
   bucket_id: uuid("bucket_id").notNull(),
   organization_id: uuid("organization_id")
@@ -79,7 +79,7 @@ export const storage_access_token_bucket = pgTable("storage_access_token_bucket"
   }).onDelete("cascade"),
   foreignKey({
     columns: [table.bucket_id, table.organization_id],
-    foreignColumns: [bucket.id, bucket.organization_id],
+    foreignColumns: [storage.id, storage.organization_id],
     name: "storage_access_token_bucket_bucket_scope_fk",
   }).onDelete("cascade"),
   index("storage_access_token_bucket_token_id_idx").on(table.access_token_id),
@@ -91,4 +91,4 @@ export const storage_access_token_bucket = pgTable("storage_access_token_bucket"
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
-]).enableRLS();
+]);

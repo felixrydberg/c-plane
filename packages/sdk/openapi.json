@@ -4659,7 +4659,7 @@
         "required": [
           "access_key_id",
           "endpoint_url",
-          "provider_type"
+          "name"
         ],
         "properties": {
           "access_key_id": {
@@ -4674,7 +4674,7 @@
               "null"
             ]
           },
-          "provider_type": {
+          "name": {
             "type": "string"
           }
         }

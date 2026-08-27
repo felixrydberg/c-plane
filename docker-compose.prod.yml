@@ -253,7 +253,7 @@ services:
 
   openbao-init:
     image: openbao/openbao:2.5.5
-    command: ["sh", "-ec", "bao operator unseal \"$${BAO_UNSEAL_KEY}\" && (bao secrets enable -path=cplane -version=2 kv 2>/dev/null || true)"]
+    command: ["sh", "-ec", "bao operator unseal \"$${BAO_UNSEAL_KEY}\" && (bao secrets enable transit 2>/dev/null || true)"]
     environment:
       BAO_ADDR: http://openbao:8200
       BAO_TOKEN: ${OPENBAO_ROOT_TOKEN}

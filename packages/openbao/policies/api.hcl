@@ -1,27 +1,19 @@
-path "cplane/data/platform/s3/providers/*" {
-  capabilities = ["read"]
+path "transit/encrypt/platform" {
+  capabilities = ["update"]
 }
 
-path "cplane/data/platform/s3/access-keys/*" {
-  capabilities = ["create", "update", "read", "delete"]
+path "transit/decrypt/platform" {
+  capabilities = ["update"]
 }
 
-path "cplane/metadata/platform/s3/access-keys/*" {
-  capabilities = ["delete"]
+path "transit/keys/tenant-*" {
+  capabilities = ["create", "update", "read"]
 }
 
-path "cplane/data/storage/sse-c/*" {
-  capabilities = ["create", "update", "read", "delete"]
+path "transit/encrypt/tenant-*" {
+  capabilities = ["update"]
 }
 
-path "cplane/metadata/storage/sse-c/*" {
-  capabilities = ["delete"]
-}
-
-path "cplane/data/organizations/*" {
-  capabilities = ["create", "update", "read", "delete"]
-}
-
-path "cplane/metadata/organizations/*" {
-  capabilities = ["delete"]
+path "transit/decrypt/tenant-*" {
+  capabilities = ["update"]
 }

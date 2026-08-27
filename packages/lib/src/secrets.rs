@@ -1,5 +1,5 @@
-use reqwest::{Method, StatusCode};
-use serde::{Serialize, de::DeserializeOwned};
+use base64::{Engine, engine::general_purpose::STANDARD};
+use reqwest::StatusCode;
 use serde_json::{Value, json};
 use std::{env, sync::Arc, time::Duration};
 use thiserror::Error;
@@ -17,15 +17,17 @@ pub enum SecretError {
     InvalidResponse(#[from] serde_json::Error),
 }
 
+pub const PLATFORM_KEY: &str = "platform";
+
 #[derive(Clone)]
-pub struct Secrets {
+pub struct Client {
     http: reqwest::Client,
     address: String,
     token: Arc<RwLock<Option<String>>>,
     approle: Option<(String, String)>,
 }
 
-impl Secrets {
+impl Client {
     pub fn from_env() -> Result<Self, SecretError> {
         let address = required("OPENBAO_ADDR")?;
         let token = env::var("OPENBAO_TOKEN")
@@ -54,56 +56,12 @@ impl Secrets {
         })
     }
 
-    pub async fn get<T: DeserializeOwned>(&self, path: &str) -> Result<Option<T>, SecretError> {
-        let response = self.request(Method::GET, path, None).await?;
-        if response.status() == StatusCode::NOT_FOUND {
-            return Ok(None);
-        }
-        if !response.status().is_success() {
-            return Err(SecretError::Status(response.status()));
-        }
-        let body: KvResponse<T> = response.json().await?;
-        Ok(Some(body.data.data))
-    }
-
-    pub async fn set<T: Serialize>(&self, path: &str, value: &T) -> Result<(), SecretError> {
-        let response = self
-            .request(Method::POST, path, Some(json!({ "data": value })))
-            .await?;
-        if !response.status().is_success() {
-            return Err(SecretError::Status(response.status()));
-        }
-        Ok(())
-    }
-
-    pub async fn delete(&self, path: &str) -> Result<(), SecretError> {
-        let response = self.request(Method::DELETE, path, None).await?;
-        if !response.status().is_success() && response.status() != StatusCode::NOT_FOUND {
-            return Err(SecretError::Status(response.status()));
-        }
-        Ok(())
-    }
-
-    async fn request(
-        &self,
-        method: Method,
-        path: &str,
-        body: Option<Value>,
-    ) -> Result<reqwest::Response, SecretError> {
+    async fn post(&self, path: &str, body: Value) -> Result<reqwest::Response, SecretError> {
         for attempt in 0..2 {
             let token = self.token().await?;
-            let url = if method == Method::DELETE {
-                format!("{}/v1/cplane/metadata/{path}", self.address)
-            } else {
-                format!("{}/v1/cplane/data/{path}", self.address)
-            };
-            let mut request = self
-                .http
-                .request(method.clone(), url)
-                .header("X-Vault-Token", token);
-            if let Some(body) = body.as_ref() {
-                request = request.json(body);
-            }
+            let url = format!("{}/v1/{path}", self.address);
+            let mut request = self.http.post(url).header("X-Vault-Token", token);
+            request = request.json(&body);
             let response = request.send().await?;
             if attempt == 0
                 && self.approle.is_some()
@@ -127,7 +85,7 @@ impl Secrets {
         let (role_id, secret_id) = self
             .approle
             .as_ref()
-            .expect("Secrets always has a token or AppRole credentials");
+            .expect("Client always has a token or AppRole credentials");
         let response = self
             .http
             .post(format!("{}/v1/auth/approle/login", self.address))
@@ -141,6 +99,46 @@ impl Secrets {
         *self.token.write().await = Some(token.clone());
         Ok(token)
     }
+}
+
+pub async fn encrypt(client: &Client, key: &str, plaintext: &[u8]) -> Result<String, SecretError> {
+    let response = client
+        .post(
+            &format!("transit/encrypt/{key}"),
+            json!({ "plaintext": STANDARD.encode(plaintext) }),
+        )
+        .await?;
+    if !response.status().is_success() {
+        return Err(SecretError::Status(response.status()));
+    }
+    Ok(response
+        .json::<TransitEncryptResponse>()
+        .await?
+        .data
+        .ciphertext)
+}
+
+pub async fn decrypt(client: &Client, key: &str, ciphertext: &str) -> Result<Vec<u8>, SecretError> {
+    let response = client
+        .post(
+            &format!("transit/decrypt/{key}"),
+            json!({ "ciphertext": ciphertext }),
+        )
+        .await?;
+    if !response.status().is_success() {
+        return Err(SecretError::Status(response.status()));
+    }
+    let plaintext = response
+        .json::<TransitDecryptResponse>()
+        .await?
+        .data
+        .plaintext;
+    STANDARD.decode(plaintext).map_err(|error| {
+        SecretError::InvalidResponse(serde_json::Error::io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            error,
+        )))
+    })
 }
 
 fn required(name: &'static str) -> Result<String, SecretError> {
@@ -161,20 +159,29 @@ struct LoginAuth {
 }
 
 #[derive(serde::Deserialize)]
-struct KvResponse<T> {
-    data: KvData<T>,
+struct TransitEncryptResponse {
+    data: TransitCiphertext,
 }
 
 #[derive(serde::Deserialize)]
-struct KvData<T> {
-    data: T,
+struct TransitCiphertext {
+    ciphertext: String,
+}
+
+#[derive(serde::Deserialize)]
+struct TransitDecryptResponse {
+    data: TransitPlaintext,
+}
+
+#[derive(serde::Deserialize)]
+struct TransitPlaintext {
+    plaintext: String,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use axum::{Json, Router, extract::State, http::HeaderMap, routing::any};
-    use serde::{Deserialize, Serialize};
     use std::sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
@@ -183,11 +190,6 @@ mod tests {
     #[derive(Clone)]
     struct TestState {
         logins: Arc<AtomicUsize>,
-    }
-
-    #[derive(Debug, Deserialize, PartialEq, Serialize)]
-    struct TestSecret {
-        value: String,
     }
 
     async fn handler(
@@ -209,22 +211,29 @@ mod tests {
         {
             return (StatusCode::FORBIDDEN, Json(json!({})));
         }
-        match *request.method() {
-            Method::GET if path.ends_with("/missing") => (StatusCode::NOT_FOUND, Json(json!({}))),
-            Method::DELETE if path.ends_with("/missing-delete") => {
-                (StatusCode::NOT_FOUND, Json(json!({})))
-            }
-            Method::GET => (
+        if path.starts_with("/v1/transit/encrypt/") {
+            return (
                 StatusCode::OK,
-                Json(json!({ "data": { "data": { "value": "stored" } } })),
-            ),
-            Method::POST | Method::DELETE => (StatusCode::NO_CONTENT, Json(json!({}))),
-            _ => (StatusCode::METHOD_NOT_ALLOWED, Json(json!({}))),
+                Json(json!({ "data": { "ciphertext": "vault:v1:ciphertext" } })),
+            );
         }
+        if path.starts_with("/v1/transit/decrypt/") {
+            if path.ends_with("/malformed") {
+                return (
+                    StatusCode::OK,
+                    Json(json!({ "data": { "plaintext": "%%%" } })),
+                );
+            }
+            return (
+                StatusCode::OK,
+                Json(json!({ "data": { "plaintext": STANDARD.encode(b"decrypted") } })),
+            );
+        }
+        (StatusCode::METHOD_NOT_ALLOWED, Json(json!({})))
     }
 
     #[tokio::test]
-    async fn gets_sets_deletes_and_reauthenticates_once() {
+    async fn encrypts_and_decrypts() {
         let state = TestState {
             logins: Arc::new(AtomicUsize::new(0)),
         };
@@ -239,32 +248,21 @@ mod tests {
             )
             .into_future(),
         );
-        let secrets = Secrets::new(
+        let secrets = Client::new(
             format!("http://{address}"),
             None,
             Some(("role".into(), "secret".into())),
         )
         .unwrap();
 
+        let ciphertext = encrypt(&secrets, "tenant-key", b"plaintext").await.unwrap();
+        assert_eq!(ciphertext, "vault:v1:ciphertext");
         assert_eq!(
-            secrets.get::<TestSecret>("present").await.unwrap(),
-            Some(TestSecret {
-                value: "stored".into()
-            })
+            decrypt(&secrets, "tenant-key", &ciphertext).await.unwrap(),
+            b"decrypted"
         );
+        assert!(decrypt(&secrets, "malformed", &ciphertext).await.is_err());
         assert_eq!(state.logins.load(Ordering::SeqCst), 2);
-        assert_eq!(secrets.get::<TestSecret>("missing").await.unwrap(), None);
-        secrets
-            .set(
-                "present",
-                &TestSecret {
-                    value: "new".into(),
-                },
-            )
-            .await
-            .unwrap();
-        secrets.delete("present").await.unwrap();
-        secrets.delete("missing-delete").await.unwrap();
         server.abort();
     }
 }

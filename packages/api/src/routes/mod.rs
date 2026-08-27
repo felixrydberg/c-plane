@@ -604,9 +604,6 @@ mod tests {
         );
         assert_eq!(registered_scope("GET", "/health"), None);
         assert_eq!(registered_scope("GET", "/api/registry/token"), None);
-        assert_eq!(
-            registered_scope("GET", "/api/registry/maintenance"),
-            None
-        );
+        assert_eq!(registered_scope("GET", "/api/registry/maintenance"), None);
     }
 }

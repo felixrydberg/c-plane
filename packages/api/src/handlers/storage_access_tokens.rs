@@ -11,7 +11,7 @@ use uuid::Uuid;
 use crate::{
     errors::AppError,
     middleware::auth::AuthContext,
-    models::entities::{bucket, storage_access_token, storage_access_token_bucket},
+    models::entities::{storage, storage_access_token, storage_access_token_bucket},
     services::events,
     services::s3_providers::S3AccessKeySecret,
     state::get_app_state,
@@ -431,9 +431,9 @@ async fn verify_bucket_permissions(
     permissions: &[BucketPermissionRequest],
 ) -> Result<(), AppError> {
     for permission in permissions {
-        if bucket::Entity::find_by_id(permission.bucket_id)
-            .filter(bucket::Column::ProjectId.eq(project_id))
-            .filter(bucket::Column::OrganizationId.eq(organization_id))
+        if storage::Entity::find_by_id(permission.bucket_id)
+            .filter(storage::Column::ProjectId.eq(project_id))
+            .filter(storage::Column::OrganizationId.eq(organization_id))
             .one(tx)
             .await?
             .is_none()

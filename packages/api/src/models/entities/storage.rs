@@ -2,7 +2,7 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
-#[sea_orm(table_name = "bucket")]
+#[sea_orm(table_name = "storage")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
@@ -10,6 +10,7 @@ pub struct Model {
     pub organization_id: Uuid,
     pub region_id: Uuid,
     pub name: String,
+    pub status: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -3,7 +3,7 @@ import { check, index, integer, jsonb, pgPolicy, pgTable, text, timestamp, uniqu
 import { organization } from "../tenants/organization.ts";
 import { app_tenant } from "../rls.ts";
 
-export const worker_job = pgTable("worker_job", {
+export const worker_queue = pgTable.withRLS("worker_queue", {
   id: uuid("id").primaryKey(),
   organization_id: uuid("organization_id").references(() => organization.id, { onDelete: "cascade" }),
   queue_name: text("queue_name").notNull(),
@@ -22,21 +22,21 @@ export const worker_job = pgTable("worker_job", {
   created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
   updated_at: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 }, (table) => [
-  check("worker_job_status_check", sql`${table.status} in ('queued', 'running', 'succeeded', 'failed')`),
-  check("worker_job_attempts_check", sql`${table.attempts} >= 0 and ${table.max_attempts} > 0`),
-  index("worker_job_organization_id_idx").on(table.organization_id),
-  index("worker_job_claim_idx").on(table.queue_name, table.status, table.available_at, table.created_at),
-  index("worker_job_lease_idx").on(table.status, table.lease_expires_at),
-  uniqueIndex("worker_job_active_dedupe_uidx")
+  check("worker_queue_status_check", sql`${table.status} in ('queued', 'running', 'succeeded', 'failed')`),
+  check("worker_queue_attempts_check", sql`${table.attempts} >= 0 and ${table.max_attempts} > 0`),
+  index("worker_queue_organization_id_idx").on(table.organization_id),
+  index("worker_queue_claim_idx").on(table.queue_name, table.status, table.available_at, table.created_at),
+  index("worker_queue_lease_idx").on(table.status, table.lease_expires_at),
+  uniqueIndex("worker_queue_active_dedupe_uidx")
     .on(table.queue_name, table.dedupe_key)
     .where(sql`${table.dedupe_key} is not null and ${table.status} in ('queued', 'running')`),
-]).enableRLS();
+]);
 
-export const registry_maintenance = pgTable("registry_maintenance", {
+export const registry_maintenance = pgTable.withRLS("registry_maintenance", {
   service: text("service").primaryKey().default("distribution"),
   gc_access_key_id: text("gc_access_key_id").notNull().unique(),
   phase: text("phase").notNull().default("idle"),
-  active_job_id: uuid("active_job_id").references(() => worker_job.id, { onDelete: "set null" }),
+  active_job_id: uuid("active_job_id").references(() => worker_queue.id, { onDelete: "set null" }),
   started_at: timestamp("started_at", { withTimezone: true, mode: "string" }),
   finished_at: timestamp("finished_at", { withTimezone: true, mode: "string" }),
   last_result: text("last_result"),
@@ -52,4 +52,4 @@ export const registry_maintenance = pgTable("registry_maintenance", {
     to: app_tenant,
     using: sql`true`,
   }),
-]).enableRLS();
+]);

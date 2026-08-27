@@ -3,7 +3,7 @@ import { organization } from "./organization.ts";
 import { app_tenant, orgAllowed } from "../rls.ts";
 import { API_KEY_SCOPE_VALUES } from "../../utils/api-key-scopes.ts";
 
-export const api_keys = pgTable("api_keys", {
+export const api_keys = pgTable.withRLS("api_keys", {
   id: uuid("id").primaryKey(),
   organization_id: uuid("organization_id")
     .notNull()
@@ -24,11 +24,11 @@ export const api_keys = pgTable("api_keys", {
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
-]).enableRLS();
+]);
 
 export const api_key_scopes_type = pgEnum("api_key_scopes_type", API_KEY_SCOPE_VALUES);
 
-export const api_key_scopes = pgTable("api_key_scopes", {
+export const api_key_scopes = pgTable.withRLS("api_key_scopes", {
   id: uuid("id").primaryKey(),
   api_key_id: uuid("api_key_id").notNull(),
   organization_id: uuid("organization_id")
@@ -52,4 +52,4 @@ export const api_key_scopes = pgTable("api_key_scopes", {
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
-]).enableRLS();
+]);
