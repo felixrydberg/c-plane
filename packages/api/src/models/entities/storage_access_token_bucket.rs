@@ -23,9 +23,9 @@ pub enum Relation {
     )]
     AccessToken,
     #[sea_orm(
-        belongs_to = "super::bucket::Entity",
+        belongs_to = "super::storage::Entity",
         from = "Column::BucketId",
-        to = "super::bucket::Column::Id",
+        to = "super::storage::Column::Id",
         on_delete = "Cascade"
     )]
     Bucket,

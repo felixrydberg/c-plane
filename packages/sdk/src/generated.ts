@@ -925,7 +925,7 @@ export interface components {
             access_key_id: string;
             endpoint_url: string;
             provider_region?: string | null;
-            provider_type: string;
+            name: string;
         };
         TimelineResponse: {
             created_at: string;

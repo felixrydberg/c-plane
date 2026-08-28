@@ -15,14 +15,12 @@ use crate::{
     errors::AppError,
     middleware::auth::AuthContext,
     models::entities::{
-        bucket,
         region::{self, RegionRoutingMode, RegionStatus},
+        storage,
     },
 };
 
 use super::databases::{verify_org_access, verify_org_owner, verify_project_in_org};
-
-const BUCKET_PREFIX: &str = "cp-";
 
 #[derive(Deserialize)]
 pub struct ListBucketsQuery {
@@ -73,8 +71,8 @@ pub async fn create_bucket(
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
     verify_project_in_org(tx, body.project_id, organization_id).await?;
-    if bucket::Entity::find()
-        .filter(bucket::Column::Name.eq(&name))
+    if storage::Entity::find()
+        .filter(storage::Column::Name.eq(&name))
         .one(tx)
         .await?
         .is_some()
@@ -92,23 +90,19 @@ pub async fn create_bucket(
         .ok_or_else(|| AppError::Conflict("Region has no S3 provider".into()))?;
 
     let bucket_id = Uuid::new_v4();
-    let physical_bucket_name = physical_bucket_name(bucket_id);
-    providers
-        .create_bucket(provider_id, &physical_bucket_name)
-        .await?;
+    providers.create_bucket(provider_id, bucket_id).await?;
     if let Err(error) = providers.ensure_bucket_sse_key(bucket_id).await {
-        let _ = providers
-            .delete_bucket(provider_id, &physical_bucket_name)
-            .await;
+        let _ = providers.delete_bucket(provider_id, bucket_id).await;
         return Err(error);
     }
 
-    let created = bucket::ActiveModel {
+    let created = storage::ActiveModel {
         id: Set(bucket_id),
         project_id: Set(body.project_id),
         organization_id: Set(organization_id),
         region_id: Set(body.region),
         name: Set(name.clone()),
+        status: Default::default(),
     }
     .insert(tx)
     .await?;
@@ -149,9 +143,9 @@ pub async fn list_buckets(
     let tx = scoped.connection();
     verify_project_in_org(tx, query.project_id, organization_id).await?;
 
-    let buckets = bucket::Entity::find()
-        .filter(bucket::Column::ProjectId.eq(query.project_id))
-        .order_by_asc(bucket::Column::Name)
+    let buckets = storage::Entity::find()
+        .filter(storage::Column::ProjectId.eq(query.project_id))
+        .order_by_asc(storage::Column::Name)
         .all(tx)
         .await?;
     scoped.commit().await?;
@@ -182,8 +176,8 @@ pub async fn delete_bucket(
     let providers = crate::state::get_app_state().s3_providers;
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
-    let bucket = bucket::Entity::find_by_id(bucket_id)
-        .filter(bucket::Column::OrganizationId.eq(organization_id))
+    let bucket = storage::Entity::find_by_id(bucket_id)
+        .filter(storage::Column::OrganizationId.eq(organization_id))
         .one(tx)
         .await?
         .ok_or_else(|| AppError::NotFound("Bucket not found".into()))?;
@@ -207,10 +201,8 @@ pub async fn delete_bucket(
         .map(|row| row.try_get("", "access_key_id"))
         .collect::<Result<Vec<String>, _>>()?;
 
-    providers
-        .delete_bucket(provider_id, &physical_bucket_name(bucket.id))
-        .await?;
-    bucket::Entity::delete_by_id(bucket.id).exec(tx).await?;
+    providers.delete_bucket(provider_id, bucket.id).await?;
+    storage::Entity::delete_by_id(bucket.id).exec(tx).await?;
     crate::services::events::record(
         tx,
         organization_id,
@@ -228,17 +220,13 @@ pub async fn delete_bucket(
     Ok(axum::http::StatusCode::NO_CONTENT)
 }
 
-fn response(bucket: &bucket::Model) -> BucketResponse {
+fn response(bucket: &storage::Model) -> BucketResponse {
     BucketResponse {
         id: bucket.id,
         project_id: bucket.project_id,
         name: bucket.name.clone(),
         region: bucket.region_id,
     }
-}
-
-pub(crate) fn physical_bucket_name(id: Uuid) -> String {
-    format!("{BUCKET_PREFIX}{}", id.simple())
 }
 
 fn valid_bucket_name(name: &str) -> bool {
@@ -260,13 +248,5 @@ mod tests {
         assert!(!valid_bucket_name("UPPERCASE"));
         assert!(!valid_bucket_name("ab"));
         assert!(!valid_bucket_name("-assets"));
-    }
-
-    #[test]
-    fn prefixes_physical_bucket_names() {
-        assert_eq!(
-            super::physical_bucket_name(uuid::Uuid::nil()),
-            "cp-00000000000000000000000000000000"
-        );
     }
 }

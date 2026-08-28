@@ -35,7 +35,7 @@ pub struct Cluster {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct S3Provider {
     pub id: String,
-    pub provider_type: String,
+    pub name: String,
     pub endpoint_url: String,
     pub provider_region: Option<String>,
     pub is_active: bool,

@@ -13,11 +13,11 @@ use uuid::Uuid;
 use crate::{
     errors::AppError,
     middleware::auth::AuthContext,
-    models::entities::{bucket, region},
+    models::entities::{region, storage},
     state::{TenantDatabase, get_app_state},
 };
 
-use super::{databases::verify_project_in_org, storage_buckets::physical_bucket_name};
+use super::databases::verify_project_in_org;
 
 const OBJECT_PAGE_SIZE: i32 = 100;
 
@@ -276,8 +276,8 @@ async fn bucket_descriptor(
     super::databases::verify_org_access(tenant_db, organization_id)?;
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
-    let bucket = bucket::Entity::find_by_id(bucket_id)
-        .filter(bucket::Column::OrganizationId.eq(organization_id))
+    let bucket = storage::Entity::find_by_id(bucket_id)
+        .filter(storage::Column::OrganizationId.eq(organization_id))
         .one(tx)
         .await?
         .ok_or_else(|| AppError::NotFound("Bucket not found".into()))?;
@@ -294,7 +294,7 @@ async fn bucket_descriptor(
     Ok(StorageBucketDescriptor {
         organization_id,
         bucket_id,
-        physical_bucket_name: physical_bucket_name(bucket_id),
+        physical_bucket_name: lib::buckets::physical_bucket_name(bucket_id),
         provider_id,
         platform_sse_key,
     })

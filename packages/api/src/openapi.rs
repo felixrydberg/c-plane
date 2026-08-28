@@ -153,6 +153,7 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
         crate::handlers::external_registries::rename_external_registry,
         crate::handlers::external_registries::rotate_external_registry_token,
         crate::handlers::external_registries::delete_external_registry,
+        crate::handlers::internal_secrets::provision_tenant_key,
         crate::handlers::internal_s3::resolve_access_token,
         crate::handlers::internal_s3::provider_credentials,
     ),

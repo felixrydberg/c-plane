@@ -176,7 +176,7 @@ fn CreateRegion(providers: Vec<S3Provider>, on_saved: EventHandler<()>) -> Eleme
                 label { "Display name" input { value: name, oninput: move |e| name.set(e.value()) } }
                 label { "Slug" input { value: slug, oninput: move |e| slug.set(e.value()) } }
                 label { "Status" select { value: status, onchange: move |e| status.set(e.value()), option { value: "active", "Active" } option { value: "inactive", "Inactive" } option { value: "maintenance", "Maintenance" } } }
-                label { "S3 provider" select { value: provider, onchange: move |e| provider.set(e.value()), option { value: "", "None" } for item in providers { option { value: "{item.id}", "{item.provider_type} — {item.endpoint_url}" } } } }
+                label { "S3 provider" select { value: provider, onchange: move |e| provider.set(e.value()), option { value: "", "None" } for item in providers { option { value: "{item.id}", "{item.name} — {item.endpoint_url}" } } } }
             }
             ErrorMessage { message }
             button { class: "primary", onclick: move |_| async move {
@@ -205,7 +205,7 @@ fn RegionRow(item: Region, providers: Vec<S3Provider>, on_saved: EventHandler<()
                 label { "Name" input { value: name, oninput: move |e| name.set(e.value()) } }
                 label { "Slug" input { value: slug, oninput: move |e| slug.set(e.value()) } }
                 label { "Status" select { value: status, onchange: move |e| status.set(e.value()), option { value: "active", "Active" } option { value: "inactive", "Inactive" } option { value: "maintenance", "Maintenance" } } }
-                label { "S3 provider" select { value: provider, onchange: move |e| provider.set(e.value()), option { value: "", "None" } for value in providers { option { value: "{value.id}", "{value.provider_type} — {value.endpoint_url}" } } } }
+                label { "S3 provider" select { value: provider, onchange: move |e| provider.set(e.value()), option { value: "", "None" } for value in providers { option { value: "{value.id}", "{value.name} — {value.endpoint_url}" } } } }
                 ErrorMessage { message }
                 div { class: "actions",
                     button { class: "primary", onclick: move |_| { let id = id.clone(); async move { match update_region(id, slug(), name(), status(), optional(provider())).await { Ok(()) => { message.set(None); on_saved.call(()); }, Err(error) => message.set(Some(error.to_string())) } } }, "Save" }
@@ -300,13 +300,13 @@ pub fn S3Providers() -> Element {
     let rows_state = rows.read().clone();
     rsx! { Shell { title: "S3 Providers",
         CreateS3Provider { on_saved: move |_| rows.restart() }
-        match rows_state { Some(Ok(items)) => rsx! { table { thead { tr { th { "Provider" } th { "Endpoint" } th { "Region" } th { "Active" } th { "Actions" } } } tbody { for item in items { S3ProviderRow { key: "{item.id}", item, on_saved: move |_| rows.restart() } } } } }, Some(Err(error)) => rsx! { p { class: "state error", "{error}" } }, None => rsx! { p { class: "state", "Loading…" } } }
+        match rows_state { Some(Ok(items)) => rsx! { table { thead { tr { th { "Name" } th { "Endpoint" } th { "Region" } th { "Active" } th { "Actions" } } } tbody { for item in items { S3ProviderRow { key: "{item.id}", item, on_saved: move |_| rows.restart() } } } } }, Some(Err(error)) => rsx! { p { class: "state error", "{error}" } }, None => rsx! { p { class: "state", "Loading…" } } }
     } }
 }
 
 #[component]
 fn CreateS3Provider(on_saved: EventHandler<()>) -> Element {
-    let mut provider_type = use_signal(|| "aws_s3".to_string());
+    let mut name = use_signal(String::new);
     let mut endpoint = use_signal(String::new);
     let mut region = use_signal(String::new);
     let mut access = use_signal(String::new);
@@ -315,16 +315,16 @@ fn CreateS3Provider(on_saved: EventHandler<()>) -> Element {
     let mut active = use_signal(|| true);
     let mut message = use_signal(|| None::<String>);
     rsx! { details { class: "create", summary { "+ New S3 provider" } div { class: "form-grid",
-        label { "Provider" select { value: provider_type, onchange: move |e| provider_type.set(e.value()), option { value: "aws_s3", "AWS S3" } option { value: "cloudflare_r2", "Cloudflare R2" } } }
+        label { "Name" input { value: name, oninput: move |e| name.set(e.value()) } }
         label { "Endpoint URL" input { value: endpoint, oninput: move |e| endpoint.set(e.value()) } } label { "Provider region" input { value: region, oninput: move |e| region.set(e.value()) } }
         label { "Access key ID" input { value: access, oninput: move |e| access.set(e.value()) } } label { "Secret access key" input { r#type: "password", value: secret, oninput: move |e| secret.set(e.value()) } }
         label { "Session token" input { r#type: "password", value: session, oninput: move |e| session.set(e.value()) } } label { class: "checkbox", input { r#type: "checkbox", checked: active, onchange: move |e| active.set(e.checked()) } "Active" }
-    } ErrorMessage { message } button { class: "primary", onclick: move |_| async move { match create_s3_provider(provider_type(), endpoint(), region(), access(), secret(), optional(session()), active()).await { Ok(()) => { message.set(None); access.set(String::new()); secret.set(String::new()); session.set(String::new()); on_saved.call(()); }, Err(error) => message.set(Some(error.to_string())) } }, "Create provider" } } }
+    } ErrorMessage { message } button { class: "primary", onclick: move |_| async move { match create_s3_provider(name(), endpoint(), region(), access(), secret(), optional(session()), active()).await { Ok(()) => { name.set(String::new()); endpoint.set(String::new()); region.set(String::new()); message.set(None); access.set(String::new()); secret.set(String::new()); session.set(String::new()); on_saved.call(()); }, Err(error) => message.set(Some(error.to_string())) } }, "Create provider" } } }
 }
 
 #[component]
 fn S3ProviderRow(item: S3Provider, on_saved: EventHandler<()>) -> Element {
-    let mut provider_type = use_signal(|| item.provider_type.clone());
+    let mut name = use_signal(|| item.name.clone());
     let mut endpoint = use_signal(|| item.endpoint_url.clone());
     let mut region = use_signal(|| item.provider_region.clone().unwrap_or_default());
     let mut access = use_signal(String::new);
@@ -334,15 +334,15 @@ fn S3ProviderRow(item: S3Provider, on_saved: EventHandler<()>) -> Element {
     let mut message = use_signal(|| None::<String>);
     let update_id = item.id.clone();
     let delete_id = item.id.clone();
-    rsx! { tr { td { "{item.provider_type}" } td { "{item.endpoint_url}" } td { {item.provider_region.as_deref().unwrap_or("-")} } td { if item.is_active { "Yes" } else { "No" } }
+    rsx! { tr { td { "{item.name}" } td { "{item.endpoint_url}" } td { {item.provider_region.as_deref().unwrap_or("-")} } td { if item.is_active { "Yes" } else { "No" } }
         td { details { summary { "Edit" } div { class: "popover form-grid",
-            label { "Provider" select { value: provider_type, onchange: move |e| provider_type.set(e.value()), option { value: "aws_s3", "AWS S3" } option { value: "cloudflare_r2", "Cloudflare R2" } } }
+            label { "Name" input { value: name, oninput: move |e| name.set(e.value()) } }
             label { "Endpoint URL" input { value: endpoint, oninput: move |e| endpoint.set(e.value()) } } label { "Provider region" input { value: region, oninput: move |e| region.set(e.value()) } }
             label { "Replacement access key" input { value: access, oninput: move |e| access.set(e.value()) } } label { "Replacement secret key" input { r#type: "password", value: secret, oninput: move |e| secret.set(e.value()) } }
             label { "Replacement session token" input { r#type: "password", value: session, oninput: move |e| session.set(e.value()) } } label { class: "checkbox", input { r#type: "checkbox", checked: active, onchange: move |e| active.set(e.checked()) } "Active" }
             p { class: "form-note", "Credential rotations can take up to a couple of minutes to fully propagate. Keep the old credentials active during this window." }
             ErrorMessage { message } div { class: "actions",
-                button { class: "primary", onclick: move |_| { let id = update_id.clone(); async move { match update_s3_provider(id, provider_type(), endpoint(), region(), optional(access()), optional(secret()), optional(session()), active()).await { Ok(()) => { message.set(None); access.set(String::new()); secret.set(String::new()); on_saved.call(()); }, Err(error) => message.set(Some(error.to_string())) } } }, "Save" }
+                button { class: "primary", onclick: move |_| { let id = update_id.clone(); async move { match update_s3_provider(id, name(), endpoint(), region(), optional(access()), optional(secret()), optional(session()), active()).await { Ok(()) => { message.set(None); access.set(String::new()); secret.set(String::new()); on_saved.call(()); }, Err(error) => message.set(Some(error.to_string())) } } }, "Save" }
                 button { class: "danger", onclick: move |_| { let id = delete_id.clone(); async move { match delete_s3_provider(id).await { Ok(()) => on_saved.call(()), Err(error) => message.set(Some(error.to_string())) } } }, "Delete" }
             }
         } } }

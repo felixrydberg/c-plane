@@ -1,0 +1,2 @@
+ALTER TABLE "bucket_grant" ADD CONSTRAINT "bucket_grant_credential_id_fkey" FOREIGN KEY ("credential_id") REFERENCES "credential"("id") ON DELETE CASCADE;--> statement-breakpoint
+ALTER TABLE "credential" ADD CONSTRAINT "credential_secret_id_secret_id_fkey" FOREIGN KEY ("secret_id") REFERENCES "secret"("id") ON DELETE RESTRICT;

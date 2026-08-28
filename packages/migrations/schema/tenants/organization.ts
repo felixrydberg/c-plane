@@ -12,7 +12,7 @@ import { sql } from "drizzle-orm";
 import { user } from "./studio.ts";
 import { app_tenant, orgAllowed } from "../rls.ts";
 
-export const organization = pgTable(
+export const organization = pgTable.withRLS(
   "organization",
   {
     id: uuid("id").primaryKey(),
@@ -51,9 +51,9 @@ export const organization = pgTable(
       withCheck: sql`true`,
     }),
   ],
-).enableRLS();
+);
 
-export const organization_member = pgTable(
+export const organization_member = pgTable.withRLS(
   "organization_member",
   {
     id: uuid("id").primaryKey(),
@@ -81,14 +81,14 @@ export const organization_member = pgTable(
       withCheck: orgAllowed(table.organization_id),
     }),
   ],
-).enableRLS();
+);
 
 export const organization_invitation_status = pgEnum(
   "organization_invitation_status",
   ["pending", "accepted", "declined", "revoked"],
 );
 
-export const organization_invitation = pgTable(
+export const organization_invitation = pgTable.withRLS(
   "organization_invitation",
   {
     id: uuid("id").primaryKey(),
@@ -117,9 +117,9 @@ export const organization_invitation = pgTable(
       withCheck: orgAllowed(table.organization_id),
     }),
   ],
-).enableRLS();
+);
 
-export const active_organization = pgTable("active_organization", {
+export const active_organization = pgTable.withRLS("active_organization", {
   user_id: uuid("user_id")
     .primaryKey()
     .references(() => user.id, { onDelete: "cascade" }).unique(),
@@ -135,4 +135,4 @@ export const active_organization = pgTable("active_organization", {
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
-]).enableRLS();
+]);

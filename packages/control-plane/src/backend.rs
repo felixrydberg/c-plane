@@ -92,7 +92,7 @@ pub async fn list_s3_providers() -> Result<Vec<S3Provider>> {
 
 #[post("/api/infrastructure/s3-providers", headers: dioxus::fullstack::HeaderMap)]
 pub async fn create_s3_provider(
-    provider_type: String,
+    name: String,
     endpoint_url: String,
     provider_region: String,
     access_key_id: String,
@@ -102,7 +102,7 @@ pub async fn create_s3_provider(
 ) -> Result<()> {
     server::create_s3_provider(
         &headers,
-        provider_type,
+        name,
         endpoint_url,
         provider_region,
         S3Credentials {
@@ -118,7 +118,7 @@ pub async fn create_s3_provider(
 #[patch("/api/infrastructure/s3-providers/{id}", headers: dioxus::fullstack::HeaderMap)]
 pub async fn update_s3_provider(
     id: String,
-    provider_type: String,
+    name: String,
     endpoint_url: String,
     provider_region: String,
     access_key_id: Option<String>,
@@ -142,7 +142,7 @@ pub async fn update_s3_provider(
     server::update_s3_provider(
         &headers,
         id,
-        provider_type,
+        name,
         endpoint_url,
         provider_region,
         credentials,
@@ -201,7 +201,7 @@ pub mod server {
     use super::*;
     use chrono::{Duration, Utc};
     use dioxus::{CapturedError, fullstack::HeaderMap};
-    use lib::secrets::Secrets;
+    use lib::secrets::{self, Client, PLATFORM_KEY};
     use sea_orm::{
         ConnectionTrait, Database, DatabaseBackend, DatabaseConnection, QueryResult, Statement,
         TransactionTrait, Value,
@@ -213,7 +213,7 @@ pub mod server {
     use uuid::Uuid;
 
     static DATABASE: OnceCell<DatabaseConnection> = OnceCell::const_new();
-    static SECRETS: OnceCell<Secrets> = OnceCell::const_new();
+    static SECRETS: OnceCell<Client> = OnceCell::const_new();
 
     pub async fn initialize() -> Result<()> {
         required(
@@ -547,12 +547,12 @@ pub mod server {
     }
 
     pub async fn list_s3_providers() -> Result<Vec<S3Provider>> {
-        let rows = database().await?.query_all(statement("SELECT id::text, provider_type::text, endpoint_url, provider_region, is_active FROM s3_providers ORDER BY endpoint_url", vec![])).await.map_err(CapturedError::from_display)?;
+        let rows = database().await?.query_all(statement("SELECT id::text, name, endpoint_url, provider_region, is_active FROM s3_providers ORDER BY endpoint_url", vec![])).await.map_err(CapturedError::from_display)?;
         rows.iter()
             .map(|row| {
                 Ok(S3Provider {
                     id: text(row, "id")?,
-                    provider_type: text(row, "provider_type")?,
+                    name: text(row, "name")?,
                     endpoint_url: text(row, "endpoint_url")?,
                     provider_region: optional_text(row, "provider_region")?,
                     is_active: row
@@ -563,35 +563,10 @@ pub mod server {
             .collect()
     }
 
-    async fn secrets() -> Result<&'static Secrets> {
+    async fn secrets() -> Result<&'static Client> {
         SECRETS
-            .get_or_try_init(|| async { Secrets::from_env().map_err(CapturedError::from_display) })
+            .get_or_try_init(|| async { Client::from_env().map_err(CapturedError::from_display) })
             .await
-    }
-
-    async fn openbao_read(id: &str) -> Result<S3Credentials> {
-        secrets()
-            .await?
-            .get(&format!("platform/s3/providers/{id}"))
-            .await
-            .map_err(CapturedError::from_display)?
-            .ok_or_else(|| CapturedError::msg("S3 provider credentials not found"))
-    }
-
-    async fn openbao_write(id: &str, credentials: &S3Credentials) -> Result<()> {
-        secrets()
-            .await?
-            .set(&format!("platform/s3/providers/{id}"), credentials)
-            .await
-            .map_err(CapturedError::from_display)
-    }
-
-    async fn openbao_delete(id: &str) -> Result<()> {
-        secrets()
-            .await?
-            .delete(&format!("platform/s3/providers/{id}"))
-            .await
-            .map_err(CapturedError::from_display)
     }
 
     async fn redis_connection() -> Result<redis::aio::MultiplexedConnection> {
@@ -641,7 +616,7 @@ pub mod server {
         let rows = database()
             .await?
             .query_all(statement(
-                "SELECT DISTINCT token.access_key_id FROM storage_access_token token JOIN storage_access_token_bucket permission ON permission.access_token_id=token.id JOIN bucket ON bucket.id=permission.bucket_id WHERE bucket.region_id=$1::uuid",
+                "SELECT DISTINCT token.access_key_id FROM storage_access_token token JOIN storage_access_token_bucket permission ON permission.access_token_id=token.id JOIN storage ON storage.id=permission.bucket_id WHERE storage.region_id=$1::uuid",
                 vec![region_id.to_owned().into()],
             ))
             .await
@@ -703,7 +678,7 @@ pub mod server {
             .map_err(CapturedError::from_display)?;
         transaction
             .execute(statement(
-                "INSERT INTO worker_job (id, queue_name, job_type, dedupe_key, payload) VALUES ($1::uuid, 'maintenance', 'registry_gc', 'registry_gc', '{}'::jsonb)",
+                "INSERT INTO worker_queue (id, queue_name, job_type, dedupe_key, payload) VALUES ($1::uuid, 'maintenance', 'registry_gc', 'registry_gc', '{}'::jsonb)",
                 vec![job_id.into()],
             ))
             .await
@@ -724,7 +699,7 @@ pub mod server {
             &transaction,
             headers,
             "enqueue",
-            "worker_job",
+            "worker_queue",
             Some(&job_id.to_string()),
             json!({"queue": "maintenance", "job_type": "registry_gc"}),
         )
@@ -741,107 +716,132 @@ pub mod server {
 
     pub async fn create_s3_provider(
         headers: &HeaderMap,
-        provider_type: String,
+        name: String,
         endpoint_url: String,
         provider_region: String,
         credentials: S3Credentials,
         is_active: bool,
     ) -> Result<()> {
-        let id = Uuid::new_v4().to_string();
-        let provider_type =
-            validate_choice(provider_type, &["aws_s3", "cloudflare_r2"], "provider type")?;
+        let id = Uuid::new_v4();
+        let name = required(name, "name")?;
         let endpoint_url = required(endpoint_url, "endpoint URL")?;
         let provider_region = required(provider_region, "provider region")?;
         required(credentials.access_key_id.clone(), "access key ID")?;
         required(credentials.secret_access_key.clone(), "secret access key")?;
-        openbao_write(&id, &credentials).await?;
-        let database_result: Result<()> = async {
-            let tx = database()
-                .await?
-                .begin()
-                .await
-                .map_err(CapturedError::from_display)?;
-            tx.execute(statement("INSERT INTO s3_providers (id, provider_type, endpoint_url, provider_region, is_active) VALUES ($1::uuid, $2::s3_provider_type, $3, $4, $5)", vec![id.clone().into(), provider_type.clone().into(), endpoint_url.clone().into(), provider_region.clone().into(), is_active.into()])).await.map_err(CapturedError::from_display)?;
-            audit(&tx, headers, "create", "s3_provider", Some(&id), json!({"provider_type": provider_type, "endpoint_url": endpoint_url, "provider_region": provider_region, "is_active": is_active})).await?;
-            tx.commit().await.map_err(CapturedError::from_display)?;
-            Ok(())
-        }.await;
-        if let Err(error) = database_result {
-            let _ = openbao_delete(&id).await;
-            return Err(error);
-        }
-        invalidate_provider_credentials(&id).await
+        let ciphertext = secrets::encrypt(
+            secrets().await?,
+            PLATFORM_KEY,
+            &serde_json::to_vec(&credentials).map_err(CapturedError::from_display)?,
+        )
+        .await
+        .map_err(CapturedError::from_display)?;
+        let credential_secret_id = Uuid::new_v4();
+        let tx = database()
+            .await?
+            .begin()
+            .await
+            .map_err(CapturedError::from_display)?;
+        tx.execute(statement(
+            "INSERT INTO secret (id, scope, organization_id, ciphertext) VALUES ($1::uuid, 'platform'::secret_scope, NULL, $2)",
+            vec![credential_secret_id.into(), ciphertext.into()],
+        ))
+        .await
+        .map_err(CapturedError::from_display)?;
+        tx.execute(statement("INSERT INTO s3_providers (id, name, endpoint_url, provider_region, credential_secret_id, is_active) VALUES ($1::uuid, $2, $3, $4, $5::uuid, $6)", vec![id.into(), name.clone().into(), endpoint_url.clone().into(), provider_region.clone().into(), credential_secret_id.into(), is_active.into()])).await.map_err(CapturedError::from_display)?;
+        audit(&tx, headers, "create", "s3_provider", Some(&id.to_string()), json!({"name": name, "endpoint_url": endpoint_url, "provider_region": provider_region, "is_active": is_active})).await?;
+        tx.commit().await.map_err(CapturedError::from_display)?;
+        invalidate_provider_credentials(&id.to_string()).await
     }
 
     pub async fn update_s3_provider(
         headers: &HeaderMap,
         id: String,
-        provider_type: String,
+        name: String,
         endpoint_url: String,
         provider_region: String,
         credentials: Option<S3Credentials>,
         is_active: bool,
     ) -> Result<()> {
-        let provider_type =
-            validate_choice(provider_type, &["aws_s3", "cloudflare_r2"], "provider type")?;
+        let name = required(name, "name")?;
         let endpoint_url = required(endpoint_url, "endpoint URL")?;
         let provider_region = required(provider_region, "provider region")?;
-        let previous_credentials = openbao_read(&id).await?;
-        if let Some(replacement) = credentials.as_ref() {
-            openbao_write(&id, replacement).await?;
-        }
-        let database_result: Result<()> = async {
-            let tx = database()
-                .await?
-                .begin()
+        let replacement_ciphertext = match credentials.as_ref() {
+            Some(replacement) => Some(
+                secrets::encrypt(
+                    secrets().await?,
+                    PLATFORM_KEY,
+                    &serde_json::to_vec(replacement).map_err(CapturedError::from_display)?,
+                )
+                .await
+                .map_err(CapturedError::from_display)?,
+            ),
+            None => None,
+        };
+        let tx = database()
+            .await?
+            .begin()
+            .await
+            .map_err(CapturedError::from_display)?;
+        let row = tx
+            .query_one(statement(
+                "SELECT credential_secret_id FROM s3_providers WHERE id=$1::uuid FOR UPDATE",
+                vec![id.clone().into()],
+            ))
+            .await
+            .map_err(CapturedError::from_display)?
+            .ok_or_else(|| CapturedError::msg("S3 provider not found"))?;
+        let credential_secret_id: Uuid = row
+            .try_get("", "credential_secret_id")
+            .map_err(CapturedError::from_display)?;
+        if let Some(ciphertext) = replacement_ciphertext {
+            let updated = tx
+                .execute(statement(
+                    "UPDATE secret SET ciphertext=$2, updated_at=NOW() WHERE id=$1::uuid",
+                    vec![credential_secret_id.into(), ciphertext.into()],
+                ))
                 .await
                 .map_err(CapturedError::from_display)?;
-            let result = tx.execute(statement("UPDATE s3_providers SET provider_type=$2::s3_provider_type, endpoint_url=$3, provider_region=$4, is_active=$5, updated_at=now() WHERE id=$1::uuid", vec![id.clone().into(), provider_type.clone().into(), endpoint_url.clone().into(), provider_region.clone().into(), is_active.into()])).await.map_err(CapturedError::from_display)?;
-            if result.rows_affected() == 0 {
-                return Err(CapturedError::msg("S3 provider not found"));
+            if updated.rows_affected() != 1 {
+                return Err(CapturedError::msg("S3 provider secret not found"));
             }
-            audit(&tx, headers, "update", "s3_provider", Some(&id), json!({"provider_type": provider_type, "endpoint_url": endpoint_url, "provider_region": provider_region, "is_active": is_active, "credentials_rotated": credentials.is_some()})).await?;
-            tx.commit().await.map_err(CapturedError::from_display)?;
-            Ok(())
-        }.await;
-        if let Err(error) = database_result {
-            if credentials.is_some() {
-                let _ = openbao_write(&id, &previous_credentials).await;
-            }
-            let _ = invalidate_provider_credentials(&id).await;
-            return Err(error);
         }
+        tx.execute(statement("UPDATE s3_providers SET name=$2, endpoint_url=$3, provider_region=$4, is_active=$5, updated_at=now() WHERE id=$1::uuid", vec![id.clone().into(), name.clone().into(), endpoint_url.clone().into(), provider_region.clone().into(), is_active.into()])).await.map_err(CapturedError::from_display)?;
+        audit(&tx, headers, "update", "s3_provider", Some(&id), json!({"name": name, "endpoint_url": endpoint_url, "provider_region": provider_region, "is_active": is_active, "credentials_rotated": credentials.is_some()})).await?;
+        tx.commit().await.map_err(CapturedError::from_display)?;
         invalidate_provider_credentials(&id).await
     }
 
     pub async fn delete_s3_provider(headers: &HeaderMap, id: String) -> Result<()> {
-        let old = openbao_read(&id).await?;
-        openbao_delete(&id).await?;
-        let result = async {
-            let tx = database()
-                .await?
-                .begin()
-                .await
-                .map_err(CapturedError::from_display)?;
-            let deleted = tx
-                .execute(statement(
-                    "DELETE FROM s3_providers WHERE id=$1::uuid",
-                    vec![id.clone().into()],
-                ))
-                .await
-                .map_err(CapturedError::from_display)?;
-            if deleted.rows_affected() == 0 {
-                return Err(CapturedError::msg("S3 provider not found"));
-            }
-            audit(&tx, headers, "delete", "s3_provider", Some(&id), json!({})).await?;
-            tx.commit().await.map_err(CapturedError::from_display)?;
-            Ok(())
-        }
-        .await;
-        if let Err(error) = result {
-            let _ = openbao_write(&id, &old).await;
-            return Err(error);
-        }
+        let tx = database()
+            .await?
+            .begin()
+            .await
+            .map_err(CapturedError::from_display)?;
+        let row = tx
+            .query_one(statement(
+                "SELECT credential_secret_id FROM s3_providers WHERE id=$1::uuid FOR UPDATE",
+                vec![id.clone().into()],
+            ))
+            .await
+            .map_err(CapturedError::from_display)?
+            .ok_or_else(|| CapturedError::msg("S3 provider not found"))?;
+        let credential_secret_id: Uuid = row
+            .try_get("", "credential_secret_id")
+            .map_err(CapturedError::from_display)?;
+        tx.execute(statement(
+            "DELETE FROM s3_providers WHERE id=$1::uuid",
+            vec![id.clone().into()],
+        ))
+        .await
+        .map_err(CapturedError::from_display)?;
+        tx.execute(statement(
+            "DELETE FROM secret WHERE id=$1::uuid",
+            vec![credential_secret_id.into()],
+        ))
+        .await
+        .map_err(CapturedError::from_display)?;
+        audit(&tx, headers, "delete", "s3_provider", Some(&id), json!({})).await?;
+        tx.commit().await.map_err(CapturedError::from_display)?;
         invalidate_provider_credentials(&id).await
     }
 
