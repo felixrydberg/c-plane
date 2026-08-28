@@ -4,7 +4,10 @@ import * as z from "zod"
 const compromisedPasswordMessage = "This password has been compromised in a data breach, please choose a different one."
 const newPasswordSchema = z.object({
   newPassword: z.string().min(8, "Password must be at least 8 characters"),
+  currentPassword: z.string().min(1).optional(),
 })
+
+const freshSessionWindowMs = 5 * 60 * 1000
 
 // ponytail: Better Auth's server-only setPassword has no route path for the plugin to match; remove this when it exposes one.
 async function assertPasswordIsNotCompromised(password: string) {
@@ -34,16 +37,59 @@ async function assertPasswordIsNotCompromised(password: string) {
 }
 
 export default defineEventHandler(async (event) => {
+  const session = await auth.api.getSession({
+    headers: event.headers,
+    query: { disableCookieCache: true },
+  })
+
+  if (!session) {
+    throw createError({ statusCode: 401, statusMessage: "Unauthorized" })
+  }
+
   const body = newPasswordSchema.safeParse(await readBody(event))
 
   if (!body.success) {
     throw createError({ statusCode: 400, statusMessage: "New password must be at least 8 characters" })
   }
 
+  const accounts = await auth.api.listUserAccounts({ headers: event.headers })
+  const hasPassword = accounts.some(account => account.providerId === "credential")
+
+  if (hasPassword) {
+    if (!body.data.currentPassword) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: "Current password is required",
+      })
+    }
+
+    await assertPasswordIsNotCompromised(body.data.newPassword)
+
+    return auth.api.changePassword({
+      headers: event.headers,
+      body: {
+        currentPassword: body.data.currentPassword,
+        newPassword: body.data.newPassword,
+        revokeOtherSessions: true,
+      },
+    })
+  }
+
+  if (Date.now() - new Date(session.session.createdAt).getTime() > freshSessionWindowMs) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: "Please sign in again before setting a password",
+    })
+  }
+
   await assertPasswordIsNotCompromised(body.data.newPassword)
 
-  return auth.api.setPassword({
+  const result = await auth.api.setPassword({
     headers: event.headers,
     body: { newPassword: body.data.newPassword },
   })
+
+  await auth.api.revokeOtherSessions({ headers: event.headers })
+
+  return result
 })

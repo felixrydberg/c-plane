@@ -108,6 +108,7 @@ const onChangePassword = async () => {
     const { error } = await client.changePassword({
       currentPassword: passwordState.currentPassword,
       newPassword: passwordState.newPassword,
+      revokeOtherSessions: true,
     })
 
     if (error) {

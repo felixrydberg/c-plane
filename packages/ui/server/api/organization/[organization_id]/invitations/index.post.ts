@@ -5,14 +5,21 @@ import { uuidv7 } from "uuidv7";
 import { logEvent } from "~~/server/utils/events";
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody<{
-    email: string;
-    role: "member" | "admin";
-    organization_id: string;
-  }>(event);
+  const organizationId = getRouterParam(event, "organization_id");
+  if (!organizationId) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "Organization ID is required",
+    });
+  }
 
-  const { email, role, organization_id } = body;
-  const inviteEmail = email.trim().toLowerCase();
+  const body = await readBody<{
+    email?: string;
+    role?: "member" | "admin";
+  }>(event) ?? {};
+
+  const { email, role } = body;
+  const inviteEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
 
   if (!email || !inviteEmail) {
     throw createError({
@@ -21,7 +28,14 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const membership = await getOrganizationMembership(event);
+  if (role !== "member" && role !== "admin") {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "Role must be 'member' or 'admin'",
+    });
+  }
+
+  const membership = await getOrganizationMembership(event, organizationId);
   if (!membership) {
     throw createError({
       statusCode: 403,
@@ -29,21 +43,15 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  if (membership.organization_id !== organization_id) {
-    throw createError({
-      statusCode: 403,
-      statusMessage: "Organization mismatch",
-    });
-  }
-
   const invitationId = uuidv7();
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
-  const invitation = await withTenantDb([organization_id], async (tx) => {
+  const invitation = await withTenantDb([organizationId], async (tx) => {
     const existingInvitation = await tx
       .select()
       .from(organization_invitation)
       .where(and(
+        eq(organization_invitation.organization_id, organizationId),
         eq(organization_invitation.email, inviteEmail),
         eq(organization_invitation.status, "pending"),
       ))
@@ -61,7 +69,7 @@ export default defineEventHandler(async (event) => {
       .from(organization_member)
       .innerJoin(user, eq(organization_member.user_id, user.id))
       .where(and(
-        eq(organization_member.organization_id, organization_id),
+        eq(organization_member.organization_id, organizationId),
         eq(user.email, inviteEmail),
       ))
       .limit(1);
@@ -77,7 +85,7 @@ export default defineEventHandler(async (event) => {
       .insert(organization_invitation)
       .values({
         id: invitationId,
-        organization_id: organization_id,
+        organization_id: organizationId,
         email: inviteEmail,
         role,
         status: "pending",
@@ -93,7 +101,7 @@ export default defineEventHandler(async (event) => {
       });
     }
 
-    await logEvent(organization_id, "organization:invitation_created", {
+    await logEvent(organizationId, "organization:invitation_created", {
       id: invitation.id,
       organization_id: invitation.organization_id,
       email: invitation.email,

@@ -1,12 +1,13 @@
-import { organization_invitation, organization_member } from "~~/server/schema";
+import { organization_invitation } from "~~/server/schema";
 import { withTenantDb } from "~~/server/utils/db";
 import { eq, and } from "drizzle-orm";
-import { uuidv7 } from "uuidv7";
+import { acceptInvitationAndActivateOrganization } from "~~/server/utils/invitations";
+import { logEvent } from "~~/server/utils/events";
 
 export default defineEventHandler(async (event) => {
   const session = await requireSession(event);
   const params = getRouterParams(event);
-  const body = await readBody<{ action: "accept" | "decline" }>(event);
+  const body = await readBody<{ action?: "accept" | "decline" }>(event) ?? {};
 
   const invitationId = params.invitation_id as string;
   const organizationId = params.organization_id as string;
@@ -49,6 +50,10 @@ export default defineEventHandler(async (event) => {
 
   const invitation = invitations[0];
 
+  if (action === "accept") {
+    return acceptInvitationAndActivateOrganization(event, invitationId);
+  }
+
   if (invitation.status !== "pending") {
     throw createError({
       statusCode: 400,
@@ -68,7 +73,14 @@ export default defineEventHandler(async (event) => {
       const [result] = await tx
         .update(organization_invitation)
         .set({ status: "declined" })
-        .where(eq(organization_invitation.id, invitationId))
+        .where(
+          and(
+            eq(organization_invitation.id, invitationId),
+            eq(organization_invitation.organization_id, organizationId),
+            eq(organization_invitation.email, session.user.email || ""),
+            eq(organization_invitation.status, "pending"),
+          ),
+        )
         .returning();
 
       if (result) {
@@ -89,51 +101,11 @@ export default defineEventHandler(async (event) => {
 
     if (!updated) {
       throw createError({
-        statusCode: 500,
-        statusMessage: "Failed to decline invitation",
+        statusCode: 409,
+        statusMessage: "Invitation has already been processed",
       });
     }
 
     return updated;
-  } else {
-    const [updatedInvitation] = await withTenantDb([organizationId], async (tx) => {
-      const updated = await tx
-        .update(organization_invitation)
-        .set({ status: "accepted" })
-        .where(eq(organization_invitation.id, invitationId))
-        .returning();
-
-      const organization_member_id = uuidv7();
-      await tx.insert(organization_member).values({
-        id: organization_member_id,
-        organization_id: organizationId,
-        user_id: session.user.id,
-        role: invitation.role,
-      });
-
-      if (updated[0]) {
-        await logEvent(organizationId, "organization:invitation_accepted", {
-          id: updated[0].id,
-          organization_id: updated[0].organization_id,
-          email: updated[0].email,
-          role: updated[0].role,
-          status: updated[0].status,
-          expires_at: updated[0].expires_at,
-          inviter_id: updated[0].inviter_id,
-          created_at: updated[0].created_at,
-        }, false, {}, tx);
-      }
-
-      return updated;
-    });
-
-    if (!updatedInvitation) {
-      throw createError({
-        statusCode: 500,
-        statusMessage: "Failed to accept invitation",
-      });
-    }
-
-    return updatedInvitation;
   }
 });

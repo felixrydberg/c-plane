@@ -33,20 +33,6 @@ export const acceptInvitationAndActivateOrganization = async (
     });
   }
 
-  if (invitation.status === "declined" || invitation.status === "revoked") {
-    throw createError({
-      statusCode: 400,
-      statusMessage: "Invitation can no longer be accepted",
-    });
-  }
-
-  if (new Date(invitation.expires_at) < new Date()) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: "Invitation has expired",
-    });
-  }
-
   const [organizationRecord] = await getIdentityDb()
     .select({
       id: organization.id,
@@ -66,49 +52,82 @@ export const acceptInvitationAndActivateOrganization = async (
 
   const organizationScope = await activeOrganizationScope(session.user.id, invitation.organization_id);
 
-  if (invitation.status === "accepted") {
-    await withTenantDb(organizationScope, async (tx) => {
-      await tx
-        .insert(active_organization)
-        .values({
-          user_id: session.user.id,
-          organization_id: invitation.organization_id,
-        })
-        .onConflictDoUpdate({
-          target: active_organization.user_id,
-          set: {
-            organization_id: invitation.organization_id,
-          },
-        });
-    });
+  const acceptedInvitation = await withTenantDb(organizationScope, async (tx) => {
+    const [currentInvitation] = await tx
+      .select()
+      .from(organization_invitation)
+      .where(
+        and(
+          eq(organization_invitation.id, invitation.id),
+          eq(organization_invitation.email, session.user.email || ""),
+        ),
+      )
+      .limit(1);
 
-    return {
-      invitation,
-      organization: organizationRecord,
-    };
-  }
-
-  const [updatedInvitation] = await withTenantDb(organizationScope, async (tx) => {
-    const [updated] = await tx
-      .update(organization_invitation)
-      .set({ status: "accepted" })
-      .where(eq(organization_invitation.id, invitation.id))
-      .returning();
-
-    if (!updated) {
+    if (!currentInvitation) {
       throw createError({
-        statusCode: 500,
-        statusMessage: "Failed to accept invitation"
-      })
+        statusCode: 404,
+        statusMessage: "Invitation not found or email does not match",
+      });
+    }
+
+    if (currentInvitation.status === "declined" || currentInvitation.status === "revoked") {
+      throw createError({
+        statusCode: 400,
+        statusMessage: "Invitation can no longer be accepted",
+      });
+    }
+
+    if (new Date(currentInvitation.expires_at) < new Date()) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: "Invitation has expired",
+      });
+    }
+
+    let accepted = currentInvitation;
+    let newlyAccepted = false;
+
+    if (currentInvitation.status === "pending") {
+      const [updated] = await tx
+        .update(organization_invitation)
+        .set({ status: "accepted" })
+        .where(
+          and(
+            eq(organization_invitation.id, currentInvitation.id),
+            eq(organization_invitation.status, "pending"),
+          ),
+        )
+        .returning();
+
+      if (updated) {
+        accepted = updated;
+        newlyAccepted = true;
+      } else {
+        const [acceptedAfterRace] = await tx
+          .select()
+          .from(organization_invitation)
+          .where(eq(organization_invitation.id, currentInvitation.id))
+          .limit(1);
+
+        if (!acceptedAfterRace || acceptedAfterRace.status !== "accepted") {
+          throw createError({
+            statusCode: 409,
+            statusMessage: "Invitation has already been processed",
+          });
+        }
+
+        accepted = acceptedAfterRace;
+      }
     }
 
     await tx
       .insert(organization_member)
       .values({
         id: uuidv7(),
-        organization_id: invitation.organization_id,
+        organization_id: accepted.organization_id,
         user_id: session.user.id,
-        role: invitation.role,
+        role: accepted.role,
       })
       .onConflictDoNothing({
         target: [organization_member.user_id, organization_member.organization_id],
@@ -118,38 +137,33 @@ export const acceptInvitationAndActivateOrganization = async (
       .insert(active_organization)
       .values({
         user_id: session.user.id,
-        organization_id: invitation.organization_id,
+        organization_id: accepted.organization_id,
       })
       .onConflictDoUpdate({
         target: active_organization.user_id,
         set: {
-          organization_id: invitation.organization_id,
+          organization_id: accepted.organization_id,
         },
       });
 
-    await logEvent(invitation.organization_id, "organization:invitation_accepted", {
-      id: updated.id,
-      organization_id: updated.organization_id,
-      email: updated.email,
-      role: updated.role,
-      status: updated.status,
-      expires_at: updated.expires_at,
-      inviter_id: updated.inviter_id,
-      created_at: updated.created_at,
-    }, false, {}, tx);
+    if (newlyAccepted) {
+      await logEvent(accepted.organization_id, "organization:invitation_accepted", {
+        id: accepted.id,
+        organization_id: accepted.organization_id,
+        email: accepted.email,
+        role: accepted.role,
+        status: accepted.status,
+        expires_at: accepted.expires_at,
+        inviter_id: accepted.inviter_id,
+        created_at: accepted.created_at,
+      }, false, {}, tx);
+    }
 
-    return [updated];
+    return accepted;
   });
 
-  if (!updatedInvitation) {
-    throw createError({
-      statusCode: 500,
-      statusMessage: "Failed to accept invitation",
-    });
-  }
-
   return {
-    invitation: updatedInvitation,
+    invitation: acceptedInvitation,
     organization: organizationRecord,
   };
 };
