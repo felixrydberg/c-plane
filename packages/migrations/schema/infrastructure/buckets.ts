@@ -16,7 +16,8 @@ import { app_tenant, orgAllowed } from "../rls.ts";
 import { region } from "./regions.ts";
 import { credential, secret } from "./secrets.ts";
 
-export const foundation_bucket_status = pgEnum("foundation_bucket_status", ["active", "deleting"]);
+export const FOUNDATION_BUCKET_STATUSES = ["active", "deleting"] as const;
+export const foundation_bucket_status = pgEnum("foundation_bucket_status", FOUNDATION_BUCKET_STATUSES);
 
 export const bucket = pgTable.withRLS("bucket", {
   id: uuid("id").primaryKey(),
@@ -54,6 +55,11 @@ export const bucket_grant = pgTable.withRLS("bucket_grant", {
     table.bucket_id,
     table.prefix,
   ),
+  foreignKey({
+    columns: [table.credential_id],
+    foreignColumns: [credential.id],
+    name: "bucket_grant_credential_id_fkey",
+  }).onDelete("cascade"),
   foreignKey({
     columns: [table.credential_id, table.organization_id],
     foreignColumns: [credential.id, credential.organization_id],

@@ -192,6 +192,11 @@ echo "Applying database migrations..."
 run_quiet "${compose[@]}" run --rm --build migrate
 echo "Database migrations complete"
 
+echo "Provisioning tenant Transit keys..."
+while IFS= read -r organization_id; do
+  [ -z "$organization_id" ] || "${root_bao[@]}" write -f "transit/keys/tenant-${organization_id//-/}" >/dev/null
+done < <("${compose[@]}" exec -T postgresd psql -U cplane -d cplane -At -c 'SELECT id FROM organization')
+
 provider_id="$(env_value REGISTRY_STORAGE_S3_PROVIDER_ID)"
 provider_exists=0
 if [ -n "$provider_id" ]; then
@@ -250,15 +255,15 @@ if [ "$provider_exists" != 1 ]; then
   provider_id="$(new_uuid)"
   provider_secret_id="$(new_uuid)"
   region_id="$(new_uuid)"
-  provider_payload="{\"access_key_id\":\"$(json_escape "$provider_access_key")\",\"secret_access_key\":\"$(json_escape "$provider_secret_key")\",\"session_token\":"
   if [ -n "$provider_session_token" ]; then
-    provider_payload="${provider_payload}\"$(json_escape "$provider_session_token")\"}"
+    session_token_json="\"$(json_escape "$provider_session_token")\""
   else
-    provider_payload="${provider_payload}null}"
+    session_token_json="null"
   fi
+  provider_payload="{\"access_key_id\":\"$(json_escape "$provider_access_key")\",\"secret_access_key\":\"$(json_escape "$provider_secret_key")\",\"session_token\":${session_token_json}}"
   provider_payload_b64="$(printf '%s' "$provider_payload" | openssl base64 -A)"
   provider_ciphertext="$(printf '%s' "$provider_payload_b64" | "${root_bao[@]}" write -field=ciphertext transit/encrypt/platform plaintext=-)"
-  unset provider_payload provider_payload_b64
+  unset provider_payload provider_payload_b64 session_token_json
 
   if ! run_quiet "${compose[@]}" exec -T postgresd psql -v ON_ERROR_STOP=1 -U cplane -d cplane \
     -v provider_id="$provider_id" -v provider_name="$provider_name" \

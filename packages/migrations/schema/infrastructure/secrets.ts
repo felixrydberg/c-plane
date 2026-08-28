@@ -15,7 +15,8 @@ import {
 import { app_tenant, orgAllowed } from "../rls.ts";
 import { organization } from "../tenants/organization.ts";
 
-export const secret_scope = pgEnum("secret_scope", ["platform", "tenant"]);
+export const SECRET_SCOPES = ["platform", "tenant"] as const;
+export const secret_scope = pgEnum("secret_scope", SECRET_SCOPES);
 
 export const secret = pgTable.withRLS("secret", {
   id: uuid("id").primaryKey(),
@@ -66,6 +67,11 @@ export const credential = pgTable.withRLS("credential", {
   uniqueIndex("credential_access_key_id_uidx").on(table.access_key_id),
   uniqueIndex("credential_secret_id_uidx").on(table.secret_id),
   unique("credential_id_organization_id_uidx").on(table.id, table.organization_id).nullsNotDistinct(),
+  foreignKey({
+    columns: [table.secret_id],
+    foreignColumns: [secret.id],
+    name: "credential_secret_id_secret_id_fkey",
+  }).onDelete("restrict"),
   foreignKey({
     columns: [table.secret_id, table.organization_id],
     foreignColumns: [secret.id, secret.organization_id],

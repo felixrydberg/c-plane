@@ -1,4 +1,7 @@
-use axum::{Router, middleware, routing::get};
+use axum::{
+    Router, middleware,
+    routing::{get, post},
+};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -7,6 +10,7 @@ use crate::handlers::events;
 use crate::handlers::external_registries;
 use crate::handlers::health::health_check;
 use crate::handlers::internal_s3;
+use crate::handlers::internal_secrets;
 use crate::handlers::postgres_databases;
 use crate::handlers::projects;
 use crate::handlers::regions;
@@ -23,6 +27,10 @@ use crate::openapi::ApiDoc;
 // Roles: Member everywhere; stricter requirements are spelled out inline.
 pub fn create_routes() -> Router {
     let internal = Router::new()
+        .route(
+            "/organizations/{organization_id}/transit-key",
+            post(internal_secrets::provision_tenant_key),
+        )
         .route(
             "/s3-access-tokens/resolve/{access_key}",
             get(internal_s3::resolve_access_token),

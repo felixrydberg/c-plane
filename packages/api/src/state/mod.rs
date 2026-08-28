@@ -96,6 +96,7 @@ pub struct State {
     pub identity_db: AppDatabase,
     pub tenant_db: DatabaseConnection,
     pub config: Config,
+    pub secrets: Client,
     pub s3_providers: S3ProviderClient,
     pub storage_client: reqwest::Client,
 }
@@ -119,6 +120,7 @@ pub async fn create_app_state() -> Result<State, AppError> {
         identity_db: AppDatabase(identity_db),
         tenant_db,
         config,
+        secrets,
         s3_providers,
         storage_client,
     };

@@ -87,8 +87,8 @@ pub mod credentials {
         value: &T,
     ) -> Result<Credential> {
         let plaintext = serde_json::to_vec(value)?;
-        let ciphertext =
-            secrets::encrypt(client, &transit_key(organization_id), &plaintext).await?;
+        let key = transit_key(organization_id);
+        let ciphertext = secrets::encrypt(client, &key, &plaintext).await?;
         Ok(Credential {
             id: Uuid::new_v4(),
             secret_id: Uuid::new_v4(),

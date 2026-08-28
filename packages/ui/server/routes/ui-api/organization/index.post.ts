@@ -57,6 +57,12 @@ export default defineEventHandler(async (event) => {
   const organizationId = uuidv7();
   const organizationMemberId = uuidv7();
 
+  const { backendUrl, cplaneServiceToken } = useRuntimeConfig();
+  await $fetch(`${backendUrl}/internal/organizations/${organizationId}/transit-key`, {
+    method: "POST",
+    headers: { "x-cplane-token": cplaneServiceToken },
+  });
+
   const organizationScope = await activeOrganizationScope(session.user.id, organizationId);
   const createdOrganization = await (async () => {
     try {

@@ -118,6 +118,16 @@ pub async fn encrypt(client: &Client, key: &str, plaintext: &[u8]) -> Result<Str
         .ciphertext)
 }
 
+pub async fn create_key(client: &Client, key: &str) -> Result<(), SecretError> {
+    let response = client
+        .post(&format!("transit/keys/{key}"), json!({}))
+        .await?;
+    if !response.status().is_success() {
+        return Err(SecretError::Status(response.status()));
+    }
+    Ok(())
+}
+
 pub async fn decrypt(client: &Client, key: &str, ciphertext: &str) -> Result<Vec<u8>, SecretError> {
     let response = client
         .post(
@@ -183,13 +193,14 @@ mod tests {
     use super::*;
     use axum::{Json, Router, extract::State, http::HeaderMap, routing::any};
     use std::sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicUsize, Ordering},
     };
 
     #[derive(Clone)]
     struct TestState {
         logins: Arc<AtomicUsize>,
+        requests: Arc<Mutex<Vec<String>>>,
     }
 
     async fn handler(
@@ -210,6 +221,10 @@ mod tests {
             .is_none_or(|token| token == "token-1")
         {
             return (StatusCode::FORBIDDEN, Json(json!({})));
+        }
+        state.requests.lock().unwrap().push(path.to_owned());
+        if path.starts_with("/v1/transit/keys/") {
+            return (StatusCode::NO_CONTENT, Json(json!({})));
         }
         if path.starts_with("/v1/transit/encrypt/") {
             return (
@@ -236,6 +251,7 @@ mod tests {
     async fn encrypts_and_decrypts() {
         let state = TestState {
             logins: Arc::new(AtomicUsize::new(0)),
+            requests: Arc::new(Mutex::new(Vec::new())),
         };
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
@@ -255,6 +271,7 @@ mod tests {
         )
         .unwrap();
 
+        create_key(&secrets, "tenant-key").await.unwrap();
         let ciphertext = encrypt(&secrets, "tenant-key", b"plaintext").await.unwrap();
         assert_eq!(ciphertext, "vault:v1:ciphertext");
         assert_eq!(
@@ -263,6 +280,15 @@ mod tests {
         );
         assert!(decrypt(&secrets, "malformed", &ciphertext).await.is_err());
         assert_eq!(state.logins.load(Ordering::SeqCst), 2);
+        assert_eq!(
+            *state.requests.lock().unwrap(),
+            [
+                "/v1/transit/keys/tenant-key",
+                "/v1/transit/encrypt/tenant-key",
+                "/v1/transit/decrypt/tenant-key",
+                "/v1/transit/decrypt/malformed",
+            ]
+        );
         server.abort();
     }
 }
