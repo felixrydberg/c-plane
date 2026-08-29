@@ -919,7 +919,7 @@ export interface components {
             bucket_name: string;
             can_read: boolean;
             can_write: boolean;
-            is_deleting?: boolean;
+            is_deleting: boolean;
             physical_bucket_name: string;
             /** Format: uuid */
             provider_id: string;

@@ -34,6 +34,7 @@ pub struct ResolvedS3BucketPermission {
     pub can_read: bool,
     pub can_write: bool,
     #[serde(default)]
+    #[schema(required)]
     pub is_deleting: bool,
 }
 

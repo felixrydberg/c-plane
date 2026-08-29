@@ -4627,7 +4627,8 @@
           "region",
           "provider_id",
           "can_read",
-          "can_write"
+          "can_write",
+          "is_deleting"
         ],
         "properties": {
           "bucket_id": {
