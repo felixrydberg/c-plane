@@ -16,6 +16,7 @@ which paths each process may access:
 
 - API may encrypt and decrypt platform and tenant secrets.
 - Control plane may encrypt and decrypt platform secrets.
+- Worker may decrypt platform secrets for background jobs.
 
 `OPENBAO_TOKEN` is an explicit development override. Without it, the library
 logs in with `OPENBAO_ROLE_ID` and `OPENBAO_SECRET_ID`, caches the returned
@@ -35,8 +36,8 @@ Secret rows carry platform or tenant scope. Tenant rows identify their
 organization and are protected by RLS. Credentials retain only their public
 access-key identifier and reference a Secret for sensitive material.
 
-Installation enables Transit, creates the platform key, writes API and
-control-plane policies, and passes no OpenBao root token to a
+Installation enables Transit, creates the platform key, writes API,
+control-plane, and worker policies, and passes no OpenBao root token to a
 long-running application container.
 
 The versioned policy definitions live in `packages/openbao/policies`. The

@@ -20,6 +20,7 @@ pub(crate) struct Config {
     pub(crate) queues: String,
     pub(crate) concurrency: usize,
     pub(crate) redis_url: String,
+    pub(crate) secrets: lib::secrets::Client,
     pub(crate) registry_token_ttl: Duration,
     pub(crate) registry_access_key: String,
     pub(crate) registry_gc_access_key: String,
@@ -101,6 +102,7 @@ impl Config {
             queues: queues.join(","),
             concurrency,
             redis_url: required_env("REDIS_URL")?,
+            secrets: lib::secrets::Client::from_env()?,
             registry_token_ttl: Duration::from_secs(token_ttl_seconds),
             registry_access_key: env::var("REGISTRY_STORAGE_S3_ACCESSKEY").unwrap_or_default(),
             registry_gc_access_key: env::var("REGISTRY_STORAGE_S3_GC_ACCESSKEY")

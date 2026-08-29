@@ -19,7 +19,9 @@ import { credential, secret } from "./secrets.ts";
 export const FOUNDATION_BUCKET_STATUSES = ["active", "deleting"] as const;
 export const foundation_bucket_status = pgEnum("foundation_bucket_status", FOUNDATION_BUCKET_STATUSES);
 
-export const bucket = pgTable.withRLS("bucket", {
+// Foundation bucket, no RLS: holds tenant buckets and internal/platform buckets alike.
+// Tenant scoping happens on storage_bucket / bucket_grant / storage_access_token.
+export const bucket = pgTable("bucket", {
   id: uuid("id").primaryKey(),
   region_id: uuid("region_id").notNull().references(() => region.id, { onDelete: "restrict" }),
   sse_secret_id: uuid("sse_secret_id").notNull().references(() => secret.id, { onDelete: "restrict" }),
@@ -30,12 +32,6 @@ export const bucket = pgTable.withRLS("bucket", {
   uniqueIndex("bucket_sse_secret_id_uidx").on(table.sse_secret_id),
   index("bucket_region_id_idx").on(table.region_id),
   index("bucket_status_idx").on(table.status),
-  pgPolicy("bucket_tenant_select_rls", {
-    as: "permissive",
-    for: "select",
-    to: app_tenant,
-    using: sql`true`,
-  }),
 ]);
 
 export const bucket_grant = pgTable.withRLS("bucket_grant", {
@@ -50,10 +46,9 @@ export const bucket_grant = pgTable.withRLS("bucket_grant", {
   updated_at: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 }, (table) => [
   check("bucket_grant_permission_check", sql`${table.can_read} or ${table.can_write}`),
-  uniqueIndex("bucket_grant_credential_bucket_prefix_uidx").on(
+  uniqueIndex("bucket_grant_credential_bucket_uidx").on(
     table.credential_id,
     table.bucket_id,
-    table.prefix,
   ),
   foreignKey({
     columns: [table.credential_id],

@@ -56,8 +56,8 @@ async function save() {
     <div class="grid lg:grid-cols-[minmax(0,1fr)_280px]">
       <main class="divide-y divide-default/60 lg:pr-8">
         <section class="grid gap-4 py-8 lg:grid-cols-[190px_minmax(0,1fr)]">
-          <div><h2 class="text-sm font-semibold">Token</h2><p class="mt-1 text-xs text-muted">The access key cannot be changed.</p></div>
-          <UFormField label="Access key ID"><UInput :model-value="token?.access_key_id" readonly class="w-full font-mono" /></UFormField>
+          <div><h2 class="text-sm font-semibold">Token</h2><p class="mt-1 text-xs text-muted">The access key and object prefix cannot be changed.</p></div>
+          <div class="space-y-4"><UFormField label="Access key ID"><UInput :model-value="token?.access_key_id" readonly class="w-full font-mono" /></UFormField><UFormField label="Object key prefix"><UInput :model-value="token?.prefix || 'Whole bucket'" readonly class="w-full font-mono" /></UFormField></div>
         </section>
         <section class="grid gap-4 py-8 lg:grid-cols-[190px_minmax(0,1fr)]">
           <div><h2 class="text-sm font-semibold">Bucket Permissions</h2><p class="mt-1 text-xs text-muted">Choose what this token can do in each project bucket.</p></div>

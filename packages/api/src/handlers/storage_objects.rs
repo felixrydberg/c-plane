@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::{
     errors::AppError,
     middleware::auth::AuthContext,
-    models::entities::{region, storage},
+    models::entities::{bucket, region, storage},
     state::{TenantDatabase, get_app_state},
 };
 
@@ -282,19 +282,23 @@ async fn bucket_descriptor(
         .await?
         .ok_or_else(|| AppError::NotFound("Bucket not found".into()))?;
     verify_project_in_org(tx, bucket.project_id, organization_id).await?;
-    let region = region::Entity::find_by_id(bucket.region_id)
+    let (_, region) = bucket::Entity::find_by_id(bucket.bucket_id)
+        .find_also_related(region::Entity)
         .one(tx)
         .await?
-        .ok_or_else(|| AppError::NotFound("Bucket region not found".into()))?;
+        .ok_or_else(|| AppError::NotFound("Bucket foundation not found".into()))?;
     let provider_id = region
-        .s3_provider_id
+        .and_then(|region| region.s3_provider_id)
         .ok_or_else(|| AppError::Conflict("Region has no S3 provider".into()))?;
     scoped.commit().await?;
-    let platform_sse_key = get_app_state().s3_providers.bucket_key(bucket_id).await?;
+    let platform_sse_key = get_app_state()
+        .s3_providers
+        .bucket_key(bucket.bucket_id, organization_id)
+        .await?;
     Ok(StorageBucketDescriptor {
         organization_id,
-        bucket_id,
-        physical_bucket_name: lib::buckets::physical_bucket_name(bucket_id),
+        bucket_id: bucket.bucket_id,
+        physical_bucket_name: lib::buckets::physical_bucket_name(bucket.bucket_id),
         provider_id,
         platform_sse_key,
     })

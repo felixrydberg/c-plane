@@ -59,6 +59,7 @@ export const credential = pgTable.withRLS("credential", {
   organization_id: uuid("organization_id")
     .references(() => organization.id, { onDelete: "cascade" }),
   access_key_id: text("access_key_id").notNull(),
+  prefix: text("prefix").notNull().default(""),
   secret_id: uuid("secret_id").notNull(),
   revoked_at: timestamp("revoked_at", { withTimezone: true, mode: "string" }),
   created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),

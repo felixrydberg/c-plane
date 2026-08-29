@@ -169,16 +169,22 @@ root_bao=("${compose[@]}" exec -T -e BAO_ADDR=http://127.0.0.1:8200 -e "BAO_TOKE
 "${root_bao[@]}" auth enable approle >/dev/null 2>&1 || true
 "${root_bao[@]}" policy write cplane-api - < packages/openbao/policies/api.hcl >/dev/null
 "${root_bao[@]}" policy write cplane-control-plane - < packages/openbao/policies/control-plane.hcl >/dev/null
+"${root_bao[@]}" policy write cplane-worker - < packages/openbao/policies/worker.hcl >/dev/null
 "${root_bao[@]}" write auth/approle/role/cplane-api token_policies=cplane-api token_ttl=1h token_max_ttl=4h >/dev/null
 "${root_bao[@]}" write auth/approle/role/cplane-control-plane token_policies=cplane-control-plane token_ttl=1h token_max_ttl=4h >/dev/null
+"${root_bao[@]}" write auth/approle/role/cplane-worker token_policies=cplane-worker token_ttl=1h token_max_ttl=4h >/dev/null
 api_role_id="$("${root_bao[@]}" read -field=role_id auth/approle/role/cplane-api/role-id)"
 api_secret_id="$("${root_bao[@]}" write -field=secret_id -f auth/approle/role/cplane-api/secret-id)"
 control_plane_role_id="$("${root_bao[@]}" read -field=role_id auth/approle/role/cplane-control-plane/role-id)"
 control_plane_secret_id="$("${root_bao[@]}" write -field=secret_id -f auth/approle/role/cplane-control-plane/secret-id)"
+worker_role_id="$("${root_bao[@]}" read -field=role_id auth/approle/role/cplane-worker/role-id)"
+worker_secret_id="$("${root_bao[@]}" write -field=secret_id -f auth/approle/role/cplane-worker/secret-id)"
 set_env OPENBAO_API_ROLE_ID "$api_role_id"
 set_env OPENBAO_API_SECRET_ID "$api_secret_id"
 set_env OPENBAO_CONTROL_PLANE_ROLE_ID "$control_plane_role_id"
 set_env OPENBAO_CONTROL_PLANE_SECRET_ID "$control_plane_secret_id"
+set_env OPENBAO_WORKER_ROLE_ID "$worker_role_id"
+set_env OPENBAO_WORKER_SECRET_ID "$worker_secret_id"
 
 api_token="$("${root_bao[@]}" write -field=token auth/approle/login role_id="$api_role_id" secret_id="$api_secret_id")"
 control_plane_token="$("${root_bao[@]}" write -field=token auth/approle/login role_id="$control_plane_role_id" secret_id="$control_plane_secret_id")"
@@ -186,7 +192,7 @@ api_provider_caps="$("${compose[@]}" exec -T -e BAO_ADDR=http://127.0.0.1:8200 -
 control_plane_tenant_caps="$("${compose[@]}" exec -T -e BAO_ADDR=http://127.0.0.1:8200 -e "BAO_TOKEN=$control_plane_token" openbao bao token capabilities transit/encrypt/tenant-policy-smoke-test)"
 printf '%s' "$api_provider_caps" | grep -qw update
 [ "$control_plane_tenant_caps" = deny ] || { echo "Control-plane AppRole unexpectedly has tenant access" >&2; exit 1; }
-unset api_token control_plane_token api_secret_id control_plane_secret_id
+unset api_token control_plane_token api_secret_id control_plane_secret_id worker_role_id worker_secret_id
 
 echo "Applying database migrations..."
 run_quiet "${compose[@]}" run --rm --build migrate
@@ -351,7 +357,7 @@ elif [ "$bucket_status" != 200 ]; then
 fi
 unset registry_secret_key registry_session_token
 
-services=(storage ui api registry control-plane worker)
+services=(ingress storage ui api registry control-plane worker)
 echo "Starting C-Plane ($mode)..."
 "${compose[@]}" up -d --build "${services[@]}"
 echo "C-Plane is installed"

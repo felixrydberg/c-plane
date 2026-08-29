@@ -44,6 +44,7 @@ export type Sdk = {
   }
   internal: {
     provider_credentials: Operation<"/internal/s3-providers/{provider_id}/credentials", 'get'>
+    provision_tenant_key: Operation<"/internal/organizations/{organization_id}/transit-key", 'post'>
     resolve_access_token: Operation<"/internal/s3-access-tokens/resolve/{access_key}", 'get'>
   }
   projects: {
@@ -128,6 +129,7 @@ export const createSdk = (options: SdkOptions = {}): Sdk => {
     },
     internal: {
       provider_credentials: (...args: Parameters<Operation<"/internal/s3-providers/{provider_id}/credentials", 'get'>>) => client.GET("/internal/s3-providers/{provider_id}/credentials", ...args),
+      provision_tenant_key: (...args: Parameters<Operation<"/internal/organizations/{organization_id}/transit-key", 'post'>>) => client.POST("/internal/organizations/{organization_id}/transit-key", ...args),
       resolve_access_token: (...args: Parameters<Operation<"/internal/s3-access-tokens/resolve/{access_key}", 'get'>>) => client.GET("/internal/s3-access-tokens/resolve/{access_key}", ...args)
     },
     projects: {

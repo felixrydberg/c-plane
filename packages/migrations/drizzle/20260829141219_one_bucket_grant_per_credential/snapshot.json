@@ -1,9 +1,9 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "41571c22-f3ca-4ceb-90f8-af268f5787e3",
+  "id": "6490446a-c42a-4680-ab03-0254aa64c79d",
   "prevIds": [
-    "eb55ea1b-d849-4168-b54a-2191fa098b33"
+    "30bbf357-ff32-4848-9b27-be2519b1435a"
   ],
   "ddl": [
     {
@@ -90,17 +90,6 @@
     },
     {
       "values": [
-        "provisioning",
-        "ready",
-        "deleting",
-        "failed"
-      ],
-      "name": "storage_status",
-      "entityType": "enums",
-      "schema": "public"
-    },
-    {
-      "values": [
         "region:read",
         "project:read",
         "project:create",
@@ -175,7 +164,7 @@
       "schema": "public"
     },
     {
-      "isRlsEnabled": true,
+      "isRlsEnabled": false,
       "name": "bucket",
       "entityType": "tables",
       "schema": "public"
@@ -272,19 +261,13 @@
     },
     {
       "isRlsEnabled": true,
-      "name": "storage",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": true,
       "name": "storage_access_token",
       "entityType": "tables",
       "schema": "public"
     },
     {
       "isRlsEnabled": true,
-      "name": "storage_access_token_bucket",
+      "name": "storage_bucket",
       "entityType": "tables",
       "schema": "public"
     },
@@ -1557,6 +1540,19 @@
       "generated": null,
       "identity": null,
       "name": "access_key_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "credential"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "''",
+      "generated": null,
+      "identity": null,
+      "name": "prefix",
       "entityType": "columns",
       "schema": "public",
       "table": "credential"
@@ -2869,85 +2865,7 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "storage"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "project_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "storage"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "organization_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "storage"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "region_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "storage"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "name",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "storage"
-    },
-    {
-      "type": "storage_status",
-      "typeSchema": "public",
-      "notNull": true,
-      "dimensions": 0,
-      "default": "'provisioning'",
-      "generated": null,
-      "identity": null,
-      "name": "status",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "storage"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "id",
+      "name": "credential_id",
       "entityType": "columns",
       "schema": "public",
       "table": "storage_access_token"
@@ -2992,43 +2910,17 @@
       "table": "storage_access_token"
     },
     {
-      "type": "text",
+      "type": "uuid",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "access_key_id",
+      "name": "id",
       "entityType": "columns",
       "schema": "public",
-      "table": "storage_access_token"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "storage_access_token"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "revoked_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "storage_access_token"
+      "table": "storage_bucket"
     },
     {
       "type": "uuid",
@@ -3038,10 +2930,23 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "access_token_id",
+      "name": "project_id",
       "entityType": "columns",
       "schema": "public",
-      "table": "storage_access_token_bucket"
+      "table": "storage_bucket"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "organization_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "storage_bucket"
     },
     {
       "type": "uuid",
@@ -3054,46 +2959,20 @@
       "name": "bucket_id",
       "entityType": "columns",
       "schema": "public",
-      "table": "storage_access_token_bucket"
+      "table": "storage_bucket"
     },
     {
-      "type": "uuid",
+      "type": "text",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "organization_id",
+      "name": "name",
       "entityType": "columns",
       "schema": "public",
-      "table": "storage_access_token_bucket"
-    },
-    {
-      "type": "boolean",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "false",
-      "generated": null,
-      "identity": null,
-      "name": "can_read",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "storage_access_token_bucket"
-    },
-    {
-      "type": "boolean",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "false",
-      "generated": null,
-      "identity": null,
-      "name": "can_write",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "storage_access_token_bucket"
+      "table": "storage_bucket"
     },
     {
       "type": "uuid",
@@ -4912,13 +4791,6 @@
           "asc": true,
           "nullsFirst": false,
           "opclass": null
-        },
-        {
-          "value": "prefix",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
         }
       ],
       "isUnique": true,
@@ -4926,7 +4798,7 @@
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "bucket_grant_credential_bucket_prefix_uidx",
+      "name": "bucket_grant_credential_bucket_uidx",
       "entityType": "indexes",
       "schema": "public",
       "table": "bucket_grant"
@@ -6083,139 +5955,6 @@
       "nameExplicit": true,
       "columns": [
         {
-          "value": "name",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": true,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "storage_name_idx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "storage"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "project_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "storage_project_id_idx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "storage"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "organization_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "storage_organization_id_idx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "storage"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "region_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "storage_region_id_idx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "storage"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "access_key_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": true,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "storage_access_token_access_key_id_uidx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "storage_access_token"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "project_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "name",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": true,
-      "where": "\"revoked_at\" is null",
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "storage_access_token_project_name_uidx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "storage_access_token"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
           "value": "organization_id",
           "isExpression": false,
           "asc": true,
@@ -6258,12 +5997,33 @@
       "nameExplicit": true,
       "columns": [
         {
-          "value": "access_token_id",
+          "value": "project_id",
           "isExpression": false,
           "asc": true,
           "nullsFirst": false,
           "opclass": null
         },
+        {
+          "value": "name",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "storage_bucket_project_name_uidx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "storage_bucket"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
         {
           "value": "bucket_id",
           "isExpression": false,
@@ -6277,16 +6037,16 @@
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "storage_access_token_bucket_uidx",
+      "name": "storage_bucket_foundation_bucket_uidx",
       "entityType": "indexes",
       "schema": "public",
-      "table": "storage_access_token_bucket"
+      "table": "storage_bucket"
     },
     {
       "nameExplicit": true,
       "columns": [
         {
-          "value": "access_token_id",
+          "value": "project_id",
           "isExpression": false,
           "asc": true,
           "nullsFirst": false,
@@ -6298,16 +6058,16 @@
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "storage_access_token_bucket_token_id_idx",
+      "name": "storage_bucket_project_id_idx",
       "entityType": "indexes",
       "schema": "public",
-      "table": "storage_access_token_bucket"
+      "table": "storage_bucket"
     },
     {
       "nameExplicit": true,
       "columns": [
         {
-          "value": "bucket_id",
+          "value": "organization_id",
           "isExpression": false,
           "asc": true,
           "nullsFirst": false,
@@ -6319,10 +6079,10 @@
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "storage_access_token_bucket_bucket_id_idx",
+      "name": "storage_bucket_organization_id_idx",
       "entityType": "indexes",
       "schema": "public",
-      "table": "storage_access_token_bucket"
+      "table": "storage_bucket"
     },
     {
       "nameExplicit": true,
@@ -7717,57 +7477,6 @@
     {
       "nameExplicit": false,
       "columns": [
-        "project_id"
-      ],
-      "schemaTo": "public",
-      "tableTo": "project",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "name": "storage_project_id_project_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "storage"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        "organization_id"
-      ],
-      "schemaTo": "public",
-      "tableTo": "organization",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "name": "storage_organization_id_organization_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "storage"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        "region_id"
-      ],
-      "schemaTo": "public",
-      "tableTo": "regions",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "RESTRICT",
-      "name": "storage_region_id_regions_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "storage"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
         "organization_id"
       ],
       "schemaTo": "public",
@@ -7800,6 +7509,42 @@
       "table": "storage_access_token"
     },
     {
+      "nameExplicit": true,
+      "columns": [
+        "credential_id",
+        "organization_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "credential",
+      "columnsTo": [
+        "id",
+        "organization_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "storage_access_token_credential_scope_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "storage_access_token"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "project_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "project",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "storage_bucket_project_id_project_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "storage_bucket"
+    },
+    {
       "nameExplicit": false,
       "columns": [
         "organization_id"
@@ -7811,48 +7556,27 @@
       ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
-      "name": "storage_access_token_bucket_vSGyhrH3NafP_fkey",
+      "name": "storage_bucket_organization_id_organization_id_fkey",
       "entityType": "fks",
       "schema": "public",
-      "table": "storage_access_token_bucket"
+      "table": "storage_bucket"
     },
     {
-      "nameExplicit": true,
+      "nameExplicit": false,
       "columns": [
-        "access_token_id",
-        "organization_id"
+        "bucket_id"
       ],
       "schemaTo": "public",
-      "tableTo": "storage_access_token",
+      "tableTo": "bucket",
       "columnsTo": [
-        "id",
-        "organization_id"
+        "id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "name": "storage_access_token_bucket_token_scope_fk",
+      "onDelete": "RESTRICT",
+      "name": "storage_bucket_bucket_id_bucket_id_fkey",
       "entityType": "fks",
       "schema": "public",
-      "table": "storage_access_token_bucket"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        "bucket_id",
-        "organization_id"
-      ],
-      "schemaTo": "public",
-      "tableTo": "storage",
-      "columnsTo": [
-        "id",
-        "organization_id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "name": "storage_access_token_bucket_bucket_scope_fk",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "storage_access_token_bucket"
+      "table": "storage_bucket"
     },
     {
       "nameExplicit": false,
@@ -8378,12 +8102,12 @@
     },
     {
       "columns": [
-        "id"
+        "credential_id"
       ],
       "nameExplicit": false,
-      "name": "storage_pkey",
+      "name": "storage_access_token_pkey",
       "schema": "public",
-      "table": "storage",
+      "table": "storage_access_token",
       "entityType": "pks"
     },
     {
@@ -8391,9 +8115,9 @@
         "id"
       ],
       "nameExplicit": false,
-      "name": "storage_access_token_pkey",
+      "name": "storage_bucket_pkey",
       "schema": "public",
-      "table": "storage_access_token",
+      "table": "storage_bucket",
       "entityType": "pks"
     },
     {
@@ -8599,14 +8323,14 @@
     {
       "nameExplicit": true,
       "columns": [
-        "id",
+        "credential_id",
         "organization_id"
       ],
       "nullsNotDistinct": false,
-      "name": "storage_id_organization_id_uidx",
+      "name": "storage_access_token_credential_organization_uidx",
       "entityType": "uniques",
       "schema": "public",
-      "table": "storage"
+      "table": "storage_access_token"
     },
     {
       "nameExplicit": true,
@@ -8615,10 +8339,10 @@
         "organization_id"
       ],
       "nullsNotDistinct": false,
-      "name": "storage_access_token_id_organization_id_uidx",
+      "name": "storage_bucket_id_organization_id_uidx",
       "entityType": "uniques",
       "schema": "public",
-      "table": "storage_access_token"
+      "table": "storage_bucket"
     },
     {
       "nameExplicit": true,
@@ -8830,19 +8554,6 @@
       "roles": [
         "app_tenant"
       ],
-      "using": "true",
-      "withCheck": null,
-      "name": "bucket_tenant_select_rls",
-      "entityType": "policies",
-      "schema": "public",
-      "table": "bucket"
-    },
-    {
-      "as": "PERMISSIVE",
-      "for": "SELECT",
-      "roles": [
-        "app_tenant"
-      ],
       "using": "\"bucket_grant\".\"organization_id\" is null",
       "withCheck": null,
       "name": "bucket_grant_platform_select_rls",
@@ -8895,19 +8606,6 @@
       "roles": [
         "app_tenant"
       ],
-      "using": "true",
-      "withCheck": null,
-      "name": "registry_storage_tenant_select_rls",
-      "entityType": "policies",
-      "schema": "public",
-      "table": "registry_storage"
-    },
-    {
-      "as": "PERMISSIVE",
-      "for": "SELECT",
-      "roles": [
-        "app_tenant"
-      ],
       "using": "\"credential\".\"organization_id\" is null",
       "withCheck": null,
       "name": "credential_platform_select_rls",
@@ -8953,19 +8651,6 @@
       "entityType": "policies",
       "schema": "public",
       "table": "secret"
-    },
-    {
-      "as": "PERMISSIVE",
-      "for": "SELECT",
-      "roles": [
-        "app_tenant"
-      ],
-      "using": "true",
-      "withCheck": null,
-      "name": "registry_maintenance_tenant_select_rls",
-      "entityType": "policies",
-      "schema": "public",
-      "table": "registry_maintenance"
     },
     {
       "as": "PERMISSIVE",
@@ -9064,19 +8749,6 @@
       "roles": [
         "app_tenant"
       ],
-      "using": "\"storage\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
-      "withCheck": "\"storage\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
-      "name": "storage_tenant_rls",
-      "entityType": "policies",
-      "schema": "public",
-      "table": "storage"
-    },
-    {
-      "as": "PERMISSIVE",
-      "for": "ALL",
-      "roles": [
-        "app_tenant"
-      ],
       "using": "\"storage_access_token\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
       "withCheck": "\"storage_access_token\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
       "name": "storage_access_token_tenant_rls",
@@ -9090,12 +8762,12 @@
       "roles": [
         "app_tenant"
       ],
-      "using": "\"storage_access_token_bucket\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
-      "withCheck": "\"storage_access_token_bucket\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
-      "name": "storage_access_token_bucket_tenant_rls",
+      "using": "\"storage_bucket\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+      "withCheck": "\"storage_bucket\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+      "name": "storage_bucket_tenant_rls",
       "entityType": "policies",
       "schema": "public",
-      "table": "storage_access_token_bucket"
+      "table": "storage_bucket"
     },
     {
       "as": "PERMISSIVE",
@@ -9267,5 +8939,7 @@
       "table": "registry_repository_grants"
     }
   ],
-  "renames": []
+  "renames": [
+    "public.bucket_grant.bucket_grant_credential_bucket_prefix_uidx->public.bucket_grant.bucket_grant_credential_bucket_uidx"
+  ]
 }

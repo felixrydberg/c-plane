@@ -31,15 +31,6 @@ pub struct S3ProviderCredentials {
     pub name: String,
 }
 
-#[derive(Clone, Deserialize, Serialize)]
-pub struct S3AccessKeySecret {
-    pub kind: String,
-    pub credential_id: Uuid,
-    pub organization_id: Option<Uuid>,
-    pub project_id: Option<Uuid>,
-    pub secret_access_key: String,
-}
-
 #[derive(Clone)]
 pub struct S3ProviderClient {
     database: DatabaseConnection,
@@ -108,32 +99,29 @@ impl S3ProviderClient {
         Ok(credentials)
     }
 
-    pub async fn access_key(
+    pub async fn bucket_key(
         &self,
-        _access_key: &str,
-    ) -> Result<Option<S3AccessKeySecret>, AppError> {
-        Ok(None)
-    }
-
-    pub async fn store_access_key(
-        &self,
-        _access_key: &str,
-        _secret: &S3AccessKeySecret,
-    ) -> Result<(), AppError> {
-        pending_secret_migration()
-    }
-
-    pub async fn delete_access_key(&self, access_key: &str) -> Result<(), AppError> {
-        self.invalidate_access_token_cache(access_key).await?;
-        Ok(())
-    }
-
-    pub async fn bucket_key(&self, _bucket_id: Uuid) -> Result<String, AppError> {
-        pending_secret_migration()
-    }
-
-    pub async fn ensure_bucket_sse_key(&self, _bucket_id: Uuid) -> Result<(), AppError> {
-        pending_secret_migration()
+        bucket_id: Uuid,
+        organization_id: Uuid,
+    ) -> Result<String, AppError> {
+        let row = self
+            .database
+            .query_one(Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
+                "SELECT secret.ciphertext FROM bucket JOIN secret ON secret.id=bucket.sse_secret_id WHERE bucket.id=$1 AND secret.scope='tenant'::secret_scope AND secret.organization_id=$2",
+                vec![bucket_id.into(), organization_id.into()],
+            ))
+            .await?
+            .ok_or_else(|| AppError::NotFound("Bucket encryption key not found".into()))?;
+        let ciphertext: String = row.try_get("", "ciphertext")?;
+        let plaintext = secrets::decrypt(
+            &self.secrets,
+            &format!("tenant-{}", organization_id.simple()),
+            &ciphertext,
+        )
+        .await?;
+        String::from_utf8(plaintext)
+            .map_err(|error| AppError::Internal(format!("Invalid bucket encryption key: {error}")))
     }
 
     pub async fn create_bucket(&self, provider_id: Uuid, bucket_id: Uuid) -> Result<(), AppError> {
@@ -162,6 +150,25 @@ impl S3ProviderClient {
             tracing::error!(%provider_id, %error, "S3 provider bucket deletion failed");
             AppError::Conflict("S3 provider bucket deletion failed".into())
         })
+    }
+
+    pub async fn bucket_is_empty(
+        &self,
+        provider_id: Uuid,
+        bucket_id: Uuid,
+    ) -> Result<bool, AppError> {
+        let provider = self.credentials(provider_id).await?;
+        let region = provider
+            .provider_region
+            .clone()
+            .unwrap_or_else(|| "us-east-1".into());
+        let client = aws_sdk_s3::Client::from_conf(s3_config(&provider, &region));
+        lib::buckets::is_empty(&client, bucket_id)
+            .await
+            .map_err(|error| {
+                tracing::error!(%provider_id, %error, "S3 provider bucket status check failed");
+                AppError::Conflict("S3 provider bucket status could not be checked".into())
+            })
     }
 
     pub async fn invalidate_access_token_cache(&self, access_key: &str) -> Result<(), AppError> {
@@ -196,13 +203,6 @@ impl S3ProviderClient {
             .map_err(|error| AppError::Internal(error.to_string()))?;
         Ok(())
     }
-}
-
-// ponytail: fail closed until these callers use Transit-backed Postgres rows.
-fn pending_secret_migration<T>() -> Result<T, AppError> {
-    Err(AppError::ServiceUnavailable(
-        "Secret storage migration is not complete".into(),
-    ))
 }
 
 fn s3_config(provider: &S3ProviderCredentials, region: &str) -> aws_sdk_s3::Config {

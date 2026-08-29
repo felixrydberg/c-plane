@@ -19,6 +19,7 @@
   },
   "scripts": {
     "migrate:generate": "drizzle-kit generate --config=drizzle.config.ts",
+    "migrate:clean": "deno run --allow-read --allow-write --allow-run ./clean-migrations.ts",
     "migrate": "drizzle-kit migrate --config=drizzle.config.ts",
     "migrate:push": "drizzle-kit push --config=drizzle.config.ts",
     "better-auth:generate:ui": "better-auth generate --config ../ui/server/utils/auth.ts --y --output ./schema/tenants/studio.ts",

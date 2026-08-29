@@ -1,7 +1,7 @@
 ARG RUST_VERSION=1.92.0
 ARG DIOXUS_VERSION=0.7.9
 
-FROM rust:${RUST_VERSION} AS tools
+FROM rust:${RUST_VERSION}-bookworm AS tools
 ARG DIOXUS_VERSION
 RUN rustup target add wasm32-unknown-unknown && cargo install dioxus-cli --version ${DIOXUS_VERSION} --locked
 WORKDIR /usr/src/app

@@ -1,5 +1,8 @@
+pub mod bucket;
+pub mod bucket_grant;
 pub mod container;
 pub mod container_version;
+pub mod credential;
 pub mod event;
 pub mod external_registry;
 pub mod organisation;
@@ -13,6 +16,7 @@ pub mod region;
 pub mod registry_access_token;
 pub mod registry_repository;
 pub mod registry_repository_grant;
+pub mod secret;
+pub mod s3_provider;
 pub mod storage;
 pub mod storage_access_token;
-pub mod storage_access_token_bucket;

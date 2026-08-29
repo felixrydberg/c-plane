@@ -46,10 +46,4 @@ export const registry_maintenance = pgTable.withRLS("registry_maintenance", {
 }, (table) => [
   check("registry_maintenance_phase_check", sql`${table.phase} in ('idle', 'queued', 'draining', 'collecting', 'restoring')`),
   index("registry_maintenance_active_job_idx").on(table.active_job_id),
-  pgPolicy("registry_maintenance_tenant_select_rls", {
-    as: "permissive",
-    for: "select",
-    to: app_tenant,
-    using: sql`true`,
-  }),
 ]);

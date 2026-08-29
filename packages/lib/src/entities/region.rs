@@ -42,6 +42,20 @@ pub enum RegionRoutingMode {
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::s3_provider::Entity",
+        from = "Column::S3ProviderId",
+        to = "super::s3_provider::Column::Id",
+        on_delete = "Restrict"
+    )]
+    S3Provider,
+}
+
+impl Related<super::s3_provider::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::S3Provider.def()
+    }
+}
 
 impl ActiveModelBehavior for ActiveModel {}
