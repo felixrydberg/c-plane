@@ -17,5 +17,6 @@ pub mod registry_access_token;
 pub mod registry_repository;
 pub mod registry_repository_grant;
 pub mod secret;
+pub mod s3_provider;
 pub mod storage;
 pub mod storage_access_token;

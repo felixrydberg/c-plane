@@ -25,11 +25,24 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Credential,
+    #[sea_orm(
+        belongs_to = "super::storage::Entity",
+        from = "Column::BucketId",
+        to = "super::storage::Column::BucketId",
+        on_delete = "Restrict"
+    )]
+    Storage,
 }
 
 impl Related<super::credential::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Credential.def()
+    }
+}
+
+impl Related<super::storage::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Storage.def()
     }
 }
 

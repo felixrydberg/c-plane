@@ -46,10 +46,9 @@ export const bucket_grant = pgTable.withRLS("bucket_grant", {
   updated_at: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 }, (table) => [
   check("bucket_grant_permission_check", sql`${table.can_read} or ${table.can_write}`),
-  uniqueIndex("bucket_grant_credential_bucket_prefix_uidx").on(
+  uniqueIndex("bucket_grant_credential_bucket_uidx").on(
     table.credential_id,
     table.bucket_id,
-    table.prefix,
   ),
   foreignKey({
     columns: [table.credential_id],

@@ -650,6 +650,7 @@ mod tests {
                     platform_sse_key: "key".into(),
                     can_read: false,
                     can_write: true,
+                    is_deleting: false,
                 },
                 BucketPermission {
                     bucket_id: uuid::Uuid::nil(),
@@ -660,6 +661,7 @@ mod tests {
                     platform_sse_key: "key".into(),
                     can_read: true,
                     can_write: false,
+                    is_deleting: false,
                 },
             ],
         };

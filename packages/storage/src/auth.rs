@@ -45,6 +45,8 @@ pub struct BucketPermission {
     pub platform_sse_key: String,
     pub can_read: bool,
     pub can_write: bool,
+    #[serde(default)]
+    pub is_deleting: bool,
 }
 
 #[derive(Clone)]
@@ -127,7 +129,8 @@ impl S3Access for CredentialResolver {
                         .iter()
                         .find(|permission| permission.bucket_name == bucket)
                         .ok_or_else(|| s3s::s3_error!(AccessDenied))?;
-                    if is_write_operation(context.s3_op().name()) && !permission.can_write
+                    if is_write_operation(context.s3_op().name())
+                        && (permission.is_deleting || !permission.can_write)
                         || !is_write_operation(context.s3_op().name()) && !permission.can_read
                     {
                         return Err(s3s::s3_error!(AccessDenied));
@@ -202,7 +205,8 @@ mod tests {
                 "provider_id": Uuid::nil(),
                 "platform_sse_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
                 "can_read": true,
-                "can_write": true
+                "can_write": true,
+                "is_deleting": false
             }],
             "secret_access_key": "secret"
         })))

@@ -172,15 +172,6 @@ pub async fn delete_bucket(
     let provider_id = region
         .and_then(|region| region.s3_provider_id)
         .ok_or_else(|| AppError::Conflict("Region has no S3 provider".into()))?;
-    if !get_app_state()
-        .s3_providers
-        .bucket_is_empty(provider_id, bucket.bucket_id)
-        .await?
-    {
-        return Err(AppError::Conflict(
-            "Bucket must be empty before it can be deleted".into(),
-        ));
-    }
     let access_keys = bucket_grant::Entity::find()
         .filter(bucket_grant::Column::BucketId.eq(bucket.bucket_id))
         .find_also_related(credential::Entity)
@@ -189,6 +180,49 @@ pub async fn delete_bucket(
         .into_iter()
         .filter_map(|(_, credential)| credential.map(|credential| credential.access_key_id))
         .collect::<Vec<_>>();
+
+    bucket::ActiveModel {
+        id: Set(bucket.bucket_id),
+        status: Set(bucket::BucketStatus::Deleting),
+        ..Default::default()
+    }
+    .update(tx)
+    .await?;
+    scoped.commit().await?;
+    get_app_state()
+        .s3_providers
+        .invalidate_access_token_caches(&access_keys)
+        .await?;
+
+    if !get_app_state()
+        .s3_providers
+        .bucket_is_empty(provider_id, bucket.bucket_id)
+        .await?
+    {
+        let scoped = tenant_db.begin_scoped_transaction().await?;
+        let tx = scoped.connection();
+        bucket::ActiveModel {
+            id: Set(bucket.bucket_id),
+            status: Set(bucket::BucketStatus::Active),
+            ..Default::default()
+        }
+        .update(tx)
+        .await?;
+        scoped.commit().await?;
+        if let Err(error) = get_app_state()
+            .s3_providers
+            .invalidate_access_token_caches(&access_keys)
+            .await
+        {
+            tracing::warn!(%error, %bucket_id, "bucket cache invalidation failed after deletion conflict");
+        }
+        return Err(AppError::Conflict(
+            "Bucket must be empty before it can be deleted".into(),
+        ));
+    }
+
+    let scoped = tenant_db.begin_scoped_transaction().await?;
+    let tx = scoped.connection();
     buckets::delete(tx, bucket.bucket_id).await?;
     crate::services::events::record(
         tx,
@@ -200,13 +234,6 @@ pub async fn delete_bucket(
     )
     .await?;
     scoped.commit().await?;
-    if let Err(error) = get_app_state()
-        .s3_providers
-        .invalidate_access_token_caches(&access_keys)
-        .await
-    {
-        tracing::warn!(%error, %bucket_id, "bucket cache invalidation failed after deletion");
-    }
     Ok(axum::http::StatusCode::NO_CONTENT)
 }
 

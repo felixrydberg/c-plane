@@ -29,6 +29,12 @@ pub enum Relation {
         on_delete = "Restrict"
     )]
     Bucket,
+    #[sea_orm(
+        has_many = "super::bucket_grant::Entity",
+        from = "Column::BucketId",
+        to = "super::bucket_grant::Column::BucketId"
+    )]
+    BucketGrant,
 }
 
 impl Related<super::project::Entity> for Entity {
@@ -40,6 +46,12 @@ impl Related<super::project::Entity> for Entity {
 impl Related<super::bucket::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Bucket.def()
+    }
+}
+
+impl Related<super::bucket_grant::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::BucketGrant.def()
     }
 }
 

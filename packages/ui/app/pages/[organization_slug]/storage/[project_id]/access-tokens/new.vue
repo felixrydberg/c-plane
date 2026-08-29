@@ -33,11 +33,16 @@ function setRead(bucketId: string, canRead: boolean) { if (grants.value[bucketId
 function setWrite(bucketId: string, canWrite: boolean) { if (grants.value[bucketId]) grants.value[bucketId].can_write = canWrite }
 
 async function createToken() {
-  if (!orgId.value || !projectId.value || !name.value.trim() || !selectedPermissions.value.length) return
+  const trimmedName = name.value.trim()
+  if (!orgId.value || !projectId.value || !trimmedName || !selectedPermissions.value.length) return
+  if (new TextEncoder().encode(trimmedName).byteLength > 1024) {
+    error.value = 'Token name must be at most 1024 bytes'
+    return
+  }
   loading.value = true
   error.value = ''
   try {
-    created.value = await cplaneFetch(`/api/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/storage/access-tokens` as const, { method: 'POST', body: { name: name.value.trim(), prefix: prefix.value, bucket_permissions: selectedPermissions.value } })
+    created.value = await cplaneFetch(`/api/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/storage/access-tokens` as const, { method: 'POST', body: { name: trimmedName, prefix: prefix.value, bucket_permissions: selectedPermissions.value } })
     toast.add({ title: 'Access token created', color: 'success' })
   } catch (cause: unknown) {
     error.value = getErrorMessage(cause, 'Failed to create access token')

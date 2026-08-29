@@ -909,7 +909,7 @@ export interface components {
             credential_id: string;
             /** Format: uuid */
             organization_id?: string | null;
-            prefix?: string;
+            prefix: string;
             /** Format: uuid */
             project_id?: string | null;
         };
@@ -919,6 +919,7 @@ export interface components {
             bucket_name: string;
             can_read: boolean;
             can_write: boolean;
+            is_deleting?: boolean;
             physical_bucket_name: string;
             /** Format: uuid */
             provider_id: string;

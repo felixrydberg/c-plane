@@ -1,16 +1,24 @@
 use axum::{Json, extract::Path};
 use redis::AsyncCommands;
-use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
+use sea_orm::{
+    ColumnTrait, EntityTrait, FromQueryResult, JoinType, QueryFilter, QueryOrder, QuerySelect,
+    RelationTrait,
+};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
     errors::AppError,
+    models::entities::{
+        bucket, bucket_grant, credential, region, s3_provider, secret, storage,
+        storage_access_token,
+    },
     services::s3_providers::S3ProviderCredentials,
     state::{OrganizationContext, TenantDatabase, get_app_state},
 };
 use lib::cache::S3_ACCESS_TOKEN_CACHE_PREFIX;
+use lib::entities::secret::SecretScope;
 
 const CACHE_TTL_SECONDS: u64 = 86_400;
 
@@ -25,6 +33,8 @@ pub struct ResolvedS3BucketPermission {
     pub platform_sse_key: String,
     pub can_read: bool,
     pub can_write: bool,
+    #[serde(default)]
+    pub is_deleting: bool,
 }
 
 #[derive(Clone, Deserialize, Serialize, ToSchema)]
@@ -33,10 +43,23 @@ pub struct ResolvedS3AccessToken {
     pub project_id: Option<Uuid>,
     pub credential_id: Uuid,
     #[serde(default)]
+    #[schema(required)]
     pub prefix: String,
     pub bucket_permissions: Vec<ResolvedS3BucketPermission>,
     #[schema(ignore)]
     pub secret_access_key: String,
+}
+
+#[derive(FromQueryResult)]
+struct S3BucketPermissionRow {
+    storage_bucket_id: Uuid,
+    bucket_name: String,
+    foundation_bucket_id: Uuid,
+    region: String,
+    provider_id: Uuid,
+    can_read: bool,
+    can_write: bool,
+    status: bucket::BucketStatus,
 }
 
 #[utoipa::path(get, path = "/internal/s3-access-tokens/resolve/{access_key}", params(("access_key" = String, Path)),
@@ -46,8 +69,9 @@ pub async fn resolve_access_token(
 ) -> Result<Json<ResolvedS3AccessToken>, AppError> {
     let state = get_app_state();
     if let Some(cached) = cached(&state.config.redis_url, &access_key).await? {
-        validate_cached_token(&cached, &access_key).await?;
-        return Ok(Json(cached));
+        if validate_cached_token(&cached, &access_key).await? {
+            return Ok(Json(cached));
+        }
     }
     let resolved = resolve_uncached(&access_key).await?;
     cache(&state.config.redis_url, &access_key, &resolved).await?;
@@ -69,25 +93,30 @@ pub async fn provider_credentials(
 
 async fn resolve_uncached(access_key: &str) -> Result<ResolvedS3AccessToken, AppError> {
     let state = get_app_state();
-    let credential = state
-        .identity_db
-        .connection()
-        .query_one(statement(
-        "SELECT credential.id, credential.organization_id, credential.prefix, token.project_id, secret.ciphertext FROM credential JOIN storage_access_token token ON token.credential_id=credential.id JOIN secret ON secret.id=credential.secret_id WHERE credential.access_key_id=$1 AND credential.revoked_at IS NULL AND secret.scope='tenant'::secret_scope AND secret.organization_id=credential.organization_id",
-        vec![access_key.into()],
-    ))
-    .await
-    .map_err(|error| AppError::Internal(error.to_string()))?
-    .ok_or_else(|| AppError::NotFound("S3 access key not found".into()))?;
-    let credential_id: Uuid = credential.try_get("", "id")?;
-    let organization_id: Uuid = credential.try_get("", "organization_id")?;
-    let prefix: String = credential.try_get("", "prefix")?;
-    let project_id: Uuid = credential.try_get("", "project_id")?;
-    let ciphertext: String = credential.try_get("", "ciphertext")?;
+    let credential = credential::Entity::find()
+        .filter(credential::Column::AccessKeyId.eq(access_key))
+        .filter(credential::Column::RevokedAt.is_null())
+        .one(state.identity_db.connection())
+        .await?
+        .ok_or_else(|| AppError::NotFound("S3 access key not found".into()))?;
+    let organization_id = credential
+        .organization_id
+        .ok_or_else(|| AppError::Internal("S3 credential has no organization".into()))?;
+    let token = storage_access_token::Entity::find_by_id(credential.id)
+        .filter(storage_access_token::Column::OrganizationId.eq(organization_id))
+        .one(state.identity_db.connection())
+        .await?
+        .ok_or_else(|| AppError::NotFound("S3 access token not found".into()))?;
+    let secret = secret::Entity::find_by_id(credential.secret_id)
+        .filter(secret::Column::Scope.eq(SecretScope::Tenant))
+        .filter(secret::Column::OrganizationId.eq(organization_id))
+        .one(state.identity_db.connection())
+        .await?
+        .ok_or_else(|| AppError::NotFound("S3 access token secret not found".into()))?;
     let plaintext = lib::secrets::decrypt(
         &state.secrets,
         &format!("tenant-{}", organization_id.simple()),
-        &ciphertext,
+        &secret.ciphertext,
     )
     .await?;
     let secret: S3SecretKey = serde_json::from_slice(&plaintext)
@@ -101,33 +130,53 @@ async fn resolve_uncached(access_key: &str) -> Result<ResolvedS3AccessToken, App
         },
     );
     let scoped = tenant.begin_scoped_transaction().await?;
-    let rows = scoped.connection().query_all(statement(
-        "SELECT storage_bucket.id AS storage_bucket_id, storage_bucket.name AS bucket_name, bucket.id AS foundation_bucket_id, regions.slug AS region_slug, provider.id AS provider_id, bg.can_read, bg.can_write FROM bucket_grant bg JOIN storage_bucket ON storage_bucket.bucket_id=bg.bucket_id JOIN bucket ON bucket.id=bg.bucket_id JOIN regions ON regions.id=bucket.region_id JOIN s3_providers provider ON provider.id=regions.s3_provider_id WHERE bg.credential_id=$1 AND bg.organization_id=$2 AND storage_bucket.project_id=$3 AND provider.is_active=true ORDER BY storage_bucket.name",
-        vec![credential_id.into(), organization_id.into(), project_id.into()],
-    )).await?;
+    let tx = scoped.connection();
+    let rows = storage::Entity::find()
+        .select_only()
+        .column_as(storage::Column::Id, "storage_bucket_id")
+        .column_as(storage::Column::Name, "bucket_name")
+        .column_as(bucket::Column::Id, "foundation_bucket_id")
+        .column_as(region::Column::Slug, "region")
+        .column_as(region::Column::S3ProviderId, "provider_id")
+        .column(bucket_grant::Column::CanRead)
+        .column(bucket_grant::Column::CanWrite)
+        .column(bucket::Column::Status)
+        .inner_join(bucket::Entity)
+        .join(JoinType::InnerJoin, bucket::Relation::Region.def())
+        .join(JoinType::InnerJoin, region::Relation::S3Provider.def())
+        .inner_join(bucket_grant::Entity)
+        .filter(storage::Column::OrganizationId.eq(organization_id))
+        .filter(storage::Column::ProjectId.eq(token.project_id))
+        .filter(bucket_grant::Column::CredentialId.eq(credential.id))
+        .filter(bucket_grant::Column::OrganizationId.eq(organization_id))
+        .filter(s3_provider::Column::IsActive.eq(true))
+        .order_by_asc(storage::Column::Name)
+        .into_model::<S3BucketPermissionRow>()
+        .all(tx)
+        .await?;
     scoped.commit().await?;
     let mut bucket_permissions = Vec::with_capacity(rows.len());
     for row in rows {
-        let foundation_bucket_id: Uuid = row.try_get("", "foundation_bucket_id")?;
         bucket_permissions.push(ResolvedS3BucketPermission {
-            bucket_id: row.try_get("", "storage_bucket_id")?,
-            bucket_name: row.try_get("", "bucket_name")?,
-            physical_bucket_name: lib::buckets::physical_bucket_name(foundation_bucket_id),
-            region: row.try_get("", "region_slug")?,
-            provider_id: row.try_get("", "provider_id")?,
+            bucket_id: row.storage_bucket_id,
+            bucket_name: row.bucket_name,
+            physical_bucket_name: lib::buckets::physical_bucket_name(row.foundation_bucket_id),
+            region: row.region,
+            provider_id: row.provider_id,
             platform_sse_key: state
                 .s3_providers
-                .bucket_key(foundation_bucket_id, organization_id)
+                .bucket_key(row.foundation_bucket_id, organization_id)
                 .await?,
-            can_read: row.try_get("", "can_read")?,
-            can_write: row.try_get("", "can_write")?,
+            can_read: row.can_read,
+            can_write: row.can_write,
+            is_deleting: row.status == bucket::BucketStatus::Deleting,
         });
     }
     Ok(ResolvedS3AccessToken {
         organization_id: Some(organization_id),
-        project_id: Some(project_id),
-        credential_id,
-        prefix,
+        project_id: Some(token.project_id),
+        credential_id: credential.id,
+        prefix: credential.prefix,
         bucket_permissions,
         secret_access_key: secret.secret_access_key,
     })
@@ -136,12 +185,30 @@ async fn resolve_uncached(access_key: &str) -> Result<ResolvedS3AccessToken, App
 async fn validate_cached_token(
     cached: &ResolvedS3AccessToken,
     access_key: &str,
-) -> Result<(), AppError> {
+) -> Result<bool, AppError> {
     let (Some(organization_id), Some(project_id)) = (cached.organization_id, cached.project_id)
     else {
         return Err(AppError::Unauthorized("Invalid S3 access key".into()));
     };
     let state = get_app_state();
+    let active = storage_access_token::Entity::find()
+        .filter(storage_access_token::Column::CredentialId.eq(cached.credential_id))
+        .filter(storage_access_token::Column::OrganizationId.eq(organization_id))
+        .filter(storage_access_token::Column::ProjectId.eq(project_id))
+        .join(
+            JoinType::InnerJoin,
+            storage_access_token::Relation::Credential.def(),
+        )
+        .filter(credential::Column::AccessKeyId.eq(access_key))
+        .filter(credential::Column::OrganizationId.eq(organization_id))
+        .filter(credential::Column::RevokedAt.is_null())
+        .one(state.identity_db.connection())
+        .await?
+        .is_some();
+    if !active {
+        return Err(AppError::Unauthorized("Invalid S3 access key".into()));
+    }
+
     let tenant = TenantDatabase::new(
         state.tenant_db,
         OrganizationContext {
@@ -150,14 +217,20 @@ async fn validate_cached_token(
         },
     );
     let scoped = tenant.begin_scoped_transaction().await?;
-    let active = scoped.connection().query_one(statement(
-        "SELECT 1 FROM storage_access_token token JOIN credential ON credential.id=token.credential_id WHERE token.credential_id=$1 AND credential.access_key_id=$2 AND token.organization_id=$3 AND token.project_id=$4 AND credential.revoked_at IS NULL",
-        vec![cached.credential_id.into(), access_key.into(), organization_id.into(), project_id.into()],
-    )).await?.is_some();
+    let tx = scoped.connection();
+    let deleting = storage::Entity::find()
+        .join(JoinType::InnerJoin, storage::Relation::Bucket.def())
+        .join(JoinType::InnerJoin, storage::Relation::BucketGrant.def())
+        .filter(storage::Column::OrganizationId.eq(organization_id))
+        .filter(storage::Column::ProjectId.eq(project_id))
+        .filter(bucket_grant::Column::CredentialId.eq(cached.credential_id))
+        .filter(bucket_grant::Column::OrganizationId.eq(organization_id))
+        .filter(bucket::Column::Status.eq(bucket::BucketStatus::Deleting))
+        .one(tx)
+        .await?
+        .is_some();
     scoped.commit().await?;
-    active
-        .then_some(())
-        .ok_or_else(|| AppError::Unauthorized("Invalid S3 access key".into()))
+    Ok(!deleting)
 }
 
 async fn cached(
@@ -206,8 +279,4 @@ async fn cache(
 #[derive(Deserialize)]
 struct S3SecretKey {
     secret_access_key: String,
-}
-
-fn statement(sql: &str, values: Vec<sea_orm::Value>) -> Statement {
-    Statement::from_sql_and_values(DatabaseBackend::Postgres, sql, values)
 }
