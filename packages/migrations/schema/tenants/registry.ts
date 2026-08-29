@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { app_tenant, orgAllowed } from "../rls.ts";
 import { organization } from "./organization.ts";
 
-export const registry_repositories = pgTable("registry_repositories", {
+export const registry_repositories = pgTable.withRLS("registry_repositories", {
   id: uuid("id").primaryKey(),
   organization_id: uuid("organization_id")
     .notNull()
@@ -21,9 +21,9 @@ export const registry_repositories = pgTable("registry_repositories", {
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
-]).enableRLS();
+]);
 
-export const external_registry = pgTable("external_registry", {
+export const external_registry = pgTable.withRLS("external_registry", {
   id: uuid("id").primaryKey(),
   organization_id: uuid("organization_id")
     .notNull()
@@ -45,9 +45,9 @@ export const external_registry = pgTable("external_registry", {
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
-]).enableRLS();
+]);
 
-export const registry_access_tokens = pgTable("registry_access_tokens", {
+export const registry_access_tokens = pgTable.withRLS("registry_access_tokens", {
   id: uuid("id").primaryKey(),
   organization_id: uuid("organization_id")
     .notNull()
@@ -70,9 +70,9 @@ export const registry_access_tokens = pgTable("registry_access_tokens", {
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
-]).enableRLS();
+]);
 
-export const registry_repository_grants = pgTable("registry_repository_grants", {
+export const registry_repository_grants = pgTable.withRLS("registry_repository_grants", {
   id: uuid("id").primaryKey(),
   organization_id: uuid("organization_id")
     .notNull()
@@ -104,4 +104,4 @@ export const registry_repository_grants = pgTable("registry_repository_grants", 
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
-]).enableRLS();
+]);

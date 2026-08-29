@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import { index, jsonb, pgPolicy, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { app_audit_reader } from "../rls.ts";
 
-export const infrastructure_audit_log = pgTable("infrastructure_audit_log", {
+export const infrastructure_audit_log = pgTable.withRLS("infrastructure_audit_log", {
   id: uuid("id").primaryKey(),
   actor_identifier: text("actor_identifier").notNull(),
   source_ip: text("source_ip").notNull(),
@@ -20,4 +20,4 @@ export const infrastructure_audit_log = pgTable("infrastructure_audit_log", {
     to: app_audit_reader,
     using: sql`true`,
   }),
-]).enableRLS();
+]);

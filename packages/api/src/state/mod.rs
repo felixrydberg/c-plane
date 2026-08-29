@@ -1,11 +1,12 @@
 use crate::config::{Config, load_config};
 use crate::errors::AppError;
 use crate::services::s3_providers::S3ProviderClient;
-use lib::secrets::Secrets;
+use lib::secrets::Client;
 use sea_orm::{
     ConnectOptions, ConnectionTrait, Database, DatabaseBackend, DatabaseConnection,
     DatabaseTransaction, Statement, TransactionTrait,
 };
+use std::collections::HashMap;
 use std::sync::OnceLock;
 use std::{process, time::Duration};
 use uuid::Uuid;
@@ -13,9 +14,11 @@ use uuid::Uuid;
 #[derive(Clone)]
 pub struct AppDatabase(pub DatabaseConnection);
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct OrganizationContext {
     pub allowed_organizations: Vec<Uuid>,
+    pub organization_roles: HashMap<Uuid, String>,
+    pub api_key_organization_id: Option<Uuid>,
 }
 
 #[derive(Clone)]
@@ -93,7 +96,7 @@ pub struct State {
     pub identity_db: AppDatabase,
     pub tenant_db: DatabaseConnection,
     pub config: Config,
-    pub secrets: Secrets,
+    pub secrets: Client,
     pub s3_providers: S3ProviderClient,
     pub storage_client: reqwest::Client,
 }
@@ -105,9 +108,9 @@ pub async fn create_app_state() -> Result<State, AppError> {
     let identity_db = connect_database(&config.identity_database_url, "app_identity").await?;
     let tenant_db = connect_database(&config.tenant_database_url, "app_tenant").await?;
 
-    let secrets = Secrets::from_env()?;
+    let secrets = Client::from_env()?;
     let s3_providers =
-        S3ProviderClient::new(tenant_db.clone(), secrets.clone(), config.redis_url.clone());
+        S3ProviderClient::new(identity_db.clone(), secrets.clone(), config.redis_url.clone());
     let storage_client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(5))
         .read_timeout(Duration::from_secs(30))

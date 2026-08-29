@@ -15,7 +15,7 @@ const organization_slug = computed(() => route.params.organization_slug?.toStrin
 
 if (!route.params.organization_slug) {
   try {
-    const data = await $fetch("/api/organization/active", { method: "GET" });
+    const data = await $fetch("/ui-api/organization/active", { method: "GET" });
 
     if (!data) {
       throw createError({ statusCode: 404, statusMessage: "Organization not found" });
@@ -30,7 +30,7 @@ if (!route.params.organization_slug) {
 } else {
   try {
     const slug = route.params.organization_slug.toString();
-    const data = await $fetch("/api/organization/validate-slug", {
+    const data = await $fetch("/ui-api/organization/validate-slug", {
       method: "POST",
       body: { slug },
     });
@@ -41,7 +41,7 @@ if (!route.params.organization_slug) {
 
     if (!store.organization || store.organization.slug !== slug) {
       const { data: orgsResponse } = await useFetch<{ data: Organization[] }>(
-        "/api/organization",
+        "/ui-api/organization",
         { query: { search: slug } },
       );
       const matchedOrg = orgsResponse.value?.data?.find(organization => organization.slug === slug);

@@ -17,8 +17,8 @@ async function deployDraft() {
   if (!store.organization?.id || !store.project?.id || !store.environment) return
   deploying.value = true
   try {
-    const updated = await $fetch(
-      `/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${store.environment.id as ':environment_id'}` as const,
+    const updated = await cplaneFetch(
+      `/api/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${store.environment.id as ':environment_id'}` as const,
       { method: 'PATCH', body: { deployed_timeline_id: store.environment.draft_timeline } }
     )
     syncEnvironment(store, updated)
@@ -35,8 +35,8 @@ async function revertDraft() {
   if (!store.organization?.id || !store.project?.id || !store.environment) return
   reverting.value = true
   try {
-    const updated = await $fetch(
-      `/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${store.environment.id as ':environment_id'}` as const,
+    const updated = await cplaneFetch(
+      `/api/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${store.environment.id as ':environment_id'}` as const,
       { method: 'PATCH', body: { draft_timeline_id: store.environment.deployed_timeline } }
     )
     syncEnvironment(store, updated)

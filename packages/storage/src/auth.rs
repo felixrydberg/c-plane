@@ -29,6 +29,8 @@ pub struct ResolvedCredential {
     pub organization_id: Option<Uuid>,
     pub project_id: Option<Uuid>,
     pub credential_id: Uuid,
+    #[serde(default)]
+    pub prefix: String,
     pub bucket_permissions: Vec<BucketPermission>,
     pub secret_access_key: String,
 }
@@ -43,6 +45,8 @@ pub struct BucketPermission {
     pub platform_sse_key: String,
     pub can_read: bool,
     pub can_write: bool,
+    #[serde(default)]
+    pub is_deleting: bool,
 }
 
 #[derive(Clone)]
@@ -50,6 +54,7 @@ pub struct CredentialIdentity {
     pub organization_id: Option<Uuid>,
     pub project_id: Option<Uuid>,
     pub credential_id: Uuid,
+    pub prefix: String,
     pub bucket_permissions: Vec<BucketPermission>,
 }
 
@@ -124,7 +129,8 @@ impl S3Access for CredentialResolver {
                         .iter()
                         .find(|permission| permission.bucket_name == bucket)
                         .ok_or_else(|| s3s::s3_error!(AccessDenied))?;
-                    if is_write_operation(context.s3_op().name()) && !permission.can_write
+                    if is_write_operation(context.s3_op().name())
+                        && (permission.is_deleting || !permission.can_write)
                         || !is_write_operation(context.s3_op().name()) && !permission.can_read
                     {
                         return Err(s3s::s3_error!(AccessDenied));
@@ -136,6 +142,7 @@ impl S3Access for CredentialResolver {
                     organization_id: identity.organization_id,
                     project_id: identity.project_id,
                     credential_id: identity.credential_id,
+                    prefix: identity.prefix,
                     bucket_permissions: identity.bucket_permissions,
                 });
                 Ok(())
@@ -189,6 +196,7 @@ mod tests {
             "organization_id": (access_key == "VALID").then(Uuid::nil),
             "project_id": (access_key == "VALID").then(Uuid::nil),
             "credential_id": Uuid::nil(),
+            "prefix": "backups/production/",
             "bucket_permissions": [{
                 "bucket_id": Uuid::nil(),
                 "bucket_name": "uploads",
@@ -197,7 +205,8 @@ mod tests {
                 "provider_id": Uuid::nil(),
                 "platform_sse_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
                 "can_read": true,
-                "can_write": true
+                "can_write": true,
+                "is_deleting": false
             }],
             "secret_access_key": "secret"
         })))

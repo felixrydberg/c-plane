@@ -7,6 +7,7 @@ import { ICONS } from '~/utils/icons'
 const store = useStore();
 const route = useRoute();
 const open = ref(true);
+const isOwner = computed(() => store.organization?.member?.role === 'owner')
 
 const routeProjectId = computed(() => route.params.project_id as string | undefined)
 const routeEnvironmentId = computed(() => route.params.environment_id as string | undefined)
@@ -222,21 +223,21 @@ const accountItems = computed<NavigationMenuItem[]>(() => [{
   trailingIcon: ICONS.chevronRight,
   open: false,
   children: [
-    {
+    ...(isOwner.value ? [{
       label: 'General',
       to: `/${store.organization?.slug}/settings`,
       exact: true,
-    },
+    }] : []),
     {
       label: 'Members',
       to: `/${store.organization?.slug}/settings/members`,
       exact: true,
     },
-    {
+    ...(isOwner.value ? [{
       label: 'API Keys',
       to: `/${store.organization?.slug}/settings/authentication`,
       exact: true,
-    },
+    }] : []),
     {
       label: 'Audit Log',
       to: `/${store.organization?.slug}/settings/audit-log`,
@@ -344,10 +345,7 @@ const navigationUi = {
         </nav>
       </div>
 
-      <DashboardRegistryMaintenanceAlert
-        v-if="store.organization"
-        :organization-id="store.organization.id"
-      />
+      <DashboardRegistryMaintenanceAlert />
       <DashboardProjectsDeploymentAlert v-if="store.environment" />
 
       <div class="flex-1 bg-default px-6 py-6 lg:px-8">

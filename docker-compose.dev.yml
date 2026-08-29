@@ -1,5 +1,40 @@
 name: cplane
 services:
+  ingress:
+    build:
+      context: .
+      dockerfile: Dockerfile.rust
+      args:
+        PACKAGE: ingress
+        BINARY: c-plane-ingress
+    environment:
+      INGRESS_LISTEN: 0.0.0.0:3000,0.0.0.0:8080,0.0.0.0:8081,0.0.0.0:5000
+      INGRESS_MANAGEMENT_LISTEN: 0.0.0.0:9090
+      INGRESS_PLATFORM_HOSTS: ${INGRESS_PLATFORM_HOSTS:-localhost:3000}
+      INGRESS_API_HOSTS: ${INGRESS_API_HOSTS:-localhost:8080}
+      INGRESS_STORAGE_HOSTS: ${INGRESS_STORAGE_HOSTS:-localhost:8081}
+      INGRESS_REGISTRY_HOSTS: ${INGRESS_REGISTRY_HOSTS:-localhost:5000}
+      INGRESS_UI_UPSTREAM: ui:3000
+      INGRESS_API_UPSTREAM: api:8080
+      INGRESS_STORAGE_UPSTREAM: storage:8081
+      INGRESS_REGISTRY_UPSTREAM: registry:5000
+      INGRESS_FORWARDED_PROTO: ${INGRESS_FORWARDED_PROTO:-http}
+      INGRESS_CLIENT_IP_HEADER: ${INGRESS_CLIENT_IP_HEADER:-}
+      INGRESS_TRUSTED_PROXY_CIDRS: ${INGRESS_TRUSTED_PROXY_CIDRS:-}
+      INGRESS_RATE_MODE: ${INGRESS_RATE_MODE:-observe}
+      RUST_LOG: ${INGRESS_LOG:-c_plane_ingress=info}
+    depends_on:
+      - api
+      - storage
+      - ui
+      - registry
+    ports:
+      - "3000:3000"
+      - "8080:8080"
+      - "8081:8081"
+      - "5000:5000"
+      - "127.0.0.1:9090:9090"
+
   api:
     build:
       context: .
@@ -9,7 +44,7 @@ services:
     environment:
       SERVER_HOST: 0.0.0.0
       SERVER_PORT: 8080
-      BETTER_AUTH_SESSION_URL: http://ui:3000/api/auth/get-session
+      BETTER_AUTH_SESSION_URL: http://ui:3000/ui-api/auth/get-session
       IDENTITY_DATABASE_URL: postgresql://cplane_identity:${POSTGRES_IDENTITY_PASSWORD}@postgresd:5432/cplane
       TENANT_DATABASE_URL: postgresql://cplane_tenant:${POSTGRES_TENANT_PASSWORD}@postgresd:5432/cplane
       CPLANE_SERVICE_TOKEN: ${CPLANE_SERVICE_TOKEN}
@@ -17,7 +52,9 @@ services:
       OPENBAO_ROLE_ID: ${OPENBAO_API_ROLE_ID:-}
       OPENBAO_SECRET_ID: ${OPENBAO_API_SECRET_ID:-}
       REDIS_URL: redis://valkey:6379
-      STORAGE_ENDPOINT_URL: ${STORAGE_ENDPOINT_URL:-http://storage:8081}
+      INGRESS_FORWARDED_PROTO: ${INGRESS_FORWARDED_PROTO:-http}
+      INGRESS_STORAGE_HOSTS: ${INGRESS_STORAGE_HOSTS:-localhost:8081}
+      STORAGE_INTERNAL_URL: http://storage:8081
       REGISTRY_HOST: ${REGISTRY_HOST:-localhost:5000}
       REGISTRY_INTERNAL_URL: ${REGISTRY_INTERNAL_URL:-http://registry:5000}
       REGISTRY_TOKEN_ISSUER: ${REGISTRY_TOKEN_ISSUER:-cplane-registry}
@@ -32,8 +69,6 @@ services:
         condition: service_completed_successfully
       valkey:
         condition: service_started
-    ports:
-      - 8080:8080
 
   storage:
     build:
@@ -48,8 +83,6 @@ services:
       CPLANE_SERVICE_TOKEN: ${CPLANE_SERVICE_TOKEN}
     depends_on:
       - api
-    ports:
-      - 8081:8081
 
   ui:
     build:
@@ -69,10 +102,10 @@ services:
       NUXT_REDIS_URL: redis://valkey:6379
       NUXT_AUTH_BASE_URL: ${NUXT_AUTH_BASE_URL:-http://localhost:3000}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
-      BACKEND_URL: http://api:8080
+      NUXT_BACKEND_URL: http://api:8080
+      NUXT_CPLANE_SERVICE_TOKEN: ${CPLANE_SERVICE_TOKEN}
       NUXT_PUBLIC_REGISTRY_HOST: ${REGISTRY_HOST:-localhost:5000}
     ports:
-      - 3000:3000
       - 24678:24678
     develop:
       watch:
@@ -113,8 +146,6 @@ services:
     volumes:
       - ./packages/registry/config.yml:/etc/distribution/config.yml:ro
       - ./packages/registry/start.sh:/etc/distribution/start.sh:ro
-    ports:
-      - "5000:5000"
     depends_on:
       - storage
 
@@ -151,8 +182,11 @@ services:
     environment:
       DATABASE_URL: postgresql://cplane_admin:${POSTGRES_ADMIN_PASSWORD}@postgresd:5432/cplane
       REDIS_URL: redis://valkey:6379
-      WORKER_QUEUES: maintenance
+      WORKER_QUEUES: maintenance,foundation
       WORKER_CONCURRENCY: 1
+      OPENBAO_ADDR: http://openbao:8200
+      OPENBAO_ROLE_ID: ${OPENBAO_WORKER_ROLE_ID:-}
+      OPENBAO_SECRET_ID: ${OPENBAO_WORKER_SECRET_ID:-}
       REGISTRY_TOKEN_TTL_SECONDS: ${REGISTRY_TOKEN_TTL_SECONDS:-60}
       REGISTRY_STORAGE_S3_REGION: ${REGISTRY_STORAGE_S3_REGION:-us-east-1}
       REGISTRY_STORAGE_S3_REGIONENDPOINT: http://storage:8081
@@ -165,6 +199,8 @@ services:
       - ./packages/registry/config-gc.yml:/etc/distribution/config.yml:ro
     depends_on:
       migrate:
+        condition: service_completed_successfully
+      openbao-init:
         condition: service_completed_successfully
       storage:
         condition: service_started
@@ -232,7 +268,7 @@ services:
 
   openbao-init:
     image: openbao/openbao:2.5.5
-    command: ["sh", "-ec", "bao operator unseal \"$${BAO_UNSEAL_KEY}\" && (bao secrets enable -path=cplane -version=2 kv 2>/dev/null || true)"]
+    command: ["sh", "-ec", "bao operator unseal \"$${BAO_UNSEAL_KEY}\" && (bao secrets enable transit 2>/dev/null || true)"]
     environment:
       BAO_ADDR: http://openbao:8200
       BAO_TOKEN: ${OPENBAO_ROOT_TOKEN}
@@ -257,7 +293,7 @@ services:
     image: cloudflare/cloudflared:latest
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     depends_on:
-      - ui
+      - ingress
 
 networks:
   default:

@@ -4,8 +4,9 @@ use uuid::Uuid;
 
 use super::databases::{
     CreateDatabaseBranchRequest, CreateDatabaseRequest, DatabaseBranchResponse, DatabaseResponse,
-    ListDatabasesQuery, UpdateDatabaseBranchRequest, UpdateDatabaseRequest,
-    validate_backup_retention_days, verify_org_access, verify_project_in_org,
+    ListDatabasesQuery, UpdateDatabaseBranchRequest, UpdateDatabaseRequest, validate_autoscaling,
+    validate_backup_retention_days, validate_cpu, validate_ram, validate_read_replicas,
+    verify_org_access, verify_project_in_org,
 };
 use crate::errors::AppError;
 use crate::middleware::auth::AuthContext;
@@ -64,6 +65,19 @@ pub async fn create_database(
         return Err(AppError::BadRequest("Name is required".into()));
     }
     validate_backup_retention_days(body.backup_retention_days)?;
+    if let Some(cpu) = body.cpu.as_deref() {
+        validate_cpu(cpu)?;
+    }
+    if let Some(ram) = body.ram.as_deref() {
+        validate_ram(ram)?;
+    }
+    if let Some(read_replicas) = body.read_replicas {
+        validate_read_replicas(read_replicas)?;
+    }
+    validate_autoscaling(
+        body.autoscaling_min_cpu.as_deref(),
+        body.autoscaling_max_cpu.as_deref(),
+    )?;
 
     let db_id = Uuid::new_v4();
     let db_branch_id = Uuid::new_v4();
@@ -224,7 +238,11 @@ pub async fn update_database(
 
     let mut active: postgres_database::ActiveModel = db.clone().into();
     if let Some(ref name) = body.name {
-        active.name = Set(name.trim().to_string());
+        let trimmed = name.trim().to_string();
+        if trimmed.is_empty() {
+            return Err(AppError::BadRequest("Name is required".into()));
+        }
+        active.name = Set(trimmed);
     }
 
     let updated = active.update(tx).await?;
@@ -376,6 +394,23 @@ pub async fn update_database_branch(
         }
         active.backup_retention_days = Set(value);
     }
+    if let Some(cpu) = body.cpu.as_deref() {
+        validate_cpu(cpu)?;
+    }
+    if let Some(ram) = body.ram.as_deref() {
+        validate_ram(ram)?;
+    }
+    if let Some(read_replicas) = body.read_replicas {
+        validate_read_replicas(read_replicas)?;
+    }
+    validate_autoscaling(
+        body.autoscaling_min_cpu
+            .as_deref()
+            .or(db_branch.autoscaling_min_cpu.as_deref()),
+        body.autoscaling_max_cpu
+            .as_deref()
+            .or(db_branch.autoscaling_max_cpu.as_deref()),
+    )?;
     if body.cpu.is_some() {
         active.cpu = Set(body.cpu);
     }
@@ -493,6 +528,20 @@ pub async fn create_database_branch(
             body.backup_retention_days,
         )
     };
+
+    if let Some(cpu) = cpu.as_deref() {
+        validate_cpu(cpu)?;
+    }
+    if let Some(ram) = ram.as_deref() {
+        validate_ram(ram)?;
+    }
+    if let Some(read_replicas) = read_replicas {
+        validate_read_replicas(read_replicas)?;
+    }
+    validate_autoscaling(
+        autoscaling_min_cpu.as_deref(),
+        autoscaling_max_cpu.as_deref(),
+    )?;
 
     let id = Uuid::new_v4();
     let row: postgres_database_branch::Model = postgres_database_branch::ActiveModel {

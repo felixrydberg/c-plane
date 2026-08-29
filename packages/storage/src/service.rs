@@ -77,19 +77,27 @@ impl S3 for ProviderProxy {
     ) -> S3Result<S3Response<HeadBucketOutput>> {
         let target = self.target(&request, &request.input.bucket)?;
         request.input.bucket = target.physical_bucket_name.clone();
-        self.provider(&target).await?.head_bucket(request).await
+        let mut response = self
+            .provider(&target)
+            .await?
+            .head_bucket(request)
+            .await
+            .map_err(sanitize_provider_error)?;
+        response.output.bucket_region = Some(target.region);
+        response.output.access_point_alias = None;
+        response.output.bucket_location_name = None;
+        response.output.bucket_location_type = None;
+        Ok(response)
     }
 
     async fn get_bucket_location(
         &self,
-        mut request: S3Request<GetBucketLocationInput>,
+        request: S3Request<GetBucketLocationInput>,
     ) -> S3Result<S3Response<GetBucketLocationOutput>> {
         let target = self.target(&request, &request.input.bucket)?;
-        request.input.bucket = target.physical_bucket_name.clone();
-        self.provider(&target)
-            .await?
-            .get_bucket_location(request)
-            .await
+        Ok(S3Response::new(GetBucketLocationOutput {
+            location_constraint: bucket_location_constraint(&target.region),
+        }))
     }
 
     async fn delete_object(
@@ -97,8 +105,13 @@ impl S3 for ProviderProxy {
         mut request: S3Request<DeleteObjectInput>,
     ) -> S3Result<S3Response<DeleteObjectOutput>> {
         let target = self.target(&request, &request.input.bucket)?;
+        ensure_key_allowed(&identity(&request)?.prefix, &request.input.key)?;
         request.input.bucket = target.physical_bucket_name.clone();
-        self.provider(&target).await?.delete_object(request).await
+        self.provider(&target)
+            .await?
+            .delete_object(request)
+            .await
+            .map_err(sanitize_provider_error)
     }
 
     async fn delete_objects(
@@ -106,8 +119,15 @@ impl S3 for ProviderProxy {
         mut request: S3Request<DeleteObjectsInput>,
     ) -> S3Result<S3Response<DeleteObjectsOutput>> {
         let target = self.target(&request, &request.input.bucket)?;
+        for object in &request.input.delete.objects {
+            ensure_key_allowed(&identity(&request)?.prefix, &object.key)?;
+        }
         request.input.bucket = target.physical_bucket_name.clone();
-        self.provider(&target).await?.delete_objects(request).await
+        self.provider(&target)
+            .await?
+            .delete_objects(request)
+            .await
+            .map_err(sanitize_provider_error)
     }
 
     async fn list_objects(
@@ -116,8 +136,17 @@ impl S3 for ProviderProxy {
     ) -> S3Result<S3Response<ListObjectsOutput>> {
         let logical_bucket = request.input.bucket.clone();
         let target = self.target(&request, &request.input.bucket)?;
+        request.input.prefix = Some(scoped_list_prefix(
+            &identity(&request)?.prefix,
+            request.input.prefix.as_deref(),
+        )?);
         request.input.bucket = target.physical_bucket_name.clone();
-        let mut response = self.provider(&target).await?.list_objects(request).await?;
+        let mut response = self
+            .provider(&target)
+            .await?
+            .list_objects(request)
+            .await
+            .map_err(sanitize_provider_error)?;
         response.output.name = Some(logical_bucket);
         Ok(response)
     }
@@ -128,12 +157,17 @@ impl S3 for ProviderProxy {
     ) -> S3Result<S3Response<ListObjectsV2Output>> {
         let logical_bucket = request.input.bucket.clone();
         let target = self.target(&request, &request.input.bucket)?;
+        request.input.prefix = Some(scoped_list_prefix(
+            &identity(&request)?.prefix,
+            request.input.prefix.as_deref(),
+        )?);
         request.input.bucket = target.physical_bucket_name.clone();
         let mut response = self
             .provider(&target)
             .await?
             .list_objects_v2(request)
-            .await?;
+            .await
+            .map_err(sanitize_provider_error)?;
         response.output.name = Some(logical_bucket);
         Ok(response)
     }
@@ -143,11 +177,13 @@ impl S3 for ProviderProxy {
         mut request: S3Request<AbortMultipartUploadInput>,
     ) -> S3Result<S3Response<AbortMultipartUploadOutput>> {
         let target = self.target(&request, &request.input.bucket)?;
+        ensure_key_allowed(&identity(&request)?.prefix, &request.input.key)?;
         request.input.bucket = target.physical_bucket_name.clone();
         self.provider(&target)
             .await?
             .abort_multipart_upload(request)
             .await
+            .map_err(sanitize_provider_error)
     }
 
     async fn list_multipart_uploads(
@@ -156,12 +192,17 @@ impl S3 for ProviderProxy {
     ) -> S3Result<S3Response<ListMultipartUploadsOutput>> {
         let logical_bucket = request.input.bucket.clone();
         let target = self.target(&request, &request.input.bucket)?;
+        request.input.prefix = Some(scoped_list_prefix(
+            &identity(&request)?.prefix,
+            request.input.prefix.as_deref(),
+        )?);
         request.input.bucket = target.physical_bucket_name.clone();
         let mut response = self
             .provider(&target)
             .await?
             .list_multipart_uploads(request)
-            .await?;
+            .await
+            .map_err(sanitize_provider_error)?;
         response.output.bucket = Some(logical_bucket);
         Ok(response)
     }
@@ -172,8 +213,14 @@ impl S3 for ProviderProxy {
     ) -> S3Result<S3Response<ListPartsOutput>> {
         let logical_bucket = request.input.bucket.clone();
         let target = self.target(&request, &request.input.bucket)?;
+        ensure_key_allowed(&identity(&request)?.prefix, &request.input.key)?;
         request.input.bucket = target.physical_bucket_name.clone();
-        let mut response = self.provider(&target).await?.list_parts(request).await?;
+        let mut response = self
+            .provider(&target)
+            .await?
+            .list_parts(request)
+            .await
+            .map_err(sanitize_provider_error)?;
         response.output.bucket = Some(logical_bucket);
         Ok(response)
     }
@@ -183,6 +230,7 @@ impl S3 for ProviderProxy {
         mut request: S3Request<GetObjectInput>,
     ) -> S3Result<S3Response<GetObjectOutput>> {
         let target = self.target(&request, &request.input.bucket)?;
+        ensure_key_allowed(&identity(&request)?.prefix, &request.input.key)?;
         fill_sse(
             &mut request.input.sse_customer_algorithm,
             &mut request.input.sse_customer_key,
@@ -190,7 +238,11 @@ impl S3 for ProviderProxy {
             &target.platform_sse_key,
         )?;
         request.input.bucket = target.physical_bucket_name.clone();
-        self.provider(&target).await?.get_object(request).await
+        self.provider(&target)
+            .await?
+            .get_object(request)
+            .await
+            .map_err(sanitize_provider_error)
     }
 
     async fn head_object(
@@ -198,6 +250,7 @@ impl S3 for ProviderProxy {
         mut request: S3Request<HeadObjectInput>,
     ) -> S3Result<S3Response<HeadObjectOutput>> {
         let target = self.target(&request, &request.input.bucket)?;
+        ensure_key_allowed(&identity(&request)?.prefix, &request.input.key)?;
         fill_sse(
             &mut request.input.sse_customer_algorithm,
             &mut request.input.sse_customer_key,
@@ -205,7 +258,11 @@ impl S3 for ProviderProxy {
             &target.platform_sse_key,
         )?;
         request.input.bucket = target.physical_bucket_name.clone();
-        self.provider(&target).await?.head_object(request).await
+        self.provider(&target)
+            .await?
+            .head_object(request)
+            .await
+            .map_err(sanitize_provider_error)
     }
 
     async fn put_object(
@@ -213,6 +270,7 @@ impl S3 for ProviderProxy {
         mut request: S3Request<PutObjectInput>,
     ) -> S3Result<S3Response<PutObjectOutput>> {
         let target = self.target(&request, &request.input.bucket)?;
+        ensure_key_allowed(&identity(&request)?.prefix, &request.input.key)?;
         fill_sse(
             &mut request.input.sse_customer_algorithm,
             &mut request.input.sse_customer_key,
@@ -220,7 +278,11 @@ impl S3 for ProviderProxy {
             &target.platform_sse_key,
         )?;
         request.input.bucket = target.physical_bucket_name.clone();
-        self.provider(&target).await?.put_object(request).await
+        self.provider(&target)
+            .await?
+            .put_object(request)
+            .await
+            .map_err(sanitize_provider_error)
     }
 
     async fn create_multipart_upload(
@@ -229,6 +291,7 @@ impl S3 for ProviderProxy {
     ) -> S3Result<S3Response<CreateMultipartUploadOutput>> {
         let logical_bucket = request.input.bucket.clone();
         let target = self.target(&request, &request.input.bucket)?;
+        ensure_key_allowed(&identity(&request)?.prefix, &request.input.key)?;
         fill_sse(
             &mut request.input.sse_customer_algorithm,
             &mut request.input.sse_customer_key,
@@ -240,7 +303,8 @@ impl S3 for ProviderProxy {
             .provider(&target)
             .await?
             .create_multipart_upload(request)
-            .await?;
+            .await
+            .map_err(sanitize_provider_error)?;
         response.output.bucket = Some(logical_bucket);
         Ok(response)
     }
@@ -250,6 +314,7 @@ impl S3 for ProviderProxy {
         mut request: S3Request<UploadPartInput>,
     ) -> S3Result<S3Response<UploadPartOutput>> {
         let target = self.target(&request, &request.input.bucket)?;
+        ensure_key_allowed(&identity(&request)?.prefix, &request.input.key)?;
         fill_sse(
             &mut request.input.sse_customer_algorithm,
             &mut request.input.sse_customer_key,
@@ -257,7 +322,11 @@ impl S3 for ProviderProxy {
             &target.platform_sse_key,
         )?;
         request.input.bucket = target.physical_bucket_name.clone();
-        self.provider(&target).await?.upload_part(request).await
+        self.provider(&target)
+            .await?
+            .upload_part(request)
+            .await
+            .map_err(sanitize_provider_error)
     }
 
     async fn complete_multipart_upload(
@@ -266,6 +335,7 @@ impl S3 for ProviderProxy {
     ) -> S3Result<S3Response<CompleteMultipartUploadOutput>> {
         let logical_bucket = request.input.bucket.clone();
         let target = self.target(&request, &request.input.bucket)?;
+        ensure_key_allowed(&identity(&request)?.prefix, &request.input.key)?;
         fill_sse(
             &mut request.input.sse_customer_algorithm,
             &mut request.input.sse_customer_key,
@@ -277,11 +347,10 @@ impl S3 for ProviderProxy {
             .provider(&target)
             .await?
             .complete_multipart_upload(request)
-            .await?;
-        response.output.bucket = Some(logical_bucket.clone());
-        if let Some(location) = response.output.location.as_mut() {
-            *location = location.replace(&target.physical_bucket_name, &logical_bucket);
-        }
+            .await
+            .map_err(sanitize_provider_error)?;
+        response.output.bucket = Some(logical_bucket);
+        response.output.location = None;
         Ok(response)
     }
 
@@ -290,6 +359,7 @@ impl S3 for ProviderProxy {
         mut request: S3Request<CopyObjectInput>,
     ) -> S3Result<S3Response<CopyObjectOutput>> {
         let destination = self.target(&request, &request.input.bucket)?;
+        ensure_key_allowed(&identity(&request)?.prefix, &request.input.key)?;
         let source = self.copy_source_target(&request, &request.input.copy_source)?;
         rewrite_copy_source(&mut request.input.copy_source, &source.physical_bucket_name)?;
         same_provider(&source, &destination)?;
@@ -310,6 +380,7 @@ impl S3 for ProviderProxy {
             .await?
             .copy_object(request)
             .await
+            .map_err(sanitize_provider_error)
     }
 
     async fn upload_part_copy(
@@ -317,6 +388,7 @@ impl S3 for ProviderProxy {
         mut request: S3Request<UploadPartCopyInput>,
     ) -> S3Result<S3Response<UploadPartCopyOutput>> {
         let destination = self.target(&request, &request.input.bucket)?;
+        ensure_key_allowed(&identity(&request)?.prefix, &request.input.key)?;
         let source = self.copy_source_target(&request, &request.input.copy_source)?;
         rewrite_copy_source(&mut request.input.copy_source, &source.physical_bucket_name)?;
         same_provider(&source, &destination)?;
@@ -337,6 +409,7 @@ impl S3 for ProviderProxy {
             .await?
             .upload_part_copy(request)
             .await
+            .map_err(sanitize_provider_error)
     }
 }
 
@@ -363,6 +436,7 @@ impl ProviderProxy {
         if !target.can_read {
             return Err(s3s::s3_error!(AccessDenied));
         }
+        ensure_key_allowed(&identity(request)?.prefix, copy_source_key(copy_source))?;
         Ok(target)
     }
 
@@ -400,6 +474,33 @@ fn identity<T>(request: &S3Request<T>) -> S3Result<&CredentialIdentity> {
         .ok_or_else(|| s3s::s3_error!(AccessDenied))
 }
 
+fn ensure_key_allowed(prefix: &str, key: &str) -> S3Result<()> {
+    if key.starts_with(prefix) {
+        Ok(())
+    } else {
+        Err(s3s::s3_error!(AccessDenied))
+    }
+}
+
+fn scoped_list_prefix(allowed: &str, requested: Option<&str>) -> S3Result<String> {
+    let requested = requested.unwrap_or_default();
+    if requested.is_empty() {
+        Ok(allowed.to_owned())
+    } else if requested.starts_with(allowed) {
+        Ok(requested.to_owned())
+    } else {
+        Err(s3s::s3_error!(AccessDenied))
+    }
+}
+
+fn copy_source_key(copy_source: &CopySource) -> &str {
+    match copy_source {
+        CopySource::Bucket { key, .. }
+        | CopySource::AccessPoint { key, .. }
+        | CopySource::Outpost { key, .. } => key,
+    }
+}
+
 fn accessible_bucket_names(identity: &CredentialIdentity) -> Vec<String> {
     let mut names = identity
         .bucket_permissions
@@ -409,6 +510,22 @@ fn accessible_bucket_names(identity: &CredentialIdentity) -> Vec<String> {
         .collect::<Vec<_>>();
     names.sort();
     names
+}
+
+fn bucket_location_constraint(region: &str) -> Option<BucketLocationConstraint> {
+    (region != "us-east-1").then(|| region.to_owned().into())
+}
+
+fn sanitize_provider_error(error: s3s::S3Error) -> s3s::S3Error {
+    let mut sanitized = s3s::S3Error::new(error.code().clone());
+    sanitized.set_message("Storage provider request failed");
+    if let Some(request_id) = error.request_id() {
+        sanitized.set_request_id(request_id);
+    }
+    if let Some(status_code) = error.status_code() {
+        sanitized.set_status_code(status_code);
+    }
+    sanitized
 }
 
 fn fill_sse(
@@ -494,8 +611,8 @@ impl StorageService {
     }
 }
 
-async fn handle_s3_error(error: HttpError) -> Response<Body> {
-    tracing::error!(?error, "S3 HTTP error");
+async fn handle_s3_error(_error: HttpError) -> Response<Body> {
+    tracing::error!("S3 HTTP request failed");
     Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
         .body(Body::from("Internal Server Error".to_string()))
@@ -522,6 +639,7 @@ mod tests {
             organization_id: Some(uuid::Uuid::nil()),
             project_id: Some(uuid::Uuid::nil()),
             credential_id: uuid::Uuid::nil(),
+            prefix: "backups/production/".into(),
             bucket_permissions: vec![
                 BucketPermission {
                     bucket_id: uuid::Uuid::nil(),
@@ -532,6 +650,7 @@ mod tests {
                     platform_sse_key: "key".into(),
                     can_read: false,
                     can_write: true,
+                    is_deleting: false,
                 },
                 BucketPermission {
                     bucket_id: uuid::Uuid::nil(),
@@ -542,6 +661,7 @@ mod tests {
                     platform_sse_key: "key".into(),
                     can_read: true,
                     can_write: false,
+                    is_deleting: false,
                 },
             ],
         };
@@ -549,5 +669,45 @@ mod tests {
             accessible_bucket_names(&identity),
             ["read-only", "write-only"]
         );
+    }
+
+    #[test]
+    fn resolves_bucket_location_constraint_from_c_plane_region() {
+        assert_eq!(
+            bucket_location_constraint("eu-north-1").map(|location| location.as_str().to_owned()),
+            Some("eu-north-1".into())
+        );
+        assert_eq!(bucket_location_constraint("us-east-1"), None);
+    }
+
+    #[test]
+    fn sanitizes_provider_error_details() {
+        let mut error = s3s::S3Error::with_message(
+            s3s::S3ErrorCode::AccessDenied,
+            "physical bucket cp-secret leaked",
+        );
+        error.set_request_id("request-id");
+
+        let sanitized = sanitize_provider_error(error);
+
+        assert_eq!(sanitized.code(), &s3s::S3ErrorCode::AccessDenied);
+        assert_eq!(sanitized.message(), Some("Storage provider request failed"));
+        assert_eq!(sanitized.request_id(), Some("request-id"));
+        assert!(!format!("{sanitized:?}").contains("cp-secret"));
+    }
+
+    #[test]
+    fn enforces_credential_prefixes_for_keys_and_listings() {
+        assert_eq!(
+            scoped_list_prefix("backups/production/", None).unwrap(),
+            "backups/production/"
+        );
+        assert_eq!(
+            scoped_list_prefix("backups/production/", Some("backups/production/daily/")).unwrap(),
+            "backups/production/daily/"
+        );
+        assert!(scoped_list_prefix("backups/production/", Some("backups/staging/")).is_err());
+        assert!(ensure_key_allowed("backups/production/", "backups/production/file").is_ok());
+        assert!(ensure_key_allowed("backups/production/", "backups/staging/file").is_err());
     }
 }

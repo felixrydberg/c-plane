@@ -11,14 +11,14 @@ const tokenId = computed(() => route.params.token_id?.toString() ?? '')
 const grants = ref<Record<string, BucketPermission>>({})
 const loading = ref(false)
 const bucketsUrl = computed(() => orgId.value && projectId.value
-  ? `/api/cplane/organization/${orgId.value as ':organization_id'}/storage/buckets` as const
+  ? `/api/organization/${orgId.value as ':organization_id'}/storage/buckets` as const
   : '')
 const tokenUrl = computed(() => orgId.value && projectId.value && tokenId.value
-  ? `/api/cplane/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/storage/access-tokens/${tokenId.value as ':token_id'}` as const
+  ? `/api/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/storage/access-tokens/${tokenId.value as ':token_id'}` as const
   : '')
 const [{ data: buckets }, { data: token }] = await Promise.all([
-  useFetch(bucketsUrl, { default: () => [], query: { project_id: projectId } }),
-  useFetch(tokenUrl),
+  useCplaneFetch(bucketsUrl, { default: () => [], query: { project_id: projectId } }),
+  useCplaneFetch(tokenUrl),
 ])
 
 watch([buckets, token], ([items, accessToken]) => {
@@ -36,7 +36,7 @@ async function save() {
   if (!tokenUrl.value || !selectedPermissions.value.length) return
   loading.value = true
   try {
-    await $fetch(tokenUrl.value, { method: 'PATCH', body: { bucket_permissions: selectedPermissions.value } })
+    await cplaneFetch(tokenUrl.value, { method: 'PATCH', body: { bucket_permissions: selectedPermissions.value } })
     toast.add({ title: 'Access token updated', color: 'success' })
     await navigateTo(backUrl())
   } catch {
@@ -57,8 +57,8 @@ async function save() {
     <div class="grid lg:grid-cols-[minmax(0,1fr)_280px]">
       <main class="divide-y divide-default/60 lg:pr-8">
         <section class="grid gap-4 py-8 lg:grid-cols-[190px_minmax(0,1fr)]">
-          <div><h2 class="text-sm font-semibold">Token</h2><p class="mt-1 text-xs text-muted">The access key cannot be changed.</p></div>
-          <UFormField label="Access key ID"><UInput :model-value="token?.access_key_id" readonly class="w-full font-mono" /></UFormField>
+          <div><h2 class="text-sm font-semibold">Token</h2><p class="mt-1 text-xs text-muted">The access key and object prefix cannot be changed.</p></div>
+          <div class="space-y-4"><UFormField label="Access key ID"><UInput :model-value="token?.access_key_id" readonly class="w-full font-mono" /></UFormField><UFormField label="Object key prefix"><UInput :model-value="token?.prefix || 'Whole bucket'" readonly class="w-full font-mono" /></UFormField></div>
         </section>
         <section class="grid gap-4 py-8 lg:grid-cols-[190px_minmax(0,1fr)]">
           <div><h2 class="text-sm font-semibold">Bucket Permissions</h2><p class="mt-1 text-xs text-muted">Choose what this token can do in each project bucket.</p></div>

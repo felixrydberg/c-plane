@@ -18,7 +18,7 @@ async function handleCreate() {
   error.value = '';
 
   try {
-    const response = await $fetch<Project>(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects` as const, {
+    const response = await cplaneFetch<Project>(`/api/organization/${store.organization.id as ':organization_id'}/projects` as const, {
       method: 'POST',
       body: { name: name.value.trim() },
     });

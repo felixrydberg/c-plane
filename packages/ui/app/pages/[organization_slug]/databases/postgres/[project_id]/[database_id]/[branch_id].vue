@@ -73,9 +73,9 @@ async function fetchData() {
   loading.value = true
   try {
     const [db, branches, projectEnvironments] = await Promise.all([
-        $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/databases/postgres/${databaseId.value as ':database_id'}` as const),
-        $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/databases/postgres/${databaseId.value as ':database_id'}/branches` as const),
-        $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/environments` as const),
+        cplaneFetch(`/api/organization/${orgId.value as ':organization_id'}/databases/postgres/${databaseId.value as ':database_id'}` as const),
+        cplaneFetch(`/api/organization/${orgId.value as ':organization_id'}/databases/postgres/${databaseId.value as ':database_id'}/branches` as const),
+        cplaneFetch(`/api/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/environments` as const),
     ])
 
     dbName.value = db.name
@@ -112,8 +112,8 @@ async function save() {
   saving.value = true
   const unit = computeUnitByLabel(computeUnit.value)
   try {
-    await $fetch(
-        `/api/cplane/organization/${orgId.value as ':organization_id'}/databases/postgres/${databaseId.value as ':database_id'}/branches/${branchId.value as ':branch_id'}` as const,
+    await cplaneFetch(
+        `/api/organization/${orgId.value as ':organization_id'}/databases/postgres/${databaseId.value as ':database_id'}/branches/${branchId.value as ':branch_id'}` as const,
       {
         method: 'PATCH',
         body: {

@@ -10,14 +10,14 @@ const tokenId = computed(() => route.params.token_id?.toString() ?? '')
 const grants = ref<Record<string, RepositoryPermission>>({})
 const loading = ref(false)
   const repositoriesUrl = computed(() => organizationId.value
-  ? `/api/cplane/organization/${organizationId.value as ':organization_id'}/registry/repositories` as const
+  ? `/api/organization/${organizationId.value as ':organization_id'}/registry/repositories` as const
     : '')
   const tokenUrl = computed(() => organizationId.value && tokenId.value
-  ? `/api/cplane/organization/${organizationId.value as ':organization_id'}/registry/access-tokens/${tokenId.value as ':token_id'}` as const
+  ? `/api/organization/${organizationId.value as ':organization_id'}/registry/access-tokens/${tokenId.value as ':token_id'}` as const
     : '')
   const [{ data: repositories }, { data: token }] = await Promise.all([
-  useFetch(repositoriesUrl, { default: () => [] }),
-  useFetch(tokenUrl),
+  useCplaneFetch(repositoriesUrl, { default: () => [] }),
+  useCplaneFetch(tokenUrl),
 ])
 
 watch([repositories, token], ([items, accessToken]) => {
@@ -46,7 +46,7 @@ async function save() {
   if (!tokenUrl.value || !selectedPermissions.value.length) return
   loading.value = true
   try {
-    await $fetch(tokenUrl.value, { method: 'PATCH', body: { repository_permissions: selectedPermissions.value } })
+    await cplaneFetch(tokenUrl.value, { method: 'PATCH', body: { repository_permissions: selectedPermissions.value } })
     toast.add({ title: 'Access token updated', color: 'success' })
     await navigateTo(backUrl())
   } catch {

@@ -8,7 +8,7 @@
   const limit = ref(50);
   const page = ref(1);
   const offset = computed(() => (page.value - 1) * limit.value);
-  const { data, refresh } = await useFetch("/api/user/invitations", {
+  const { data, refresh } = await useFetch("/ui-api/user/invitations", {
     query: {
       search: queryDebounced,
       limit: limit,
@@ -25,7 +25,7 @@
 
   const onAcceptClick = async (invitation: Invitation) => {
     try {
-      const result = await $fetch<AcceptInvitationResponse>(`/api/user/invitations/${invitation.id as ':invitation_id'}/accept`, {
+      const result = await $fetch<AcceptInvitationResponse>(`/ui-api/user/invitations/${invitation.id as ':invitation_id'}/accept`, {
         method: 'POST',
       });
 
@@ -57,7 +57,7 @@
 
   const onDeclineClick = async (invitation: Invitation) => {
     try {
-      await $fetch(`/api/organization/${invitation.organization_id as ':organization_id'}/invitations/${invitation.id as ':invitation_id'}` as string, {
+      await $fetch(`/ui-api/organization/${invitation.organization_id as ':organization_id'}/invitations/${invitation.id as ':invitation_id'}` as string, {
         method: 'PATCH' as never,
         body: { action: 'decline' },
         query: { organization_id: invitation.organization_id, invitation_id: invitation.id }

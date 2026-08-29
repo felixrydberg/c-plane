@@ -4,7 +4,11 @@ ARG RUST_VERSION=1.92.0
 
 FROM registry:3.1.1 AS distribution
 
-FROM rust:${RUST_VERSION} AS builder
+FROM rust:${RUST_VERSION}-bookworm AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    cmake \
+    && rm -rf /var/lib/apt/lists/*
 
 ARG PACKAGE
 ARG BINARY
@@ -14,6 +18,7 @@ WORKDIR /usr/src/app
 COPY Cargo.toml Cargo.lock ./
 COPY packages/api ./packages/api
 COPY packages/control-plane ./packages/control-plane
+COPY packages/ingress ./packages/ingress
 COPY packages/lib ./packages/lib
 COPY packages/storage ./packages/storage
 COPY packages/worker ./packages/worker
@@ -31,6 +36,7 @@ COPY --from=runtime-builder /usr/lib/x86_64-linux-gnu/libssl.so* /usr/lib/
 COPY --from=runtime-builder /usr/lib/x86_64-linux-gnu/libcrypto.so* /usr/lib/
 
 FROM runtime-default AS runtime-api
+FROM runtime-default AS runtime-ingress
 FROM runtime-default AS runtime-storage
 FROM runtime-default AS runtime-worker
 COPY --from=distribution /bin/registry /usr/local/bin/registry

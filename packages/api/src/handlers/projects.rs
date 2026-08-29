@@ -8,14 +8,16 @@ use std::collections::HashMap;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use super::databases::verify_org_access;
+use super::databases::{verify_org_access, verify_org_owner};
 use crate::errors::AppError;
 use crate::middleware::auth::AuthContext;
 use crate::models::entities::{
-    project, project_environment, project_timeline, storage_access_token,
+    credential, project, project_environment, project_timeline, secret, storage,
+    storage_access_token,
 };
 use crate::models::pins::TimelinePins;
 use crate::services::agent;
+use crate::services::buckets;
 use crate::services::events;
 use crate::state::get_app_state;
 use crate::utils::pagination::{PaginatedResponse, PaginationQuery};
@@ -355,6 +357,7 @@ pub async fn delete_project(
     Path((organization_id, project_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
+    verify_org_owner(&tenant_db, organization_id)?;
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
@@ -366,13 +369,34 @@ pub async fn delete_project(
         .one(tx)
         .await?
         .ok_or_else(|| AppError::NotFound("Project not found".into()))?;
-    let access_keys = storage_access_token::Entity::find()
+    let tokens = storage_access_token::Entity::find()
         .filter(storage_access_token::Column::ProjectId.eq(project_id))
+        .find_also_related(credential::Entity)
         .all(tx)
-        .await?
-        .into_iter()
-        .map(|token| token.access_key_id)
+        .await?;
+    let access_keys = tokens
+        .iter()
+        .filter_map(|(_, credential)| credential.as_ref().map(|c| c.access_key_id.clone()))
         .collect::<Vec<_>>();
+    let secret_ids = tokens
+        .iter()
+        .filter_map(|(_, credential)| credential.as_ref().map(|c| c.secret_id))
+        .collect::<Vec<_>>();
+    storage_access_token::Entity::delete_many()
+        .filter(storage_access_token::Column::ProjectId.eq(project_id))
+        .exec(tx)
+        .await?;
+    secret::Entity::delete_many()
+        .filter(secret::Column::Id.is_in(secret_ids))
+        .exec(tx)
+        .await?;
+    let storage_buckets = storage::Entity::find()
+        .filter(storage::Column::ProjectId.eq(project_id))
+        .all(tx)
+        .await?;
+    for bucket in storage_buckets {
+        buckets::delete(tx, bucket.bucket_id).await?;
+    }
 
     Entity::delete_by_id(project_id).exec(tx).await?;
     events::record(
@@ -886,6 +910,7 @@ pub async fn delete_environment(
     Path((organization_id, project_id, environment_id)): Path<(Uuid, Uuid, Uuid)>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
+    verify_org_owner(&tenant_db, organization_id)?;
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();

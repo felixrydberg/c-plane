@@ -7,7 +7,7 @@ use utoipa::openapi::{
 };
 use utoipa::{Modify, OpenApi};
 
-use crate::middleware::auth::required_scope;
+use crate::middleware::scoped::registered_scope;
 
 struct SecurityAddon;
 
@@ -69,7 +69,7 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
         return;
     };
 
-    if let Some(scope) = required_scope(if method == "HEAD" { "GET" } else { method }, path) {
+    if let Some(scope) = registered_scope(method, path) {
         operation.security = Some(vec![utoipa::openapi::security::SecurityRequirement::new(
             "apiKey",
             Vec::<String>::new(),
@@ -153,6 +153,7 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
         crate::handlers::external_registries::rename_external_registry,
         crate::handlers::external_registries::rotate_external_registry_token,
         crate::handlers::external_registries::delete_external_registry,
+        crate::handlers::internal_secrets::provision_tenant_key,
         crate::handlers::internal_s3::resolve_access_token,
         crate::handlers::internal_s3::provider_credentials,
     ),
@@ -184,7 +185,6 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
             crate::utils::pagination::PaginatedResponse<crate::handlers::projects::ProjectResponse>,
             crate::utils::pagination::PaginationMeta,
             crate::handlers::storage_buckets::CreateBucketRequest,
-            crate::handlers::storage_buckets::BucketRegionResponse,
             crate::handlers::storage_buckets::BucketResponse,
             crate::handlers::storage_objects::BucketObjectResponse,
             crate::handlers::storage_objects::BucketObjectsResponse,
@@ -234,6 +234,11 @@ mod tests {
 
     #[test]
     fn head_reuses_get_scope() {
+        crate::middleware::scoped::seed_policy_for_tests(
+            "GET",
+            "/api/organization/{organization_id}/regions",
+            "region:read",
+        );
         let mut operation = Operation::default();
 
         document_scope(

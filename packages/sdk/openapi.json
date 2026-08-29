@@ -850,7 +850,7 @@
             "apiKey": []
           }
         ],
-        "x-cplane-required-scope": "database:postgres:manage"
+        "x-cplane-required-scope": "database:postgres:delete"
       },
       "patch": {
         "tags": [
@@ -2528,38 +2528,6 @@
         "x-cplane-required-scope": "registry:update"
       }
     },
-    "/api/organization/{organization_id}/registry/maintenance": {
-      "get": {
-        "tags": [
-          "registry"
-        ],
-        "operationId": "maintenance_status",
-        "parameters": [
-          {
-            "name": "organization_id",
-            "in": "path",
-            "description": "Organization ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Registry maintenance state",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RegistryMaintenanceResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/organization/{organization_id}/registry/repositories": {
       "get": {
         "tags": [
@@ -3096,6 +3064,26 @@
         "x-cplane-required-scope": "bucket:read"
       }
     },
+    "/api/registry/maintenance": {
+      "get": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "maintenance_status",
+        "responses": {
+          "200": {
+            "description": "Registry maintenance state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryMaintenanceResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/registry/token": {
       "get": {
         "tags": [
@@ -3179,6 +3167,55 @@
             }
           }
         }
+      }
+    },
+    "/internal/organizations/{organization_id}/transit-key": {
+      "post": {
+        "tags": [
+          "internal"
+        ],
+        "operationId": "provision_tenant_key",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Tenant Transit key provisioned"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "serviceToken": []
+          }
+        ]
       }
     },
     "/internal/s3-access-tokens/resolve/{access_key}": {
@@ -3322,6 +3359,7 @@
           "id",
           "name",
           "access_key_id",
+          "prefix",
           "created_at"
         ],
         "properties": {
@@ -3336,6 +3374,9 @@
             "format": "uuid"
           },
           "name": {
+            "type": "string"
+          },
+          "prefix": {
             "type": "string"
           }
         }
@@ -3575,6 +3616,9 @@
             }
           },
           "name": {
+            "type": "string"
+          },
+          "prefix": {
             "type": "string"
           }
         }
@@ -4555,6 +4599,7 @@
         "type": "object",
         "required": [
           "credential_id",
+          "prefix",
           "bucket_permissions"
         ],
         "properties": {
@@ -4575,6 +4620,9 @@
             ],
             "format": "uuid"
           },
+          "prefix": {
+            "type": "string"
+          },
           "project_id": {
             "type": [
               "string",
@@ -4593,7 +4641,8 @@
           "region",
           "provider_id",
           "can_read",
-          "can_write"
+          "can_write",
+          "is_deleting"
         ],
         "properties": {
           "bucket_id": {
@@ -4607,6 +4656,9 @@
             "type": "boolean"
           },
           "can_write": {
+            "type": "boolean"
+          },
+          "is_deleting": {
             "type": "boolean"
           },
           "physical_bucket_name": {
@@ -4685,7 +4737,7 @@
         "required": [
           "access_key_id",
           "endpoint_url",
-          "provider_type"
+          "name"
         ],
         "properties": {
           "access_key_id": {
@@ -4694,14 +4746,14 @@
           "endpoint_url": {
             "type": "string"
           },
+          "name": {
+            "type": "string"
+          },
           "provider_region": {
             "type": [
               "string",
               "null"
             ]
-          },
-          "provider_type": {
-            "type": "string"
           }
         }
       },

@@ -1,2 +1,2 @@
-pub mod entities;
+pub use lib::entities;
 pub mod pins;

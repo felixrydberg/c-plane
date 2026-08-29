@@ -9,7 +9,7 @@ const store = useStore();
 const router = useRouter();
 const isDropdownOpen = ref(false);
 
-const { data: organizations, pending, refresh } = useLazyFetch('/api/organization');
+const { data: organizations, pending, refresh } = useLazyFetch('/ui-api/organization');
 type Organization = NonNullable<typeof organizations.value>['data'][number];
 
 const items = computed<DropdownMenuItem[][]>(() => {

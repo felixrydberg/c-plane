@@ -6,7 +6,7 @@ export * from './containers.ts';
 export * from './postgres.ts';
 export * from './storage.ts';
 
-export const project = pgTable('project', {
+export const project = pgTable.withRLS('project', {
   id: uuid("id").primaryKey(),
   organization_id: uuid("organization_id")
     .notNull()
@@ -28,9 +28,9 @@ export const project = pgTable('project', {
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
-]).enableRLS();
+]);
 
-export const project_environment = pgTable('project_environment', {
+export const project_environment = pgTable.withRLS('project_environment', {
   id: uuid("id").primaryKey(),
   project_id: uuid("project_id")
     .notNull()
@@ -56,9 +56,9 @@ export const project_environment = pgTable('project_environment', {
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
-]).enableRLS();
+]);
 
-export const project_timeline = pgTable('project_timeline', {
+export const project_timeline = pgTable.withRLS('project_timeline', {
   id: uuid("id").primaryKey(),
   project_id: uuid("project_id")
     .notNull()
@@ -95,4 +95,4 @@ export const project_timeline = pgTable('project_timeline', {
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
   }),
-]).enableRLS();
+]);

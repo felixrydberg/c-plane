@@ -13,6 +13,7 @@ const store = useStore()
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
+const isOwner = computed(() => store.organization?.member?.role === 'owner')
 
 const routeProjectId = computed(() => route.params.project_id as string | undefined)
 const routeEnvironmentId = computed(() => route.params.environment_id as string | undefined)
@@ -39,7 +40,7 @@ const hasDraftRevision = computed(() =>
 // Refresh only needed after create/delete.
 async function refreshProjects() {
   if (!store.organization?.id) return
-  const { data } = await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects` as const)
+  const { data } = await cplaneFetch(`/api/organization/${store.organization.id as ':organization_id'}/projects` as const)
   if (data) {
     store.projects = data
   }
@@ -63,32 +64,34 @@ const environmentLabel = computed(() => {
 })
 
 const projectMenuItems = computed<DropdownMenuItem[][]>(() => {
-  return [[
+  const projects: DropdownMenuItem[] = [
     { label: 'All Projects', onSelect() { void selectProject(null) } },
     ...store.projects.map(project => ({
       label: project.name,
       onSelect() { void selectProject(project.id) },
     })),
-  ], [
-  { label: 'Create Project', onSelect() { createProjectModal.value = true } },
-  ...(store.project ? [{ label: 'Delete Project', color: 'error' as const, onSelect() { deleteProjectModal.value = true } }] : []),
-  ]]
+  ]
+  const actions: DropdownMenuItem[] = [
+  ...(isOwner.value ? [{ label: 'Create Project', icon: ICONS.folderPlus, onSelect() { createProjectModal.value = true } }] : []),
+  ...(store.project && isOwner.value ? [{ label: 'Delete Project', icon: ICONS.trash, color: 'error' as const, onSelect() { deleteProjectModal.value = true } }] : []),
+  ]
+  return actions.length ? [projects, actions] : [projects]
 })
 
 const environmentMenuItems = computed<DropdownMenuItem[][]>(() => {
-  return [
-    store.environments.map(environment => ({
+  const environments: DropdownMenuItem[] = store.environments.map(environment => ({
       label: environment.name,
       badges: [
         ...(environment.is_default ? ['Default'] : []),
         ...(environment.is_preview ? ['Preview'] : []),
       ],
       onSelect() { selectEnvironment(environment) },
-    })),
-    [
-      { label: 'Create Environment', onSelect() { createEnvironmentModal.value = true } },
-      ...(store.environment ? [{
+    }))
+  const actions: DropdownMenuItem[] = [
+      ...(isOwner.value ? [{ label: 'Create Environment', icon: ICONS.folderPlus, onSelect() { createEnvironmentModal.value = true } }] : []),
+      ...(store.environment && isOwner.value ? [{
         label: 'Rename Environment',
+        icon: ICONS.pencil,
         onSelect() {
           environmentName.value = store.environment?.name ?? ''
           renameEnvironmentModal.value = true
@@ -96,14 +99,16 @@ const environmentMenuItems = computed<DropdownMenuItem[][]>(() => {
       }] : []),
       ...(store.environment ? [{
         label: 'Delete Environment',
+        icon: ICONS.trash,
         color: 'error' as const,
-        disabled: store.environment.is_default,
+        disabled: !isOwner.value || store.environment.is_default,
+        description: !isOwner.value ? 'Owner role required' : undefined,
         onSelect() {
           if (!store.environment?.is_default) deleteEnvironmentModal.value = true
         },
       }] : []),
-    ],
-  ]
+    ]
+  return actions.length ? [environments, actions] : [environments]
 })
 
 const revisionItems = computed<DropdownMenuItem[][]>(() => [[
@@ -222,8 +227,8 @@ async function onRenameEnvironment() {
 
   renamingEnvironment.value = true
   try {
-    const updated = await $fetch(
-      `/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${store.environment.id as ':environment_id'}` as const,
+    const updated = await cplaneFetch(
+      `/api/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${store.environment.id as ':environment_id'}` as const,
       { method: 'PATCH', body: { name: environmentName.value.trim() } },
     )
     syncEnvironment(store, updated)
@@ -239,7 +244,7 @@ async function onRenameEnvironment() {
 async function onConfirmDeleteEnvironment() {
   if (!store.organization?.id || !store.project?.id || !store.environment) return;
   try {
-    await $fetch(`/api/cplane/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${store.environment.id as ':environment_id'}` as const, { method: 'DELETE' });
+    await cplaneFetch(`/api/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${store.environment.id as ':environment_id'}` as const, { method: 'DELETE' });
     toast.add({ title: 'Environment removed', color: 'success' });
     deleteEnvironmentModal.value = false;
     store.environment = null;

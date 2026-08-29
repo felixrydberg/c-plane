@@ -13,11 +13,11 @@ use uuid::Uuid;
 use crate::{
     errors::AppError,
     middleware::auth::AuthContext,
-    models::entities::{bucket, region},
+    models::entities::{bucket, region, storage},
     state::{TenantDatabase, get_app_state},
 };
 
-use super::{databases::verify_project_in_org, storage_buckets::physical_bucket_name};
+use super::databases::verify_project_in_org;
 
 const OBJECT_PAGE_SIZE: i32 = 25;
 
@@ -276,25 +276,29 @@ async fn bucket_descriptor(
     super::databases::verify_org_access(tenant_db, organization_id)?;
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
-    let bucket = bucket::Entity::find_by_id(bucket_id)
-        .filter(bucket::Column::OrganizationId.eq(organization_id))
+    let bucket = storage::Entity::find_by_id(bucket_id)
+        .filter(storage::Column::OrganizationId.eq(organization_id))
         .one(tx)
         .await?
         .ok_or_else(|| AppError::NotFound("Bucket not found".into()))?;
     verify_project_in_org(tx, bucket.project_id, organization_id).await?;
-    let region = region::Entity::find_by_id(bucket.region_id)
+    let (_, region) = bucket::Entity::find_by_id(bucket.bucket_id)
+        .find_also_related(region::Entity)
         .one(tx)
         .await?
-        .ok_or_else(|| AppError::NotFound("Bucket region not found".into()))?;
+        .ok_or_else(|| AppError::NotFound("Bucket foundation not found".into()))?;
     let provider_id = region
-        .s3_provider_id
+        .and_then(|region| region.s3_provider_id)
         .ok_or_else(|| AppError::Conflict("Region has no S3 provider".into()))?;
     scoped.commit().await?;
-    let platform_sse_key = get_app_state().s3_providers.bucket_key(bucket_id).await?;
+    let platform_sse_key = get_app_state()
+        .s3_providers
+        .bucket_key(bucket.bucket_id, organization_id)
+        .await?;
     Ok(StorageBucketDescriptor {
         organization_id,
-        bucket_id,
-        physical_bucket_name: physical_bucket_name(bucket_id),
+        bucket_id: bucket.bucket_id,
+        physical_bucket_name: lib::buckets::physical_bucket_name(bucket.bucket_id),
         provider_id,
         platform_sse_key,
     })
@@ -306,7 +310,7 @@ async fn storage_request<T: Serialize>(path: &str, body: T) -> Result<reqwest::R
         .storage_client
         .post(format!(
             "{}/{}",
-            state.config.storage_endpoint_url.trim_end_matches('/'),
+            state.config.storage_internal_url.trim_end_matches('/'),
             path
         ))
         .header("x-cplane-token", &state.config.service_token)

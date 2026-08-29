@@ -12,8 +12,8 @@ const name = ref('')
 const regionId = ref('')
 const loading = ref(false)
 const error = ref('')
-const regionsUrl = computed(() => orgId.value ? `/api/cplane/organization/${orgId.value as ':organization_id'}/regions` as const : '')
-const { data: regions } = await useFetch(regionsUrl, { default: () => [] })
+const regionsUrl = computed(() => orgId.value ? `/api/organization/${orgId.value as ':organization_id'}/regions` as const : '')
+const { data: regions } = await useCplaneFetch(regionsUrl, { default: () => [] })
 
 function backUrl() { return `/${route.params.organization_slug}/storage/${projectId.value}` }
 
@@ -22,7 +22,7 @@ async function createBucket() {
   loading.value = true
   error.value = ''
   try {
-    await $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/storage/buckets` as const, {
+    await cplaneFetch(`/api/organization/${orgId.value as ':organization_id'}/storage/buckets` as const, {
       method: 'POST',
       body: { project_id: projectId.value, name: name.value.trim(), region: regionId.value },
     })

@@ -8,7 +8,7 @@ const orgId = computed(() => store.organization?.id ?? '')
 const projectId = computed(() => route.params.project_id?.toString() || null)
 const projectName = computed(() => store.projects.find(p => p.id === projectId.value)?.name ?? projectId.value ?? '')
 const databasesUrl = computed(() => orgId.value
-  ? `/api/cplane/organization/${orgId.value as ':organization_id'}/databases/postgres` as const
+  ? `/api/organization/${orgId.value as ':organization_id'}/databases/postgres` as const
   : '')
 
 const search = ref('')

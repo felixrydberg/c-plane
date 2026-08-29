@@ -8,7 +8,7 @@ export const cluster_health_status = pgEnum("cluster_health_status", ["healthy",
 export const cluster_provider = pgEnum("cluster_provider", ["aws", "gcp", "azure", "metal"]);
 export const cluster_ingress_endpoint_health_status = pgEnum("cluster_ingress_endpoint_health_status", ["healthy", "degraded", "unreachable"]);
 
-export const cluster = pgTable("clusters", {
+export const cluster = pgTable.withRLS("clusters", {
   id: uuid("id").primaryKey(),
   region_id: uuid("region_id")
     .notNull()
@@ -32,9 +32,9 @@ export const cluster = pgTable("clusters", {
   index("clusters_status_idx").on(table.status),
   index("clusters_health_status_idx").on(table.health_status),
   index("clusters_provider_idx").on(table.provider),
-]).enableRLS();
+]);
 
-export const cluster_ingress_endpoint = pgTable("cluster_ingress_endpoints", {
+export const cluster_ingress_endpoint = pgTable.withRLS("cluster_ingress_endpoints", {
   id: uuid("id").primaryKey(),
   cluster_id: uuid("cluster_id")
     .notNull()
@@ -51,9 +51,9 @@ export const cluster_ingress_endpoint = pgTable("cluster_ingress_endpoints", {
   index("cluster_ingress_endpoints_cluster_id_idx").on(table.cluster_id),
   index("cluster_ingress_endpoints_health_status_idx").on(table.health_status),
   index("cluster_ingress_endpoints_enabled_idx").on(table.enabled),
-]).enableRLS();
+]);
 
-export const cluster_join_credential = pgTable("cluster_join_credentials", {
+export const cluster_join_credential = pgTable.withRLS("cluster_join_credentials", {
   id: uuid("id").primaryKey(),
   cluster_id: uuid("cluster_id")
     .notNull()
@@ -69,4 +69,4 @@ export const cluster_join_credential = pgTable("cluster_join_credentials", {
   index("cluster_join_credentials_cluster_id_idx").on(table.cluster_id),
   index("cluster_join_credentials_expires_at_idx").on(table.expires_at),
   index("cluster_join_credentials_token_hash_idx").on(table.token_hash),
-]).enableRLS();
+]);

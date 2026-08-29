@@ -41,8 +41,11 @@ const passkeyRegistrationContextSecret = getPasskeyRegistrationContextSecret()
 export const auth = betterAuth({
   appName: "C-Plane",
   baseURL: authBaseURL,
+  basePath: "/ui-api/auth",
   secret: passkeyRegistrationContextSecret,
-  trustedOrigins: process.env.NODE_ENV === "production" ? [authBaseURL] : [authBaseURL, "http://ui:3000"],
+  trustedOrigins: process.env.NODE_ENV === "production"
+    ? [new URL(authBaseURL).origin]
+    : [new URL(authBaseURL).origin, "http://ui:3000"],
   database: drizzleAdapter(db, {
     provider: "pg",
     schema,

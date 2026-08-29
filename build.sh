@@ -30,6 +30,56 @@ set_env() {
   fi
 }
 
+configure_preset() {
+  read -r -p "Use a public domain for ingress? [y/N]: " use_domain
+  case "$use_domain" in
+    y|Y|yes|YES|Yes)
+      domain="$(env_value CPLANE_DOMAIN)"
+      if [ -n "$domain" ]; then
+        read -r -p "Public domain [$domain]: " entered_domain
+        domain="${entered_domain:-$domain}"
+      else
+        read -r -p "Public domain (for example: example.com): " domain
+      fi
+      if [ -z "$domain" ]; then
+        echo "A public domain is required when domain ingress is enabled" >&2
+        exit 2
+      fi
+      if ! printf '%s\n' "$domain" | grep -Eq '^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$'; then
+        echo "The domain must be a hostname without a scheme, port, path, or trailing dot" >&2
+        exit 2
+      fi
+      set_env CPLANE_DOMAIN "$domain"
+      set_env NUXT_AUTH_BASE_URL "https://$domain"
+      set_env INGRESS_PLATFORM_HOSTS "$domain"
+      set_env INGRESS_API_HOSTS "api.$domain"
+      set_env INGRESS_STORAGE_HOSTS "storage.$domain"
+      set_env INGRESS_REGISTRY_HOSTS "registry.$domain"
+      set_env INGRESS_FORWARDED_PROTO https
+      set_env REGISTRY_HOST "registry.$domain"
+      set_env REGISTRY_INTERNAL_URL http://registry:5000
+      set_env REGISTRY_TOKEN_REALM "https://api.$domain/api/registry/token"
+      ;;
+    *)
+      if [ "$mode" = prod ]; then
+        echo "Production requires a public domain for ingress" >&2
+        exit 2
+      fi
+      set_env NUXT_AUTH_BASE_URL http://localhost:3000
+      set_env INGRESS_PLATFORM_HOSTS localhost:3000
+      set_env INGRESS_API_HOSTS localhost:8080
+      set_env INGRESS_STORAGE_HOSTS localhost:8081
+      set_env INGRESS_REGISTRY_HOSTS localhost:5000
+      set_env INGRESS_FORWARDED_PROTO http
+      set_env REGISTRY_HOST localhost:5000
+      set_env REGISTRY_INTERNAL_URL http://registry:5000
+      set_env REGISTRY_TOKEN_REALM http://localhost:8080/api/registry/token
+      ;;
+  esac
+}
+
+configure_preset
+
 ensure_secret() {
   value="$(env_value "$1")"
   case "$value" in
@@ -51,6 +101,10 @@ new_uuid() {
   printf '%s-%s-4%s-a%s-%s' "${hex:0:8}" "${hex:8:4}" "${hex:13:3}" "${hex:17:3}" "${hex:20:12}"
 }
 
+json_escape() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
 run_quiet() {
   local log
   log="$(mktemp)"
@@ -69,9 +123,6 @@ done
 ensure_registry_token_secret
 ensure_secret REGISTRY_STORAGE_S3_ACCESSKEY 16
 ensure_secret REGISTRY_STORAGE_S3_GC_ACCESSKEY 16
-case "$(env_value STORAGE_ENDPOINT_URL)" in
-  ""|http://localhost:8081) set_env STORAGE_ENDPOINT_URL http://storage:8081 ;;
-esac
 [ -n "$(env_value REGISTRY_HOST)" ] || set_env REGISTRY_HOST localhost:5000
 [ -n "$(env_value REGISTRY_STORAGE_S3_REGION)" ] || set_env REGISTRY_STORAGE_S3_REGION us-east-1
 [ -n "$(env_value REGISTRY_STORAGE_S3_BUCKET)" ] || set_env REGISTRY_STORAGE_S3_BUCKET cplane-registry
@@ -79,7 +130,6 @@ esac
 case "$(env_value REGISTRY_TOKEN_REALM)" in
   ""|http://localhost:3000/api/backend/registry/token) set_env REGISTRY_TOKEN_REALM http://localhost:8080/api/registry/token ;;
 esac
-
 compose=(docker compose --env-file .env -f "$compose_file")
 
 echo "Starting Postgres, Valkey, and OpenBao..."
@@ -88,9 +138,18 @@ run_quiet "${compose[@]}" up -d --wait postgresd valkey openbao
 bao_status="$("${compose[@]}" exec -T -e BAO_ADDR=http://127.0.0.1:8200 openbao bao status -format=json 2>/dev/null || true)"
 if ! printf '%s' "$bao_status" | grep -Eq '"initialized"[[:space:]]*:[[:space:]]*true'; then
   echo "Initializing OpenBao..."
-  bao_init="$("${compose[@]}" exec -T -e BAO_ADDR=http://127.0.0.1:8200 openbao bao operator init -key-shares=1 -key-threshold=1)"
-  set_env OPENBAO_UNSEAL_KEY "$(printf '%s\n' "$bao_init" | sed -n 's/^Unseal Key 1: //p')"
-  set_env OPENBAO_ROOT_TOKEN "$(printf '%s\n' "$bao_init" | sed -n 's/^Initial Root Token: //p')"
+  if ! bao_init="$("${compose[@]}" exec -T -e BAO_ADDR=http://127.0.0.1:8200 openbao bao operator init -key-shares=1 -key-threshold=1)"; then
+    echo "OpenBao initialization failed" >&2
+    exit 1
+  fi
+  bao_unseal_key="$(printf '%s\n' "$bao_init" | sed -n 's/^Unseal Key 1: //p')"
+  bao_root_token="$(printf '%s\n' "$bao_init" | sed -n 's/^Initial Root Token: //p')"
+  if [ -z "$bao_unseal_key" ] || [ -z "$bao_root_token" ]; then
+    echo "OpenBao initialization returned incomplete credentials" >&2
+    exit 1
+  fi
+  set_env OPENBAO_UNSEAL_KEY "$bao_unseal_key"
+  set_env OPENBAO_ROOT_TOKEN "$bao_root_token"
 else
   bao_unseal_key="$(env_value OPENBAO_UNSEAL_KEY)"
   bao_root_token="$(env_value OPENBAO_ROOT_TOKEN)"
@@ -101,40 +160,48 @@ else
   fi
 fi
 
-echo "Unsealing OpenBao and enabling its KV store..."
+echo "Unsealing OpenBao and enabling Transit..."
 run_quiet "${compose[@]}" run --rm openbao-init
 
 echo "Configuring OpenBao AppRoles..."
 root_bao=("${compose[@]}" exec -T -e BAO_ADDR=http://127.0.0.1:8200 -e "BAO_TOKEN=$(env_value OPENBAO_ROOT_TOKEN)" openbao bao)
+"${root_bao[@]}" write -f transit/keys/platform >/dev/null
 "${root_bao[@]}" auth enable approle >/dev/null 2>&1 || true
 "${root_bao[@]}" policy write cplane-api - < packages/openbao/policies/api.hcl >/dev/null
 "${root_bao[@]}" policy write cplane-control-plane - < packages/openbao/policies/control-plane.hcl >/dev/null
+"${root_bao[@]}" policy write cplane-worker - < packages/openbao/policies/worker.hcl >/dev/null
 "${root_bao[@]}" write auth/approle/role/cplane-api token_policies=cplane-api token_ttl=1h token_max_ttl=4h >/dev/null
 "${root_bao[@]}" write auth/approle/role/cplane-control-plane token_policies=cplane-control-plane token_ttl=1h token_max_ttl=4h >/dev/null
+"${root_bao[@]}" write auth/approle/role/cplane-worker token_policies=cplane-worker token_ttl=1h token_max_ttl=4h >/dev/null
 api_role_id="$("${root_bao[@]}" read -field=role_id auth/approle/role/cplane-api/role-id)"
 api_secret_id="$("${root_bao[@]}" write -field=secret_id -f auth/approle/role/cplane-api/secret-id)"
 control_plane_role_id="$("${root_bao[@]}" read -field=role_id auth/approle/role/cplane-control-plane/role-id)"
 control_plane_secret_id="$("${root_bao[@]}" write -field=secret_id -f auth/approle/role/cplane-control-plane/secret-id)"
+worker_role_id="$("${root_bao[@]}" read -field=role_id auth/approle/role/cplane-worker/role-id)"
+worker_secret_id="$("${root_bao[@]}" write -field=secret_id -f auth/approle/role/cplane-worker/secret-id)"
 set_env OPENBAO_API_ROLE_ID "$api_role_id"
 set_env OPENBAO_API_SECRET_ID "$api_secret_id"
 set_env OPENBAO_CONTROL_PLANE_ROLE_ID "$control_plane_role_id"
 set_env OPENBAO_CONTROL_PLANE_SECRET_ID "$control_plane_secret_id"
+set_env OPENBAO_WORKER_ROLE_ID "$worker_role_id"
+set_env OPENBAO_WORKER_SECRET_ID "$worker_secret_id"
 
 api_token="$("${root_bao[@]}" write -field=token auth/approle/login role_id="$api_role_id" secret_id="$api_secret_id")"
 control_plane_token="$("${root_bao[@]}" write -field=token auth/approle/login role_id="$control_plane_role_id" secret_id="$control_plane_secret_id")"
-api_provider_caps="$("${compose[@]}" exec -T -e BAO_ADDR=http://127.0.0.1:8200 -e "BAO_TOKEN=$api_token" openbao bao token capabilities cplane/data/platform/s3/providers/policy-smoke-test)"
-control_plane_nonprovider_caps="$("${compose[@]}" exec -T -e BAO_ADDR=http://127.0.0.1:8200 -e "BAO_TOKEN=$control_plane_token" openbao bao token capabilities cplane/data/platform/s3/access-keys/policy-smoke-test)"
-printf '%s' "$api_provider_caps" | grep -qw read
-if printf '%s' "$api_provider_caps" | grep -Eqw 'create|update|delete'; then
-  echo "API AppRole unexpectedly has provider write access" >&2
-  exit 1
-fi
-[ "$control_plane_nonprovider_caps" = deny ] || { echo "Control-plane AppRole unexpectedly has non-provider access" >&2; exit 1; }
-unset api_token control_plane_token api_secret_id control_plane_secret_id
+api_provider_caps="$("${compose[@]}" exec -T -e BAO_ADDR=http://127.0.0.1:8200 -e "BAO_TOKEN=$api_token" openbao bao token capabilities transit/decrypt/platform)"
+control_plane_tenant_caps="$("${compose[@]}" exec -T -e BAO_ADDR=http://127.0.0.1:8200 -e "BAO_TOKEN=$control_plane_token" openbao bao token capabilities transit/encrypt/tenant-policy-smoke-test)"
+printf '%s' "$api_provider_caps" | grep -qw update
+[ "$control_plane_tenant_caps" = deny ] || { echo "Control-plane AppRole unexpectedly has tenant access" >&2; exit 1; }
+unset api_token control_plane_token api_secret_id control_plane_secret_id worker_role_id worker_secret_id
 
 echo "Applying database migrations..."
 run_quiet "${compose[@]}" run --rm --build migrate
 echo "Database migrations complete"
+
+echo "Provisioning tenant Transit keys..."
+while IFS= read -r organization_id; do
+  [ -z "$organization_id" ] || "${root_bao[@]}" write -f "transit/keys/tenant-${organization_id//-/}" >/dev/null
+done < <("${compose[@]}" exec -T postgresd psql -U cplane -d cplane -At -c 'SELECT id FROM organization')
 
 provider_id="$(env_value REGISTRY_STORAGE_S3_PROVIDER_ID)"
 provider_exists=0
@@ -150,13 +217,12 @@ if [ "$provider_exists" != 1 ]; then
   echo
   echo "Configure the first S3 provider"
   while :; do
-    read -r -p "Provider type [aws_s3/cloudflare_r2] (aws_s3): " provider_type
-    provider_type="${provider_type:-aws_s3}"
-    case "$provider_type" in
-      aws_s3) default_provider_region=us-east-1 ;;
-      cloudflare_r2) default_provider_region=auto ;;
-      *) echo "Provider type must be aws_s3 or cloudflare_r2; try again." >&2; continue ;;
-    esac
+    read -r -p "S3 provider name: " provider_name
+    if [ -z "$provider_name" ]; then
+      echo "S3 provider name is required; try again." >&2
+      continue
+    fi
+    default_provider_region=us-east-1
 
     read -r -p "S3 endpoint URL: " provider_endpoint
     if [ -z "$provider_endpoint" ]; then
@@ -193,32 +259,37 @@ if [ "$provider_exists" != 1 ]; then
   echo "Registry backing bucket: $registry_bucket"
 
   provider_id="$(new_uuid)"
+  provider_secret_id="$(new_uuid)"
   region_id="$(new_uuid)"
-  bao=("${compose[@]}" exec -T -e BAO_ADDR=http://127.0.0.1:8200 -e "BAO_TOKEN=$(env_value OPENBAO_ROOT_TOKEN)" openbao bao kv put "cplane/platform/s3/providers/$provider_id")
   if [ -n "$provider_session_token" ]; then
-    run_quiet "${bao[@]}" "access_key_id=$provider_access_key" "secret_access_key=$provider_secret_key" "session_token=$provider_session_token"
+    session_token_json="\"$(json_escape "$provider_session_token")\""
   else
-    run_quiet "${bao[@]}" "access_key_id=$provider_access_key" "secret_access_key=$provider_secret_key"
+    session_token_json="null"
   fi
+  provider_payload="{\"access_key_id\":\"$(json_escape "$provider_access_key")\",\"secret_access_key\":\"$(json_escape "$provider_secret_key")\",\"session_token\":${session_token_json}}"
+  provider_payload_b64="$(printf '%s' "$provider_payload" | openssl base64 -A)"
+  provider_ciphertext="$(printf '%s' "$provider_payload_b64" | "${root_bao[@]}" write -field=ciphertext transit/encrypt/platform plaintext=-)"
+  unset provider_payload provider_payload_b64 session_token_json
 
   if ! run_quiet "${compose[@]}" exec -T postgresd psql -v ON_ERROR_STOP=1 -U cplane -d cplane \
-    -v provider_id="$provider_id" -v provider_type="$provider_type" \
+    -v provider_id="$provider_id" -v provider_name="$provider_name" \
     -v provider_endpoint="$provider_endpoint" -v provider_region="$provider_region" \
+    -v provider_secret_id="$provider_secret_id" -v provider_ciphertext="$provider_ciphertext" \
     -v region_id="$region_id" -v region_slug="$region_slug" -v region_name="$region_name" <<'SQL'
 BEGIN;
-INSERT INTO s3_providers (id, provider_type, endpoint_url, provider_region, is_active)
-VALUES (:'provider_id'::uuid, :'provider_type'::s3_provider_type, :'provider_endpoint', :'provider_region', true);
+INSERT INTO secret (id, scope, ciphertext)
+VALUES (:'provider_secret_id'::uuid, 'platform', :'provider_ciphertext');
+INSERT INTO s3_providers (id, name, endpoint_url, provider_region, credential_secret_id, is_active)
+VALUES (:'provider_id'::uuid, :'provider_name', :'provider_endpoint', :'provider_region', :'provider_secret_id'::uuid, true);
 INSERT INTO regions (id, slug, display_name, s3_provider_id, status, routing_mode)
 VALUES (:'region_id'::uuid, :'region_slug', :'region_name', :'provider_id'::uuid, 'active', 'active');
 INSERT INTO infrastructure_audit_log (id, actor_identifier, source_ip, action, resource_type, resource_id, changes)
 VALUES
-  (gen_random_uuid(), 'install.sh', 'local', 'create', 's3_provider', :'provider_id'::uuid, jsonb_build_object('provider_type', :'provider_type', 'endpoint_url', :'provider_endpoint', 'provider_region', :'provider_region', 'is_active', true)),
+  (gen_random_uuid(), 'install.sh', 'local', 'create', 's3_provider', :'provider_id'::uuid, jsonb_build_object('name', :'provider_name', 'endpoint_url', :'provider_endpoint', 'provider_region', :'provider_region', 'is_active', true)),
   (gen_random_uuid(), 'install.sh', 'local', 'create', 'region', :'region_id'::uuid, jsonb_build_object('slug', :'region_slug', 'display_name', :'region_name', 'status', 'active', 's3_provider_id', :'provider_id'));
 COMMIT;
 SQL
   then
-    "${compose[@]}" exec -T -e BAO_ADDR=http://127.0.0.1:8200 -e "BAO_TOKEN=$(env_value OPENBAO_ROOT_TOKEN)" openbao \
-      bao kv delete "cplane/platform/s3/providers/$provider_id" >/dev/null || true
     exit 1
   fi
 
@@ -247,41 +318,36 @@ ON CONFLICT (service) DO UPDATE SET gc_access_key_id=EXCLUDED.gc_access_key_id, 
 SQL
 )"
 registry_storage_id="$(printf '%s\n' "$registry_storage_id" | head -n 1)"
-run_quiet "${root_bao[@]}" kv put "cplane/platform/s3/access-keys/$(env_value REGISTRY_STORAGE_S3_ACCESSKEY)" \
-  kind=distribution "credential_id=$registry_storage_id" "secret_access_key=$(env_value REGISTRY_STORAGE_S3_SECRETKEY)"
-run_quiet "${root_bao[@]}" kv put "cplane/platform/s3/access-keys/$(env_value REGISTRY_STORAGE_S3_GC_ACCESSKEY)" \
-  kind=distribution_gc "credential_id=$registry_storage_id" "secret_access_key=$(env_value REGISTRY_STORAGE_S3_GC_SECRETKEY)"
-if ! "${root_bao[@]}" kv get -field=key "cplane/storage/sse-c/$registry_storage_id" >/dev/null 2>&1; then
-  run_quiet "${root_bao[@]}" kv put "cplane/storage/sse-c/$registry_storage_id" "key=$(openssl rand -base64 32 | tr -d '\n')"
-fi
-
 echo "Ensuring registry backing bucket..."
 registry_provider_id="$(env_value REGISTRY_STORAGE_S3_PROVIDER_ID)"
 registry_bucket="$(env_value REGISTRY_STORAGE_S3_PHYSICAL_BUCKET)"
 registry_bucket="${registry_bucket:-$(env_value REGISTRY_STORAGE_S3_BUCKET)}"
 registry_provider="$("${compose[@]}" exec -T postgresd psql -U cplane -d cplane -At -F $'\t' -v provider_id="$registry_provider_id" <<'SQL'
-SELECT endpoint_url, provider_region, provider_type::text
-FROM s3_providers
-WHERE id=:'provider_id'::uuid AND is_active=true;
+SELECT provider.endpoint_url, provider.provider_region, provider.name, secret.ciphertext
+FROM s3_providers provider
+JOIN secret ON secret.id=provider.credential_secret_id AND secret.scope='platform'
+WHERE provider.id=:'provider_id'::uuid AND provider.is_active=true;
 SQL
 )"
-IFS=$'\t' read -r registry_endpoint registry_region registry_provider_type <<< "$registry_provider"
-if [ -z "$registry_endpoint" ] || [ -z "$registry_region" ] || [ -z "$registry_provider_type" ]; then
+IFS=$'\t' read -r registry_endpoint registry_region registry_provider_name registry_provider_ciphertext <<< "$registry_provider"
+if [ -z "$registry_endpoint" ] || [ -z "$registry_region" ] || [ -z "$registry_provider_name" ] || [ -z "$registry_provider_ciphertext" ]; then
   echo "Registry S3 provider is not active" >&2
   exit 1
 fi
 
-bao=("${compose[@]}" exec -T -e BAO_ADDR=http://127.0.0.1:8200 -e "BAO_TOKEN=$(env_value OPENBAO_ROOT_TOKEN)" openbao bao kv get)
-registry_access_key="$("${bao[@]}" -field=access_key_id "cplane/platform/s3/providers/$registry_provider_id")"
-registry_secret_key="$("${bao[@]}" -field=secret_access_key "cplane/platform/s3/providers/$registry_provider_id")"
-registry_session_token="$("${bao[@]}" -field=session_token "cplane/platform/s3/providers/$registry_provider_id" 2>/dev/null || true)"
+provider_plaintext_b64="$("${root_bao[@]}" write -field=plaintext transit/decrypt/platform "ciphertext=$registry_provider_ciphertext")"
+provider_payload="$(printf '%s' "$provider_plaintext_b64" | openssl base64 -A -d)"
+registry_access_key="$(printf '%s' "$provider_payload" | sed -n 's/.*"access_key_id":"\([^"]*\)".*/\1/p')"
+registry_secret_key="$(printf '%s' "$provider_payload" | sed -n 's/.*"secret_access_key":"\([^"]*\)".*/\1/p')"
+registry_session_token="$(printf '%s' "$provider_payload" | sed -n 's/.*"session_token":"\([^"]*\)".*/\1/p')"
+unset provider_plaintext_b64 provider_payload registry_provider_ciphertext
 registry_bucket_url="${registry_endpoint%/}/$registry_bucket"
 s3=(curl --silent --show-error --aws-sigv4 "aws:amz:$registry_region:s3" --user "$registry_access_key:$registry_secret_key")
 [ -z "$registry_session_token" ] || s3+=(-H "x-amz-security-token: $registry_session_token")
 bucket_status="$("${s3[@]}" -o /dev/null -w '%{http_code}' --head "$registry_bucket_url" || true)"
 if [ "$bucket_status" = 404 ]; then
   create=("${s3[@]}" --fail -X PUT)
-  if [ "$registry_provider_type" = aws_s3 ] && [ "$registry_region" != us-east-1 ]; then
+  if [ "$registry_region" != us-east-1 ]; then
     create+=(-H 'Content-Type: application/xml' --data "<CreateBucketConfiguration xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><LocationConstraint>$registry_region</LocationConstraint></CreateBucketConfiguration>")
   fi
   "${create[@]}" "$registry_bucket_url"
@@ -291,7 +357,7 @@ elif [ "$bucket_status" != 200 ]; then
 fi
 unset registry_secret_key registry_session_token
 
-services=(storage ui api registry control-plane worker)
+services=(ingress storage ui api registry control-plane worker)
 echo "Starting C-Plane ($mode)..."
 "${compose[@]}" up -d --build "${services[@]}"
 echo "C-Plane is installed"

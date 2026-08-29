@@ -367,22 +367,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/organization/{organization_id}/registry/maintenance": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["maintenance_status"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/organization/{organization_id}/registry/repositories": {
         parameters: {
             query?: never;
@@ -479,6 +463,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/registry/maintenance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["maintenance_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/registry/token": {
         parameters: {
             query?: never;
@@ -505,6 +505,22 @@ export interface paths {
         get: operations["health_check"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/organizations/{organization_id}/transit-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["provision_tenant_key"];
         delete?: never;
         options?: never;
         head?: never;
@@ -556,6 +572,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
+            prefix: string;
         };
         BucketObjectResponse: {
             etag?: string | null;
@@ -623,6 +640,7 @@ export interface components {
         CreateAccessTokenRequest: {
             bucket_permissions: components["schemas"]["BucketPermissionRequest"][];
             name: string;
+            prefix?: string;
         };
         CreateBucketRequest: {
             name: string;
@@ -894,6 +912,7 @@ export interface components {
             credential_id: string;
             /** Format: uuid */
             organization_id?: string | null;
+            prefix: string;
             /** Format: uuid */
             project_id?: string | null;
         };
@@ -903,6 +922,7 @@ export interface components {
             bucket_name: string;
             can_read: boolean;
             can_write: boolean;
+            is_deleting: boolean;
             physical_bucket_name: string;
             /** Format: uuid */
             provider_id: string;
@@ -927,8 +947,8 @@ export interface components {
         S3ProviderCredentials: {
             access_key_id: string;
             endpoint_url: string;
+            name: string;
             provider_region?: string | null;
-            provider_type: string;
         };
         TimelineResponse: {
             created_at: string;
@@ -2520,29 +2540,6 @@ export interface operations {
             };
         };
     };
-    maintenance_status: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Organization ID */
-                organization_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Registry maintenance state */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RegistryMaintenanceResponse"];
-                };
-            };
-        };
-    };
     list_repositories: {
         parameters: {
             query?: never;
@@ -2938,6 +2935,26 @@ export interface operations {
             };
         };
     };
+    maintenance_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Registry maintenance state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistryMaintenanceResponse"];
+                };
+            };
+        };
+    };
     issue_token: {
         parameters: {
             query: {
@@ -2995,6 +3012,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    provision_tenant_key: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tenant Transit key provisioned */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

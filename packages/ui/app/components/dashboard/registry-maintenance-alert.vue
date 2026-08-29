@@ -1,10 +1,6 @@
 <script setup lang="ts">
-const props = defineProps<{ organizationId: string }>()
-
-const endpoint = computed(() =>
-  `/api/cplane/organization/${props.organizationId as ':organization_id'}/registry/maintenance` as const
-)
-const { data: maintenance, refresh } = await useFetch(endpoint)
+const endpoint = '/api/registry/maintenance' as const
+const { data: maintenance, refresh } = await useCplaneFetch(endpoint)
 
 let refreshTimer: ReturnType<typeof setInterval> | undefined
 onMounted(() => {

@@ -43,8 +43,8 @@ async function fetchBranches() {
   branchesLoading.value = true
   try {
     const [data, projectEnvironmentsList] = await Promise.all([
-      $fetch(`/api/cplane/organization/${props.organizationId as ':organization_id'}/databases/postgres/${props.databaseId as ':database_id'}/branches` as const),
-      $fetch(`/api/cplane/organization/${props.organizationId as ':organization_id'}/projects/${props.projectId as ':project_id'}/environments` as const),
+      cplaneFetch(`/api/organization/${props.organizationId as ':organization_id'}/databases/postgres/${props.databaseId as ':database_id'}/branches` as const),
+      cplaneFetch(`/api/organization/${props.organizationId as ':organization_id'}/projects/${props.projectId as ':project_id'}/environments` as const),
     ])
     projectEnvironments.value = projectEnvironmentsList
     branches.value = data.map(b => ({
@@ -62,8 +62,8 @@ async function linkBranch(pb: Environment) {
   linkBranchModalOpen.value = false
   busy.value = true
   try {
-    const created = await $fetch(
-      `/api/cplane/organization/${props.organizationId as ':organization_id'}/databases/postgres/${props.databaseId as ':database_id'}/branches` as const,
+    const created = await cplaneFetch(
+      `/api/organization/${props.organizationId as ':organization_id'}/databases/postgres/${props.databaseId as ':database_id'}/branches` as const,
       { method: 'POST', body: { branch_id: pb.id } }
     )
     branches.value = [...branches.value, { ...created, _name: pb.name }]
@@ -80,7 +80,7 @@ onMounted(() => { fetchBranches() })
 async function unlinkBranch(b: DatabaseBranch & { _name: string }) {
   busy.value = true
   try {
-    await $fetch(`/api/cplane/organization/${props.organizationId as ':organization_id'}/databases/postgres/${props.databaseId as ':database_id'}/branches/${b.branch_id as ':branch_id'}` as const, { method: 'DELETE' })
+    await cplaneFetch(`/api/organization/${props.organizationId as ':organization_id'}/databases/postgres/${props.databaseId as ':database_id'}/branches/${b.branch_id as ':branch_id'}` as const, { method: 'DELETE' })
     branches.value = branches.value.filter(br => br.id !== b.id)
     toast.add({ title: `Deleted ${b._name}`, color: 'success' })
   } catch {
@@ -94,7 +94,7 @@ async function unlinkBranch(b: DatabaseBranch & { _name: string }) {
 async function handleDelete() {
   deleting.value = true
   try {
-    await $fetch(`/api/cplane/organization/${props.organizationId as ':organization_id'}/databases/postgres/${props.databaseId as ':database_id'}` as const, { method: 'DELETE' })
+    await cplaneFetch(`/api/organization/${props.organizationId as ':organization_id'}/databases/postgres/${props.databaseId as ':database_id'}` as const, { method: 'DELETE' })
     deleteModalOpen.value = false
     emit('deleted')
   } catch {

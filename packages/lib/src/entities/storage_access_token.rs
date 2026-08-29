@@ -1,0 +1,31 @@
+use sea_orm::entity::prelude::*;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
+#[sea_orm(table_name = "storage_access_token")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub credential_id: Uuid,
+    pub organization_id: Uuid,
+    pub project_id: Uuid,
+    pub name: String,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::credential::Entity",
+        from = "Column::CredentialId",
+        to = "super::credential::Column::Id",
+        on_delete = "Cascade"
+    )]
+    Credential,
+}
+
+impl Related<super::credential::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Credential.def()
+    }
+}
+
+impl ActiveModelBehavior for ActiveModel {}

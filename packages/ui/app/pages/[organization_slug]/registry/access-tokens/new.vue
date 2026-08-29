@@ -16,9 +16,9 @@ const loading = ref(false)
 const error = ref('')
 const created = ref<CreatedRegistryAccessToken | null>(null)
 const repositoriesUrl = computed(() => organizationId.value
-  ? `/api/cplane/organization/${organizationId.value as ':organization_id'}/registry/repositories` as const
+  ? `/api/organization/${organizationId.value as ':organization_id'}/registry/repositories` as const
   : '')
-const { data: repositories } = await useFetch(repositoriesUrl, { default: () => [] })
+const { data: repositories } = await useCplaneFetch(repositoriesUrl, { default: () => [] })
 
 watch(repositories, (items) => {
   for (const repository of items) {
@@ -48,7 +48,7 @@ async function createToken() {
   loading.value = true
   error.value = ''
   try {
-    created.value = await $fetch(`/api/cplane/organization/${organizationId.value as ':organization_id'}/registry/access-tokens` as const, {
+    created.value = await cplaneFetch(`/api/organization/${organizationId.value as ':organization_id'}/registry/access-tokens` as const, {
       method: 'POST',
       body: { name: name.value.trim(), repository_permissions: selectedPermissions.value },
     })

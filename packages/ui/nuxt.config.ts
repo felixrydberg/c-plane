@@ -1,6 +1,7 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   runtimeConfig: {
+    backendUrl: 'http://localhost:8080',
     controlPlaneUrl: '',
     cplaneServiceToken: '',
     public: {
@@ -47,7 +48,7 @@ export default defineNuxtConfig({
     minify: true,
     sourceMap: false,
     routeRules: {
-      '/api/**': {
+      '/ui-api/**': {
         cors: true,
         headers: {
           'Access-Control-Allow-Origin': '*',

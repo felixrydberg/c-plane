@@ -6,8 +6,9 @@ import { ICONS } from '~/utils/icons'
 const props = defineProps<{ organizationId: string; projectId: string }>()
 const route = useRoute()
 const toast = useToast()
-const endpoint = computed(() => `/api/cplane/organization/${props.organizationId as ':organization_id'}/projects/${props.projectId as ':project_id'}/storage/access-tokens` as const)
-const { data: tokens, status, refresh } = await useFetch(endpoint, { default: () => [] })
+const isOwner = computed(() => useStore().organization?.member?.role === 'owner')
+const endpoint = computed(() => `/api/organization/${props.organizationId as ':organization_id'}/projects/${props.projectId as ':project_id'}/storage/access-tokens` as const)
+const { data: tokens, status, refresh } = await useCplaneFetch(endpoint, { default: () => [] })
 const revokingId = ref('')
 const refreshing = ref(false)
 const search = ref('')
@@ -21,7 +22,7 @@ const filteredTokens = computed(() => {
 async function revoke(token: NonNullable<typeof tokens.value>[number]) {
   revokingId.value = token.id
   try {
-    await $fetch(`/api/cplane/organization/${props.organizationId as ':organization_id'}/projects/${props.projectId as ':project_id'}/storage/access-tokens/${token.id as ':token_id'}` as const, { method: 'DELETE' })
+    await cplaneFetch(`/api/organization/${props.organizationId as ':organization_id'}/projects/${props.projectId as ':project_id'}/storage/access-tokens/${token.id as ':token_id'}` as const, { method: 'DELETE' })
     await refresh()
   } catch { toast.add({ title: 'Could not revoke token', color: 'error' }) }
   finally { revokingId.value = '' }
@@ -58,7 +59,7 @@ const columns: TableColumn<NonNullable<typeof tokens.value>[number]>[] = [
     id: 'actions',
     header: '',
     meta: { class: { th: 'text-right', td: 'text-right' } },
-    cell: ({ row }) => h('div', { class: 'flex justify-end gap-2' }, [
+    cell: ({ row }) => isOwner.value ? h('div', { class: 'flex justify-end gap-2' }, [
       h(UButton, {
         icon: ICONS.pencil,
         color: 'neutral',
@@ -72,7 +73,7 @@ const columns: TableColumn<NonNullable<typeof tokens.value>[number]>[] = [
         loading: revokingId.value === row.original.id,
         onClick: () => revoke(row.original),
       }, { default: () => 'Revoke' }),
-    ]),
+    ]) : null,
   },
 ]
 </script>

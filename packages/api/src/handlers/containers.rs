@@ -151,6 +151,24 @@ fn is_exact_latest_image(image: &str) -> bool {
     image.ends_with(":latest")
 }
 
+pub(crate) fn validate_replica_count(replica_count: i32) -> Result<(), AppError> {
+    if !(1..=100).contains(&replica_count) {
+        return Err(AppError::BadRequest(
+            "Replica count must be between 1 and 100".into(),
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_port(port: i32) -> Result<(), AppError> {
+    if !(1..=65535).contains(&port) {
+        return Err(AppError::BadRequest(
+            "Port must be between 1 and 65535".into(),
+        ));
+    }
+    Ok(())
+}
+
 async fn selected_external_registry(
     tx: &impl sea_orm::ConnectionTrait,
     organization_id: Uuid,
@@ -254,6 +272,10 @@ pub async fn create_container(
     }
     if body.region_id.is_nil() {
         return Err(AppError::BadRequest("Region is required".into()));
+    }
+    validate_replica_count(body.replica_count)?;
+    if let Some(port) = body.port {
+        validate_port(port)?;
     }
 
     let container_id = Uuid::new_v4();
@@ -410,6 +432,7 @@ pub async fn list_containers(
     }
 
     let containers = container::Entity::find()
+        .filter(container::Column::OrganizationId.eq(organization_id))
         .order_by_asc(container::Column::Name)
         .all(tx)
         .await?;
@@ -614,7 +637,7 @@ async fn update_container_with_options(
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
 
-    let c = container::Entity::find()
+    let mut c = container::Entity::find()
         .filter(container::Column::Id.eq(container_id))
         .filter(container::Column::OrganizationId.eq(organization_id))
         .one(tx)
@@ -637,12 +660,20 @@ async fn update_container_with_options(
 
     if let Some(ref new_name) = body.name {
         let trimmed = new_name.trim().to_string();
-        if !trimmed.is_empty() {
-            let mut active: container::ActiveModel = c.clone().into();
-            active.name = Set(trimmed);
-            active.updated_at = Set(Utc::now().fixed_offset());
-            active.update(tx).await?;
+        if trimmed.is_empty() {
+            return Err(AppError::BadRequest("Name is required".into()));
         }
+        let mut active: container::ActiveModel = c.clone().into();
+        active.name = Set(trimmed);
+        active.updated_at = Set(Utc::now().fixed_offset());
+        c = active.update(tx).await?;
+    }
+
+    if let Some(replica_count) = body.replica_count {
+        validate_replica_count(replica_count)?;
+    }
+    if let Some(port) = body.port {
+        validate_port(port)?;
     }
 
     let mut new_version: Option<container_version::Model> = None;
@@ -730,6 +761,17 @@ async fn update_container_with_options(
 
     events::record(tx, organization_id, c.project_id, "container:updated", serde_json::json!({"summary": format!("Updated container '{}'", c.name), "target_id": container_id.to_string(), "environment_id": environment.id.to_string()}), auth.actor_id).await?;
 
+    let latest_version = match new_version {
+        Some(v) => Some(v),
+        None => {
+            container_version::Entity::find()
+                .filter(container_version::Column::ContainerId.eq(container_id))
+                .order_by_desc(container_version::Column::Version)
+                .one(tx)
+                .await?
+        }
+    };
+
     scoped.commit().await?;
     if let Some(revision_id) = compute_revision {
         agent::emit_compute(
@@ -741,41 +783,21 @@ async fn update_container_with_options(
         .await?;
     }
 
-    let scoped2 = tenant_db.begin_scoped_transaction().await?;
-    let tx2 = scoped2.connection();
-
-    let updated = container::Entity::find_by_id(container_id)
-        .one(tx2)
-        .await?
-        .unwrap();
-
-    let latest_version = if let Some(v) = new_version {
-        Some(v)
-    } else {
-        container_version::Entity::find()
-            .filter(container_version::Column::ContainerId.eq(container_id))
-            .order_by_desc(container_version::Column::Version)
-            .one(tx2)
-            .await?
-    };
-
-    scoped2.commit().await?;
-
     Ok(Json(ContainerResponse {
-        id: updated.id,
-        organization_id: updated.organization_id,
-        name: updated.name,
+        id: c.id,
+        organization_id: c.organization_id,
+        name: c.name,
         current_version: latest_version.map(|v| resolve_latest_version(&v)),
         project_id: Some(c.project_id),
-        region_id: updated.region_id,
-        created_at: updated.created_at.to_string(),
-        updated_at: updated.updated_at.to_string(),
+        region_id: c.region_id,
+        created_at: c.created_at.to_string(),
+        updated_at: c.updated_at.to_string(),
     }))
 }
 
 #[cfg(test)]
 mod redeploy_tests {
-    use super::is_exact_latest_image;
+    use super::{is_exact_latest_image, validate_port, validate_replica_count};
 
     #[test]
     fn only_exact_latest_images_can_be_redeployed() {
@@ -783,6 +805,20 @@ mod redeploy_tests {
         assert!(is_exact_latest_image("registry.example.com/app:latest"));
         assert!(!is_exact_latest_image("nginx:Latest"));
         assert!(!is_exact_latest_image("nginx:latest@sha256:abc"));
+    }
+
+    #[test]
+    fn replica_and_port_ranges_are_enforced() {
+        assert!(validate_replica_count(1).is_ok());
+        assert!(validate_replica_count(0).is_err());
+        assert!(validate_replica_count(-3).is_err());
+        assert!(validate_replica_count(101).is_err());
+
+        assert!(validate_port(80).is_ok());
+        assert!(validate_port(65535).is_ok());
+        assert!(validate_port(0).is_err());
+        assert!(validate_port(-80).is_err());
+        assert!(validate_port(65536).is_err());
     }
 }
 

@@ -44,6 +44,7 @@ export type Sdk = {
   }
   internal: {
     provider_credentials: Operation<"/internal/s3-providers/{provider_id}/credentials", 'get'>
+    provision_tenant_key: Operation<"/internal/organizations/{organization_id}/transit-key", 'post'>
     resolve_access_token: Operation<"/internal/s3-access-tokens/resolve/{access_key}", 'get'>
   }
   projects: {
@@ -68,7 +69,7 @@ export type Sdk = {
     list_access_tokens: Operation<"/api/organization/{organization_id}/registry/access-tokens", 'get'>
     list_external_registries: Operation<"/api/organization/{organization_id}/registry/external-registries", 'get'>
     list_repositories: Operation<"/api/organization/{organization_id}/registry/repositories", 'get'>
-    maintenance_status: Operation<"/api/organization/{organization_id}/registry/maintenance", 'get'>
+    maintenance_status: Operation<"/api/registry/maintenance", 'get'>
     rename_external_registry: Operation<"/api/organization/{organization_id}/registry/external-registries/{registry_id}", 'patch'>
     revoke_access_token: Operation<"/api/organization/{organization_id}/registry/access-tokens/{token_id}", 'delete'>
     rotate_external_registry_token: Operation<"/api/organization/{organization_id}/registry/external-registries/{registry_id}/rotate-token", 'post'>
@@ -128,6 +129,7 @@ export const createSdk = (options: SdkOptions = {}): Sdk => {
     },
     internal: {
       provider_credentials: (...args: Parameters<Operation<"/internal/s3-providers/{provider_id}/credentials", 'get'>>) => client.GET("/internal/s3-providers/{provider_id}/credentials", ...args),
+      provision_tenant_key: (...args: Parameters<Operation<"/internal/organizations/{organization_id}/transit-key", 'post'>>) => client.POST("/internal/organizations/{organization_id}/transit-key", ...args),
       resolve_access_token: (...args: Parameters<Operation<"/internal/s3-access-tokens/resolve/{access_key}", 'get'>>) => client.GET("/internal/s3-access-tokens/resolve/{access_key}", ...args)
     },
     projects: {
@@ -152,7 +154,7 @@ export const createSdk = (options: SdkOptions = {}): Sdk => {
       list_access_tokens: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/access-tokens", 'get'>>) => client.GET("/api/organization/{organization_id}/registry/access-tokens", ...args),
       list_external_registries: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/external-registries", 'get'>>) => client.GET("/api/organization/{organization_id}/registry/external-registries", ...args),
       list_repositories: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/repositories", 'get'>>) => client.GET("/api/organization/{organization_id}/registry/repositories", ...args),
-      maintenance_status: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/maintenance", 'get'>>) => client.GET("/api/organization/{organization_id}/registry/maintenance", ...args),
+      maintenance_status: (...args: Parameters<Operation<"/api/registry/maintenance", 'get'>>) => client.GET("/api/registry/maintenance", ...args),
       rename_external_registry: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/external-registries/{registry_id}", 'patch'>>) => client.PATCH("/api/organization/{organization_id}/registry/external-registries/{registry_id}", ...args),
       revoke_access_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/access-tokens/{token_id}", 'delete'>>) => client.DELETE("/api/organization/{organization_id}/registry/access-tokens/{token_id}", ...args),
       rotate_external_registry_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/external-registries/{registry_id}/rotate-token", 'post'>>) => client.POST("/api/organization/{organization_id}/registry/external-registries/{registry_id}/rotate-token", ...args),

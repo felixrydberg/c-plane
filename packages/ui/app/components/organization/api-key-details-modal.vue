@@ -27,7 +27,7 @@ const apiKeyStateSchema = z.object({
 
 type ApiKeyState = z.infer<typeof apiKeyStateSchema>;
 
-const { data, status, refresh } = await useFetch<ApiKeyDetails>(`/api/organization/${props.organizationId as ':organization_id'}/api-keys/${props.apiKeyId as ':api_key_id'}`);
+const { data, status, refresh } = await useFetch<ApiKeyDetails>(`/ui-api/organization/${props.organizationId as ':organization_id'}/api-keys/${props.apiKeyId as ':api_key_id'}`);
 
 const apiKeyDetails = computed(() => data.value as ApiKeyDetails | undefined);
 const isLoading = computed(() => status.value === 'pending');
@@ -68,7 +68,7 @@ const onSubmit = async () => {
   if (!apiKeyDetails.value) return;
 
   try {
-    await $fetch(`/api/organization/${props.organizationId as ':organization_id'}/api-keys/${props.apiKeyId as ':api_key_id'}`, {
+    await $fetch(`/ui-api/organization/${props.organizationId as ':organization_id'}/api-keys/${props.apiKeyId as ':api_key_id'}`, {
       method: 'PUT',
       body: {
         name: state.value.name,

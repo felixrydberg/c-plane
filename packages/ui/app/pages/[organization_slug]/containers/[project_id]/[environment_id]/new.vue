@@ -14,9 +14,9 @@ const projectId = computed(() => route.params.project_id?.toString() || null)
 const environmentId = computed(() => route.params.environment_id?.toString() || null)
 const projectName = computed(() => store.projects.find(p => p.id === projectId.value)?.name ?? projectId.value ?? '')
 const externalRegistriesUrl = computed(() => orgId.value
-  ? `/api/cplane/organization/${orgId.value as ':organization_id'}/registry/external-registries` as const
+  ? `/api/organization/${orgId.value as ':organization_id'}/registry/external-registries` as const
   : '')
-const { data: externalRegistries } = await useFetch(externalRegistriesUrl, { default: () => [] })
+const { data: externalRegistries } = await useCplaneFetch(externalRegistriesUrl, { default: () => [] })
 const externalRegistryId = ref('none')
 const externalRegistryItems = computed(() => [
   { label: 'No external registry', value: 'none' },
@@ -46,7 +46,7 @@ const regionId = ref('')
 
 onMounted(async () => {
   if (!orgId.value) return
-  try { regions.value = await $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/regions` as const) } catch { regions.value = [] }
+  try { regions.value = await cplaneFetch(`/api/organization/${orgId.value as ':organization_id'}/regions` as const) } catch { regions.value = [] }
 })
 
 interface EnvRow { key: string; value: string }
@@ -73,7 +73,7 @@ async function handleCreate() {
     }
     if (Object.keys(envObj).length > 0) body.env = envObj
 
-    await $fetch(`/api/cplane/organization/${orgId.value as ':organization_id'}/containers` as const, { method: 'POST', body })
+    await cplaneFetch(`/api/organization/${orgId.value as ':organization_id'}/containers` as const, { method: 'POST', body })
     await loadProjectEnvironments(projectId.value, environmentId.value)
     toast.add({ title: createAsDraft.value ? 'Container draft created' : 'Container created and deployed', color: 'success' })
     const path = `/${route.params.organization_slug}/containers/${projectId.value}/${environmentId.value}`

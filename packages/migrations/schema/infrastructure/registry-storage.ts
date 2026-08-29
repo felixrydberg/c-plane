@@ -3,7 +3,7 @@ import { index, pgPolicy, pgTable, text, timestamp, uniqueIndex, uuid } from "dr
 import { s3_provider } from "./durability.ts";
 import { app_tenant } from "../rls.ts";
 
-export const registry_storage = pgTable("registry_storage", {
+export const registry_storage = pgTable.withRLS("registry_storage", {
   id: uuid("id").primaryKey(),
   service: text("service").notNull().default("distribution"),
   provider_id: uuid("provider_id")
@@ -20,10 +20,4 @@ export const registry_storage = pgTable("registry_storage", {
   uniqueIndex("registry_storage_physical_bucket_name_uidx").on(table.physical_bucket_name),
   uniqueIndex("registry_storage_access_key_id_uidx").on(table.access_key_id),
   index("registry_storage_provider_id_idx").on(table.provider_id),
-  pgPolicy("registry_storage_tenant_select_rls", {
-    as: "permissive",
-    for: "select",
-    to: app_tenant,
-    using: sql`true`,
-  }),
-]).enableRLS();
+]);

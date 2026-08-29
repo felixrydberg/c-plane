@@ -8,14 +8,14 @@ use base64::{
     engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
 };
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
-use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
+use sea_orm::{ColumnTrait, ConnectionTrait, DatabaseBackend, EntityTrait, QueryFilter, Statement};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::env;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{errors::AppError, state::get_app_state};
+use crate::{errors::AppError, models::entities::registry_access_token, state::get_app_state};
 
 const REGISTRY_MAINTENANCE_MESSAGE: &str =
     "Registry is read-only for maintenance; retry after maintenance completes";
@@ -44,16 +44,13 @@ pub struct RegistryMaintenanceResponse {
 
 #[utoipa::path(
     get,
-    path = "/api/organization/{organization_id}/registry/maintenance",
-    params(("organization_id" = Uuid, Path, description = "Organization ID")),
+    path = "/api/registry/maintenance",
     responses(
         (status = 200, description = "Registry maintenance state", body = RegistryMaintenanceResponse),
     ),
     tag = "registry",
 )]
-pub async fn maintenance_status(
-    Path(_organization_id): Path<Uuid>,
-) -> Result<Json<RegistryMaintenanceResponse>, AppError> {
+pub async fn maintenance_status() -> Result<Json<RegistryMaintenanceResponse>, AppError> {
     let row = registry_maintenance_row().await?;
     let phase: String = row.try_get("", "phase").map_err(maintenance_error)?;
     let started_at = row
@@ -370,27 +367,18 @@ fn maintenance_error(error: impl std::fmt::Display) -> AppError {
 
 async fn resolve_registry_token(raw_token: &str) -> Result<Option<RegistryIdentity>, AppError> {
     let token_hash = hex::encode(Sha256::digest(raw_token.as_bytes()));
-    let row = get_app_state()
-        .identity_db
-        .connection()
-        .query_one(Statement::from_sql_and_values(
-            DatabaseBackend::Postgres,
-            "SELECT id, organization_id FROM registry_access_tokens WHERE token_hash = $1 AND revoked_at IS NULL LIMIT 1",
-            vec![token_hash.into()],
-        ))
+    let token = registry_access_token::Entity::find()
+        .filter(registry_access_token::Column::TokenHash.eq(&token_hash))
+        .filter(registry_access_token::Column::RevokedAt.is_null())
+        .one(get_app_state().identity_db.connection())
         .await
-        .map_err(|error| AppError::Internal(format!("Failed to resolve registry token: {error}")))?;
-    row.map(|row| {
-        Ok(RegistryIdentity {
-            id: row.try_get("", "id").map_err(|error| {
-                AppError::Internal(format!("Failed to resolve registry token: {error}"))
-            })?,
-            organization_id: row.try_get("", "organization_id").map_err(|error| {
-                AppError::Internal(format!("Failed to resolve registry token: {error}"))
-            })?,
-        })
-    })
-    .transpose()
+        .map_err(|error| {
+            AppError::Internal(format!("Failed to resolve registry token: {error}"))
+        })?;
+    Ok(token.map(|token| RegistryIdentity {
+        id: token.id,
+        organization_id: token.organization_id,
+    }))
 }
 
 fn apply_repository_grant(
