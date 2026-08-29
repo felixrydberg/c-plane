@@ -182,8 +182,11 @@ services:
     environment:
       DATABASE_URL: postgresql://cplane_admin:${POSTGRES_ADMIN_PASSWORD}@postgresd:5432/cplane
       REDIS_URL: redis://valkey:6379
-      WORKER_QUEUES: maintenance
+      WORKER_QUEUES: maintenance,foundation
       WORKER_CONCURRENCY: 1
+      OPENBAO_ADDR: http://openbao:8200
+      OPENBAO_ROLE_ID: ${OPENBAO_WORKER_ROLE_ID:-}
+      OPENBAO_SECRET_ID: ${OPENBAO_WORKER_SECRET_ID:-}
       REGISTRY_TOKEN_TTL_SECONDS: ${REGISTRY_TOKEN_TTL_SECONDS:-60}
       REGISTRY_STORAGE_S3_REGION: ${REGISTRY_STORAGE_S3_REGION:-us-east-1}
       REGISTRY_STORAGE_S3_REGIONENDPOINT: http://storage:8081
@@ -196,6 +199,8 @@ services:
       - ./packages/registry/config-gc.yml:/etc/distribution/config.yml:ro
     depends_on:
       migrate:
+        condition: service_completed_successfully
+      openbao-init:
         condition: service_completed_successfully
       storage:
         condition: service_started

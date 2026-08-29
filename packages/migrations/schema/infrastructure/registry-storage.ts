@@ -20,10 +20,4 @@ export const registry_storage = pgTable.withRLS("registry_storage", {
   uniqueIndex("registry_storage_physical_bucket_name_uidx").on(table.physical_bucket_name),
   uniqueIndex("registry_storage_access_key_id_uidx").on(table.access_key_id),
   index("registry_storage_provider_id_idx").on(table.provider_id),
-  pgPolicy("registry_storage_tenant_select_rls", {
-    as: "permissive",
-    for: "select",
-    to: app_tenant,
-    using: sql`true`,
-  }),
 ]);

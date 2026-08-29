@@ -9,11 +9,12 @@ if (process.argv.includes('--help') || process.argv.includes('-h')) {
   process.exit(0)
 }
 
-const accessKey = 'CP35CE39A8F0324463976BD1DE9F49664F'
-const secretKey = '4b9245019f8045deb982b20aef3615302a0adfb4970c44dbb2be71b993d34d25'
-const bucket = 'test'
+const accessKey = ''
+const secretKey = ''
+const bucket = ''
 
-const endpoint = new URL('https://storage.674571401.xyz')
+// const endpoint = new URL('https://storage.674571401.xyz')
+const endpoint = new URL('http://localhost:8081')
 const region = 'eu-north-1'
 const iterations = 1
 const concurrency = 1

@@ -29,6 +29,8 @@ pub struct ResolvedCredential {
     pub organization_id: Option<Uuid>,
     pub project_id: Option<Uuid>,
     pub credential_id: Uuid,
+    #[serde(default)]
+    pub prefix: String,
     pub bucket_permissions: Vec<BucketPermission>,
     pub secret_access_key: String,
 }
@@ -50,6 +52,7 @@ pub struct CredentialIdentity {
     pub organization_id: Option<Uuid>,
     pub project_id: Option<Uuid>,
     pub credential_id: Uuid,
+    pub prefix: String,
     pub bucket_permissions: Vec<BucketPermission>,
 }
 
@@ -136,6 +139,7 @@ impl S3Access for CredentialResolver {
                     organization_id: identity.organization_id,
                     project_id: identity.project_id,
                     credential_id: identity.credential_id,
+                    prefix: identity.prefix,
                     bucket_permissions: identity.bucket_permissions,
                 });
                 Ok(())
@@ -189,6 +193,7 @@ mod tests {
             "organization_id": (access_key == "VALID").then(Uuid::nil),
             "project_id": (access_key == "VALID").then(Uuid::nil),
             "credential_id": Uuid::nil(),
+            "prefix": "backups/production/",
             "bucket_permissions": [{
                 "bucket_id": Uuid::nil(),
                 "bucket_name": "uploads",

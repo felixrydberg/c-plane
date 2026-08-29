@@ -3169,6 +3169,55 @@
         }
       }
     },
+    "/internal/organizations/{organization_id}/transit-key": {
+      "post": {
+        "tags": [
+          "internal"
+        ],
+        "operationId": "provision_tenant_key",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Tenant Transit key provisioned"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "serviceToken": []
+          }
+        ]
+      }
+    },
     "/internal/s3-access-tokens/resolve/{access_key}": {
       "get": {
         "tags": [
@@ -3310,6 +3359,7 @@
           "id",
           "name",
           "access_key_id",
+          "prefix",
           "created_at"
         ],
         "properties": {
@@ -3324,6 +3374,9 @@
             "format": "uuid"
           },
           "name": {
+            "type": "string"
+          },
+          "prefix": {
             "type": "string"
           }
         }
@@ -3549,6 +3602,9 @@
             }
           },
           "name": {
+            "type": "string"
+          },
+          "prefix": {
             "type": "string"
           }
         }
@@ -4549,6 +4605,9 @@
             ],
             "format": "uuid"
           },
+          "prefix": {
+            "type": "string"
+          },
           "project_id": {
             "type": [
               "string",
@@ -4668,14 +4727,14 @@
           "endpoint_url": {
             "type": "string"
           },
+          "name": {
+            "type": "string"
+          },
           "provider_region": {
             "type": [
               "string",
               "null"
             ]
-          },
-          "name": {
-            "type": "string"
           }
         }
       },

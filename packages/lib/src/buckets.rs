@@ -1,7 +1,7 @@
 use crate::secrets;
 use aws_sdk_s3::{
     error::ProvideErrorMetadata,
-    types::{BucketLocationConstraint, CreateBucketConfiguration},
+    types::{BucketLocationConstraint, CreateBucketConfiguration, Delete, ObjectIdentifier},
 };
 use sea_orm::{ConnectionTrait, DatabaseBackend, Statement, Value};
 use serde::Serialize;
@@ -11,6 +11,7 @@ pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Result<T> = std::result::Result<T, Error>;
 
 const BUCKET_PREFIX: &str = "cp-";
+const DELETE_BATCH_SIZE: i32 = 1_000;
 
 pub async fn create(
     client: &aws_sdk_s3::Client,
@@ -37,6 +38,82 @@ pub async fn create(
 
 pub fn physical_bucket_name(id: Uuid) -> String {
     format!("{BUCKET_PREFIX}{}", id.simple())
+}
+
+pub async fn is_empty(client: &aws_sdk_s3::Client, bucket_id: Uuid) -> Result<bool> {
+    let output = match client
+        .list_objects_v2()
+        .bucket(physical_bucket_name(bucket_id))
+        .max_keys(1)
+        .send()
+        .await
+    {
+        Ok(output) => output,
+        Err(error)
+            if error.as_service_error().and_then(|error| error.code()) == Some("NoSuchBucket") =>
+        {
+            return Ok(true);
+        }
+        Err(error) => return Err(Box::new(error)),
+    };
+    Ok(output.contents().is_empty())
+}
+
+pub async fn empty(client: &aws_sdk_s3::Client, bucket_id: Uuid) -> Result<()> {
+    let bucket = physical_bucket_name(bucket_id);
+    let mut continuation_token = None;
+
+    loop {
+        let output = match client
+            .list_objects_v2()
+            .bucket(&bucket)
+            .set_continuation_token(continuation_token)
+            .max_keys(DELETE_BATCH_SIZE)
+            .send()
+            .await
+        {
+            Ok(output) => output,
+            Err(error)
+                if error.as_service_error().and_then(|error| error.code())
+                    == Some("NoSuchBucket") =>
+            {
+                return Ok(());
+            }
+            Err(error) => return Err(Box::new(error)),
+        };
+        let objects = output
+            .contents()
+            .iter()
+            .filter_map(|object| object.key())
+            .map(|key| ObjectIdentifier::builder().key(key).build())
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        if !objects.is_empty() {
+            let delete = Delete::builder()
+                .set_objects(Some(objects))
+                .quiet(true)
+                .build()?;
+            let response = client
+                .delete_objects()
+                .bucket(&bucket)
+                .delete(delete)
+                .send()
+                .await?;
+            if !response.errors().is_empty() {
+                return Err(Box::new(std::io::Error::other(format!(
+                    "S3 provider returned {} object deletion errors",
+                    response.errors().len()
+                ))));
+            }
+            continuation_token = None;
+            continue;
+        }
+
+        continuation_token = output.next_continuation_token().map(str::to_owned);
+        if continuation_token.is_none() {
+            return Ok(());
+        }
+    }
 }
 
 pub async fn delete(client: &aws_sdk_s3::Client, bucket_id: Uuid) -> Result<()> {

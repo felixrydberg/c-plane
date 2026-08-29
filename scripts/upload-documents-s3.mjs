@@ -21,12 +21,12 @@ const positiveInt = (name, fallback) => {
   return value
 }
 
-const accessKey = env('S3_ACCESS_KEY_ID', 'CPF7ECD9A20E9A4C059CDA709498E10ABA')
-const secretKey = env('S3_SECRET_ACCESS_KEY', 'edccfbe3d5fd4e1fb1b4d6ac74ceb4ae66de02646bd74077989f79377402acd9')
-const bucket = env('S3_BUCKET', 'test')
-if (!bucket) throw new Error('Set S3_BUCKET.')
+const accessKey = ''
+const secretKey = ''
+const bucket = ''
 
-const endpoint = new URL(env('S3_ENDPOINT', 'http://localhost:8081'))
+// const endpoint = new URL('https://storage.674571401.xyz')
+const endpoint = new URL('http://localhost:8081')
 const region = env('AWS_REGION', 'eu-north-1')
 const count = positiveInt('S3_DOCUMENT_COUNT', 100)
 const concurrency = positiveInt('S3_DOCUMENT_CONCURRENCY', 8)
