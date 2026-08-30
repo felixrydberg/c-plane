@@ -17,33 +17,9 @@ pub(crate) async fn run(
     }
 }
 
-pub(crate) async fn prepare_completion(
-    database: &DatabaseConnection,
-    config: &Config,
-    consumer: &str,
-    job: &Job,
-) -> Result<()> {
-    if registry::handles(job) {
-        registry::prepare_completion(database, config, consumer, job).await?;
-    }
-    Ok(())
-}
-
-pub(crate) async fn record_completion(
-    transaction: &DatabaseTransaction,
-    job: &Job,
-    status: &str,
-    last_error: Option<String>,
-) -> Result<()> {
-    if registry::handles(job) {
-        registry::record_completion(transaction, job, status, last_error).await?;
-    }
-    Ok(())
-}
-
-pub(crate) async fn complete(config: &Config, job: &Job) -> Result<()> {
-    if registry::handles(job) {
-        registry::complete(config).await?;
+pub(crate) async fn record_completion(transaction: &DatabaseTransaction, job: &Job) -> Result<()> {
+    if registry::handles(job) && job.organization_id.is_some() {
+        registry::record_completion(transaction, job).await?;
     }
     Ok(())
 }

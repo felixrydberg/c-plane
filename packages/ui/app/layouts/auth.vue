@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '@nuxt/ui'
 import DashboardProjectsDeploymentAlert from '~/components/dashboard/projects/deployment-alert.vue'
-import DashboardRegistryMaintenanceAlert from '~/components/dashboard/registry-maintenance-alert.vue'
 import { ICONS } from '~/utils/icons'
 
 const store = useStore();
@@ -158,7 +157,6 @@ const items = computed<NavigationMenuItem[]>(() => [
         <dashboard-projects-nav />
       </div>
 
-      <DashboardRegistryMaintenanceAlert />
       <DashboardProjectsDeploymentAlert v-if="store.environment" />
 
       <div class="flex-1 bg-default px-6 py-6 lg:px-8">

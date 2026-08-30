@@ -46,6 +46,7 @@ export type Sdk = {
     provider_credentials: Operation<"/internal/s3-providers/{provider_id}/credentials", 'get'>
     provision_tenant_key: Operation<"/internal/organizations/{organization_id}/transit-key", 'post'>
     resolve_access_token: Operation<"/internal/s3-access-tokens/resolve/{access_key}", 'get'>
+    resolve_registry: Operation<"/internal/organizations/{organization_id}/registry", 'get'>
   }
   projects: {
     create_project: Operation<"/api/organization/{organization_id}/projects", 'post'>
@@ -59,20 +60,23 @@ export type Sdk = {
     list_regions: Operation<"/api/organization/{organization_id}/regions", 'get'>
   }
   registry: {
+    activate_registry: Operation<"/api/organization/{organization_id}/registry", 'put'>
     create_access_token: Operation<"/api/organization/{organization_id}/registry/access-tokens", 'post'>
     create_external_registry: Operation<"/api/organization/{organization_id}/registry/external-registries", 'post'>
     create_repository: Operation<"/api/organization/{organization_id}/registry/repositories", 'post'>
     delete_external_registry: Operation<"/api/organization/{organization_id}/registry/external-registries/{registry_id}", 'delete'>
     delete_repository: Operation<"/api/organization/{organization_id}/registry/repositories/{repository_id}", 'delete'>
     get_access_token: Operation<"/api/organization/{organization_id}/registry/access-tokens/{token_id}", 'get'>
+    get_garbage_collection: Operation<"/api/organization/{organization_id}/registry/garbage-collection", 'get'>
+    get_registry: Operation<"/api/organization/{organization_id}/registry", 'get'>
     issue_token: Operation<"/api/registry/token", 'get'>
     list_access_tokens: Operation<"/api/organization/{organization_id}/registry/access-tokens", 'get'>
     list_external_registries: Operation<"/api/organization/{organization_id}/registry/external-registries", 'get'>
     list_repositories: Operation<"/api/organization/{organization_id}/registry/repositories", 'get'>
-    maintenance_status: Operation<"/api/registry/maintenance", 'get'>
     rename_external_registry: Operation<"/api/organization/{organization_id}/registry/external-registries/{registry_id}", 'patch'>
     revoke_access_token: Operation<"/api/organization/{organization_id}/registry/access-tokens/{token_id}", 'delete'>
     rotate_external_registry_token: Operation<"/api/organization/{organization_id}/registry/external-registries/{registry_id}/rotate-token", 'post'>
+    run_garbage_collection: Operation<"/api/organization/{organization_id}/registry/garbage-collection", 'post'>
     update_access_token: Operation<"/api/organization/{organization_id}/registry/access-tokens/{token_id}", 'patch'>
   }
   storage: {
@@ -130,7 +134,8 @@ export const createSdk = (options: SdkOptions = {}): Sdk => {
     internal: {
       provider_credentials: (...args: Parameters<Operation<"/internal/s3-providers/{provider_id}/credentials", 'get'>>) => client.GET("/internal/s3-providers/{provider_id}/credentials", ...args),
       provision_tenant_key: (...args: Parameters<Operation<"/internal/organizations/{organization_id}/transit-key", 'post'>>) => client.POST("/internal/organizations/{organization_id}/transit-key", ...args),
-      resolve_access_token: (...args: Parameters<Operation<"/internal/s3-access-tokens/resolve/{access_key}", 'get'>>) => client.GET("/internal/s3-access-tokens/resolve/{access_key}", ...args)
+      resolve_access_token: (...args: Parameters<Operation<"/internal/s3-access-tokens/resolve/{access_key}", 'get'>>) => client.GET("/internal/s3-access-tokens/resolve/{access_key}", ...args),
+      resolve_registry: (...args: Parameters<Operation<"/internal/organizations/{organization_id}/registry", 'get'>>) => client.GET("/internal/organizations/{organization_id}/registry", ...args)
     },
     projects: {
       create_project: (...args: Parameters<Operation<"/api/organization/{organization_id}/projects", 'post'>>) => client.POST("/api/organization/{organization_id}/projects", ...args),
@@ -144,20 +149,23 @@ export const createSdk = (options: SdkOptions = {}): Sdk => {
       list_regions: (...args: Parameters<Operation<"/api/organization/{organization_id}/regions", 'get'>>) => client.GET("/api/organization/{organization_id}/regions", ...args)
     },
     registry: {
+      activate_registry: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry", 'put'>>) => client.PUT("/api/organization/{organization_id}/registry", ...args),
       create_access_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/access-tokens", 'post'>>) => client.POST("/api/organization/{organization_id}/registry/access-tokens", ...args),
       create_external_registry: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/external-registries", 'post'>>) => client.POST("/api/organization/{organization_id}/registry/external-registries", ...args),
       create_repository: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/repositories", 'post'>>) => client.POST("/api/organization/{organization_id}/registry/repositories", ...args),
       delete_external_registry: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/external-registries/{registry_id}", 'delete'>>) => client.DELETE("/api/organization/{organization_id}/registry/external-registries/{registry_id}", ...args),
       delete_repository: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/repositories/{repository_id}", 'delete'>>) => client.DELETE("/api/organization/{organization_id}/registry/repositories/{repository_id}", ...args),
       get_access_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/access-tokens/{token_id}", 'get'>>) => client.GET("/api/organization/{organization_id}/registry/access-tokens/{token_id}", ...args),
+      get_garbage_collection: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/garbage-collection", 'get'>>) => client.GET("/api/organization/{organization_id}/registry/garbage-collection", ...args),
+      get_registry: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry", 'get'>>) => client.GET("/api/organization/{organization_id}/registry", ...args),
       issue_token: (...args: Parameters<Operation<"/api/registry/token", 'get'>>) => client.GET("/api/registry/token", ...args),
       list_access_tokens: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/access-tokens", 'get'>>) => client.GET("/api/organization/{organization_id}/registry/access-tokens", ...args),
       list_external_registries: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/external-registries", 'get'>>) => client.GET("/api/organization/{organization_id}/registry/external-registries", ...args),
       list_repositories: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/repositories", 'get'>>) => client.GET("/api/organization/{organization_id}/registry/repositories", ...args),
-      maintenance_status: (...args: Parameters<Operation<"/api/registry/maintenance", 'get'>>) => client.GET("/api/registry/maintenance", ...args),
       rename_external_registry: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/external-registries/{registry_id}", 'patch'>>) => client.PATCH("/api/organization/{organization_id}/registry/external-registries/{registry_id}", ...args),
       revoke_access_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/access-tokens/{token_id}", 'delete'>>) => client.DELETE("/api/organization/{organization_id}/registry/access-tokens/{token_id}", ...args),
       rotate_external_registry_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/external-registries/{registry_id}/rotate-token", 'post'>>) => client.POST("/api/organization/{organization_id}/registry/external-registries/{registry_id}/rotate-token", ...args),
+      run_garbage_collection: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/garbage-collection", 'post'>>) => client.POST("/api/organization/{organization_id}/registry/garbage-collection", ...args),
       update_access_token: (...args: Parameters<Operation<"/api/organization/{organization_id}/registry/access-tokens/{token_id}", 'patch'>>) => client.PATCH("/api/organization/{organization_id}/registry/access-tokens/{token_id}", ...args)
     },
     storage: {

@@ -120,26 +120,26 @@ services:
           path: ./packages/migrations/package.json
 
   registry:
-    image: registry:3.1.1
+    build:
+      context: .
+      dockerfile: Dockerfile.registry
     restart: unless-stopped
-    entrypoint: ["/bin/sh", "/etc/distribution/start.sh"]
     environment:
-      - REGISTRY_HTTP_SECRET=${REGISTRY_HTTP_SECRET}
-      - REGISTRY_TOKEN_SECRET=${REGISTRY_TOKEN_SECRET}
-      - REGISTRY_AUTH_TOKEN_REALM=${REGISTRY_TOKEN_REALM}
-      - REGISTRY_AUTH_TOKEN_SERVICE=${REGISTRY_HOST}
-      - REGISTRY_AUTH_TOKEN_ISSUER=${REGISTRY_TOKEN_ISSUER:-cplane-registry}
-      - REGISTRY_STORAGE_S3_REGION
-      - REGISTRY_STORAGE_S3_REGIONENDPOINT=http://storage:8081
-      - REGISTRY_STORAGE_S3_FORCEPATHSTYLE=true
-      - REGISTRY_STORAGE_S3_SECURE=false
-      - REGISTRY_STORAGE_S3_BUCKET
-      - REGISTRY_STORAGE_S3_ACCESSKEY
-      - REGISTRY_STORAGE_S3_SECRETKEY
+      REGISTRY_HTTP_SECRET: ${REGISTRY_HTTP_SECRET}
+      REGISTRY_TOKEN_SECRET: ${REGISTRY_TOKEN_SECRET}
+      REGISTRY_TOKEN_ISSUER: ${REGISTRY_TOKEN_ISSUER:-cplane-registry}
+      REGISTRY_HOST: ${REGISTRY_HOST}
+      REGISTRY_AUTH_CPLANE_REALM: ${REGISTRY_TOKEN_REALM}
+      REGISTRY_AUTH_CPLANE_SERVICE: ${REGISTRY_HOST}
+      REGISTRY_AUTH_CPLANE_ISSUER: ${REGISTRY_TOKEN_ISSUER:-cplane-registry}
+      REGISTRY_STORAGE_CPLANE_CONTROLPLANEURL: http://api:8080
+      REGISTRY_STORAGE_CPLANE_SERVICETOKEN: ${CPLANE_SERVICE_TOKEN}
+      CPLANE_API_URL: http://api:8080
+      CPLANE_SERVICE_TOKEN: ${CPLANE_SERVICE_TOKEN}
     volumes:
       - ./packages/registry/config.yml:/etc/distribution/config.yml:ro
-      - ./packages/registry/start.sh:/etc/distribution/start.sh:ro
     depends_on:
+      - api
       - storage
 
   control-plane:
@@ -174,22 +174,14 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://cplane_admin:${POSTGRES_ADMIN_PASSWORD}@postgresd:5432/cplane
-      REDIS_URL: redis://valkey:6379
       WORKER_QUEUES: maintenance,foundation
       WORKER_CONCURRENCY: 1
+      RUST_LOG: ${WORKER_LOG:-c_plane_worker=info}
       OPENBAO_ADDR: http://openbao:8200
       OPENBAO_ROLE_ID: ${OPENBAO_WORKER_ROLE_ID:-}
       OPENBAO_SECRET_ID: ${OPENBAO_WORKER_SECRET_ID:-}
-      REGISTRY_TOKEN_TTL_SECONDS: ${REGISTRY_TOKEN_TTL_SECONDS:-60}
-      REGISTRY_STORAGE_S3_REGION: ${REGISTRY_STORAGE_S3_REGION}
-      REGISTRY_STORAGE_S3_REGIONENDPOINT: http://storage:8081
-      REGISTRY_STORAGE_S3_FORCEPATHSTYLE: "true"
-      REGISTRY_STORAGE_S3_SECURE: "false"
-      REGISTRY_STORAGE_S3_BUCKET: ${REGISTRY_STORAGE_S3_BUCKET}
-      REGISTRY_STORAGE_S3_ACCESSKEY: ${REGISTRY_STORAGE_S3_GC_ACCESSKEY}
-      REGISTRY_STORAGE_S3_SECRETKEY: ${REGISTRY_STORAGE_S3_GC_SECRETKEY}
-    volumes:
-      - ./packages/registry/config-gc.yml:/etc/distribution/config.yml:ro
+      REGISTRY_INTERNAL_URL: ${REGISTRY_INTERNAL_URL:-http://registry:5000}
+      CPLANE_SERVICE_TOKEN: ${CPLANE_SERVICE_TOKEN}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -197,9 +189,9 @@ services:
         condition: service_completed_successfully
       storage:
         condition: service_started
-      valkey:
-        condition: service_started
       api:
+        condition: service_started
+      registry:
         condition: service_started
 
   postgresd:

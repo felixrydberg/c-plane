@@ -26,12 +26,12 @@ pub enum Relation {
     )]
     Credential,
     #[sea_orm(
-        belongs_to = "super::storage::Entity",
+        belongs_to = "super::bucket::Entity",
         from = "Column::BucketId",
-        to = "super::storage::Column::BucketId",
+        to = "super::bucket::Column::Id",
         on_delete = "Restrict"
     )]
-    Storage,
+    Bucket,
 }
 
 impl Related<super::credential::Entity> for Entity {
@@ -40,9 +40,9 @@ impl Related<super::credential::Entity> for Entity {
     }
 }
 
-impl Related<super::storage::Entity> for Entity {
+impl Related<super::bucket::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Storage.def()
+        Relation::Bucket.def()
     }
 }
 

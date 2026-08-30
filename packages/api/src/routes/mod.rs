@@ -11,6 +11,7 @@ use crate::handlers::external_registries;
 use crate::handlers::health::health_check;
 use crate::handlers::internal_s3;
 use crate::handlers::internal_secrets;
+use crate::handlers::managed_registry;
 use crate::handlers::postgres_databases;
 use crate::handlers::projects;
 use crate::handlers::regions;
@@ -39,6 +40,10 @@ pub fn create_routes() -> Router {
             "/s3-providers/{provider_id}/credentials",
             get(internal_s3::provider_credentials),
         )
+        .route(
+            "/organizations/{organization_id}/registry",
+            get(managed_registry::resolve_registry),
+        )
         .layer(middleware::from_fn(internal_auth::authorize));
 
     Router::new()
@@ -46,10 +51,6 @@ pub fn create_routes() -> Router {
         // Unauthenticated / non-AuthContext routes: no scope needed.
         .route("/health", get(health_check))
         .route("/api/registry/token", get(registry::issue_token))
-        .route(
-            "/api/registry/maintenance",
-            get(registry::maintenance_status),
-        )
         .scoped_route(
             "/api/organization/{organization_id}/regions",
             [scoped::get(
@@ -210,6 +211,28 @@ pub fn create_routes() -> Router {
         .scoped_route(
             "/api/organization/{organization_id}/storage/buckets/{bucket_id}/objects/download",
             [scoped::get(storage_objects::download_object, "bucket:read", Role::Member)],
+        )
+        .scoped_route(
+            "/api/organization/{organization_id}/registry",
+            [
+                scoped::get(managed_registry::get_registry, "registry:read", Role::Member),
+                scoped::put(managed_registry::activate_registry, "registry:create", Role::Admin),
+            ],
+        )
+        .scoped_route(
+            "/api/organization/{organization_id}/registry/garbage-collection",
+            [
+                scoped::get(
+                    managed_registry::get_garbage_collection,
+                    "registry:read",
+                    Role::Member,
+                ),
+                scoped::post(
+                    managed_registry::run_garbage_collection,
+                    "registry:update",
+                    Role::Admin,
+                ),
+            ],
         )
         .scoped_route(
             "/api/organization/{organization_id}/registry/repositories",
@@ -612,6 +635,19 @@ mod tests {
         );
         assert_eq!(registered_scope("GET", "/health"), None);
         assert_eq!(registered_scope("GET", "/api/registry/token"), None);
-        assert_eq!(registered_scope("GET", "/api/registry/maintenance"), None);
+        assert_eq!(
+            registered_scope(
+                "GET",
+                "/api/organization/{organization_id}/registry/garbage-collection"
+            ),
+            Some("registry:read")
+        );
+        assert_eq!(
+            registered_scope(
+                "POST",
+                "/api/organization/{organization_id}/registry/garbage-collection"
+            ),
+            Some("registry:update")
+        );
     }
 }

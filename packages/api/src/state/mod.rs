@@ -109,8 +109,11 @@ pub async fn create_app_state() -> Result<State, AppError> {
     let tenant_db = connect_database(&config.tenant_database_url, "app_tenant").await?;
 
     let secrets = Client::from_env()?;
-    let s3_providers =
-        S3ProviderClient::new(identity_db.clone(), secrets.clone(), config.redis_url.clone());
+    let s3_providers = S3ProviderClient::new(
+        identity_db.clone(),
+        secrets.clone(),
+        config.redis_url.clone(),
+    );
     let storage_client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(5))
         .read_timeout(Duration::from_secs(30))

@@ -13,7 +13,7 @@ use crate::{
     errors::AppError,
     handlers::{
         external_registries::load_secret,
-        registry::{organization_slug, sign_repository_token},
+        registry::{organization_slug, sign_repository_access},
     },
     models::entities::external_registry,
 };
@@ -62,23 +62,27 @@ async fn internal_registry(
 ) -> Result<(Reference, RegistryAuth, Client), AppError> {
     let slug = organization_slug(organization_id).await?;
     let repository_name = internal_repository_name(reference.repository(), &slug)?;
-    let token = sign_repository_token(organization_id, repository_name, &["pull"]).await?;
+    let access = sign_repository_access(organization_id, repository_name, &["pull"]).await?;
     let internal_url =
         env::var("REGISTRY_INTERNAL_URL").unwrap_or_else(|_| "http://registry:5000".into());
     let (registry, protocol) = internal_endpoint(&internal_url)?;
     let network_reference = match (reference.tag(), reference.digest()) {
         (Some(tag), None) => {
-            Reference::with_tag(registry.clone(), reference.repository().into(), tag.into())
+            Reference::with_tag(registry.clone(), access.repository_name.clone(), tag.into())
         }
         (None, Some(digest)) => Reference::with_digest(
             registry.clone(),
-            reference.repository().into(),
+            access.repository_name.clone(),
             digest.into(),
         ),
         _ => unreachable!("parsed image references must have a tag or digest"),
     };
     let client = oci_client(protocol)?;
-    Ok((network_reference, RegistryAuth::Bearer(token), client))
+    Ok((
+        network_reference,
+        RegistryAuth::Bearer(access.token),
+        client,
+    ))
 }
 
 async fn external_registry(
