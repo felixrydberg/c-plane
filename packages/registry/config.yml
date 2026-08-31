@@ -2,29 +2,35 @@ version: 0.1
 
 log:
   level: info
+  formatter: json
 
 http:
   addr: :5000
+  debug:
+    addr: :5001
+    prometheus:
+      enabled: true
+      path: /metrics
 
 storage:
-  s3:
-    region: us-east-1
-    bucket: cplane-registry
-    secure: true
-    v4auth: true
+  cplane:
+    controlplaneurl: http://api:8080
+    servicetoken: ""
+    cachecapacity: 256
+    cachettl: 15m
   redirect:
     disable: true
   delete:
     enabled: true
+  maintenance:
+    uploadpurging:
+      enabled: false
 
 auth:
-  token:
+  cplane:
     realm: http://localhost:8080/api/registry/token
     service: localhost:5000
     issuer: cplane-registry
-    jwks: /run/registry-token-jwks.json
-    signingalgorithms:
-      - HS256
 
 validation:
   disabled: false

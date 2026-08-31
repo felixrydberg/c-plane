@@ -14,10 +14,10 @@ if [ "$status" != 401 ]; then
 fi
 printf '%-14s OK (%s)\n' Registry "$status"
 
-registry_repository="${REGISTRY_REPOSITORY:-project-x}"
-registry_username="${REGISTRY_USERNAME:-}"
-registry_password="${REGISTRY_PASSWORD:-}"
-if [ -t 0 ]; then
+registry_repository="${REGISTRY_REPOSITORY:-test}"
+registry_username="${REGISTRY_USERNAME:-${CPLANE_REGISTRY_USERNAME:-}}"
+registry_password="${REGISTRY_PASSWORD:-${CPLANE_REGISTRY_PASSWORD:-}}"
+if [ -t 0 ] && { [ -z "$registry_username" ] || [ -z "$registry_password" ]; }; then
   read -r -p "Registry username${registry_username:+ [$registry_username]}: " input
   registry_username="${input:-$registry_username}"
   read -r -s -p 'Registry password: ' input
@@ -33,8 +33,15 @@ fi
 image_tag="${SMOKE_TAG:-$registry_repository}"
 image="$registry_host/$registry_username/$registry_repository:$image_tag"
 printf '%s' "$registry_password" | docker login "$registry_host" --username "$registry_username" --password-stdin
-docker pull "${SMOKE_IMAGE:-alpine:3.20}"
-docker tag "${SMOKE_IMAGE:-alpine:3.20}" "$image"
+if [ -n "${SMOKE_IMAGE:-}" ]; then
+  docker pull "$SMOKE_IMAGE"
+  docker tag "$SMOKE_IMAGE" "$image"
+else
+  docker build --pull -t "$image" - <<'EOF'
+FROM alpine:3.20
+RUN dd if=/dev/urandom of=/10mb bs=1048576 count=10
+EOF
+fi
 docker push "$image"
 token_response="$(curl -sS --user "$registry_username:$registry_password" --get "$token_url" \
   --data-urlencode "service=$registry_host" \

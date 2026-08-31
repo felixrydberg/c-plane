@@ -22,12 +22,6 @@ h1 { margin: 0; font-size: 27px; }
 .intro, .card, table, .state { background: white; border: 1px solid #dfe5e1; border-radius: 12px; }
 .intro { padding: 24px; }
 .intro h2 { margin-top: 0; }
-.maintenance, .maintenance-banner { margin-top: 16px; padding: 18px 20px; border: 1px solid #e1b84b; border-radius: 12px; background: #fff8dd; }
-.maintenance h2 { margin: 0 0 8px; }
-.maintenance p { max-width: 760px; }
-.maintenance-status { color: #695214; }
-.maintenance-banner { display: grid; gap: 4px; margin: 0 0 18px; color: #664e0d; }
-.maintenance-banner span, .confirmation { font-size: 13px; }
 .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
 .card { display: grid; gap: 24px; padding: 20px; }
 .card span { color: #607066; font-size: 13px; }

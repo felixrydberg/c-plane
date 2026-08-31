@@ -1,0 +1,2 @@
+ALTER TABLE "regions" ALTER COLUMN "s3_provider_id" SET NOT NULL;--> statement-breakpoint
+ALTER TABLE "regions" DROP CONSTRAINT "regions_s3_provider_id_s3_providers_id_fkey", ADD CONSTRAINT "regions_s3_provider_id_s3_providers_id_fkey" FOREIGN KEY ("s3_provider_id") REFERENCES "s3_providers"("id") ON DELETE RESTRICT;

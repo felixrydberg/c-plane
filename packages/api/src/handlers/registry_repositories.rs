@@ -13,7 +13,7 @@ use crate::{
 };
 
 use super::{
-    databases::verify_org_access, registry::sign_repository_token,
+    databases::verify_org_access, registry::sign_repository_access,
     registry_access_tokens::record_event,
 };
 
@@ -64,6 +64,7 @@ pub async fn create_repository(
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
+    super::managed_registry::require_active(tx, organization_id).await?;
     if registry_repository::Entity::find()
         .filter(registry_repository::Column::OrganizationId.eq(organization_id))
         .filter(registry_repository::Column::Name.eq(name))
@@ -131,7 +132,7 @@ pub async fn list_repositories(
         (status = 204, description = "Registry repository deleted"),
         (status = 403, description = "Organization access required"),
         (status = 404, description = "Registry repository not found"),
-        (status = 503, description = "Registry is read-only for maintenance", body = crate::errors::ErrorResponse),
+        (status = 503, description = "Registry is unavailable during maintenance", body = crate::errors::ErrorResponse),
         (status = 409, description = "Registry cleanup conflict"),
         (status = 500, description = "Registry cleanup failed"),
     ),
@@ -183,18 +184,18 @@ async fn delete_repository_images(
 ) -> Result<(), AppError> {
     let base_url =
         std::env::var("REGISTRY_INTERNAL_URL").unwrap_or_else(|_| "http://registry:5000".into());
-    let token =
-        sign_repository_token(organization_id, repository_name, &["pull", "delete"]).await?;
+    let access =
+        sign_repository_access(organization_id, repository_name, &["pull", "delete"]).await?;
     let client = Client::builder()
         .timeout(Duration::from_secs(10))
         .build()
         .map_err(|error| {
             AppError::Internal(format!("Registry cleanup client setup failed: {error}"))
         })?;
-    let tags_url = registry_url(&base_url, repository_name, "tags/list")?;
+    let tags_url = registry_url(&base_url, &access.repository_name, "tags/list")?;
     let response = client
         .get(tags_url)
-        .bearer_auth(&token)
+        .bearer_auth(&access.token)
         .send()
         .await
         .map_err(|error| AppError::Internal(format!("Registry cleanup request failed: {error}")))?;
@@ -215,11 +216,15 @@ async fn delete_repository_images(
         .unwrap_or_default();
     let mut digests = std::collections::HashSet::new();
     for tag in tags {
-        let manifest_url = registry_url(&base_url, repository_name, &format!("manifests/{tag}"))?;
+        let manifest_url = registry_url(
+            &base_url,
+            &access.repository_name,
+            &format!("manifests/{tag}"),
+        )?;
         let response = client
             .head(manifest_url)
             .header(reqwest::header::ACCEPT, MANIFEST_ACCEPT)
-            .bearer_auth(&token)
+            .bearer_auth(&access.token)
             .send()
             .await
             .map_err(|error| {
@@ -246,11 +251,14 @@ async fn delete_repository_images(
         digests.insert(digest.to_owned());
     }
     for digest in digests {
-        let manifest_url =
-            registry_url(&base_url, repository_name, &format!("manifests/{digest}"))?;
+        let manifest_url = registry_url(
+            &base_url,
+            &access.repository_name,
+            &format!("manifests/{digest}"),
+        )?;
         let response = client
             .delete(manifest_url)
-            .bearer_auth(&token)
+            .bearer_auth(&access.token)
             .send()
             .await
             .map_err(|error| {
@@ -309,7 +317,7 @@ fn valid_repository_name(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::valid_repository_name;
+    use super::{registry_url, valid_repository_name};
 
     #[test]
     fn validates_distribution_repository_names() {
@@ -317,5 +325,15 @@ mod tests {
         assert!(!valid_repository_name("Backend"));
         assert!(!valid_repository_name("backend//api"));
         assert!(!valid_repository_name("backend..api"));
+    }
+
+    #[test]
+    fn builds_registry_urls_with_the_organization_scope() {
+        let url = registry_url("http://registry:5000", "acme/backend/api", "tags/list").unwrap();
+
+        assert_eq!(
+            url.as_str(),
+            "http://registry:5000/v2/acme/backend/api/tags/list"
+        );
     }
 }

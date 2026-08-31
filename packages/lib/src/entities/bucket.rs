@@ -14,7 +14,11 @@ pub struct Model {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
-#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "foundation_bucket_status")]
+#[sea_orm(
+    rs_type = "String",
+    db_type = "Enum",
+    enum_name = "foundation_bucket_status"
+)]
 pub enum BucketStatus {
     #[sea_orm(string_value = "active")]
     Active,
@@ -38,6 +42,8 @@ pub enum Relation {
         on_delete = "Restrict"
     )]
     SseSecret,
+    #[sea_orm(has_many = "super::bucket_grant::Entity")]
+    BucketGrant,
 }
 
 impl Related<super::region::Entity> for Entity {
@@ -49,6 +55,12 @@ impl Related<super::region::Entity> for Entity {
 impl Related<super::secret::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::SseSecret.def()
+    }
+}
+
+impl Related<super::bucket_grant::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::BucketGrant.def()
     }
 }
 

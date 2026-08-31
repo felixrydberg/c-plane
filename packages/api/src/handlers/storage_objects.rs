@@ -293,7 +293,7 @@ async fn bucket_descriptor(
     scoped.commit().await?;
     let platform_sse_key = get_app_state()
         .s3_providers
-        .bucket_key(bucket.bucket_id, organization_id)
+        .bucket_key(bucket.bucket_id, Some(organization_id))
         .await?;
     Ok(StorageBucketDescriptor {
         organization_id,

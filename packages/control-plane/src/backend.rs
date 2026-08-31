@@ -186,16 +186,6 @@ pub async fn list_audit_logs() -> Result<Vec<AuditLog>> {
     server::list_audit_logs().await
 }
 
-#[get("/api/registry/garbage-collection")]
-pub async fn registry_gc_status() -> Result<RegistryGcStatus> {
-    server::registry_gc_status().await
-}
-
-#[post("/api/registry/garbage-collection", headers: dioxus::fullstack::HeaderMap)]
-pub async fn enqueue_registry_gc() -> Result<()> {
-    server::enqueue_registry_gc(&headers).await
-}
-
 #[cfg(feature = "server")]
 pub mod server {
     use super::*;
@@ -634,84 +624,6 @@ pub mod server {
             .await
             .map_err(CapturedError::from_display)?;
         rows.iter().map(|row| text(row, "access_key_id")).collect()
-    }
-
-    async fn registry_access_keys() -> Result<Vec<String>> {
-        let rows = database()
-            .await?
-            .query_all(statement(
-                "SELECT access_key_id FROM registry_storage WHERE service='distribution' AND access_key_id IS NOT NULL UNION SELECT gc_access_key_id AS access_key_id FROM registry_maintenance WHERE service='distribution' AND gc_access_key_id IS NOT NULL",
-                vec![],
-            ))
-            .await
-            .map_err(CapturedError::from_display)?;
-        rows.iter().map(|row| text(row, "access_key_id")).collect()
-    }
-
-    pub async fn registry_gc_status() -> Result<RegistryGcStatus> {
-        let row = database()
-            .await?
-            .query_one(statement(
-                "SELECT phase, active_job_id::text, started_at::text, finished_at::text, last_result, last_error FROM registry_maintenance WHERE service='distribution'",
-                vec![],
-            ))
-            .await
-            .map_err(CapturedError::from_display)?
-            .ok_or_else(|| CapturedError::msg("registry maintenance is not configured"))?;
-        Ok(RegistryGcStatus {
-            phase: text(&row, "phase")?,
-            active_job_id: optional_text(&row, "active_job_id")?,
-            started_at: optional_text(&row, "started_at")?,
-            finished_at: optional_text(&row, "finished_at")?,
-            last_result: optional_text(&row, "last_result")?,
-            last_error: optional_text(&row, "last_error")?,
-        })
-    }
-
-    pub async fn enqueue_registry_gc(headers: &HeaderMap) -> Result<()> {
-        let access_keys = registry_access_keys().await?;
-        let job_id = Uuid::new_v4();
-        let transaction = database()
-            .await?
-            .begin()
-            .await
-            .map_err(CapturedError::from_display)?;
-        transaction
-            .execute(statement(
-                "INSERT INTO worker_queue (id, queue_name, job_type, dedupe_key, payload) VALUES ($1::uuid, 'maintenance', 'registry_gc', 'registry_gc', '{}'::jsonb)",
-                vec![job_id.into()],
-            ))
-            .await
-            .map_err(|error| CapturedError::msg(format!("registry garbage collection is already queued: {error}")))?;
-        let updated = transaction
-            .execute(statement(
-                "UPDATE registry_maintenance SET phase='queued', active_job_id=$1::uuid, started_at=NOW(), finished_at=NULL, last_result=NULL, last_error=NULL, updated_at=NOW() WHERE service='distribution' AND phase='idle'",
-                vec![job_id.into()],
-            ))
-            .await
-            .map_err(CapturedError::from_display)?;
-        if updated.rows_affected() != 1 {
-            return Err(CapturedError::msg(
-                "registry garbage collection is already running",
-            ));
-        }
-        audit(
-            &transaction,
-            headers,
-            "enqueue",
-            "worker_queue",
-            Some(&job_id.to_string()),
-            json!({"queue": "maintenance", "job_type": "registry_gc"}),
-        )
-        .await?;
-        transaction
-            .commit()
-            .await
-            .map_err(CapturedError::from_display)?;
-        if let Err(error) = invalidate_access_token_caches(&access_keys).await {
-            eprintln!("failed to invalidate registry permissions after enqueue: {error}");
-        }
-        Ok(())
     }
 
     pub async fn create_s3_provider(

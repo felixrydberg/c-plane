@@ -1,114 +1,85 @@
-# Container registry architecture
+# Container Registry architecture
 
 ## Model
 
-C-Plane runs one shared CNCF Distribution service for all organizations. It is
-a separate container in the control-plane Compose stack; it does not run in
-Kubernetes and does not store image data in the API container or Postgres.
-
-Each organization owns one repository namespace:
+C-Plane runs one shared CNCF Distribution service, but every organization
+explicitly activates its own managed Registry in one immutable region. Each
+managed Registry owns one tenant credential and one foundation bucket.
 
 ```text
 registry.platform.dev/{organization-slug}/{repository}:{tag}
+
+organization
+  -> managed_registry
+  -> credential -> bucket_grant -> foundation bucket
 ```
 
-Repositories are created explicitly in C-Plane. Postgres stores their identity
-and access grants. Distribution stores manifests, upload state, and layers in
-one S3-compatible bucket. Blobs are content-addressed and deduplicated across
-the registry, while repository metadata remains namespaced by organization.
+The shared Registry process is stateless. Organization-specific storage is
+selected from the authenticated request rather than from process-wide S3
+configuration.
 
-## Components
+## Request path
 
-```text
-CI or container runtime
-  -> Distribution
-  -> C-Plane registry token endpoint
-  -> identity database
-  -> Distribution
-  -> Storage service
-  -> assigned S3-compatible provider
-```
+1. Distribution challenges the client for a C-Plane Registry token.
+2. The API validates the Registry access token and repository grant, then signs
+   a short-lived HS256 token containing the immutable organization ID.
+3. The Registry middleware and C-Plane Distribution access controller validate
+   that token; the middleware resolves the organization's current managed
+   Registry metadata from the API and the access controller checks repository
+   actions.
+4. The delegating storage driver selects a cached Distribution S3 driver for
+   that organization.
+5. The driver signs ordinary S3 requests with the organization's tenant
+   credential and the logical bucket name `registry`.
+6. Storage resolves the credential through `bucket_grant`, derives the logical
+   name through `managed_registry`, and proxies to the foundation bucket's S3
+   provider with its SSE-C key.
 
-- **Distribution** implements the OCI Registry v2 push and pull protocol.
-- **C-Plane API** authenticates organization credentials and signs short-lived
-  repository access tokens.
-- **Identity database** stores repositories, dedicated registry access tokens,
-  per-token pull/push grants, and organization membership. Only token hashes
-  and display prefixes are retained.
-- **Storage service** authenticates Distribution's platform service
-  credential, resolves the global registry bucket, and supplies its encryption
-  key when proxying provider requests.
-- **S3-compatible storage** durably stores all registry content behind Storage.
+Distribution never receives a provider credential, physical bucket name, or
+SSE-C key. The foundation bucket is not shared with another organization.
 
-## Authentication and tenant isolation
+## Isolation
 
-Distribution does not model tenants. The C-Plane token endpoint provides the
-tenant boundary:
+- Registry access tokens cannot authenticate to control-plane API routes.
+- Control-plane API keys cannot authenticate to Distribution.
+- Repository scopes must begin with the organization slug resolved from the
+  immutable organization ID in the Registry JWT.
+- Catalog access is disabled.
+- A Registry credential has exactly one read/write grant to its foundation
+  bucket. Grant uniqueness remains `(credential_id, bucket_id)`.
 
-1. The client requests a repository operation from Distribution.
-2. Distribution responds with a Bearer challenge naming the public C-Plane
-   token endpoint and required repository scope.
-3. The client authenticates to that token endpoint with the organization slug
-   as username and a dedicated registry access token as password.
-4. C-Plane hashes and resolves the registry token, verifies the username matches
-   its organization, loads the repository grant, and intersects the requested
-   actions with that grant. It only grants existing repository names beginning
-   with that organization's slug and signs a short-lived HS256 JWT.
-5. The client retries the repository operation with the JWT. Distribution
-   verifies it and permits only its repository and actions.
+## Lifecycle and garbage collection
 
-Registry access tokens cannot authenticate to normal control-plane API routes,
-and control-plane API keys cannot authenticate to Distribution.
-Registry-wide scopes such as catalog access are never issued, preventing one
-organization from listing another organization's repositories. Credentials are
-limited to the repositories selected when they are created.
+Activation is synchronous and idempotent. It creates
+the bucket SSE secret, foundation bucket, tenant credential, grant, and
+`managed_registry` row in one organization-scoped operation. The region cannot
+be changed later and there is no standalone Registry deletion endpoint.
+Organization deletion revokes the grant and credential, deletes Registry
+metadata and secrets, and queues the existing asynchronous physical bucket
+cleanup by deleting the foundation bucket row.
 
-## Push and pull paths
+Each `managed_registry` is either `active` or `maintenance`. Distribution
+resolves that status for every authenticated request and returns an OCI-shaped
+`503` for pulls, pushes, and deletes while the affected organization is in
+maintenance; other organizations remain available.
 
-For a CI push, the pipeline logs in, builds an image tagged inside its
-organization namespace, and pushes it to Distribution. Distribution validates
-the push token and writes the OCI data through Storage to the configured
-provider.
+Activation enables a daily garbage-collection schedule at 03:00 UTC. The
+schedule stores local wall-clock time plus timezone so it stays at night across
+daylight-saving changes. An
+organization admin or owner can change or disable the schedule and queue an
+immediate run through the organization API. Each run uses an organization
+dedupe key, switches only that Registry to maintenance, and calls the Registry's
+service-authenticated internal endpoint. The Registry waits for that
+organization's in-flight requests to finish, then runs Distribution
+mark-and-sweep directly against its foundation bucket. Completion restores
+`active`, records the result, and schedules the next daily run.
 
-For a pull, Distribution validates a pull token and reads registry metadata and
-layers through Storage. Workloads should deploy immutable image digests rather
-than mutable tags.
+## Runtime
 
-## Keys and configuration
+`packages/registry` builds a Go 1.25 binary pinned to CNCF Distribution v3.1.1.
+It registers an outer request middleware and a complete delegating StorageDriver
+without forking Distribution. Its bounded, concurrency-safe driver cache is
+keyed by organization ID and invalidated by the managed Registry storage
+revision.
 
-The API and Distribution receive the same base64url-encoded 256-bit
-`REGISTRY_TOKEN_SECRET`. The API signs HS256 tokens with it; Distribution
-writes an ephemeral symmetric JWKS under `/run` at startup. A dedicated
-platform S3 service access-key pair authenticates Distribution to Storage, and
-a second pair is reserved for garbage collection.
-The singleton `registry_storage` row stores the normal credential and bucket
-assignment. The disposable `registry_maintenance` row stores the GC credential
-ID and current maintenance state. OpenBao stores each secret keyed by its
-public access-key ID at `cplane/data/platform/s3/access-keys/{access_key_id}`.
-
-The registry bucket has its own random 256-bit SSE-C key at
-`storage/sse-c/{registry_storage_id}`. Storage supplies this key to the backing
-provider; Distribution never receives it or the provider credentials. The key
-belongs to the global registry bucket rather than an organization so shared
-content-addressed layers remain readable across organization namespaces.
-
-Its runtime configuration lives in `packages/registry/config.yml`;
-installation secrets provide the public hosts, JWT secret, and Storage
-access-key pair. Garbage collection uses the auth-free
-`packages/registry/config-gc.yml`, so Worker does not receive the JWT secret.
-
-## Operational boundaries
-
-- Postgres owns repository identity and grants. Distribution owns manifests,
-  tags, layers, and upload state.
-- Manifest deletion makes blobs eligible for collection. The control plane
-  queues a `registry_gc` job in Postgres; horizontally scalable workers claim
-  the maintenance queue with `FOR UPDATE SKIP LOCKED` and run Distribution's
-  official collector. API token grants and Storage permissions make the
-  Registry read-only while the shared maintenance state is active.
-- Provider mirroring is deferred to the generic Storage design; the registry
-  initially uses one authoritative provider.
-- Quotas, organization deletion cleanup, and private external-registry
-  credentials are not part of the initial implementation.
-
-See `docs/services/registry.md` for setup and CI commands.
+See `docs/services/registry.md` for activation and client usage.

@@ -1967,6 +1967,109 @@
         "x-cplane-required-scope": "region:read"
       }
     },
+    "/api/organization/{organization_id}/registry": {
+      "get": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "get_registry",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Managed Registry configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedRegistryResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Managed Registry is not activated"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "registry:read"
+      },
+      "put": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "activate_registry",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivateManagedRegistryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Managed Registry already active",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedRegistryResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Managed Registry activated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedRegistryResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Organization or active region not found"
+          },
+          "409": {
+            "description": "Active region has no S3 provider"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "registry:create"
+      }
+    },
     "/api/organization/{organization_id}/registry/access-tokens": {
       "get": {
         "tags": [
@@ -2528,6 +2631,111 @@
         "x-cplane-required-scope": "registry:update"
       }
     },
+    "/api/organization/{organization_id}/registry/garbage-collection": {
+      "get": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "get_garbage_collection",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "description": "Items per page",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Garbage-collection status with paginated runs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryGarbageCollectionResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Managed Registry is not activated"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "registry:read"
+      },
+      "post": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "run_garbage_collection",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Garbage collection queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryGarbageCollectionResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Managed Registry is not activated"
+          },
+          "409": {
+            "description": "Garbage collection is already running"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "registry:update"
+      }
+    },
     "/api/organization/{organization_id}/registry/repositories": {
       "get": {
         "tags": [
@@ -2669,7 +2877,7 @@
             "description": "Registry cleanup failed"
           },
           "503": {
-            "description": "Registry is read-only for maintenance",
+            "description": "Registry is unavailable during maintenance",
             "content": {
               "application/json": {
                 "schema": {
@@ -3064,26 +3272,6 @@
         "x-cplane-required-scope": "bucket:read"
       }
     },
-    "/api/registry/maintenance": {
-      "get": {
-        "tags": [
-          "registry"
-        ],
-        "operationId": "maintenance_status",
-        "responses": {
-          "200": {
-            "description": "Registry maintenance state",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RegistryMaintenanceResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/registry/token": {
       "get": {
         "tags": [
@@ -3128,7 +3316,7 @@
             "description": "Invalid registry credentials"
           },
           "503": {
-            "description": "Registry is read-only for maintenance",
+            "description": "Registry is unavailable during maintenance",
             "content": {
               "application/json": {
                 "schema": {
@@ -3167,6 +3355,52 @@
             }
           }
         }
+      }
+    },
+    "/internal/organizations/{organization_id}/registry": {
+      "get": {
+        "tags": [
+          "internal"
+        ],
+        "operationId": "resolve_registry",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolvedManagedRegistry"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "serviceToken": []
+          }
+        ]
       }
     },
     "/internal/organizations/{organization_id}/transit-key": {
@@ -3378,6 +3612,18 @@
           },
           "prefix": {
             "type": "string"
+          }
+        }
+      },
+      "ActivateManagedRegistryRequest": {
+        "type": "object",
+        "required": [
+          "region_id"
+        ],
+        "properties": {
+          "region_id": {
+            "type": "string",
+            "format": "uuid"
           }
         }
       },
@@ -4256,6 +4502,36 @@
           }
         }
       },
+      "ManagedRegistryResponse": {
+        "type": "object",
+        "required": [
+          "organization_id",
+          "region_id",
+          "status",
+          "storage_revision",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "region_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "storage_revision": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
       "PaginatedResponse_ProjectResponse": {
         "type": "object",
         "required": [
@@ -4307,6 +4583,60 @@
                   "format": "uuid"
                 },
                 "updated_at": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          }
+        }
+      },
+      "PaginatedResponse_RegistryGcRunResponse": {
+        "type": "object",
+        "required": [
+          "data",
+          "pagination"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "started_at",
+                "finished_at",
+                "result"
+              ],
+              "properties": {
+                "bytes_after": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int64"
+                },
+                "bytes_before": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int64"
+                },
+                "error": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "finished_at": {
+                  "type": "string"
+                },
+                "result": {
+                  "type": "string"
+                },
+                "started_at": {
                   "type": "string"
                 }
               }
@@ -4459,26 +4789,87 @@
           }
         }
       },
-      "RegistryMaintenanceResponse": {
+      "RegistryGarbageCollectionResponse": {
         "type": "object",
         "required": [
-          "read_only"
+          "gc_runs"
         ],
         "properties": {
-          "phase": {
+          "active_job": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RegistryGcJobResponse"
+              }
+            ]
+          },
+          "gc_runs": {
+            "$ref": "#/components/schemas/PaginatedResponse_RegistryGcRunResponse"
+          }
+        }
+      },
+      "RegistryGcJobResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "trigger",
+          "available_at"
+        ],
+        "properties": {
+          "available_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "trigger": {
+            "type": "string"
+          }
+        }
+      },
+      "RegistryGcRunResponse": {
+        "type": "object",
+        "required": [
+          "started_at",
+          "finished_at",
+          "result"
+        ],
+        "properties": {
+          "bytes_after": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "bytes_before": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "error": {
             "type": [
               "string",
               "null"
             ]
           },
-          "read_only": {
-            "type": "boolean"
+          "finished_at": {
+            "type": "string"
+          },
+          "result": {
+            "type": "string"
           },
           "started_at": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": "string"
           }
         }
       },
@@ -4595,6 +4986,43 @@
           }
         }
       },
+      "ResolvedManagedRegistry": {
+        "type": "object",
+        "required": [
+          "organization_id",
+          "organization_slug",
+          "storage_revision",
+          "status",
+          "access_key_id",
+          "bucket_name",
+          "storage_endpoint_url"
+        ],
+        "properties": {
+          "access_key_id": {
+            "type": "string"
+          },
+          "bucket_name": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organization_slug": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "storage_endpoint_url": {
+            "type": "string"
+          },
+          "storage_revision": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
       "ResolvedS3AccessToken": {
         "type": "object",
         "required": [
@@ -4622,13 +5050,6 @@
           },
           "prefix": {
             "type": "string"
-          },
-          "project_id": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "uuid"
           }
         }
       },
@@ -4647,10 +5068,12 @@
         "properties": {
           "bucket_id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Foundation bucket ID."
           },
           "bucket_name": {
-            "type": "string"
+            "type": "string",
+            "description": "Logical S3 bucket name presented to the credential."
           },
           "can_read": {
             "type": "boolean"

@@ -3,9 +3,9 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait, Q
 use uuid::Uuid;
 
 use crate::{errors::AppError, services::s3_providers::S3ProviderClient};
-use lib::entities::{bucket, bucket_grant, secret, storage};
 use lib::entities::bucket::BucketStatus;
 use lib::entities::secret::SecretScope;
+use lib::entities::{bucket, bucket_grant, secret, storage};
 
 pub async fn create(
     tx: &DatabaseTransaction,

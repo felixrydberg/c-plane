@@ -19,16 +19,16 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(10);
 pub(crate) struct Config {
     pub(crate) queues: String,
     pub(crate) concurrency: usize,
-    pub(crate) redis_url: String,
     pub(crate) secrets: lib::secrets::Client,
-    pub(crate) registry_token_ttl: Duration,
-    pub(crate) registry_access_key: String,
-    pub(crate) registry_gc_access_key: String,
+    pub(crate) registry_http: reqwest::Client,
+    pub(crate) registry_internal_url: String,
+    pub(crate) service_token: String,
 }
 
 #[derive(Clone)]
 pub(crate) struct Job {
     pub(crate) id: Uuid,
+    pub(crate) organization_id: Option<Uuid>,
     pub(crate) queue_name: String,
     pub(crate) job_type: String,
     pub(crate) attempts: i32,
@@ -91,22 +91,17 @@ impl Config {
         if !(1..=64).contains(&concurrency) {
             return Err(message("WORKER_CONCURRENCY must be between 1 and 64"));
         }
-        let token_ttl_seconds = env::var("REGISTRY_TOKEN_TTL_SECONDS")
-            .unwrap_or_else(|_| "60".into())
-            .parse::<u64>()
-            .map_err(|_| message("REGISTRY_TOKEN_TTL_SECONDS must be a number"))?;
-        if token_ttl_seconds < 60 {
-            return Err(message("REGISTRY_TOKEN_TTL_SECONDS must be at least 60"));
-        }
         Ok(Self {
             queues: queues.join(","),
             concurrency,
-            redis_url: required_env("REDIS_URL")?,
             secrets: lib::secrets::Client::from_env()?,
-            registry_token_ttl: Duration::from_secs(token_ttl_seconds),
-            registry_access_key: env::var("REGISTRY_STORAGE_S3_ACCESSKEY").unwrap_or_default(),
-            registry_gc_access_key: env::var("REGISTRY_STORAGE_S3_GC_ACCESSKEY")
-                .unwrap_or_default(),
+            registry_http: reqwest::Client::builder()
+                .connect_timeout(Duration::from_secs(5))
+                .build()?,
+            registry_internal_url: required_env("REGISTRY_INTERNAL_URL")?
+                .trim_end_matches('/')
+                .to_owned(),
+            service_token: required_env("CPLANE_SERVICE_TOKEN")?,
         })
     }
 }
@@ -116,8 +111,7 @@ async fn consume(database: DatabaseConnection, config: Config, consumer: String)
         match claim_job(&database, &config.queues, &consumer).await {
             Ok(Some(job)) if job.attempts > job.max_attempts => {
                 let error = format!("maximum attempts ({}) exceeded", job.max_attempts);
-                if let Err(finish_error) =
-                    finish_job(&database, &config, &consumer, &job, Err(error)).await
+                if let Err(finish_error) = finish_job(&database, &consumer, &job, Err(error)).await
                 {
                     error!(job_id = %job.id, %finish_error, "failed to exhaust job");
                 }
@@ -125,8 +119,7 @@ async fn consume(database: DatabaseConnection, config: Config, consumer: String)
             Ok(Some(job)) => {
                 info!(job_id = %job.id, queue = job.queue_name, job_type = job.job_type, attempt = job.attempts, "job claimed");
                 if let Some(result) = run_with_lease(&database, &config, &consumer, &job).await {
-                    if let Err(finish_error) =
-                        finish_job(&database, &config, &consumer, &job, result).await
+                    if let Err(finish_error) = finish_job(&database, &consumer, &job, result).await
                     {
                         error!(job_id = %job.id, %finish_error, "failed to finish job");
                     }
@@ -150,7 +143,7 @@ async fn claim_job(
 ) -> Result<Option<Job>> {
     let row = database
         .query_one(statement(
-            "WITH candidate AS (SELECT id FROM worker_queue WHERE queue_name=ANY(string_to_array($1, ',')) AND ((status='queued' AND available_at<=NOW()) OR (status='running' AND lease_expires_at<NOW())) ORDER BY created_at, id FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE worker_queue job SET status='running', attempts=job.attempts+1, locked_by=$2, lease_expires_at=NOW()+INTERVAL '30 seconds', started_at=COALESCE(job.started_at, NOW()), updated_at=NOW() FROM candidate WHERE job.id=candidate.id RETURNING job.id, job.queue_name, job.job_type, job.attempts, job.max_attempts",
+            "WITH candidate AS (SELECT id FROM worker_queue WHERE queue_name=ANY(string_to_array($1, ',')) AND ((status='queued' AND available_at<=NOW()) OR (status='running' AND lease_expires_at<NOW())) ORDER BY created_at, id FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE worker_queue job SET status='running', attempts=job.attempts+1, locked_by=$2, lease_expires_at=NOW()+INTERVAL '30 seconds', started_at=COALESCE(job.started_at, NOW()), updated_at=NOW() FROM candidate WHERE job.id=candidate.id RETURNING job.id, job.organization_id, job.queue_name, job.job_type, job.attempts, job.max_attempts",
             vec![queues.to_owned().into(), consumer.to_owned().into()],
         ))
         .await?;
@@ -160,6 +153,7 @@ async fn claim_job(
 fn job_from_row(row: QueryResult) -> Result<Job> {
     Ok(Job {
         id: row.try_get("", "id")?,
+        organization_id: row.try_get("", "organization_id")?,
         queue_name: row.try_get("", "queue_name")?,
         job_type: row.try_get("", "job_type")?,
         attempts: row.try_get("", "attempts")?,
@@ -203,7 +197,6 @@ async fn renew_lease(database: &DatabaseConnection, job_id: Uuid, consumer: &str
 
 async fn finish_job(
     database: &DatabaseConnection,
-    config: &Config,
     consumer: &str,
     job: &Job,
     result: std::result::Result<(), String>,
@@ -212,8 +205,6 @@ async fn finish_job(
         Ok(()) => ("succeeded", None),
         Err(error) => ("failed", Some(error.clone())),
     };
-    services::prepare_completion(database, config, consumer, job).await?;
-
     let transaction = database.begin().await?;
     let updated = transaction
         .execute(statement(
@@ -224,9 +215,8 @@ async fn finish_job(
     if updated.rows_affected() != 1 {
         return Err(message("job lease was lost before completion"));
     }
-    services::record_completion(&transaction, job, status, last_error).await?;
+    services::record_completion(&transaction, job).await?;
     transaction.commit().await?;
-    services::complete(config, job).await?;
     match result {
         Ok(()) => info!(job_id = %job.id, "job succeeded"),
         Err(error) => warn!(job_id = %job.id, %error, "job failed"),

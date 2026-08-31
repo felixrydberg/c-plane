@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { check, index, integer, jsonb, pgPolicy, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { organization } from "../tenants/organization.ts";
-import { app_tenant } from "../rls.ts";
+import { app_tenant, orgAllowed } from "../rls.ts";
 
 export const worker_queue = pgTable.withRLS("worker_queue", {
   id: uuid("id").primaryKey(),
@@ -30,20 +30,11 @@ export const worker_queue = pgTable.withRLS("worker_queue", {
   uniqueIndex("worker_queue_active_dedupe_uidx")
     .on(table.queue_name, table.dedupe_key)
     .where(sql`${table.dedupe_key} is not null and ${table.status} in ('queued', 'running')`),
-]);
-
-export const registry_maintenance = pgTable.withRLS("registry_maintenance", {
-  service: text("service").primaryKey().default("distribution"),
-  gc_access_key_id: text("gc_access_key_id").notNull().unique(),
-  phase: text("phase").notNull().default("idle"),
-  active_job_id: uuid("active_job_id").references(() => worker_queue.id, { onDelete: "set null" }),
-  started_at: timestamp("started_at", { withTimezone: true, mode: "string" }),
-  finished_at: timestamp("finished_at", { withTimezone: true, mode: "string" }),
-  last_result: text("last_result"),
-  last_error: text("last_error"),
-  created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
-  updated_at: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
-}, (table) => [
-  check("registry_maintenance_phase_check", sql`${table.phase} in ('idle', 'queued', 'draining', 'collecting', 'restoring')`),
-  index("registry_maintenance_active_job_idx").on(table.active_job_id),
+  pgPolicy("worker_queue_tenant_rls", {
+    as: "permissive",
+    for: "all",
+    to: app_tenant,
+    using: orgAllowed(table.organization_id),
+    withCheck: orgAllowed(table.organization_id),
+  }),
 ]);

@@ -5,6 +5,7 @@ pub mod external_registries;
 pub mod health;
 pub mod internal_s3;
 pub mod internal_secrets;
+pub mod managed_registry;
 pub mod postgres_databases;
 pub mod projects;
 pub mod regions;

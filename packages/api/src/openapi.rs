@@ -36,6 +36,7 @@ impl Modify for SecurityAddon {
         for (path, item) in &mut openapi.paths.paths {
             document_scope("GET", path, item.get.as_mut());
             document_scope("POST", path, item.post.as_mut());
+            document_scope("PUT", path, item.put.as_mut());
             document_scope("PATCH", path, item.patch.as_mut());
             document_scope("DELETE", path, item.delete.as_mut());
             document_download_response(path, item.get.as_mut());
@@ -139,7 +140,11 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
         crate::handlers::storage_access_tokens::revoke_access_token,
         crate::handlers::storage_access_tokens::update_access_token,
         crate::handlers::registry::issue_token,
-        crate::handlers::registry::maintenance_status,
+        crate::handlers::managed_registry::get_registry,
+        crate::handlers::managed_registry::activate_registry,
+        crate::handlers::managed_registry::get_garbage_collection,
+        crate::handlers::managed_registry::run_garbage_collection,
+        crate::handlers::managed_registry::resolve_registry,
         crate::handlers::registry_access_tokens::create_access_token,
         crate::handlers::registry_access_tokens::get_access_token,
         crate::handlers::registry_access_tokens::list_access_tokens,
@@ -195,7 +200,13 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
             crate::handlers::storage_access_tokens::AccessTokenDetailsResponse,
             crate::handlers::storage_access_tokens::CreatedAccessTokenResponse,
             crate::handlers::registry::RegistryTokenResponse,
-            crate::handlers::registry::RegistryMaintenanceResponse,
+            crate::handlers::managed_registry::ActivateManagedRegistryRequest,
+            crate::handlers::managed_registry::RegistryGcJobResponse,
+            crate::handlers::managed_registry::RegistryGcRunResponse,
+            crate::utils::pagination::PaginatedResponse<crate::handlers::managed_registry::RegistryGcRunResponse>,
+            crate::handlers::managed_registry::RegistryGarbageCollectionResponse,
+            crate::handlers::managed_registry::ManagedRegistryResponse,
+            crate::handlers::managed_registry::ResolvedManagedRegistry,
             crate::handlers::registry_access_tokens::CreateRegistryAccessTokenRequest,
             crate::handlers::registry_access_tokens::UpdateRegistryAccessTokenRequest,
             crate::handlers::registry_access_tokens::RepositoryPermissionRequest,
