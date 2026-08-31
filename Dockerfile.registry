@@ -1,0 +1,14 @@
+ARG GO_VERSION=1.25
+
+FROM golang:${GO_VERSION}-bookworm AS builder
+WORKDIR /usr/src/app/packages/registry
+COPY packages/registry/go.mod packages/registry/go.sum ./
+RUN go mod download
+COPY packages/registry ./
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/registry .
+
+FROM cgr.dev/chainguard/static:latest
+COPY --from=builder --chmod=755 /out/registry /usr/local/bin/registry
+COPY packages/registry/config.yml /etc/distribution/config.yml
+ENTRYPOINT ["/usr/local/bin/registry"]
+CMD ["serve", "/etc/distribution/config.yml"]

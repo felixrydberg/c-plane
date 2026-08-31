@@ -2,8 +2,6 @@ ARG PACKAGE=api
 ARG BINARY=c-plane
 ARG RUST_VERSION=1.92.0
 
-FROM registry:3.1.1 AS distribution
-
 FROM rust:${RUST_VERSION}-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -39,7 +37,6 @@ FROM runtime-default AS runtime-api
 FROM runtime-default AS runtime-ingress
 FROM runtime-default AS runtime-storage
 FROM runtime-default AS runtime-worker
-COPY --from=distribution /bin/registry /usr/local/bin/registry
 
 FROM runtime-${PACKAGE}
 

@@ -3,9 +3,13 @@ use aws_sdk_s3::config::{BehaviorVersion, Credentials, Region};
 use lib::{
     buckets,
     cache::S3_PROVIDER_CREDENTIAL_CACHE_PREFIX,
+    entities::{bucket, secret},
     secrets::{self, Client, PLATFORM_KEY},
 };
-use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement};
+use sea_orm::{
+    ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection, EntityTrait, QueryFilter,
+    Statement,
+};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -102,24 +106,30 @@ impl S3ProviderClient {
     pub async fn bucket_key(
         &self,
         bucket_id: Uuid,
-        organization_id: Uuid,
+        organization_id: Option<Uuid>,
     ) -> Result<String, AppError> {
-        let row = self
-            .database
-            .query_one(Statement::from_sql_and_values(
-                DatabaseBackend::Postgres,
-                "SELECT secret.ciphertext FROM bucket JOIN secret ON secret.id=bucket.sse_secret_id WHERE bucket.id=$1 AND secret.scope='tenant'::secret_scope AND secret.organization_id=$2",
-                vec![bucket_id.into(), organization_id.into()],
-            ))
+        let mut query = bucket::Entity::find_by_id(bucket_id).find_also_related(secret::Entity);
+        query = match organization_id {
+            Some(organization_id) => {
+                query.filter(secret::Column::OrganizationId.eq(organization_id))
+            }
+            None => query.filter(secret::Column::OrganizationId.is_null()),
+        };
+        let secret = query
+            .one(&self.database)
             .await?
+            .and_then(|(_, secret)| secret)
             .ok_or_else(|| AppError::NotFound("Bucket encryption key not found".into()))?;
-        let ciphertext: String = row.try_get("", "ciphertext")?;
-        let plaintext = secrets::decrypt(
-            &self.secrets,
-            &format!("tenant-{}", organization_id.simple()),
-            &ciphertext,
-        )
-        .await?;
+        let ciphertext = secret.ciphertext;
+        let scope = secret.scope;
+        let key = match (scope, organization_id) {
+            (secret::SecretScope::Tenant, Some(organization_id)) => {
+                format!("tenant-{}", organization_id.simple())
+            }
+            (secret::SecretScope::Platform, None) => PLATFORM_KEY.into(),
+            _ => return Err(AppError::NotFound("Bucket encryption key not found".into())),
+        };
+        let plaintext = secrets::decrypt(&self.secrets, &key, &ciphertext).await?;
         String::from_utf8(plaintext)
             .map_err(|error| AppError::Internal(format!("Invalid bucket encryption key: {error}")))
     }

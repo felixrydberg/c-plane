@@ -637,7 +637,6 @@ mod tests {
     fn lists_readable_and_writable_buckets_across_regions() {
         let identity = CredentialIdentity {
             organization_id: Some(uuid::Uuid::nil()),
-            project_id: Some(uuid::Uuid::nil()),
             credential_id: uuid::Uuid::nil(),
             prefix: "backups/production/".into(),
             bucket_permissions: vec![

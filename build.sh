@@ -105,40 +105,93 @@ json_escape() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
-run_quiet() {
-  local log
-  log="$(mktemp)"
-  if "$@" >"$log" 2>&1; then
-    rm -f "$log"
-  else
-    cat "$log" >&2
-    rm -f "$log"
-    return 1
+progress_pid=
+
+progress_spinner() {
+  local label="$1"
+  local start="$2"
+  local frames='|/-\\'
+  local frame=0
+  local elapsed
+
+  while :; do
+    elapsed=$((SECONDS - start))
+    printf '\r\033[2K[%s] %s (%ss)' "${frames:frame:1}" "$label" "$elapsed" >&2
+    frame=$(( (frame + 1) % 4 ))
+    sleep 0.2
+  done
+}
+
+cleanup_progress() {
+  if [ -n "${progress_pid:-}" ]; then
+    kill "$progress_pid" 2>/dev/null || true
+    wait "$progress_pid" 2>/dev/null || true
+    progress_pid=
+    printf '\r\033[2K' >&2
   fi
 }
 
-for key in POSTGRES_PASSWORD POSTGRES_UI_PASSWORD POSTGRES_IDENTITY_PASSWORD POSTGRES_TENANT_PASSWORD POSTGRES_ADMIN_PASSWORD VALKEY_PASSWORD BETTER_AUTH_SECRET CPLANE_SERVICE_TOKEN REGISTRY_HTTP_SECRET REGISTRY_STORAGE_S3_SECRETKEY REGISTRY_STORAGE_S3_GC_SECRETKEY; do
+trap cleanup_progress EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+run_with_progress() {
+  local label="$1"
+  local capture_output=0
+  local log
+  local start
+  local elapsed
+  local status=0
+
+  shift
+  if [ "${1:-}" = --capture-output ]; then
+    capture_output=1
+    shift
+  fi
+
+  log="$(mktemp)"
+  start=$SECONDS
+  progress_spinner "$label" "$start" &
+  progress_pid=$!
+
+  if "$@" >"$log" 2>&1; then
+    status=0
+  else
+    status=$?
+  fi
+
+  cleanup_progress
+  elapsed=$((SECONDS - start))
+  if [ "$status" -eq 0 ]; then
+    printf '\r\033[2K[✓] %s (%ss)\n' "$label" "$elapsed" >&2
+    if [ "$capture_output" -eq 1 ]; then
+      cat "$log"
+    fi
+  else
+    printf '\r\033[2K[✗] %s (%ss)\n' "$label" "$elapsed" >&2
+    cat "$log" >&2
+  fi
+  rm -f "$log"
+  return "$status"
+}
+
+for key in POSTGRES_PASSWORD POSTGRES_UI_PASSWORD POSTGRES_IDENTITY_PASSWORD POSTGRES_TENANT_PASSWORD POSTGRES_ADMIN_PASSWORD VALKEY_PASSWORD BETTER_AUTH_SECRET CPLANE_SERVICE_TOKEN REGISTRY_HTTP_SECRET; do
   ensure_secret "$key"
 done
 ensure_registry_token_secret
-ensure_secret REGISTRY_STORAGE_S3_ACCESSKEY 16
-ensure_secret REGISTRY_STORAGE_S3_GC_ACCESSKEY 16
 [ -n "$(env_value REGISTRY_HOST)" ] || set_env REGISTRY_HOST localhost:5000
-[ -n "$(env_value REGISTRY_STORAGE_S3_REGION)" ] || set_env REGISTRY_STORAGE_S3_REGION us-east-1
-[ -n "$(env_value REGISTRY_STORAGE_S3_BUCKET)" ] || set_env REGISTRY_STORAGE_S3_BUCKET cplane-registry
-[ -n "$(env_value REGISTRY_STORAGE_S3_PHYSICAL_BUCKET)" ] || set_env REGISTRY_STORAGE_S3_PHYSICAL_BUCKET "$(env_value REGISTRY_STORAGE_S3_BUCKET)"
 case "$(env_value REGISTRY_TOKEN_REALM)" in
   ""|http://localhost:3000/api/backend/registry/token) set_env REGISTRY_TOKEN_REALM http://localhost:8080/api/registry/token ;;
 esac
 compose=(docker compose --env-file .env -f "$compose_file")
 
-echo "Starting Postgres, Valkey, and OpenBao..."
-run_quiet "${compose[@]}" up -d --wait postgresd valkey openbao
+run_with_progress "Starting Postgres, Valkey, and OpenBao" \
+  "${compose[@]}" up -d --wait postgresd valkey openbao
 
 bao_status="$("${compose[@]}" exec -T -e BAO_ADDR=http://127.0.0.1:8200 openbao bao status -format=json 2>/dev/null || true)"
 if ! printf '%s' "$bao_status" | grep -Eq '"initialized"[[:space:]]*:[[:space:]]*true'; then
-  echo "Initializing OpenBao..."
-  if ! bao_init="$("${compose[@]}" exec -T -e BAO_ADDR=http://127.0.0.1:8200 openbao bao operator init -key-shares=1 -key-threshold=1)"; then
+  if ! bao_init="$(run_with_progress "Initializing OpenBao" --capture-output \
+    "${compose[@]}" exec -T -e BAO_ADDR=http://127.0.0.1:8200 openbao bao operator init -key-shares=1 -key-threshold=1)"; then
     echo "OpenBao initialization failed" >&2
     exit 1
   fi
@@ -160,8 +213,8 @@ else
   fi
 fi
 
-echo "Unsealing OpenBao and enabling Transit..."
-run_quiet "${compose[@]}" run --rm openbao-init
+run_with_progress "Unsealing OpenBao and enabling Transit" \
+  "${compose[@]}" run --rm openbao-init
 
 echo "Configuring OpenBao AppRoles..."
 root_bao=("${compose[@]}" exec -T -e BAO_ADDR=http://127.0.0.1:8200 -e "BAO_TOKEN=$(env_value OPENBAO_ROOT_TOKEN)" openbao bao)
@@ -194,24 +247,25 @@ printf '%s' "$api_provider_caps" | grep -qw update
 [ "$control_plane_tenant_caps" = deny ] || { echo "Control-plane AppRole unexpectedly has tenant access" >&2; exit 1; }
 unset api_token control_plane_token api_secret_id control_plane_secret_id worker_role_id worker_secret_id
 
-echo "Applying database migrations..."
-run_quiet "${compose[@]}" run --rm --build migrate
-echo "Database migrations complete"
+run_with_progress "Applying database migrations" \
+  "${compose[@]}" run --rm --build migrate
 
-echo "Provisioning tenant Transit keys..."
-while IFS= read -r organization_id; do
-  [ -z "$organization_id" ] || "${root_bao[@]}" write -f "transit/keys/tenant-${organization_id//-/}" >/dev/null
-done < <("${compose[@]}" exec -T postgresd psql -U cplane -d cplane -At -c 'SELECT id FROM organization')
+provision_tenant_keys() {
+  local organization_id
 
-provider_id="$(env_value REGISTRY_STORAGE_S3_PROVIDER_ID)"
+  while IFS= read -r organization_id; do
+    if [ -n "$organization_id" ]; then
+      "${root_bao[@]}" write -f "transit/keys/tenant-${organization_id//-/}" >/dev/null || return 1
+    fi
+  done < <("${compose[@]}" exec -T postgresd psql -U cplane -d cplane -At -c 'SELECT id FROM organization')
+}
+
+run_with_progress "Provisioning tenant Transit keys" provision_tenant_keys
+
+provider_id="$("${compose[@]}" exec -T postgresd psql -U cplane -d cplane -At \
+  -c "SELECT id FROM s3_providers WHERE is_active=true ORDER BY created_at LIMIT 1")"
 provider_exists=0
-if [ -n "$provider_id" ]; then
-  provider_exists="$("${compose[@]}" exec -T postgresd psql -U cplane -d cplane -At \
-    -v provider_id="$provider_id" <<'SQL'
-SELECT EXISTS (SELECT 1 FROM s3_providers WHERE id=:'provider_id'::uuid AND is_active=true)::int;
-SQL
-  )"
-fi
+[ -z "$provider_id" ] || provider_exists=1
 
 if [ "$provider_exists" != 1 ]; then
   echo
@@ -255,9 +309,6 @@ if [ "$provider_exists" != 1 ]; then
     region_name="${region_name:-$region_slug}"
     break
   done
-  registry_bucket="$(env_value REGISTRY_STORAGE_S3_BUCKET)"
-  echo "Registry backing bucket: $registry_bucket"
-
   provider_id="$(new_uuid)"
   provider_secret_id="$(new_uuid)"
   region_id="$(new_uuid)"
@@ -271,7 +322,7 @@ if [ "$provider_exists" != 1 ]; then
   provider_ciphertext="$(printf '%s' "$provider_payload_b64" | "${root_bao[@]}" write -field=ciphertext transit/encrypt/platform plaintext=-)"
   unset provider_payload provider_payload_b64 session_token_json
 
-  if ! run_quiet "${compose[@]}" exec -T postgresd psql -v ON_ERROR_STOP=1 -U cplane -d cplane \
+  if ! run_with_progress "Saving S3 provider configuration" "${compose[@]}" exec -T postgresd psql -v ON_ERROR_STOP=1 -U cplane -d cplane \
     -v provider_id="$provider_id" -v provider_name="$provider_name" \
     -v provider_endpoint="$provider_endpoint" -v provider_region="$provider_region" \
     -v provider_secret_id="$provider_secret_id" -v provider_ciphertext="$provider_ciphertext" \
@@ -292,72 +343,10 @@ SQL
   then
     exit 1
   fi
-
-  set_env REGISTRY_STORAGE_S3_PROVIDER_ID "$provider_id"
-  set_env REGISTRY_STORAGE_S3_PHYSICAL_BUCKET "$registry_bucket"
   unset provider_secret_key provider_session_token
 fi
 
-echo "Bootstrapping registry storage..."
-registry_storage_id="$(new_uuid)"
-registry_storage_id="$("${compose[@]}" exec -T postgresd psql -v ON_ERROR_STOP=1 -U cplane -d cplane -At \
-  -v storage_id="$registry_storage_id" \
-  -v provider_id="$(env_value REGISTRY_STORAGE_S3_PROVIDER_ID)" \
-  -v bucket_name="$(env_value REGISTRY_STORAGE_S3_BUCKET)" \
-  -v physical_bucket_name="$(env_value REGISTRY_STORAGE_S3_PHYSICAL_BUCKET)" \
-  -v access_key="$(env_value REGISTRY_STORAGE_S3_ACCESSKEY)" \
-  -v gc_access_key="$(env_value REGISTRY_STORAGE_S3_GC_ACCESSKEY)" <<'SQL'
-INSERT INTO registry_storage (id, service, provider_id, bucket_name, physical_bucket_name, access_key_id)
-VALUES (:'storage_id'::uuid, 'distribution', :'provider_id'::uuid, :'bucket_name', :'physical_bucket_name', :'access_key')
-ON CONFLICT (service) DO UPDATE SET provider_id=EXCLUDED.provider_id, bucket_name=EXCLUDED.bucket_name,
-  physical_bucket_name=EXCLUDED.physical_bucket_name, access_key_id=EXCLUDED.access_key_id, updated_at=NOW()
-RETURNING id;
-INSERT INTO registry_maintenance (service, gc_access_key_id)
-VALUES ('distribution', :'gc_access_key')
-ON CONFLICT (service) DO UPDATE SET gc_access_key_id=EXCLUDED.gc_access_key_id, updated_at=NOW();
-SQL
-)"
-registry_storage_id="$(printf '%s\n' "$registry_storage_id" | head -n 1)"
-echo "Ensuring registry backing bucket..."
-registry_provider_id="$(env_value REGISTRY_STORAGE_S3_PROVIDER_ID)"
-registry_bucket="$(env_value REGISTRY_STORAGE_S3_PHYSICAL_BUCKET)"
-registry_bucket="${registry_bucket:-$(env_value REGISTRY_STORAGE_S3_BUCKET)}"
-registry_provider="$("${compose[@]}" exec -T postgresd psql -U cplane -d cplane -At -F $'\t' -v provider_id="$registry_provider_id" <<'SQL'
-SELECT provider.endpoint_url, provider.provider_region, provider.name, secret.ciphertext
-FROM s3_providers provider
-JOIN secret ON secret.id=provider.credential_secret_id AND secret.scope='platform'
-WHERE provider.id=:'provider_id'::uuid AND provider.is_active=true;
-SQL
-)"
-IFS=$'\t' read -r registry_endpoint registry_region registry_provider_name registry_provider_ciphertext <<< "$registry_provider"
-if [ -z "$registry_endpoint" ] || [ -z "$registry_region" ] || [ -z "$registry_provider_name" ] || [ -z "$registry_provider_ciphertext" ]; then
-  echo "Registry S3 provider is not active" >&2
-  exit 1
-fi
-
-provider_plaintext_b64="$("${root_bao[@]}" write -field=plaintext transit/decrypt/platform "ciphertext=$registry_provider_ciphertext")"
-provider_payload="$(printf '%s' "$provider_plaintext_b64" | openssl base64 -A -d)"
-registry_access_key="$(printf '%s' "$provider_payload" | sed -n 's/.*"access_key_id":"\([^"]*\)".*/\1/p')"
-registry_secret_key="$(printf '%s' "$provider_payload" | sed -n 's/.*"secret_access_key":"\([^"]*\)".*/\1/p')"
-registry_session_token="$(printf '%s' "$provider_payload" | sed -n 's/.*"session_token":"\([^"]*\)".*/\1/p')"
-unset provider_plaintext_b64 provider_payload registry_provider_ciphertext
-registry_bucket_url="${registry_endpoint%/}/$registry_bucket"
-s3=(curl --silent --show-error --aws-sigv4 "aws:amz:$registry_region:s3" --user "$registry_access_key:$registry_secret_key")
-[ -z "$registry_session_token" ] || s3+=(-H "x-amz-security-token: $registry_session_token")
-bucket_status="$("${s3[@]}" -o /dev/null -w '%{http_code}' --head "$registry_bucket_url" || true)"
-if [ "$bucket_status" = 404 ]; then
-  create=("${s3[@]}" --fail -X PUT)
-  if [ "$registry_region" != us-east-1 ]; then
-    create+=(-H 'Content-Type: application/xml' --data "<CreateBucketConfiguration xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><LocationConstraint>$registry_region</LocationConstraint></CreateBucketConfiguration>")
-  fi
-  "${create[@]}" "$registry_bucket_url"
-elif [ "$bucket_status" != 200 ]; then
-  echo "Unable to check registry backing bucket (S3 returned $bucket_status)" >&2
-  exit 1
-fi
-unset registry_secret_key registry_session_token
-
 services=(ingress storage ui api registry control-plane worker)
-echo "Starting C-Plane ($mode)..."
-"${compose[@]}" up -d --build "${services[@]}"
+run_with_progress "Starting C-Plane ($mode)" \
+  "${compose[@]}" up -d --build "${services[@]}"
 echo "C-Plane is installed"

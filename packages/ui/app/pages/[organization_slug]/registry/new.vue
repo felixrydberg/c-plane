@@ -15,11 +15,21 @@ const loading = ref(false)
 const error = ref('')
 const registryHost = computed(() => config.public.registryHost)
 const repositoryReference = computed(() => `${registryHost.value}/${organizationSlug.value}/${name.value || 'repository'}`)
+const trimmedName = computed(() => name.value.trim())
+const isValidRepositoryName = computed(() => {
+  const value = trimmedName.value
+  return value.length > 0
+    && value.length <= 200
+    && /^[a-z0-9]+(?:[._-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$/.test(value)
+})
+const nameError = computed(() => trimmedName.value && !isValidRepositoryName.value
+  ? 'Repository names must use lowercase letters, numbers, dots, underscores, dashes, and slashes'
+  : undefined)
 
 function backUrl() { return `/${route.params.organization_slug}/registry` }
 
 async function createRepository() {
-  if (!orgId.value || !name.value.trim()) return
+  if (!orgId.value || !isValidRepositoryName.value) return
   loading.value = true
   error.value = ''
   try {
@@ -51,8 +61,8 @@ async function createRepository() {
             <h2 class="text-sm font-semibold">Repository</h2>
             <p class="mt-1 text-xs text-muted">Names cannot be changed after creation.</p>
           </div>
-          <UFormField label="Name" description="Lowercase letters, numbers, dots, underscores, dashes, and slashes.">
-            <UInput v-model="name" placeholder="backend/api" class="w-full" :disabled="loading" />
+          <UFormField label="Name" description="Lowercase letters, numbers, dots, underscores, dashes, and slashes." :error="nameError">
+            <UInput v-model="name" placeholder="backend/api" maxlength="200" class="w-full" :disabled="loading" />
           </UFormField>
         </section>
         <p v-if="error" class="py-4 text-sm text-error">{{ error }}</p>
@@ -67,7 +77,7 @@ async function createRepository() {
           </dl>
           <div class="mt-8 flex gap-3">
             <UButton variant="ghost" color="neutral" :to="backUrl()">Cancel</UButton>
-            <UButton :icon="ICONS.plus" color="primary" :loading="loading" :disabled="!name.trim()" @click="createRepository">Create repository</UButton>
+            <UButton :icon="ICONS.plus" color="primary" :loading="loading" :disabled="!isValidRepositoryName" @click="createRepository">Create repository</UButton>
           </div>
         </div>
       </aside>

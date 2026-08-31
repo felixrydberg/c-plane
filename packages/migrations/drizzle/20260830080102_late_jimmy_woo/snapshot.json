@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "3444b257-bd7b-472f-a4b4-f7b879fd6795",
+  "id": "4a6091f2-98b4-4906-b503-b921c74ace24",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
@@ -225,6 +225,12 @@
     },
     {
       "isRlsEnabled": true,
+      "name": "managed_registry",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": true,
       "name": "organization",
       "entityType": "tables",
       "schema": "public"
@@ -304,12 +310,6 @@
     {
       "isRlsEnabled": true,
       "name": "registry_repository_grants",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": true,
-      "name": "registry_storage",
       "entityType": "tables",
       "schema": "public"
     },
@@ -2020,6 +2020,97 @@
       "default": null,
       "generated": null,
       "identity": null,
+      "name": "organization_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "bucket_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "credential_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "name": "gc_active",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "storage_revision",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
       "name": "id",
       "entityType": "columns",
       "schema": "public",
@@ -3401,110 +3492,6 @@
       "name": "id",
       "entityType": "columns",
       "schema": "public",
-      "table": "registry_storage"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "'distribution'",
-      "generated": null,
-      "identity": null,
-      "name": "service",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_storage"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "provider_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_storage"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "bucket_name",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_storage"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "physical_bucket_name",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_storage"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "access_key_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_storage"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_storage"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "updated_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_storage"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "id",
-      "entityType": "columns",
-      "schema": "public",
       "table": "s3_providers"
     },
     {
@@ -4539,13 +4526,6 @@
           "asc": true,
           "nullsFirst": false,
           "opclass": null
-        },
-        {
-          "value": "prefix",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
         }
       ],
       "isUnique": true,
@@ -4553,7 +4533,7 @@
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "bucket_grant_credential_bucket_prefix_uidx",
+      "name": "bucket_grant_credential_bucket_uidx",
       "entityType": "indexes",
       "schema": "public",
       "table": "bucket_grant"
@@ -5320,6 +5300,48 @@
       "entityType": "indexes",
       "schema": "public",
       "table": "infrastructure_audit_log"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "bucket_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "managed_registry_bucket_id_uidx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "managed_registry"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "credential_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "managed_registry_credential_id_uidx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "managed_registry"
     },
     {
       "nameExplicit": true,
@@ -6249,111 +6271,6 @@
       "nameExplicit": true,
       "columns": [
         {
-          "value": "service",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": true,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "registry_storage_service_uidx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "registry_storage"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "bucket_name",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": true,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "registry_storage_bucket_name_uidx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "registry_storage"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "physical_bucket_name",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": true,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "registry_storage_physical_bucket_name_uidx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "registry_storage"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "access_key_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": true,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "registry_storage_access_key_id_uidx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "registry_storage"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "provider_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "registry_storage_provider_id_idx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "registry_storage"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
           "value": "name",
           "isExpression": false,
           "asc": true,
@@ -7236,6 +7153,59 @@
       ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
+      "name": "managed_registry_organization_id_organization_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "managed_registry"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "bucket_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "bucket",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "managed_registry_bucket_id_bucket_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "managed_registry"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "credential_id",
+        "organization_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "credential",
+      "columnsTo": [
+        "id",
+        "organization_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "managed_registry_credential_scope_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "managed_registry"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "organization_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "organization",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
       "name": "organization_invitation_organization_id_organization_id_fkey",
       "entityType": "fks",
       "schema": "public",
@@ -7692,23 +7662,6 @@
       "table": "registry_repository_grants"
     },
     {
-      "nameExplicit": false,
-      "columns": [
-        "provider_id"
-      ],
-      "schemaTo": "public",
-      "tableTo": "s3_providers",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "RESTRICT",
-      "name": "registry_storage_provider_id_s3_providers_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "registry_storage"
-    },
-    {
       "nameExplicit": true,
       "columns": [
         "credential_secret_id"
@@ -8049,6 +8002,16 @@
     },
     {
       "columns": [
+        "organization_id"
+      ],
+      "nameExplicit": false,
+      "name": "managed_registry_pkey",
+      "schema": "public",
+      "table": "managed_registry",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
         "id"
       ],
       "nameExplicit": false,
@@ -8185,16 +8148,6 @@
       "name": "registry_repository_grants_pkey",
       "schema": "public",
       "table": "registry_repository_grants",
-      "entityType": "pks"
-    },
-    {
-      "columns": [
-        "id"
-      ],
-      "nameExplicit": false,
-      "name": "registry_storage_pkey",
-      "schema": "public",
-      "table": "registry_storage",
       "entityType": "pks"
     },
     {
@@ -8684,6 +8637,19 @@
       "entityType": "policies",
       "schema": "public",
       "table": "infrastructure_audit_log"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "ALL",
+      "roles": [
+        "app_tenant"
+      ],
+      "using": "\"managed_registry\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+      "withCheck": "\"managed_registry\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+      "name": "managed_registry_tenant_rls",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "managed_registry"
     },
     {
       "as": "PERMISSIVE",

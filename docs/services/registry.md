@@ -1,82 +1,68 @@
-# Registry operations
+# Managed Registry
 
-## External registries
+Each organization explicitly activates one Managed Registry in one immutable
+region. Activation synchronously creates one tenant foundation bucket, one
+tenant-scoped S3 credential, and one read/write `bucket_grant`. The grant stays
+an infrastructure authorization record keyed by credential and foundation
+bucket; the resolver derives the fixed logical bucket name `registry` through
+`managed_registry`.
 
-C-Plane stores reusable pull credentials for these private registry providers:
+Repository and Registry access-token creation require activation. Registry
+storage is deleted only with the organization. Metadata deletion removes the
+foundation bucket row, which uses the normal `foundation_bucket_delete` worker
+job for asynchronous provider cleanup.
 
-- Docker Hub
-- GitHub Container Registry
-- GitLab Container Registry
-- Google Artifact Registry
-- AWS Elastic Container Registry
+## Request path
 
-Docker Hub, GitHub, and GitLab use fixed registry hosts. Google Artifact
-Registry accepts only `<location>-docker.pkg.dev`; ECR accepts only its
-account-and-region `dkr.ecr` host. Arbitrary and self-hosted private registries
-are not supported. Tokens are stored in OpenBao and are never returned by the
-API.
+The Registry service is a custom Go binary built with CNCF Distribution
+v3.1.1. Distribution uses a complete delegating storage driver:
+
+```text
+OCI client -> Registry -> standard Storage S3 endpoint -> foundation bucket
+                         SigV4 credential + logical bucket "registry"
+```
+
+The service never receives a physical provider bucket name, provider
+credential, SSE key, or Registry-specific Storage mode. Its per-organization
+S3 driver cache is keyed by organization ID, expires after 15 idle minutes by
+default, coalesces concurrent misses, and replaces entries when
+`storage_revision` changes.
+
+Registry bearer tokens contain an immutable `organization_id`. The outer HTTP
+middleware verifies HS256, issuer, audience, organization metadata, and that
+every repository scope begins with the current organization slug. Distribution
+uses the registry's C-Plane access controller for the same HS256 token so
+repository actions are checked without the upstream JWKS controller, which
+expects public-key-compatible signing keys. Catalog access is disabled.
 
 ## Garbage collection
 
-Deleting a repository removes its manifests. Shared, content-addressed layers
-must not be deleted by S3 prefix; Distribution's garbage collector determines
-which blobs are no longer referenced.
+Every managed Registry has an `active` or `maintenance` status. While an
+organization is in maintenance, all authenticated Distribution access for that
+organization returns an OCI-shaped `503`; other organizations continue
+normally. The API also blocks Registry mutations while it is not active.
 
-Run collection from the private control-plane Overview page:
+Organization admins and owners can queue a cleanup with
+`POST /api/organization/{organization_id}/registry/garbage-collection`.
 
-1. Select **Queue garbage collection** and confirm.
-2. The control plane inserts a `registry_gc` job and changes the shared
-   `registry_maintenance` state to `queued` in one Postgres transaction.
-3. A worker claims the `maintenance` queue and drains for the configured
-   Registry token lifetime. New write tokens are rejected immediately, while
-   the normal Registry storage credential can finish writes during the drain.
-4. After the drain, storage blocks the normal Registry credential and enables
-   the dedicated GC credential. The worker runs
-   `registry garbage-collect /etc/distribution/config.yml`.
-5. The worker restores writes after success or failure. Pulls remain available
-   throughout; untagged and digest-only manifests are preserved.
-
-The current phase is shared by every API and control-plane instance. Customer
-dashboards poll it every five seconds. Storage permits the normal Registry
-credential to write while the phase is `idle`, `queued`, or `draining`, and
-permits the dedicated GC credential to write only while the phase is
-`collecting`.
-
-Write-token requests receive `503 Service Unavailable` during maintenance.
-`REGISTRY_TOKEN_TTL_SECONDS` controls both token lifetime and the drain period;
-it defaults to Distribution's 60-second compatibility minimum.
-
-Token expiry prevents an old token from starting another request after the
-drain. It does not cancel a request that Distribution already accepted, so the
-drain is defense in depth rather than a replacement for Distribution's native
-read-only restart requirement.
-
-Interrupted uploads under `_uploads` are not content-addressed blobs and are
-not removed by the garbage-collection command. Distribution's separate upload
-purger removes old orphaned upload directories; its defaults are enabled, a
-seven-day age, and a 24-hour interval.
-
-Worker jobs use leases and at-least-once processing. If a worker exits, another
-replica can reclaim the job after the lease expires. The Registry subprocess is
-killed if its worker loses the lease.
-
-If the garbage-collection command returns an error, the worker records it,
-restores Registry writes, and leaves the failed job in the queue history. Fix
-the reported problem and queue a new run from the control plane. If a worker or
-dependency is unavailable, the job and non-idle maintenance phase remain in
-Postgres; restart the dependency or any worker replica and let lease recovery
-continue the job. Do not clear the maintenance row manually while a worker may
-still own its lease.
-
-## GC worker
-
-`worker_job` stores durable `registry_gc` jobs. Worker replicas claim jobs with
-`FOR UPDATE SKIP LOCKED`, so replicas process different runs without a central
-coordinator.
-
-Configure the worker with the maintenance queue and local concurrency:
+The worker switches only the target organization's Registry to maintenance and
+calls the Registry over the internal service network:
 
 ```text
-WORKER_QUEUES=maintenance
-WORKER_CONCURRENCY=4
+registry serve /etc/distribution/config.yml
+POST /internal/organizations/{organization_id}/garbage-collection
 ```
+
+The endpoint requires the C-Plane service token, resolves current bucket
+credentials through the internal API, waits for that organization's in-flight
+requests to finish, and runs Distribution mark-and-sweep against its foundation
+bucket. It is not exposed by ingress. The worker always restores `active`,
+records success or failure. Upstream global upload purging remains disabled
+because it has no tenant context.
+
+## External registries
+
+C-Plane separately stores reusable pull credentials for Docker Hub, GitHub
+Container Registry, GitLab Container Registry, Google Artifact Registry, and
+AWS Elastic Container Registry. Tokens are stored in OpenBao and are never
+returned by the API.

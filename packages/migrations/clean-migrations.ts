@@ -7,7 +7,7 @@ const customDir = join(packageDir, "custom-migrations");
 
 async function runDrizzle(args: string[]) {
   const command = new Deno.Command(Deno.execPath(), {
-    args: ["x", "--allow-read", "--allow-write", "-p", "drizzle-kit@1.0.0-rc.4", "drizzle-kit", ...args],
+    args: ["x", "--allow-read", "--allow-write", "--allow-env", "--allow-sys", "-p", "drizzle-kit@1.0.0-rc.4", "drizzle-kit", ...args],
     cwd: packageDir,
     stdout: "inherit",
     stderr: "inherit",

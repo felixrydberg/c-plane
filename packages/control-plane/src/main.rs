@@ -44,8 +44,6 @@ pub enum Route {
 
 #[allow(non_snake_case)]
 fn App() -> Element {
-    let maintenance_version = use_signal(|| 0_u64);
-    use_context_provider(|| maintenance_version);
     rsx! {
         document::Stylesheet { href: CSS }
         Router::<Route> {}

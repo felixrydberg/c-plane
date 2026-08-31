@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    extract::{Path, RawQuery},
+    extract::RawQuery,
     http::{HeaderMap, header},
 };
 use base64::{
@@ -17,9 +17,6 @@ use uuid::Uuid;
 
 use crate::{errors::AppError, models::entities::registry_access_token, state::get_app_state};
 
-const REGISTRY_MAINTENANCE_MESSAGE: &str =
-    "Registry is read-only for maintenance; retry after maintenance completes";
-
 #[derive(Debug)]
 pub struct RegistryTokenQuery {
     service: String,
@@ -35,35 +32,6 @@ pub struct RegistryTokenResponse {
     issued_at: String,
 }
 
-#[derive(Serialize, ToSchema)]
-pub struct RegistryMaintenanceResponse {
-    pub read_only: bool,
-    pub phase: Option<String>,
-    pub started_at: Option<String>,
-}
-
-#[utoipa::path(
-    get,
-    path = "/api/registry/maintenance",
-    responses(
-        (status = 200, description = "Registry maintenance state", body = RegistryMaintenanceResponse),
-    ),
-    tag = "registry",
-)]
-pub async fn maintenance_status() -> Result<Json<RegistryMaintenanceResponse>, AppError> {
-    let row = registry_maintenance_row().await?;
-    let phase: String = row.try_get("", "phase").map_err(maintenance_error)?;
-    let started_at = row
-        .try_get::<Option<chrono::DateTime<chrono::Utc>>>("", "started_at")
-        .map_err(maintenance_error)?
-        .map(|value| value.to_rfc3339());
-    Ok(Json(RegistryMaintenanceResponse {
-        read_only: phase != "idle",
-        phase: (phase != "idle").then_some(phase),
-        started_at,
-    }))
-}
-
 #[derive(Serialize)]
 struct RegistryClaims {
     iss: String,
@@ -73,6 +41,7 @@ struct RegistryClaims {
     nbf: u64,
     iat: u64,
     jti: String,
+    organization_id: Uuid,
     access: Vec<RegistryAccess>,
 }
 
@@ -89,6 +58,11 @@ struct RegistryIdentity {
     organization_id: Uuid,
 }
 
+pub(crate) struct SignedRepositoryAccess {
+    pub token: String,
+    pub repository_name: String,
+}
+
 #[utoipa::path(
     get,
     path = "/api/registry/token",
@@ -99,7 +73,7 @@ struct RegistryIdentity {
     responses(
         (status = 200, description = "Short-lived Distribution access token", body = RegistryTokenResponse),
         (status = 401, description = "Invalid registry credentials"),
-        (status = 503, description = "Registry is read-only for maintenance", body = crate::errors::ErrorResponse),
+        (status = 503, description = "Registry is unavailable during maintenance", body = crate::errors::ErrorResponse),
     ),
     tag = "registry",
 )]
@@ -124,12 +98,7 @@ pub async fn issue_token(
         ));
     }
 
-    let read_only = registry_is_read_only().await?;
-    if read_only && requests_write(&query.scope, &organization_slug) {
-        return Err(AppError::ServiceUnavailable(
-            REGISTRY_MAINTENANCE_MESSAGE.into(),
-        ));
-    }
+    require_managed_registry(identity.organization_id).await?;
     let token_ttl_seconds = get_app_state().config.registry_token_ttl_seconds;
     let mut access = Vec::new();
     for scope in query.scope {
@@ -137,8 +106,7 @@ pub async fn issue_token(
             continue;
         };
         if let Some(authorized) =
-            authorize_repository(requested, identity.id, identity.organization_id, read_only)
-                .await?
+            authorize_repository(requested, identity.id, identity.organization_id).await?
         {
             access.push(authorized);
         }
@@ -153,6 +121,7 @@ pub async fn issue_token(
         nbf: issued_at.saturating_sub(5),
         iat: issued_at,
         jti: Uuid::new_v4().to_string(),
+        organization_id: identity.organization_id,
         access,
     };
     let token = sign_registry_claims(&claims)?;
@@ -165,25 +134,18 @@ pub async fn issue_token(
     }))
 }
 
-pub(crate) async fn sign_repository_token(
+pub(crate) async fn sign_repository_access(
     organization_id: Uuid,
     repository_name: &str,
     actions: &[&str],
-) -> Result<String, AppError> {
-    if actions
-        .iter()
-        .any(|action| matches!(*action, "push" | "delete"))
-        && registry_is_read_only().await?
-    {
-        return Err(AppError::ServiceUnavailable(
-            REGISTRY_MAINTENANCE_MESSAGE.into(),
-        ));
-    }
+) -> Result<SignedRepositoryAccess, AppError> {
+    require_managed_registry(organization_id).await?;
     let organization_slug = organization_slug(organization_id).await?;
+    let repository_name = format!("{organization_slug}/{repository_name}");
     let token_ttl_seconds = get_app_state().config.registry_token_ttl_seconds;
     let now = chrono::Utc::now();
     let issued_at = now.timestamp() as u64;
-    sign_registry_claims(&RegistryClaims {
+    let token = sign_registry_claims(&RegistryClaims {
         iss: env::var("REGISTRY_TOKEN_ISSUER").unwrap_or_else(|_| "cplane-registry".into()),
         sub: "cplane-control-plane".into(),
         aud: env::var("REGISTRY_HOST").unwrap_or_else(|_| "localhost:5000".into()),
@@ -191,11 +153,16 @@ pub(crate) async fn sign_repository_token(
         nbf: issued_at.saturating_sub(5),
         iat: issued_at,
         jti: Uuid::new_v4().to_string(),
+        organization_id,
         access: vec![RegistryAccess {
             resource_type: "repository",
-            name: format!("{organization_slug}/{repository_name}"),
+            name: repository_name.clone(),
             actions: actions.iter().map(|action| (*action).into()).collect(),
         }],
+    })?;
+    Ok(SignedRepositoryAccess {
+        token,
+        repository_name,
     })
 }
 
@@ -276,17 +243,6 @@ fn access_for_scope(scope: &str, organization_slug: &str) -> Option<RegistryAcce
     })
 }
 
-fn requests_write(scopes: &[String], organization_slug: &str) -> bool {
-    scopes.iter().any(|scope| {
-        access_for_scope(scope, organization_slug).is_some_and(|access| {
-            access
-                .actions
-                .iter()
-                .any(|action| matches!(action.as_str(), "push" | "delete"))
-        })
-    })
-}
-
 fn valid_repository_name(name: &str, organization_slug: &str) -> bool {
     let mut segments = name.split('/');
     segments.next() == Some(organization_slug)
@@ -307,7 +263,6 @@ async fn authorize_repository(
     access: RegistryAccess,
     access_token_id: Uuid,
     organization_id: Uuid,
-    read_only: bool,
 ) -> Result<Option<RegistryAccess>, AppError> {
     let repository_name = access
         .name
@@ -333,36 +288,7 @@ async fn authorize_repository(
     let can_push = row
         .try_get::<bool>("", "can_push")
         .map_err(|error| AppError::Internal(format!("Failed to authorize repository: {error}")))?;
-    Ok(Some(apply_repository_grant(
-        access, can_pull, can_push, read_only,
-    )))
-}
-
-async fn registry_maintenance_row() -> Result<sea_orm::QueryResult, AppError> {
-    get_app_state()
-        .identity_db
-        .connection()
-        .query_one(Statement::from_string(
-            DatabaseBackend::Postgres,
-            "SELECT COALESCE((SELECT phase FROM registry_maintenance WHERE service='distribution'), 'idle') AS phase, (SELECT started_at FROM registry_maintenance WHERE service='distribution') AS started_at",
-        ))
-        .await
-        .map_err(maintenance_error)?
-        .ok_or_else(|| AppError::Internal("Failed to read registry maintenance state".into()))
-}
-
-async fn registry_is_read_only() -> Result<bool, AppError> {
-    registry_maintenance_row()
-        .await?
-        .try_get::<String>("", "phase")
-        .map(|phase| phase != "idle")
-        .map_err(maintenance_error)
-}
-
-fn maintenance_error(error: impl std::fmt::Display) -> AppError {
-    AppError::Internal(format!(
-        "Failed to read registry maintenance state: {error}"
-    ))
+    Ok(Some(apply_repository_grant(access, can_pull, can_push)))
 }
 
 async fn resolve_registry_token(raw_token: &str) -> Result<Option<RegistryIdentity>, AppError> {
@@ -385,13 +311,26 @@ fn apply_repository_grant(
     mut access: RegistryAccess,
     can_pull: bool,
     can_push: bool,
-    read_only: bool,
 ) -> RegistryAccess {
     access.actions.retain(|action| {
-        (action == "pull" && can_pull)
-            || (matches!(action.as_str(), "push" | "delete") && can_push && !read_only)
+        (action == "pull" && can_pull) || (matches!(action.as_str(), "push" | "delete") && can_push)
     });
     access
+}
+
+async fn require_managed_registry(organization_id: Uuid) -> Result<(), AppError> {
+    use crate::models::entities::managed_registry;
+    use lib::entities::managed_registry::ManagedRegistryStatus;
+    let registry = managed_registry::Entity::find_by_id(organization_id)
+        .one(get_app_state().identity_db.connection())
+        .await?
+        .ok_or_else(|| AppError::Conflict("Activate Managed Registry first".into()))?;
+    if registry.status != ManagedRegistryStatus::Active {
+        return Err(AppError::ServiceUnavailable(
+            "Managed Registry is unavailable during maintenance".into(),
+        ));
+    }
+    Ok(())
 }
 
 pub(crate) async fn organization_slug(organization_id: Uuid) -> Result<String, AppError> {
@@ -428,11 +367,11 @@ fn registry_signing_secret() -> Result<Vec<u8>, AppError> {
 mod tests {
     use super::{
         RegistryAccess, RegistryClaims, access_for_scope, apply_repository_grant,
-        parse_registry_token_query, registry_token_exp, requests_write,
-        sign_registry_claims_with_secret,
+        parse_registry_token_query, registry_token_exp, sign_registry_claims_with_secret,
     };
     use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
     use serde_json::Value;
+    use uuid::Uuid;
 
     #[test]
     fn accepts_repeated_registry_scopes() {
@@ -442,15 +381,6 @@ mod tests {
         .unwrap();
 
         assert_eq!(query.scope.len(), 2);
-    }
-
-    #[test]
-    fn identifies_write_token_requests() {
-        assert!(requests_write(&["repository:acme/api:push".into()], "acme"));
-        assert!(!requests_write(
-            &["repository:acme/api:pull".into()],
-            "acme"
-        ));
     }
 
     #[test]
@@ -469,20 +399,20 @@ mod tests {
 
         let access = access_for_scope("repository:acme/api:pull,push,delete", "acme").unwrap();
         assert_eq!(
-            apply_repository_grant(access, true, false, false).actions,
+            apply_repository_grant(access, true, false).actions,
             vec!["pull"]
         );
 
         let access = access_for_scope("repository:acme/api:pull,push,delete", "acme").unwrap();
         assert_eq!(
-            apply_repository_grant(access, false, true, false).actions,
+            apply_repository_grant(access, false, true).actions,
             vec!["push", "delete"]
         );
 
         let access = access_for_scope("repository:acme/api:pull,push,delete", "acme").unwrap();
         assert_eq!(
-            apply_repository_grant(access, true, true, true).actions,
-            vec!["pull"]
+            apply_repository_grant(access, true, true).actions,
+            vec!["pull", "push", "delete"]
         );
     }
 
@@ -498,6 +428,7 @@ mod tests {
                 nbf: 0,
                 iat: 0,
                 jti: "test".into(),
+                organization_id: Uuid::nil(),
                 access: vec![RegistryAccess {
                     resource_type: "repository",
                     name: "acme/api".into(),
@@ -514,6 +445,7 @@ mod tests {
             .unwrap()
             .claims;
 
+        assert_eq!(claims["organization_id"], Uuid::nil().to_string());
         assert_eq!(claims["access"][0]["name"], "acme/api");
     }
 }

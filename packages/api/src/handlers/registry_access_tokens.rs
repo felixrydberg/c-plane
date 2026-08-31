@@ -96,6 +96,7 @@ pub async fn create_access_token(
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
+    super::managed_registry::require_active(tx, organization_id).await?;
     verify_repositories(tx, organization_id, &body.repository_permissions).await?;
     if registry_access_token::Entity::find()
         .filter(registry_access_token::Column::OrganizationId.eq(organization_id))
@@ -245,6 +246,7 @@ pub async fn update_access_token(
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
+    super::managed_registry::require_active(tx, organization_id).await?;
     active_token(tx, organization_id, token_id).await?;
     verify_repositories(tx, organization_id, &body.repository_permissions).await?;
     replace_permissions(tx, organization_id, token_id, &body.repository_permissions).await?;

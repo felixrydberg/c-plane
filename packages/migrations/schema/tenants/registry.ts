@@ -1,7 +1,66 @@
-import { boolean, foreignKey, index, pgPolicy, pgTable, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, foreignKey, index, pgEnum, pgPolicy, pgTable, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { app_tenant, orgAllowed } from "../rls.ts";
 import { organization } from "./organization.ts";
+import { bucket } from "../infrastructure/buckets.ts";
+import { credential } from "../infrastructure/secrets.ts";
+import { worker_queue } from "../infrastructure/worker-queue.ts";
+
+export const managed_registry_status = pgEnum("managed_registry_status", ["active", "maintenance"]);
+
+export const managed_registry = pgTable.withRLS("managed_registry", {
+  organization_id: uuid("organization_id")
+    .primaryKey()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  bucket_id: uuid("bucket_id")
+    .notNull()
+    .references(() => bucket.id, { onDelete: "restrict" }),
+  credential_id: uuid("credential_id").notNull(),
+  status: managed_registry_status("status").notNull().default("active"),
+  gc_active_job_id: uuid("gc_active_job_id").references(() => worker_queue.id, { onDelete: "set null" }),
+  storage_revision: uuid("storage_revision").notNull(),
+  created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+  updated_at: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("managed_registry_bucket_id_uidx").on(table.bucket_id),
+  uniqueIndex("managed_registry_credential_id_uidx").on(table.credential_id),
+  index("managed_registry_status_idx").on(table.status),
+  index("managed_registry_gc_active_job_idx").on(table.gc_active_job_id),
+  foreignKey({
+    columns: [table.credential_id, table.organization_id],
+    foreignColumns: [credential.id, credential.organization_id],
+    name: "managed_registry_credential_scope_fk",
+  }).onDelete("cascade"),
+  pgPolicy("managed_registry_tenant_rls", {
+    as: "permissive",
+    for: "all",
+    to: app_tenant,
+    using: orgAllowed(table.organization_id),
+    withCheck: orgAllowed(table.organization_id),
+  }),
+]);
+
+export const managed_registry_gc_runs = pgTable.withRLS("managed_registry_gc_runs", {
+  id: uuid("id").primaryKey(),
+  organization_id: uuid("organization_id")
+    .notNull()
+    .references(() => managed_registry.organization_id, { onDelete: "cascade" }),
+  started_at: timestamp("started_at", { withTimezone: true, mode: "string" }).notNull(),
+  finished_at: timestamp("finished_at", { withTimezone: true, mode: "string" }).notNull(),
+  bytes_before: bigint("bytes_before", { mode: "number" }),
+  bytes_after: bigint("bytes_after", { mode: "number" }),
+  result: text("result").notNull(),
+  error: text("error"),
+}, (table) => [
+  index("managed_registry_gc_runs_organization_id_idx").on(table.organization_id),
+  pgPolicy("managed_registry_gc_runs_tenant_rls", {
+    as: "permissive",
+    for: "all",
+    to: app_tenant,
+    using: orgAllowed(table.organization_id),
+    withCheck: orgAllowed(table.organization_id),
+  }),
+]);
 
 export const registry_repositories = pgTable.withRLS("registry_repositories", {
   id: uuid("id").primaryKey(),

@@ -197,6 +197,17 @@ CREATE TABLE "infrastructure_audit_log" (
 );
 --> statement-breakpoint
 ALTER TABLE "infrastructure_audit_log" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE TABLE "managed_registry" (
+	"organization_id" uuid PRIMARY KEY,
+	"bucket_id" uuid NOT NULL,
+	"credential_id" uuid NOT NULL,
+	"gc_active" boolean DEFAULT false NOT NULL,
+	"storage_revision" uuid NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+ALTER TABLE "managed_registry" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "organization" (
 	"id" uuid PRIMARY KEY,
 	"name" text NOT NULL,
@@ -362,18 +373,6 @@ CREATE TABLE "registry_repository_grants" (
 );
 --> statement-breakpoint
 ALTER TABLE "registry_repository_grants" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-CREATE TABLE "registry_storage" (
-	"id" uuid PRIMARY KEY,
-	"service" text DEFAULT 'distribution' NOT NULL,
-	"provider_id" uuid NOT NULL,
-	"bucket_name" text NOT NULL,
-	"physical_bucket_name" text NOT NULL,
-	"access_key_id" text NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-ALTER TABLE "registry_storage" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "s3_providers" (
 	"id" uuid PRIMARY KEY,
 	"name" text NOT NULL,
@@ -487,7 +486,7 @@ CREATE INDEX "api_keys_key_hash_idx" ON "api_keys" ("key_hash");--> statement-br
 CREATE UNIQUE INDEX "bucket_sse_secret_id_uidx" ON "bucket" ("sse_secret_id");--> statement-breakpoint
 CREATE INDEX "bucket_region_id_idx" ON "bucket" ("region_id");--> statement-breakpoint
 CREATE INDEX "bucket_status_idx" ON "bucket" ("status");--> statement-breakpoint
-CREATE UNIQUE INDEX "bucket_grant_credential_bucket_prefix_uidx" ON "bucket_grant" ("credential_id","bucket_id","prefix");--> statement-breakpoint
+CREATE UNIQUE INDEX "bucket_grant_credential_bucket_uidx" ON "bucket_grant" ("credential_id","bucket_id");--> statement-breakpoint
 CREATE INDEX "bucket_grant_credential_id_idx" ON "bucket_grant" ("credential_id");--> statement-breakpoint
 CREATE INDEX "bucket_grant_bucket_id_idx" ON "bucket_grant" ("bucket_id");--> statement-breakpoint
 CREATE INDEX "bucket_grant_organization_id_idx" ON "bucket_grant" ("organization_id");--> statement-breakpoint
@@ -522,6 +521,8 @@ CREATE UNIQUE INDEX "external_registry_organization_host_username_uidx" ON "exte
 CREATE INDEX "external_registry_organization_id_idx" ON "external_registry" ("organization_id");--> statement-breakpoint
 CREATE INDEX "infrastructure_audit_log_created_at_idx" ON "infrastructure_audit_log" ("created_at");--> statement-breakpoint
 CREATE INDEX "infrastructure_audit_log_resource_idx" ON "infrastructure_audit_log" ("resource_type","resource_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "managed_registry_bucket_id_uidx" ON "managed_registry" ("bucket_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "managed_registry_credential_id_uidx" ON "managed_registry" ("credential_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "organization_slug_uidx" ON "organization" ("slug");--> statement-breakpoint
 CREATE INDEX "organization_id_idx" ON "organization" ("id");--> statement-breakpoint
 CREATE INDEX "organization_invitation_organization_id_idx" ON "organization_invitation" ("organization_id");--> statement-breakpoint
@@ -563,11 +564,6 @@ CREATE UNIQUE INDEX "registry_repository_grants_token_repository_uidx" ON "regis
 CREATE INDEX "registry_repository_grants_organization_id_idx" ON "registry_repository_grants" ("organization_id");--> statement-breakpoint
 CREATE INDEX "registry_repository_grants_repository_id_idx" ON "registry_repository_grants" ("repository_id");--> statement-breakpoint
 CREATE INDEX "registry_repository_grants_access_token_id_idx" ON "registry_repository_grants" ("access_token_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "registry_storage_service_uidx" ON "registry_storage" ("service");--> statement-breakpoint
-CREATE UNIQUE INDEX "registry_storage_bucket_name_uidx" ON "registry_storage" ("bucket_name");--> statement-breakpoint
-CREATE UNIQUE INDEX "registry_storage_physical_bucket_name_uidx" ON "registry_storage" ("physical_bucket_name");--> statement-breakpoint
-CREATE UNIQUE INDEX "registry_storage_access_key_id_uidx" ON "registry_storage" ("access_key_id");--> statement-breakpoint
-CREATE INDEX "registry_storage_provider_id_idx" ON "registry_storage" ("provider_id");--> statement-breakpoint
 CREATE INDEX "s3_providers_name_idx" ON "s3_providers" ("name");--> statement-breakpoint
 CREATE INDEX "s3_providers_is_active_idx" ON "s3_providers" ("is_active");--> statement-breakpoint
 CREATE UNIQUE INDEX "s3_providers_credential_secret_id_uidx" ON "s3_providers" ("credential_secret_id");--> statement-breakpoint
@@ -612,6 +608,9 @@ ALTER TABLE "credential" ADD CONSTRAINT "credential_secret_id_secret_id_fkey" FO
 ALTER TABLE "credential" ADD CONSTRAINT "credential_secret_id_fk" FOREIGN KEY ("secret_id","organization_id") REFERENCES "secret"("id","organization_id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "event" ADD CONSTRAINT "event_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "external_registry" ADD CONSTRAINT "external_registry_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
+ALTER TABLE "managed_registry" ADD CONSTRAINT "managed_registry_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
+ALTER TABLE "managed_registry" ADD CONSTRAINT "managed_registry_bucket_id_bucket_id_fkey" FOREIGN KEY ("bucket_id") REFERENCES "bucket"("id") ON DELETE RESTRICT;--> statement-breakpoint
+ALTER TABLE "managed_registry" ADD CONSTRAINT "managed_registry_credential_scope_fk" FOREIGN KEY ("credential_id","organization_id") REFERENCES "credential"("id","organization_id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "organization_invitation" ADD CONSTRAINT "organization_invitation_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "organization_invitation" ADD CONSTRAINT "organization_invitation_inviter_id_user_id_fkey" FOREIGN KEY ("inviter_id") REFERENCES "user"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "organization_member" ADD CONSTRAINT "organization_member_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
@@ -639,7 +638,6 @@ ALTER TABLE "registry_repositories" ADD CONSTRAINT "registry_repositories_organi
 ALTER TABLE "registry_repository_grants" ADD CONSTRAINT "registry_repository_grants_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "registry_repository_grants" ADD CONSTRAINT "registry_repository_grants_repository_scope_fk" FOREIGN KEY ("repository_id","organization_id") REFERENCES "registry_repositories"("id","organization_id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "registry_repository_grants" ADD CONSTRAINT "registry_repository_grants_token_scope_fk" FOREIGN KEY ("access_token_id","organization_id") REFERENCES "registry_access_tokens"("id","organization_id") ON DELETE CASCADE;--> statement-breakpoint
-ALTER TABLE "registry_storage" ADD CONSTRAINT "registry_storage_provider_id_s3_providers_id_fkey" FOREIGN KEY ("provider_id") REFERENCES "s3_providers"("id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "s3_providers" ADD CONSTRAINT "s3_providers_credential_secret_id_fk" FOREIGN KEY ("credential_secret_id") REFERENCES "secret"("id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "s3_providers" ADD CONSTRAINT "s3_providers_mirror_provider_id_fk" FOREIGN KEY ("mirror_provider_id") REFERENCES "s3_providers"("id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "secret" ADD CONSTRAINT "secret_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
@@ -663,6 +661,7 @@ CREATE POLICY "credential_tenant_rls" ON "credential" AS PERMISSIVE FOR ALL TO "
 CREATE POLICY "event_org_rls" ON "event" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("event"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("event"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "external_registry_tenant_rls" ON "external_registry" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("external_registry"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("external_registry"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "infrastructure_audit_log_reader" ON "infrastructure_audit_log" AS PERMISSIVE FOR SELECT TO "app_audit_reader" USING (true);--> statement-breakpoint
+CREATE POLICY "managed_registry_tenant_rls" ON "managed_registry" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("managed_registry"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("managed_registry"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "organization_tenant_rls_select" ON "organization" AS PERMISSIVE FOR SELECT TO "app_tenant" USING ("organization"."id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "organization_tenant_rls_update" ON "organization" AS PERMISSIVE FOR UPDATE TO "app_tenant" USING ("organization"."id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("organization"."id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "organization_tenant_rls_delete" ON "organization" AS PERMISSIVE FOR DELETE TO "app_tenant" USING ("organization"."id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint

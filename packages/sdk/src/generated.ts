@@ -287,6 +287,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/organization/{organization_id}/registry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_registry"];
+        put: operations["activate_registry"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/organization/{organization_id}/registry/access-tokens": {
         parameters: {
             query?: never;
@@ -361,6 +377,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["rotate_external_registry_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organization/{organization_id}/registry/garbage-collection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_garbage_collection"];
+        put?: never;
+        post: operations["run_garbage_collection"];
         delete?: never;
         options?: never;
         head?: never;
@@ -463,22 +495,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/registry/maintenance": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["maintenance_status"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/registry/token": {
         parameters: {
             query?: never;
@@ -503,6 +519,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["health_check"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/organizations/{organization_id}/registry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["resolve_registry"];
         put?: never;
         post?: never;
         delete?: never;
@@ -573,6 +605,10 @@ export interface components {
             id: string;
             name: string;
             prefix: string;
+        };
+        ActivateManagedRegistryRequest: {
+            /** Format: uuid */
+            region_id: string;
         };
         BucketObjectResponse: {
             etag?: string | null;
@@ -811,6 +847,16 @@ export interface components {
         HealthResponse: {
             status: string;
         };
+        ManagedRegistryResponse: {
+            created_at: string;
+            /** Format: uuid */
+            organization_id: string;
+            /** Format: uuid */
+            region_id: string;
+            status: string;
+            /** Format: uuid */
+            storage_revision: string;
+        };
         PaginatedResponse_ProjectResponse: {
             data: {
                 created_at: string;
@@ -823,6 +869,19 @@ export interface components {
                 /** Format: uuid */
                 organization_id: string;
                 updated_at: string;
+            }[];
+            pagination: components["schemas"]["PaginationMeta"];
+        };
+        PaginatedResponse_RegistryGcRunResponse: {
+            data: {
+                /** Format: int64 */
+                bytes_after?: number | null;
+                /** Format: int64 */
+                bytes_before?: number | null;
+                error?: string | null;
+                finished_at: string;
+                result: string;
+                started_at: string;
             }[];
             pagination: components["schemas"]["PaginationMeta"];
         };
@@ -864,10 +923,26 @@ export interface components {
             id: string;
             name: string;
         };
-        RegistryMaintenanceResponse: {
-            phase?: string | null;
-            read_only: boolean;
-            started_at?: string | null;
+        RegistryGarbageCollectionResponse: {
+            active_job?: null | components["schemas"]["RegistryGcJobResponse"];
+            gc_runs: components["schemas"]["PaginatedResponse_RegistryGcRunResponse"];
+        };
+        RegistryGcJobResponse: {
+            available_at: string;
+            /** Format: uuid */
+            id: string;
+            status: string;
+            trigger: string;
+        };
+        RegistryGcRunResponse: {
+            /** Format: int64 */
+            bytes_after?: number | null;
+            /** Format: int64 */
+            bytes_before?: number | null;
+            error?: string | null;
+            finished_at: string;
+            result: string;
+            started_at: string;
         };
         RegistryRepositoryResponse: {
             created_at: string;
@@ -903,6 +978,17 @@ export interface components {
             /** Format: uuid */
             version_id: string;
         };
+        ResolvedManagedRegistry: {
+            access_key_id: string;
+            bucket_name: string;
+            /** Format: uuid */
+            organization_id: string;
+            organization_slug: string;
+            status: string;
+            storage_endpoint_url: string;
+            /** Format: uuid */
+            storage_revision: string;
+        };
         ResolvedS3AccessToken: {
             bucket_permissions: components["schemas"]["ResolvedS3BucketPermission"][];
             /** Format: uuid */
@@ -910,12 +996,14 @@ export interface components {
             /** Format: uuid */
             organization_id?: string | null;
             prefix: string;
-            /** Format: uuid */
-            project_id?: string | null;
         };
         ResolvedS3BucketPermission: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Foundation bucket ID.
+             */
             bucket_id: string;
+            /** @description Logical S3 bucket name presented to the credential. */
             bucket_name: string;
             can_read: boolean;
             can_write: boolean;
@@ -2150,6 +2238,86 @@ export interface operations {
             };
         };
     };
+    get_registry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Managed Registry configuration */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedRegistryResponse"];
+                };
+            };
+            /** @description Managed Registry is not activated */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    activate_registry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActivateManagedRegistryRequest"];
+            };
+        };
+        responses: {
+            /** @description Managed Registry already active */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedRegistryResponse"];
+                };
+            };
+            /** @description Managed Registry activated */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedRegistryResponse"];
+                };
+            };
+            /** @description Organization or active region not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Active region has no S3 provider */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     registry_list_access_tokens: {
         parameters: {
             query?: never;
@@ -2537,6 +2705,78 @@ export interface operations {
             };
         };
     };
+    get_garbage_collection: {
+        parameters: {
+            query?: {
+                /** @description Page number */
+                page?: number;
+                /** @description Items per page */
+                per_page?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Garbage-collection status with paginated runs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistryGarbageCollectionResponse"];
+                };
+            };
+            /** @description Managed Registry is not activated */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    run_garbage_collection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Garbage collection queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistryGarbageCollectionResponse"];
+                };
+            };
+            /** @description Managed Registry is not activated */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Garbage collection is already running */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_repositories: {
         parameters: {
             query?: never;
@@ -2657,7 +2897,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Registry is read-only for maintenance */
+            /** @description Registry is unavailable during maintenance */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -2932,26 +3172,6 @@ export interface operations {
             };
         };
     };
-    maintenance_status: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Registry maintenance state */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RegistryMaintenanceResponse"];
-                };
-            };
-        };
-    };
     issue_token: {
         parameters: {
             query: {
@@ -2982,7 +3202,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Registry is read-only for maintenance */
+            /** @description Registry is unavailable during maintenance */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -3009,6 +3229,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    resolve_registry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolvedManagedRegistry"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

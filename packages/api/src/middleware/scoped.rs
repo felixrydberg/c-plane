@@ -59,6 +59,19 @@ where
     }
 }
 
+pub fn put<S, H, T>(handler: H, scope: &'static str, min_role: Role) -> Scoped<S>
+where
+    H: axum::handler::Handler<T, S>,
+    T: 'static,
+    S: Clone + Send + Sync + 'static,
+{
+    Scoped {
+        method: "PUT",
+        guard: RouteGuard { scope, min_role },
+        router: axum::routing::put(handler),
+    }
+}
+
 pub fn patch<S, H, T>(handler: H, scope: &'static str, min_role: Role) -> Scoped<S>
 where
     H: axum::handler::Handler<T, S>,
