@@ -531,6 +531,30 @@ mod tests {
             ),
             (
                 "GET",
+                "/api/organization/{organization_id}/registry",
+                "registry:read",
+                Role::Member,
+            ),
+            (
+                "PUT",
+                "/api/organization/{organization_id}/registry",
+                "registry:create",
+                Role::Admin,
+            ),
+            (
+                "GET",
+                "/api/organization/{organization_id}/registry/garbage-collection",
+                "registry:read",
+                Role::Member,
+            ),
+            (
+                "POST",
+                "/api/organization/{organization_id}/registry/garbage-collection",
+                "registry:update",
+                Role::Admin,
+            ),
+            (
+                "GET",
                 "/api/organization/{organization_id}/registry/repositories",
                 "registry:read",
                 Role::Member,
@@ -635,19 +659,5 @@ mod tests {
         );
         assert_eq!(registered_scope("GET", "/health"), None);
         assert_eq!(registered_scope("GET", "/api/registry/token"), None);
-        assert_eq!(
-            registered_scope(
-                "GET",
-                "/api/organization/{organization_id}/registry/garbage-collection"
-            ),
-            Some("registry:read")
-        );
-        assert_eq!(
-            registered_scope(
-                "POST",
-                "/api/organization/{organization_id}/registry/garbage-collection"
-            ),
-            Some("registry:update")
-        );
     }
 }

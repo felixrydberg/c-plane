@@ -140,7 +140,7 @@ pub async fn get_registry(
         ("per_page" = Option<u64>, Query, description = "Items per page"),
     ),
     responses(
-        (status = 200, description = "Garbage-collection schedule and paginated runs", body = RegistryGarbageCollectionResponse),
+        (status = 200, description = "Garbage-collection status with paginated runs", body = RegistryGarbageCollectionResponse),
         (status = 404, description = "Managed Registry is not activated"),
     ),
     tag = "registry",
@@ -179,7 +179,7 @@ pub async fn get_garbage_collection(
     tag = "registry",
 )]
 pub async fn activate_registry(
-    AuthContext { tenant_db, .. }: AuthContext,
+    AuthContext { tenant_db, auth }: AuthContext,
     Path(organization_id): Path<Uuid>,
     Json(body): Json<ActivateManagedRegistryRequest>,
 ) -> Result<(StatusCode, Json<ManagedRegistryResponse>), AppError> {
@@ -224,6 +224,20 @@ pub async fn activate_registry(
             return Err(error);
         }
     };
+    if let Err(error) = record_event(
+        tx,
+        organization_id,
+        auth.actor_id,
+        "managed-registry:activated",
+        json!({ "summary": "Activated managed Registry", "target_id": organization_id }),
+    )
+    .await
+    {
+        let _ = providers
+            .delete_bucket(provider_id, foundation_bucket_id)
+            .await;
+        return Err(error);
+    }
     let response = response(&registry, region.id);
     if let Err(error) = scoped.commit().await {
         let _ = providers

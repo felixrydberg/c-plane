@@ -75,7 +75,7 @@ func TestHandlerRunsInternalGarbageCollection(t *testing.T) {
 			return garbagecollection.Report{BytesBefore: 100, BytesAfter: 25}, nil
 		},
 	}
-	request := httptest.NewRequest(http.MethodPost, "/internal/organizations/org-1/garbage-collection", nil)
+	request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/internal/organizations/org-1/garbage-collection", nil)
 	request.Header.Set("x-cplane-token", "service-token")
 	request.Header.Set("x-cplane-job-id", "job-1")
 	response := httptest.NewRecorder()
@@ -102,7 +102,7 @@ func TestHandlerRejectsUnauthenticatedInternalGarbageCollection(t *testing.T) {
 			return garbagecollection.Report{}, nil
 		},
 	}
-	request := httptest.NewRequest(http.MethodPost, "/internal/organizations/org-1/garbage-collection", nil)
+	request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/internal/organizations/org-1/garbage-collection", nil)
 	response := httptest.NewRecorder()
 	h.ServeHTTP(response, request)
 
@@ -166,7 +166,7 @@ func token(t *testing.T, organizationID, repository string) string {
 
 func request(t *testing.T, handler http.Handler, method, path, token string) *httptest.ResponseRecorder {
 	t.Helper()
-	request := httptest.NewRequest(method, path, nil)
+	request := httptest.NewRequestWithContext(t.Context(), method, path, nil)
 	if token != "" {
 		request.Header.Set("Authorization", "Bearer "+token)
 	}

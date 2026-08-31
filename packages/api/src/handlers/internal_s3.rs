@@ -5,6 +5,7 @@ use sea_orm::{
     RelationTrait, Statement,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -168,6 +169,29 @@ async fn validate_cached_token(
     if !active {
         return Err(AppError::Unauthorized("Invalid S3 access key".into()));
     }
+    let grants = bucket_grant::Entity::find()
+        .filter(bucket_grant::Column::CredentialId.eq(cached.credential_id))
+        .all(state.identity_db.connection())
+        .await?;
+    let cached_grants = cached
+        .bucket_permissions
+        .iter()
+        .map(|permission| {
+            (
+                permission.bucket_id,
+                permission.can_read,
+                permission.can_write,
+            )
+        })
+        .collect::<HashSet<_>>();
+    let current_grants = grants
+        .iter()
+        .map(|grant| (grant.bucket_id, grant.can_read, grant.can_write))
+        .collect::<HashSet<_>>();
+    if cached_grants != current_grants {
+        return Ok(false);
+    }
+
     let deleting = bucket_grant::Entity::find()
         .join(JoinType::InnerJoin, bucket_grant::Relation::Bucket.def())
         .filter(bucket_grant::Column::CredentialId.eq(cached.credential_id))

@@ -2722,7 +2722,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Garbage-collection schedule and paginated runs */
+            /** @description Garbage-collection status with paginated runs */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -15,7 +15,7 @@ http:
 storage:
   cplane:
     controlplaneurl: http://api:8080
-    servicetoken: development-only
+    servicetoken: ""
     cachecapacity: 256
     cachettl: 15m
   redirect:

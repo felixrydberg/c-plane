@@ -14,7 +14,7 @@ if [ "$status" != 401 ]; then
 fi
 printf '%-14s OK (%s)\n' Registry "$status"
 
-registry_repository="${REGISTRY_REPOSITORY-test}"
+registry_repository="${REGISTRY_REPOSITORY:-test}"
 registry_username="${REGISTRY_USERNAME:-${CPLANE_REGISTRY_USERNAME:-}}"
 registry_password="${REGISTRY_PASSWORD:-${CPLANE_REGISTRY_PASSWORD:-}}"
 if [ -t 0 ] && { [ -z "$registry_username" ] || [ -z "$registry_password" ]; }; then

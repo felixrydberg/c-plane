@@ -10,7 +10,7 @@ export const region = pgTable.withRLS("regions", {
   id: uuid("id").primaryKey(),
   slug: text("slug").notNull().unique(),
   display_name: text("display_name").notNull(),
-  s3_provider_id: uuid("s3_provider_id").references(() => s3_provider.id, { onDelete: "set null" }),
+  s3_provider_id: uuid("s3_provider_id").notNull().references(() => s3_provider.id, { onDelete: "restrict" }),
   status: region_status("status").notNull().default("active"),
   routing_mode: region_routing_mode("routing_mode").notNull().default("active"),
   created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),

@@ -2673,7 +2673,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Garbage-collection schedule and paginated runs",
+            "description": "Garbage-collection status with paginated runs",
             "content": {
               "application/json": {
                 "schema": {

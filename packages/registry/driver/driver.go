@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -42,13 +43,24 @@ func (Factory) Create(_ context.Context, parameters map[string]any) (storagedriv
 		}
 		ttl = parsed
 	}
+	serviceToken := ""
+	if raw := parameters["servicetoken"]; raw != nil {
+		serviceToken = fmt.Sprint(raw)
+	}
+	if serviceToken == "" {
+		if os.Getenv("REGISTRY_DEV_MODE") == "true" {
+			serviceToken = "development-only"
+		} else {
+			return nil, fmt.Errorf("servicetoken is required; set REGISTRY_STORAGE_CPLANE_SERVICETOKEN")
+		}
+	}
 	return &Driver{
 		capacity:        capacity,
 		idleTTL:         ttl,
 		entries:         make(map[string]*cacheEntry),
 		lru:             list.New(),
 		controlPlaneURL: fmt.Sprint(parameters["controlplaneurl"]),
-		serviceToken:    fmt.Sprint(parameters["servicetoken"]),
+		serviceToken:    serviceToken,
 		http:            &http.Client{Timeout: 5 * time.Second},
 		build:           buildS3Driver,
 		now:             time.Now,
