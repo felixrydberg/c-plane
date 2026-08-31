@@ -332,17 +332,19 @@ async fn verify_repositories(
     organization_id: Uuid,
     permissions: &[RepositoryPermissionRequest],
 ) -> Result<(), AppError> {
-    for permission in permissions {
-        if registry_repository::Entity::find_by_id(permission.repository_id)
-            .filter(registry_repository::Column::OrganizationId.eq(organization_id))
-            .one(tx)
-            .await?
-            .is_none()
-        {
-            return Err(AppError::NotFound(
-                "Repository not found in this organization".into(),
-            ));
-        }
+    let repository_ids = permissions
+        .iter()
+        .map(|permission| permission.repository_id)
+        .collect::<Vec<_>>();
+    let repositories = registry_repository::Entity::find()
+        .filter(registry_repository::Column::Id.is_in(repository_ids))
+        .filter(registry_repository::Column::OrganizationId.eq(organization_id))
+        .all(tx)
+        .await?;
+    if repositories.len() != permissions.len() {
+        return Err(AppError::NotFound(
+            "Repository not found in this organization".into(),
+        ));
     }
     Ok(())
 }
@@ -357,8 +359,9 @@ async fn replace_permissions(
         .filter(registry_repository_grant::Column::AccessTokenId.eq(token_id))
         .exec(tx)
         .await?;
-    for permission in permissions {
-        registry_repository_grant::ActiveModel {
+    let grants = permissions
+        .iter()
+        .map(|permission| registry_repository_grant::ActiveModel {
             id: Set(Uuid::new_v4()),
             organization_id: Set(organization_id),
             repository_id: Set(permission.repository_id),
@@ -366,9 +369,12 @@ async fn replace_permissions(
             can_pull: Set(permission.can_pull || permission.can_push),
             can_push: Set(permission.can_push),
             ..Default::default()
-        }
-        .insert(tx)
-        .await?;
+        })
+        .collect::<Vec<_>>();
+    if !grants.is_empty() {
+        registry_repository_grant::Entity::insert_many(grants)
+            .exec(tx)
+            .await?;
     }
     Ok(())
 }

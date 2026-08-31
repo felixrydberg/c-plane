@@ -18,132 +18,12 @@ const draftRevisionQuery = computed(() => {
     : ''
 })
 
-type RecentSection = Pick<NavigationMenuItem, 'label' | 'to'> & {
-  description?: string
-}
-
-const recentSectionDescriptions: Record<string, string> = {
-  'C1 - Containers': 'Compute',
-  'S1 - Object Storage': 'Storage & Databases',
-  'S2 - Registry': 'Storage & Databases',
-  'External Registries': 'Integrations',
-  'D1 - Postgres': 'Storage & Databases',
-  General: 'Manage account',
-  Members: 'Manage account',
-  'API Keys': 'Manage account',
-  'Audit Log': 'Manage account',
-}
-const recentSectionLabelAliases: Record<string, string> = {
-  Containers: 'C1 - Containers',
-  'O2 Object Storage': 'S1 - Object Storage',
-  'O2 Registry': 'S2 - Registry',
-  Postgres: 'D1 - Postgres',
-}
-
-const recentSections = ref<RecentSection[]>([])
-const recentSectionsReady = ref(false)
-const skippedRecentPath = ref<string | null>(null)
-const recentSectionsStorageKey = computed(() => {
-  const organizationSlug = store.organization?.slug
-  if (!organizationSlug) return ''
-  return `cplane:recent-sections:${store.user?.id ?? 'anonymous'}:${organizationSlug}`
-})
-
-function currentRecentSection(): RecentSection | null {
-  const organizationSlug = store.organization?.slug
-  if (!organizationSlug) return null
-
-  const path = route.path.slice(`/${organizationSlug}`.length)
-  if (path.startsWith('/containers')) return { label: 'C1 - Containers', description: 'Compute', to: route.fullPath }
-  if (path.startsWith('/storage')) return { label: 'S1 - Object Storage', description: 'Storage & Databases', to: route.fullPath }
-  if (path.startsWith('/integrations/github')) return { label: 'GitHub', description: 'Integrations', to: route.fullPath }
-  if (path.startsWith('/integrations/external-registries')) return { label: 'External Registries', description: 'Integrations', to: route.fullPath }
-  if (path.startsWith('/registry')) return { label: 'S2 - Registry', description: 'Storage & Databases', to: route.fullPath }
-  if (path.startsWith('/databases/postgres')) return { label: 'D1 - Postgres', description: 'Storage & Databases', to: route.fullPath }
-  if (path.startsWith('/settings/members')) return { label: 'Members', description: 'Manage account', to: route.fullPath }
-  if (path.startsWith('/settings/authentication')) return { label: 'API Keys', description: 'Manage account', to: route.fullPath }
-  if (path.startsWith('/settings/audit-log')) return { label: 'Audit Log', description: 'Manage account', to: route.fullPath }
-  if (path.startsWith('/settings')) return { label: 'General', description: 'Manage account', to: route.fullPath }
-  return null
-}
-
-function loadRecentSections() {
-  const key = recentSectionsStorageKey.value
-  if (!key) {
-    recentSections.value = []
-    return
-  }
-
-  try {
-    const stored = JSON.parse(localStorage.getItem(key) ?? '[]') as RecentSection[]
-    recentSections.value = Array.isArray(stored)
-      ? stored
-        .filter(section => typeof section?.label === 'string' && typeof section?.to === 'string')
-        .map(section => ({ ...section, label: recentSectionLabelAliases[section.label] ?? section.label }))
-        .slice(0, 5)
-      : []
-  } catch {
-    recentSections.value = []
-  }
-}
-
-function trackRecentSection() {
-  const section = currentRecentSection()
-  const key = recentSectionsStorageKey.value
-  if (!section || !key) return
-
-  recentSections.value = [
-    section,
-    ...recentSections.value.filter(item => item.label !== section.label),
-  ].slice(0, 5)
-  localStorage.setItem(key, JSON.stringify(recentSections.value))
-}
-
-const recentItems = computed<NavigationMenuItem[]>(() => recentSections.value.length
-  ? recentSections.value.map(section => ({
-      ...section,
-      description: section.description ?? recentSectionDescriptions[section.label ?? ''],
-      slot: 'recent-child',
-      class: 'min-h-12',
-      onSelect: () => { skippedRecentPath.value = section.to ?? null },
-    }))
-  : [{ label: 'No recent sections', disabled: true }])
-
-onMounted(() => {
-  loadRecentSections()
-  recentSectionsReady.value = true
-  trackRecentSection()
-})
-
-watch(() => route.fullPath, () => {
-  if (!recentSectionsReady.value) return
-  if (skippedRecentPath.value === route.fullPath) {
-    skippedRecentPath.value = null
-    return
-  }
-  skippedRecentPath.value = null
-  trackRecentSection()
-})
-
-watch(recentSectionsStorageKey, () => {
-  if (!recentSectionsReady.value) return
-  loadRecentSections()
-  trackRecentSection()
-})
-
 const mainItems = computed<NavigationMenuItem[]>(() => [
   {
     label: 'Overview',
     icon: ICONS.overview,
     to: `/${store.organization?.slug}`,
     exact: true,
-  },
-  {
-    label: 'Recent',
-    icon: ICONS.revision,
-    trailingIcon: ICONS.chevronRight,
-    open: true,
-    children: recentItems.value,
   },
   {
     type: 'label',
@@ -172,7 +52,8 @@ const mainItems = computed<NavigationMenuItem[]>(() => [
     open: true,
     children: [
       {
-        label: 'C1 - Containers',
+        label: 'Containers',
+        badge: { label: 'C1', color: 'neutral', variant: 'soft' },
         to: `/${store.organization?.slug}/containers${navProjectId.value ? `/${navProjectId.value}${routeEnvironmentId.value ? `/${routeEnvironmentId.value}` : ''}` : ''}${draftRevisionQuery.value}`,
       },
     ],
@@ -184,15 +65,18 @@ const mainItems = computed<NavigationMenuItem[]>(() => [
     open: true,
     children: [
       {
-        label: 'S1 - Object Storage',
+        label: 'Object Storage',
+        badge: { label: 'S1', color: 'neutral', variant: 'soft' },
         to: `/${store.organization?.slug}/storage${navProjectId.value ? `/${navProjectId.value}` : ''}`,
       },
       {
-        label: 'S2 - Registry',
+        label: 'Registry',
+        badge: { label: 'S2', color: 'neutral', variant: 'soft' },
         to: `/${store.organization?.slug}/registry`,
       },
       {
-        label: 'D1 - Postgres',
+        label: 'Postgres',
+        badge: { label: 'D1', color: 'neutral', variant: 'soft' },
         to: `/${store.organization?.slug}/databases/postgres${navProjectId.value ? `/${navProjectId.value}` : ''}`,
       },
     ]
@@ -220,7 +104,6 @@ const mainItems = computed<NavigationMenuItem[]>(() => [
 const accountItems = computed<NavigationMenuItem[]>(() => [{
   label: 'Manage organization',
   trailingIcon: ICONS.chevronRight,
-  open: false,
   children: [
     ...(isOwner.value ? [{
       label: 'General',
@@ -276,7 +159,7 @@ const navigationUi = {
       <template #default="slotProps">
         <dashboard-organizations-select :collapsed="!open" />
         <dashboard-projects-nav :collapsed="!open" />
-        <USeparator />
+        <USeparator class="px-2" />
         <UNavigationMenu
           :key="`main-${slotProps?.state ?? 'expanded'}`"
           :collapsed="!open"
@@ -284,16 +167,9 @@ const navigationUi = {
           :items="mainItems"
           orientation="vertical"
           :ui="navigationUi"
-        >
-          <template #recent-child="{ item }">
-            <div class="min-w-0">
-              <span class="block truncate text-sm">{{ item.label }}</span>
-              <span v-if="item.description" class="block truncate text-xs text-muted">{{ item.description }}</span>
-            </div>
-          </template>
-        </UNavigationMenu>
+        />
 
-        <USeparator class="my-2" />
+        <USeparator class="px-2" />
         <UNavigationMenu
           :key="`account-${open ? 'expanded' : 'collapsed'}`"
           :collapsed="!open"

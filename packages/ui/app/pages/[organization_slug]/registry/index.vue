@@ -148,14 +148,35 @@ const gcRuns = computed<GcRunRow[]>(() => (garbageCollection.value?.gc_runs.data
 })))
 
 const gcRunColumns: TableColumn<GcRunRow>[] = [
-  { accessorKey: 'started', header: 'Started' },
-  { accessorKey: 'duration', header: 'Duration' },
-  { accessorKey: 'before', header: 'Space before' },
-  { accessorKey: 'after', header: 'Space after' },
-  { accessorKey: 'reclaimed', header: 'Reclaimed' },
+  {
+    accessorKey: 'started',
+    header: 'Started',
+    meta: { class: { th: 'w-[28%] text-left', td: 'whitespace-nowrap' } },
+  },
+  {
+    accessorKey: 'duration',
+    header: 'Duration',
+    meta: { class: { th: 'w-[12%] text-right', td: 'text-right tabular-nums whitespace-nowrap' } },
+  },
+  {
+    accessorKey: 'before',
+    header: 'Space before',
+    meta: { class: { th: 'w-[15%] text-right', td: 'text-right tabular-nums whitespace-nowrap' } },
+  },
+  {
+    accessorKey: 'after',
+    header: 'Space after',
+    meta: { class: { th: 'w-[15%] text-right', td: 'text-right tabular-nums whitespace-nowrap' } },
+  },
+  {
+    accessorKey: 'reclaimed',
+    header: 'Reclaimed',
+    meta: { class: { th: 'w-[15%] text-right', td: 'text-right tabular-nums whitespace-nowrap' } },
+  },
   {
     accessorKey: 'result',
     header: 'Result',
+    meta: { class: { th: 'w-[15%] text-left', td: 'whitespace-nowrap' } },
     cell: ({ row }) => h('div', {
       title: row.original.error,
       class: row.original.result === 'Failed' ? 'text-error' : 'text-success',
@@ -251,7 +272,7 @@ async function deleteRepository() {
 </script>
 
 <template>
-  <div class="flex w-full max-w-375 flex-col gap-5 mx-auto">
+  <div class="flex w-full max-w-375 flex-col gap-4 mx-auto">
     <div class="flex flex-col gap-4 border-b border-default/60 pb-5 sm:flex-row sm:items-end sm:justify-between">
       <div>
         <UiPageEyebrow label="Storage &amp; Databases" />
@@ -324,16 +345,19 @@ async function deleteRepository() {
         <div class="mt-6 border-t border-default/60 pt-5">
           <h3 class="font-semibold">Recent cleanups</h3>
           <p class="mt-1 text-sm text-muted">Latest garbage-collection runs.</p>
-          <UTable
-            v-if="gcRuns.length"
-            :data="gcRuns"
-            :columns="gcRunColumns"
-            class="mt-4"
-            :ui="{
-              thead: '[&>tr>th]:py-1 [&>tr>th]:px-4 [&>tr>th]:text-sm',
-              td: 'py-2 px-4 bg-elevated/50 border-y border-default first:rounded-l-lg last:rounded-r-lg first:border-l last:border-r text-sm',
-            }"
-          />
+          <div v-if="gcRuns.length" class="mt-4 overflow-x-auto rounded-lg border border-default/60 bg-default">
+            <UTable
+              :data="gcRuns"
+              :columns="gcRunColumns"
+              class="min-w-[760px] w-full table-fixed"
+              :ui="{
+                base: 'border-separate border-spacing-0',
+                thead: 'bg-elevated/20 [&>tr>th]:border-b [&>tr>th]:border-default/60 [&>tr>th]:px-4 [&>tr>th]:py-3 [&>tr>th]:text-xs [&>tr>th]:font-medium [&>tr>th]:text-muted',
+                tbody: '[&>tr]:transition-colors [&>tr:hover]:bg-elevated/20 [&>tr:last-child>td]:border-b-0',
+                td: 'border-b border-default/40 px-4 py-3 text-sm',
+              }"
+            />
+          </div>
           <UPagination
             v-if="garbageCollection?.gc_runs.pagination.total_pages > 1"
             v-model:page="gcPage"

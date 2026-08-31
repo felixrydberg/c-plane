@@ -9,8 +9,6 @@ defineProps<{ title: string }>()
       <h1 class="mt-1 text-2xl font-semibold">{{ title }}</h1>
     </div>
 
-    <OrganizationSettingsTabs />
-
     <slot />
   </div>
 </template>

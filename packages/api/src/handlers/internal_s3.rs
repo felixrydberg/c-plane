@@ -93,15 +93,14 @@ pub async fn provider_credentials(
 
 async fn resolve_uncached(access_key: &str) -> Result<ResolvedS3AccessToken, AppError> {
     let state = get_app_state();
-    let credential = credential::Entity::find()
+    let (credential, credential_secret) = credential::Entity::find()
         .filter(credential::Column::AccessKeyId.eq(access_key))
         .filter(credential::Column::RevokedAt.is_null())
+        .find_also_related(secret::Entity)
         .one(state.identity_db.connection())
         .await?
         .ok_or_else(|| AppError::NotFound("S3 access key not found".into()))?;
-    let credential_secret = secret::Entity::find_by_id(credential.secret_id)
-        .one(state.identity_db.connection())
-        .await?
+    let credential_secret = credential_secret
         .ok_or_else(|| AppError::NotFound("S3 credential secret not found".into()))?;
     let transit_key = match (
         credential.organization_id,

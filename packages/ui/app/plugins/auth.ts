@@ -5,7 +5,7 @@ async function fetchProjects() {
   const store = useStore()
   if (!store.organization?.id) return
 
-  const requestFetch = import.meta.server ? useRequestFetch() : $fetch
+  const requestFetch = useCplaneRequestFetch()
 
     const { data } = await requestFetch(`/api/organization/${store.organization.id as ':organization_id'}/projects` as const)
   store.projects = data ?? []
