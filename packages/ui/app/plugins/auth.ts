@@ -1,37 +1,39 @@
 import useStore from "~/stores/store"
 import { getSession, loadProjectEnvironments } from "~/utils/auth"
 
-export default defineNuxtPlugin(async () => {
+async function fetchProjects() {
   const store = useStore()
-  const route = useRoute()
+  if (!store.organization?.id) return
+
   const requestFetch = useCplaneRequestFetch()
 
-  async function fetchProjects() {
-    if (!store.organization?.id) return
-
     const { data } = await requestFetch(`/api/organization/${store.organization.id as ':organization_id'}/projects` as const)
-    store.projects = data ?? []
+  store.projects = data ?? []
+}
+
+async function syncCurrentProjectEnvironments() {
+  const store = useStore()
+  const route = useRoute()
+  const projectId = route.params.project_id as string | undefined
+  if (!projectId) return
+
+  const project = store.projects.find(project => project.id === projectId)
+  if (!project) return
+
+  const environmentId = route.params.environment_id as string | undefined
+  if (store.environments_project_id === project.id) {
+    store.$patch({
+      project,
+      environment: store.environments.find(environment => environment.id === environmentId) ?? store.environments.find(environment => environment.is_default) ?? store.environments[0] ?? null,
+    })
+    return
   }
 
-  async function syncCurrentProjectEnvironments() {
-    const projectId = route.params.project_id as string | undefined
-    if (!projectId) return
+  await loadProjectEnvironments(project.id, environmentId)
+}
 
-    const project = store.projects.find(project => project.id === projectId)
-    if (!project) return
-
-    const environmentId = route.params.environment_id as string | undefined
-    if (store.environments_project_id === project.id) {
-      store.$patch({
-        project,
-        environment: store.environments.find(environment => environment.id === environmentId) ?? store.environments.find(environment => environment.is_default) ?? store.environments[0] ?? null,
-      })
-      return
-    }
-
-    await loadProjectEnvironments(project.id, environmentId, requestFetch, store)
-  }
-
+export default defineNuxtPlugin(async () => {
+  const store = useStore();
   if (import.meta.server && store.session === null) {
     await getSession();
     await fetchProjects();
@@ -39,6 +41,14 @@ export default defineNuxtPlugin(async () => {
   }
 
   if (import.meta.client) {
+    const route = useRoute()
+    const router = useRouter()
+    let currentPath = router.currentRoute.value.path
+    router.beforeEach((to) => {
+      if (to.path === currentPath) return
+      currentPath = to.path
+      store.clearBreadcrumbs()
+    })
     watch([() => route.params.project_id, () => route.params.environment_id, () => store.projects], () => void syncCurrentProjectEnvironments(), { immediate: true })
   }
 })

@@ -121,11 +121,13 @@ pub async fn get_registry(
 ) -> Result<Json<ManagedRegistryResponse>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
     let scoped = tenant_db.begin_scoped_transaction().await?;
-    let registry = find_registry(scoped.connection(), organization_id).await?;
-    let foundation = bucket::Entity::find_by_id(registry.bucket_id)
+    let (registry, foundation) = managed_registry::Entity::find_by_id(organization_id)
+        .find_also_related(bucket::Entity)
         .one(scoped.connection())
         .await?
-        .ok_or_else(|| AppError::NotFound("Managed Registry bucket not found".into()))?;
+        .ok_or_else(|| AppError::NotFound("Managed Registry is not activated".into()))?;
+    let foundation =
+        foundation.ok_or_else(|| AppError::NotFound("Managed Registry bucket not found".into()))?;
     let response = response(&registry, foundation.region_id);
     scoped.commit().await?;
     Ok(Json(response))
@@ -190,13 +192,12 @@ pub async fn activate_registry(
     let tx = scoped.connection();
     lock_organization(tx, organization_id).await?;
 
-    if let Some(existing) = managed_registry::Entity::find_by_id(organization_id)
+    if let Some((existing, foundation)) = managed_registry::Entity::find_by_id(organization_id)
+        .find_also_related(bucket::Entity)
         .one(tx)
         .await?
     {
-        let foundation = bucket::Entity::find_by_id(existing.bucket_id)
-            .one(tx)
-            .await?
+        let foundation = foundation
             .ok_or_else(|| AppError::NotFound("Managed Registry bucket not found".into()))?;
         let response = response(&existing, foundation.region_id);
         scoped.commit().await?;
@@ -377,21 +378,20 @@ pub async fn resolve_registry(
     Path(organization_id): Path<Uuid>,
 ) -> Result<Json<ResolvedManagedRegistry>, AppError> {
     let state = get_app_state();
-    let registry = managed_registry::Entity::find_by_id(organization_id)
-        .one(state.identity_db.connection())
-        .await?
-        .ok_or_else(|| AppError::NotFound("Managed Registry is not activated".into()))?;
-    let credential = credential::Entity::find_by_id(registry.credential_id)
-        .filter(credential::Column::OrganizationId.eq(organization_id))
-        .filter(credential::Column::RevokedAt.is_null())
-        .one(state.identity_db.connection())
-        .await?
+    let (registry, credential, credential_secret) =
+        managed_registry::Entity::find_by_id(organization_id)
+            .find_also_related(credential::Entity)
+            .and_also_related(secret::Entity)
+            .one(state.identity_db.connection())
+            .await?
+            .ok_or_else(|| AppError::NotFound("Managed Registry is not activated".into()))?;
+    let credential = credential
+        .filter(|credential| credential.organization_id == Some(organization_id))
+        .filter(|credential| credential.revoked_at.is_none())
         .ok_or_else(|| AppError::NotFound("Managed Registry credential not found".into()))?;
-    let credential_secret = secret::Entity::find_by_id(credential.secret_id)
-        .filter(secret::Column::Scope.eq(SecretScope::Tenant))
-        .filter(secret::Column::OrganizationId.eq(organization_id))
-        .one(state.identity_db.connection())
-        .await?
+    let credential_secret = credential_secret
+        .filter(|secret| secret.scope == SecretScope::Tenant)
+        .filter(|secret| secret.organization_id == Some(organization_id))
         .ok_or_else(|| AppError::NotFound("Managed Registry secret not found".into()))?;
     let grant = bucket_grant::Entity::find()
         .filter(bucket_grant::Column::CredentialId.eq(credential.id))

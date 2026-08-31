@@ -30,6 +30,7 @@ interface EnvironmentMeta {
   id: string
   name: string
   isDefault: boolean
+  isPreview: boolean
   exists: boolean
   isDraft: boolean
   isDeployed: boolean
@@ -262,20 +263,23 @@ async function loadGraph(preserveSelection = false) {
     const environmentDeployedTimelineMap = new Map<string, string>();
     const colorMap = new Map<string, string>();
     const environmentNames = new Map<string, string>();
+    const environmentPreviewMap = new Map<string, boolean>();
     const environmentExists = new Map<string, boolean>();
 
     environments.forEach((b, i) => {
       environmentDraftTimelineMap.set(b.id, b.draft_timeline);
       environmentDeployedTimelineMap.set(b.id, b.deployed_timeline);
       colorMap.set(b.id, environmentColors[i % environmentColors.length]);
-      environmentNames.set(b.id, `${b.name} (${b.is_preview ? 'Preview' : 'Stable'})`);
+      environmentNames.set(b.id, b.name);
+      environmentPreviewMap.set(b.id, b.is_preview);
       environmentExists.set(b.id, true);
     });
 
     for (const environmentId of environmentTimelines.keys()) {
       if (environmentNames.has(environmentId)) continue;
-      environmentNames.set(environmentId, 'Deleted Environment');
-      colorMap.set(environmentId, '#6b7280');
+        environmentNames.set(environmentId, 'Deleted Environment');
+        environmentPreviewMap.set(environmentId, false);
+        colorMap.set(environmentId, '#6b7280');
       environmentExists.set(environmentId, false);
       const revs = environmentTimelines.get(environmentId)!;
       const head = revs.reduce((a, b) => a.timeline > b.timeline ? a : b);
@@ -376,6 +380,7 @@ async function loadGraph(preserveSelection = false) {
           id,
           name: exists ? name : 'Deleted Environment',
           isDefault: isDefaultMap.get(id) || false,
+          isPreview: environmentPreviewMap.get(id) || false,
           exists,
           isDraft,
           isDeployed,
@@ -489,7 +494,7 @@ watch(open, (isOpen) => {
               v-if="selectedRevisionId"
               class="flex-shrink-0 overflow-hidden min-w-0 h-full"
             >
-              <div class="w-80 h-full bg-default flex flex-col overflow-hidden">
+              <div class="w-80 h-full bg-default/80 flex flex-col overflow-hidden">
               <!-- Loading -->
               <div v-if="detailLoading" class="flex-1 flex items-center justify-center">
                 <div class="flex flex-col items-center gap-3">
@@ -501,13 +506,13 @@ watch(open, (isOpen) => {
               <!-- Error -->
               <div v-else-if="detailError" class="flex-1 flex flex-col items-center justify-center gap-3 p-5">
                 <p class="text-sm text-muted text-center">{{ detailError }}</p>
-                <UButton size="xs" variant="soft" color="neutral" @click="selectRevision(selectedRevisionId!)">Retry</UButton>
+                <UButton size="xs" variant="frosted" color="neutral" :icon="ICONS.refresh" @click="selectRevision(selectedRevisionId!)">Retry</UButton>
               </div>
 
               <!-- Resolved -->
               <template v-else-if="selectedTimelineData">
                 <!-- Header -->
-                <div class="pl-5 pb-3">
+                <div class="px-5 py-4 border-b border-default/60">
                   <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0">
                       <h3 class="text-base font-semibold truncate">
@@ -528,71 +533,65 @@ watch(open, (isOpen) => {
                   </div>
                 </div>
 
-                <div class="flex-1 overflow-y-auto pl-5 pb-5 space-y-5">
+                <div class="flex-1 overflow-y-auto px-5 py-5 space-y-5">
                   <!-- Environments -->
-                  <div v-if="selectedNodeMeta && selectedNodeMeta.environments.length > 0">
-                    <div class="text-xs font-medium text-muted mb-1.5 uppercase tracking-wider">Environments</div>
-                    <div class="border border-default/40 rounded-lg overflow-hidden">
-                      <button
+                  <div v-if="selectedNodeMeta && selectedNodeMeta.environments.length > 0" class="space-y-2">
+                    <div class="flex items-center justify-between">
+                      <div class="text-xs font-medium text-muted uppercase tracking-wider">Environments</div>
+                      <span class="text-[11px] text-muted">{{ selectedNodeMeta.environments.length }} attached</span>
+                    </div>
+                    <div class="space-y-2">
+                      <div
                         v-for="b in selectedNodeMeta.environments"
                         :key="b.id"
-                        :disabled="!b.exists"
-                        class="group w-full text-left flex items-center gap-3 px-4 py-2.5 hover:bg-elevated/50 transition-colors border-b border-default/10 last:border-b-0 disabled:opacity-50"
-                        @click="b.exists ? navigateAndClose(`/${store.organization?.slug}/containers/${store.project?.id}/${b.id}`) : undefined"
+                        class="rounded-lg border border-default/40 bg-elevated/20 p-3"
                       >
-                        <div class="size-7 shrink-0 rounded-md bg-elevated flex items-center justify-center">
-                          <UIcon name="i-heroicons:folder" class="size-3.5 text-muted" />
-                        </div>
-                        <span class="text-sm capitalize flex-1 truncate">{{ b.name }}</span>
-                        <span v-if="b.isDefault" class="text-[10px] text-muted">default</span>
-                        <span v-if="b.isDraft && !b.isDeployed" class="text-[10px] text-warning">Draft</span>
-                        <span v-else-if="b.isDeployed && !b.isDraft" class="text-[10px] text-muted">Deployed</span>
-                        <UIcon v-if="b.exists" name="i-heroicons:chevron-right" class="size-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                        <UButton
-                          v-if="b.exists"
-                          variant="solid"
-                          size="xs"
-                          color="neutral"
-                          :icon="ICONS.pencil"
-                          @click.prevent.stop="onRenameEnvironment(b.id)"
+                        <button
+                          type="button"
+                          :disabled="!b.exists"
+                          class="group min-w-0 flex w-full flex-1 items-center gap-3 text-left disabled:opacity-50"
+                          @click="b.exists ? navigateAndClose(`/${store.organization?.slug}/containers/${store.project?.id}/${b.id}`) : undefined"
                         >
-                          Rename
-                        </UButton>
-                        <UButton
-                          v-if="!b.isDefault && b.exists"
-                          variant="solid"
-                          size="xs"
-                          color="error"
-                          :icon="ICONS.trash"
-                          @click.prevent.stop="onRemoveEnvironment(b.id)"
-                        >
-                          Delete
-                        </UButton>
-                      </button>
-                    </div>
-                  </div>
-
-                  <!-- Containers -->
-                  <div v-if="selectedTimelineData.containers.length > 0">
-                    <div class="text-xs font-medium text-muted mb-1.5 uppercase tracking-wider">Containers</div>
-                    <div class="border border-default/40 rounded-lg overflow-hidden">
-                      <button
-                        v-for="c in selectedTimelineData.containers"
-                        :key="c.container_id"
-                        :disabled="!selectedTimelineData.environment_id"
-                        class="group w-full text-left flex items-center gap-3 px-4 py-2.5 hover:bg-elevated/50 transition-colors border-b border-default/10 last:border-b-0 disabled:opacity-50"
-                        @click="selectedTimelineData.environment_id ? navigateAndClose(`/${store.organization?.slug}/containers/${store.project?.id}/${selectedTimelineData.environment_id}/${c.container_id}?revision=${selectedTimelineData.id}`) : undefined"
-                      >
-                        <div class="min-w-0 flex-1">
-                          <span class="text-sm font-medium truncate block">{{ c.container_name }}</span>
-                          <div class="flex items-center gap-2 mt-0.5 text-[11px] text-muted font-mono">
-                            <code class="bg-elevated px-1 py-0.5 rounded">{{ c.image }}</code>
-                            <span class="text-default/20">&bull;</span>
-                            <span>v{{ c.version }}</span>
+                          <div class="size-8 shrink-0 rounded-md bg-elevated flex items-center justify-center">
+                            <UIcon name="i-heroicons:folder" class="size-4 text-muted" />
                           </div>
+                          <span class="min-w-0 flex-1">
+                            <span class="text-sm capitalize truncate block">{{ b.name }}</span>
+                            <span class="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1 text-[11px] text-muted">
+                              <span>{{ b.isPreview ? 'Preview' : 'Stable' }}</span>
+                              <span v-if="b.isDefault">Default</span>
+                              <span v-if="b.isDraft" class="text-warning">Draft</span>
+                              <span v-if="b.isDeployed">Deployed</span>
+                            </span>
+                          </span>
+                          <UIcon v-if="b.exists" name="i-heroicons:chevron-right" class="size-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                        </button>
+                        <div v-if="b.exists" class="mt-3 flex flex-col gap-2">
+                          <UButton
+                            variant="frosted"
+                            size="sm"
+                            color="neutral"
+                            :icon="ICONS.pencil"
+                            block
+                            class="justify-center"
+                            @click="onRenameEnvironment(b.id)"
+                          >
+                            Rename environment
+                          </UButton>
+                          <UButton
+                            v-if="!b.isDefault"
+                            variant="frosted"
+                            size="sm"
+                            color="error"
+                            :icon="ICONS.trash"
+                            block
+                            class="justify-center"
+                            @click="onRemoveEnvironment(b.id)"
+                          >
+                            Delete environment
+                          </UButton>
                         </div>
-                        <UIcon name="i-heroicons:chevron-right" class="size-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                      </button>
+                      </div>
                     </div>
                   </div>
 
@@ -608,7 +607,7 @@ watch(open, (isOpen) => {
                       >
                         <div class="min-w-0 flex-1">
                           <span class="text-sm font-medium font-mono truncate block">{{ s.secret_name }}</span>
-                          <span class="text-[11px] text-muted font-mono mt-0.5 block">v{{ s.version }}</span>
+                          <span class="text-[11px] text-muted font-mono mt-1 block">Version {{ s.version }}</span>
                         </div>
                         <UIcon name="i-heroicons:chevron-right" class="size-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                       </button>
@@ -617,31 +616,33 @@ watch(open, (isOpen) => {
 
                   <!-- Fully empty -->
                   <div
-                    v-if="selectedTimelineData.containers.length === 0 && selectedTimelineData.secrets.length === 0 && (!selectedNodeMeta || selectedNodeMeta.environments.length === 0)"
+                    v-if="selectedTimelineData.secrets.length === 0 && (!selectedNodeMeta || selectedNodeMeta.environments.length === 0)"
                     class="py-12 text-center"
                   >
-                    <p class="text-sm text-muted/50">Nothing pinned at this revision.</p>
+                    <p class="text-sm text-muted/50">No environments or secrets attached.</p>
                   </div>
                 </div>
 
                 <!-- Footer -->
-                <div class="pl-5 flex gap-2.5">
+                <div class="px-5 pb-5 pt-4 border-t border-default/60 flex flex-col gap-2.5">
                   <UButton
-                    variant="solid"
+                    variant="frosted"
                     size="sm"
                     color="neutral"
                     :icon="ICONS.plus"
                     block
+                    class="justify-center"
                     @click="onCreateEnvironment(selectedRevisionId!)"
                   >
                     Create environment
                   </UButton>
                   <UButton
-                    variant="solid"
+                    variant="frosted"
                     size="sm"
                     color="neutral"
                     :icon="ICONS.arrowTopRight"
                     block
+                    class="justify-center"
                     @click="onRepointEnvironment(selectedRevisionId!)"
                   >
                     Repoint

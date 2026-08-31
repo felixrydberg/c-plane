@@ -4,7 +4,6 @@ use sea_orm::{
     ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, Set,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -442,45 +441,28 @@ pub async fn list_organization_environments(
     let environments = project_environment::Entity::find()
         .filter(project_environment::Column::OrganizationId.eq(organization_id))
         .order_by_asc(project_environment::Column::Name)
+        .find_also_related(project::Entity)
         .all(tx)
         .await?;
-
-    let project_ids: Vec<Uuid> = environments.iter().map(|b| b.project_id).collect();
-
-    let projects = project::Entity::find()
-        .filter(project::Column::Id.is_in(project_ids))
-        .all(tx)
-        .await?;
-
-    let mut project_names: HashMap<Uuid, String> = HashMap::new();
-    let mut project_defaults: HashMap<Uuid, Option<Uuid>> = HashMap::new();
-    for p in projects {
-        let project_id = p.id;
-        let default_environment_id = p.default_environment_id;
-        project_names.insert(project_id, p.name);
-        project_defaults.insert(project_id, default_environment_id);
-    }
 
     scoped.commit().await?;
 
     let responses = environments
         .into_iter()
-        .map(|b| {
-            let is_default = project_defaults
-                .get(&b.project_id)
-                .map(|default_id| *default_id == Some(b.id))
-                .unwrap_or(false);
+        .map(|(environment, project)| {
+            let is_default = project
+                .as_ref()
+                .is_some_and(|project| project.default_environment_id == Some(environment.id));
             EnvironmentWithProjectResponse {
-                id: b.id,
-                name: b.name,
-                is_preview: b.is_preview,
-                draft_timeline: b.draft_timeline.to_string(),
-                deployed_timeline: b.deployed_timeline.to_string(),
+                id: environment.id,
+                name: environment.name,
+                is_preview: environment.is_preview,
+                draft_timeline: environment.draft_timeline.to_string(),
+                deployed_timeline: environment.deployed_timeline.to_string(),
                 is_default,
-                project_id: b.project_id,
-                project_name: project_names
-                    .get(&b.project_id)
-                    .cloned()
+                project_id: environment.project_id,
+                project_name: project
+                    .map(|project| project.name)
                     .unwrap_or_else(|| "Unknown".into()),
             }
         })
@@ -1058,36 +1040,22 @@ pub async fn get_timeline(
     let mut containers = Vec::new();
 
     if !pins.container.is_empty() {
-        let container_ids: Vec<Uuid> = pins.container.keys().cloned().collect();
         let version_ids: Vec<Uuid> = pins.container.values().cloned().collect();
-
-        let container_models = crate::models::entities::container::Entity::find()
-            .filter(crate::models::entities::container::Column::Id.is_in(container_ids))
-            .all(tx)
-            .await?;
-
-        let container_names: HashMap<Uuid, String> = container_models
-            .into_iter()
-            .map(|c| (c.id, c.name))
-            .collect();
 
         let version_models = crate::models::entities::container_version::Entity::find()
             .filter(crate::models::entities::container_version::Column::Id.is_in(version_ids))
+            .find_also_related(crate::models::entities::container::Entity)
             .all(tx)
             .await?;
 
-        let version_map: HashMap<Uuid, &crate::models::entities::container_version::Model> =
-            version_models.iter().map(|v| (v.id, v)).collect();
-
-        for (container_id, version_id) in &pins.container {
-            if let Some(version) = version_map.get(version_id) {
+        for (version, container) in version_models {
+            if let Some(container) = container
+                && pins.container.get(&container.id) == Some(&version.id)
+            {
                 containers.push(ResolvedContainerPin {
-                    container_id: *container_id,
-                    container_name: container_names
-                        .get(container_id)
-                        .cloned()
-                        .unwrap_or_else(|| "Unknown".into()),
-                    version_id: *version_id,
+                    container_id: container.id,
+                    container_name: container.name,
+                    version_id: version.id,
                     version: version.version,
                     image: version.resolved_image.clone(),
                     external_registry_id: version.external_registry_id,

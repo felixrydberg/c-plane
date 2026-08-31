@@ -172,7 +172,6 @@ const onAddMember = async () => {
     <section class="border-b border-dashed border-default pb-10">
       <div class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 class="text-xl font-normal tracking-[-0.02em]">Organization members</h2>
           <p class="mt-2 text-sm text-muted">Search and manage member access.</p>
         </div>
         <UButton v-if="isOwner" :icon="ICONS.plus" color="primary" @click="addModalOpen = true">Add Member</UButton>

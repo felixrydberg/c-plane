@@ -33,6 +33,11 @@ const props = defineProps({
     required: false,
     default: false,
   },
+  selectable: {
+    type: Boolean,
+    required: false,
+    default: false,
+  },
   pagination: {
     type: Boolean,
     required: false,
@@ -97,6 +102,7 @@ const onContextMenu = (_e: Event, row: TableRow<T>) => {
 
 const table = useTemplateRef('table');
 const tableWrapperComponent = computed(() => props.getContextMenuItems ? UContextMenu : 'div');
+const rowClass = computed(() => props.selectable ? 'group cursor-pointer' : 'group');
 
 defineExpose({
   table,
@@ -133,20 +139,20 @@ defineExpose({
         />
       </UDropdownMenu>
     </div>
-    <div class="rounded-lg">
+    <div class="overflow-x-auto rounded-lg border border-default/60 bg-default">
       <component :is="tableWrapperComponent" :items="props.getContextMenuItems ? contextItems : undefined">
         <UTable
           ref="table"
           :data="items"
           :columns="_columns"
           :loading="props.status === 'pending'"
-          class="flex-1"
+          class="min-w-full flex-1"
           :ui="{
-            base: 'border-separate border-spacing-y-2',
-            thead: '[&>tr>th]:py-1 [&>tr>th]:px-4 [&>tr>th]:text-sm',
-            tbody: '[&>tr]:data-[selectable=true]:hover:bg-transparent',
-            tr: 'group cursor-pointer h-10 max-h-10',
-            td: 'py-2 px-4 bg-elevated/50 group-hover:bg-elevated transition-colors border-y border-default first:rounded-l-lg last:rounded-r-lg first:border-l last:border-r empty:hidden text-sm',
+            base: 'border-separate border-spacing-0',
+            thead: 'bg-elevated/20 [&>tr>th]:border-b [&>tr>th]:border-default/60 [&>tr>th]:px-4 [&>tr>th]:py-3 [&>tr>th]:text-left [&>tr>th]:text-xs [&>tr>th]:font-medium [&>tr>th]:text-muted',
+            tbody: '[&>tr:last-child>td]:border-b-0 [&>tr]:transition-colors [&>tr]:hover:bg-elevated/20',
+            tr: rowClass,
+            td: 'border-b border-default/40 px-4 py-3 text-sm empty:hidden',
           }"
           @contextmenu="onContextMenu"
           @select="(e, row: TableRow<T>) => emits('select', row)"

@@ -91,7 +91,7 @@ async function submit() {
 </script>
 
 <template>
-  <section class="space-y-3 border-t border-default/60 pt-5">
+  <section class="space-y-3 pt-5">
     <div class="flex items-center justify-between gap-3">
       <div>
         <h2 class="text-lg font-semibold">External registries</h2>
@@ -113,8 +113,8 @@ async function submit() {
             <td class="p-3">{{ registry.username }}</td>
             <td class="p-3">
               <div v-if="isOwner" class="flex justify-end gap-2">
-                <UButton :icon="ICONS.pencil" color="neutral" variant="solid" size="sm" @click="openAction('rename', registry)">Rename</UButton>
-                <UButton :icon="ICONS.refresh" color="neutral" variant="solid" size="sm" @click="openAction('rotate', registry)">Rotate token</UButton>
+                <UButton :icon="ICONS.pencil" color="neutral" size="sm" @click="openAction('rename', registry)">Rename</UButton>
+                <UButton :icon="ICONS.refresh" color="neutral" size="sm" @click="openAction('rotate', registry)">Rotate token</UButton>
                 <UButton :icon="ICONS.trash" color="error" size="sm" @click="openAction('delete', registry)">Delete</UButton>
               </div>
             </td>

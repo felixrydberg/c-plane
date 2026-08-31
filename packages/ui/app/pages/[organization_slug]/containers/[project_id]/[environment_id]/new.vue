@@ -19,7 +19,7 @@ const externalRegistriesUrl = computed(() => orgId.value
 const { data: externalRegistries } = await useCplaneFetch(externalRegistriesUrl, { default: () => [] })
 const externalRegistryId = ref('none')
 const externalRegistryItems = computed(() => [
-  { label: 'No managed registry', value: 'none' },
+  { label: 'No external registry', value: 'none' },
   ...externalRegistries.value.map(registry => ({
     label: `${registry.name} — ${registry.host} (${registry.username})`,
     value: registry.id,
@@ -94,6 +94,7 @@ function backUrl() { return `/${route.params.organization_slug}/containers/${pro
   <div class="w-full max-w-[1280px] mx-auto">
     <header class="border-b border-default/60 pb-5">
       <UiBackLink :label="projectName" :to="backUrl()" />
+      <UiPageEyebrow label="Compute" />
       <h1 class="mt-2 text-2xl font-semibold">New Container</h1>
       <p class="mt-1 text-sm text-muted">Deploy a service with one continuous configuration.</p>
     </header>
@@ -110,7 +111,7 @@ function backUrl() { return `/${route.params.organization_slug}/containers/${pro
         </section>
         <section class="grid gap-4 py-7 lg:grid-cols-[190px_minmax(0,1fr)]">
           <div><h2 class="text-sm font-semibold">Deployment</h2><p class="mt-1 text-xs text-muted">Placement, health, and visibility.</p></div>
-          <div class="grid gap-4"><UFormField label="Region" description="Where your container runs. Pick the region closest to your users."><USelect v-model="regionId" :items="regions.map(r => ({ label: r.display_name, value: r.id }))" placeholder="Select a region" class="w-full" /></UFormField><UFormField label="Health check" description="Path your app exposes for liveness probes (e.g. /health)."><UInput v-model="state.healthCheckPath" placeholder="/health" class="w-full" /></UFormField><UFormField label="Endpoint visibility"><div class="mt-1 grid grid-cols-2 gap-2"><button type="button" class="flex flex-col items-start gap-0.5 rounded-lg border-2 p-3 text-left transition-colors" :class="!state.isPublic ? 'border-primary bg-primary/10' : 'border-default/40 hover:border-default/60'" @click="state.isPublic = false"><span class="text-sm font-semibold">Private</span><span class="text-xs text-muted">Internal network only</span></button><button type="button" class="flex flex-col items-start gap-0.5 rounded-lg border-2 p-3 text-left transition-colors" :class="state.isPublic ? 'border-primary bg-primary/10' : 'border-default/40 hover:border-default/60'" @click="state.isPublic = true"><span class="text-sm font-semibold">Public</span><span class="text-xs text-muted">Accessible from the web</span></button></div></UFormField></div>
+          <div class="grid gap-4"><UFormField label="Region" description="Where your container runs. Pick the region closest to your users."><USelect v-model="regionId" :items="regions.map(r => ({ label: r.display_name, value: r.id }))" placeholder="Select a region" class="w-full" /></UFormField><UFormField label="Health check" description="Path your app exposes for liveness probes (e.g. /health)."><UInput v-model="state.healthCheckPath" placeholder="/health" class="w-full" /></UFormField><UFormField label="Endpoint visibility"><div class="mt-1 grid grid-cols-2 gap-2"><button type="button" class="flex flex-col items-start gap-0.5 rounded-md border-2 p-3 text-left transition-colors" :class="!state.isPublic ? 'border-primary bg-primary/10' : 'border-default/40 hover:border-default/60'" @click="state.isPublic = false"><span class="text-sm font-semibold">Private</span><span class="text-xs text-muted">Internal network only</span></button><button type="button" class="flex flex-col items-start gap-0.5 rounded-md border-2 p-3 text-left transition-colors" :class="state.isPublic ? 'border-primary bg-primary/10' : 'border-default/40 hover:border-default/60'" @click="state.isPublic = true"><span class="text-sm font-semibold">Public</span><span class="text-xs text-muted">Accessible from the web</span></button></div></UFormField></div>
         </section>
         <section class="grid gap-4 py-7 lg:grid-cols-[190px_minmax(0,1fr)]">
           <div><h2 class="text-sm font-semibold">Environment</h2><p class="mt-1 text-xs text-muted">Custom environment variables.</p></div>
@@ -121,7 +122,7 @@ function backUrl() { return `/${route.params.organization_slug}/containers/${pro
               <UButton size="xs" color="error" :icon="ICONS.trash" @click="removeEnvRow(i)">Remove</UButton>
             </div>
             <p v-if="envRows.length === 0" class="text-sm text-muted">No environment variables configured.</p>
-            <UButton size="sm" variant="solid" color="neutral" :icon="ICONS.plus" @click="addEnvRow">Add Variable</UButton>
+            <UButton size="sm" color="neutral" :icon="ICONS.plus" @click="addEnvRow">Add Variable</UButton>
           </div>
         </section>
         <p v-if="error" class="py-4 text-sm text-error">{{ error }}</p>

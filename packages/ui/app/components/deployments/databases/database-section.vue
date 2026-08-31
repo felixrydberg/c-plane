@@ -122,13 +122,13 @@ function isDefaultBranch(b: DatabaseBranch): boolean {
 </script>
 
 <template>
-  <section class="border-b border-default/60 bg-transparent last:border-b-0">
+  <section class="overflow-hidden rounded-lg border border-default/60 bg-default">
     <!-- Header -->
     <div class="flex items-center justify-between px-5 py-4 border-b border-default/50">
       <div class="flex items-center gap-3 min-w-0">
         <div class="min-w-0">
           <span class="block text-sm font-semibold truncate">{{ databaseName }}</span>
-          <span class="mt-0.5 block text-xs text-muted">Postgres database</span>
+          <span class="mt-0.5 block text-xs text-muted">D1 - Postgres database</span>
         </div>
         <span
           v-if="hasHa"
@@ -152,16 +152,24 @@ function isDefaultBranch(b: DatabaseBranch): boolean {
         >
           Link
         </UButton>
-        <UButton
-          variant="solid"
-          size="xs"
-          color="error"
-          :icon="ICONS.trash"
-          :loading="deleting"
-          @click="deleteModalOpen = true"
+        <UDropdownMenu
+          :items="[[{
+            label: 'Delete',
+            icon: ICONS.trash,
+            color: 'error',
+            onSelect: () => { deleteModalOpen = true },
+          }]]"
+          size="sm"
+          :content="{ align: 'end' }"
         >
-          Delete
-        </UButton>
+          <UButton
+            :icon="ICONS.more"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            aria-label="Database actions"
+          />
+        </UDropdownMenu>
       </div>
     </div>
 

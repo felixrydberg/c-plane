@@ -75,6 +75,7 @@ export default defineNuxtConfig({
     families: [
       { name: "Space Mono", provider: "google" },
       { name: "Space Grotesk", provider: "google" },
+      { name: "Inter", provider: "google" },
       { name: "Audiowide", provider: "google" }
     ]
   },

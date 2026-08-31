@@ -18,6 +18,7 @@ const currentEnvironment = computed(() =>
     <div class="flex flex-col gap-5 border-b border-default pb-6 sm:flex-row sm:items-end sm:justify-between">
       <div>
         <p class="font-space-mono text-[11px] uppercase tracking-[0.08em] text-muted">Project overview</p>
+        <UiPageEyebrow label="Overview" />
         <h1 class="mt-2 text-4xl font-normal tracking-[-0.04em]">{{ selectedProject.name }}</h1>
         <p class="mt-2 text-sm text-muted">Infrastructure, deployments, and credentials in one place.</p>
       </div>
@@ -41,7 +42,7 @@ const currentEnvironment = computed(() =>
         <UCard class="border-dashed border-default bg-transparent" :ui="{ body: 'p-5' }">
           <div class="flex items-start justify-between gap-4">
             <div>
-              <p class="text-sm text-muted">Databases</p>
+              <p class="text-sm text-muted">D1 - Postgres</p>
               <p class="mt-3 text-4xl font-normal tracking-[-0.04em]">0</p>
             </div>
             <div class="flex size-10 items-center justify-center rounded-md bg-primary/10">
@@ -52,7 +53,7 @@ const currentEnvironment = computed(() =>
         <UCard class="border-dashed border-default bg-transparent" :ui="{ body: 'p-5' }">
           <div class="flex items-start justify-between gap-4">
             <div>
-              <p class="text-sm text-muted">Containers</p>
+              <p class="text-sm text-muted">C1 - Containers</p>
               <p class="mt-3 text-4xl font-normal tracking-[-0.04em]">0</p>
             </div>
             <div class="flex size-10 items-center justify-center rounded-md bg-primary/10">
@@ -60,6 +61,13 @@ const currentEnvironment = computed(() =>
             </div>
           </div>
         </UCard>
+      </div>
+      <div class="flex flex-col gap-2">
+        <span class="text-xl">Heading</span>
+        <span class="text-lg">Heading</span>
+        <span class="text-md">Heading</span>
+        <span class="text-sm">Heading</span>
+        <span class="text-xs">Heading</span>
       </div>
     </section>
   </div>

@@ -343,17 +343,28 @@ async fn verify_bucket_permissions(
     project_id: Uuid,
     permissions: &[BucketPermissionRequest],
 ) -> Result<Vec<Uuid>, AppError> {
-    let mut foundation_bucket_ids = Vec::with_capacity(permissions.len());
-    for permission in permissions {
-        let bucket = storage::Entity::find_by_id(permission.bucket_id)
-            .filter(storage::Column::ProjectId.eq(project_id))
-            .filter(storage::Column::OrganizationId.eq(organization_id))
-            .one(tx)
-            .await?
-            .ok_or_else(|| AppError::NotFound("Bucket not found in this project".into()))?;
-        foundation_bucket_ids.push(bucket.bucket_id);
-    }
-    Ok(foundation_bucket_ids)
+    let bucket_ids = permissions
+        .iter()
+        .map(|permission| permission.bucket_id)
+        .collect::<Vec<_>>();
+    let buckets = storage::Entity::find()
+        .filter(storage::Column::Id.is_in(bucket_ids))
+        .filter(storage::Column::ProjectId.eq(project_id))
+        .filter(storage::Column::OrganizationId.eq(organization_id))
+        .all(tx)
+        .await?
+        .into_iter()
+        .map(|bucket| (bucket.id, bucket.bucket_id))
+        .collect::<HashMap<_, _>>();
+    permissions
+        .iter()
+        .map(|permission| {
+            buckets
+                .get(&permission.bucket_id)
+                .copied()
+                .ok_or_else(|| AppError::NotFound("Bucket not found in this project".into()))
+        })
+        .collect()
 }
 
 async fn insert_grants(
@@ -363,8 +374,10 @@ async fn insert_grants(
     bucket_ids: &[Uuid],
     permissions: &[BucketPermissionRequest],
 ) -> Result<(), AppError> {
-    for (bucket_id, permission) in bucket_ids.iter().zip(permissions) {
-        bucket_grant::ActiveModel {
+    let grants = bucket_ids
+        .iter()
+        .zip(permissions)
+        .map(|(bucket_id, permission)| bucket_grant::ActiveModel {
             id: Set(Uuid::new_v4()),
             credential_id: Set(credential_id),
             bucket_id: Set(*bucket_id),
@@ -373,9 +386,10 @@ async fn insert_grants(
             can_read: Set(permission.can_read),
             can_write: Set(permission.can_write),
             ..Default::default()
-        }
-        .insert(tx)
-        .await?;
+        })
+        .collect::<Vec<_>>();
+    if !grants.is_empty() {
+        bucket_grant::Entity::insert_many(grants).exec(tx).await?;
     }
     Ok(())
 }

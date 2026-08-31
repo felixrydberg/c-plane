@@ -1,5 +1,10 @@
 import type { Environment, Project } from '@cplane/sdk'
 
+type Breadcrumb = {
+  label: string
+  to?: string
+}
+
 type State = {
   user: User | null
   session: Session | null
@@ -10,6 +15,7 @@ type State = {
   environment: Environment | null
   environments: Environment[]
   environments_project_id: string | null
+  breadcrumbs: Breadcrumb[]
   // ponytail: change counter watched by resource pages.
   // Bump when a repoint/delete invalidates cached lists.
   // Incremented instead of keyed to avoid coupling to specific fetch shapes.
@@ -27,6 +33,7 @@ export const useStore = defineStore("auth", {
     environment: null,
     environments: [],
     environments_project_id: null,
+    breadcrumbs: [],
     refreshKey: 0,
   }),
 
@@ -40,6 +47,14 @@ export const useStore = defineStore("auth", {
         this.environments_project_id = null
       }
       this.organization = organization
+    },
+
+    setBreadcrumbs(breadcrumbs: Breadcrumb[]) {
+      this.breadcrumbs = breadcrumbs
+    },
+
+    clearBreadcrumbs() {
+      this.breadcrumbs = []
     },
   }
 })

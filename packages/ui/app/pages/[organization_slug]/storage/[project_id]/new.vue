@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ICONS } from '~/utils/icons'
 import { getErrorMessage } from '~/utils/errors'
 
 const store = useStore()
@@ -38,8 +39,9 @@ async function createBucket() {
   <div class="w-full max-w-[1200px] mx-auto">
     <header class="border-b border-default/60 pb-5">
       <UiBackLink :label="projectName" :to="backUrl()" />
+      <UiPageEyebrow label="Storage &amp; Databases" />
       <h1 class="mt-2 text-2xl font-semibold">New Bucket</h1>
-      <p class="mt-1 text-sm text-muted">Create storage shared by every environment in this project.</p>
+      <p class="mt-1 text-sm text-muted">Create a bucket in S1 - Object Storage, shared by every environment in this project.</p>
     </header>
 
     <div class="grid lg:grid-cols-[minmax(0,1fr)_280px]">
@@ -56,7 +58,7 @@ async function createBucket() {
       </main>
 
       <aside class="border-t border-default/60 py-8 lg:border-l lg:border-t-0 lg:pl-6">
-        <div class="sticky top-6 rounded-lg border border-dashed border-default p-5"><h2 class="text-sm font-semibold">Bucket Summary</h2><dl class="mt-5 space-y-4 text-sm"><div><dt class="text-xs text-muted">Project</dt><dd class="mt-1">{{ projectName }}</dd></div><div><dt class="text-xs text-muted">Name</dt><dd class="mt-1 font-mono text-xs">{{ name || 'Not set' }}</dd></div></dl><div class="mt-8 flex gap-3"><UButton variant="ghost" color="neutral" :to="backUrl()">Cancel</UButton><UButton color="primary" :loading="loading" :disabled="!name.trim() || !regionId" @click="createBucket">Create Bucket</UButton></div></div>
+        <div class="sticky top-6 rounded-lg border border-dashed border-default p-5"><h2 class="text-sm font-semibold">Bucket Summary</h2><dl class="mt-5 space-y-4 text-sm"><div><dt class="text-xs text-muted">Project</dt><dd class="mt-1">{{ projectName }}</dd></div><div><dt class="text-xs text-muted">Name</dt><dd class="mt-1 font-mono text-xs">{{ name || 'Not set' }}</dd></div></dl><div class="mt-8 flex gap-3"><UButton variant="ghost" color="neutral" :to="backUrl()">Cancel</UButton><UButton :icon="ICONS.plus" color="primary" :loading="loading" :disabled="!name.trim() || !regionId" @click="createBucket">Create Bucket</UButton></div></div>
       </aside>
     </div>
   </div>

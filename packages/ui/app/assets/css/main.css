@@ -30,6 +30,7 @@
 @theme {
   --font-space-mono: "Space Mono", monospace;
   --font-space-grotesk: "Space Grotesk", sans-serif;
+  --font-inter: "Inter", sans-serif;
 }
 
 @layer base {
@@ -48,21 +49,21 @@
 
 :root {
   color-scheme: light;
-  --cp-canvas: #ffffff;
+  --cp-canvas: #fafafa;
   --cp-surface: #ffffff;
-  --cp-surface-subtle: #ededed;
-  --cp-surface-strong: #dcdcdc;
-  --cp-ink: #0b0b0b;
-  --cp-ink-muted: #797979;
-  --cp-line: #ededed;
-  --cp-line-strong: #b9b9b9;
+  --cp-surface-subtle: #f3f3f3;
+  --cp-surface-strong: #dfdfdf;
+  --cp-ink: #111111;
+  --cp-ink-muted: #707070;
+  --cp-line: #dedede;
+  --cp-line-strong: #b8b8b8;
   --cp-brand: #f36458;
   --cp-focus: #0052ef;
-  --ui-text-dimmed: #979797;
+  --ui-text-dimmed: #8a8a8a;
   --ui-text-muted: var(--cp-ink-muted);
   --ui-text-toned: #5b5b5b;
   --ui-text: var(--cp-ink);
-  --ui-text-highlighted: #0b0b0b;
+  --ui-text-highlighted: #111111;
   --ui-bg: var(--cp-canvas);
   --ui-bg-muted: var(--cp-surface);
   --ui-bg-elevated: var(--cp-surface-subtle);
@@ -76,21 +77,30 @@
 
 .dark {
   color-scheme: dark;
-  --cp-canvas: #0b0b0b;
-  --cp-surface: #212121;
-  --cp-surface-subtle: #212121;
-  --cp-surface-strong: #353535;
+  --cp-canvas: #090909;
+  --cp-surface: #111111;
+  --cp-surface-subtle: #171717;
+  --cp-surface-strong: #292929;
   --cp-ink: #ffffff;
-  --cp-ink-muted: #b9b9b9;
-  --cp-line: #353535;
-  --cp-line-strong: #505b6c;
-  --cp-brand: #f36458;
+  --cp-ink-muted: #969696;
+  --cp-line: #2b2b2b;
+  --cp-line-strong: #3a3a3a;
+  --cp-brand: #dc493f;
   --cp-focus: #55beff;
-  --ui-text-dimmed: #797979;
+  --ui-primary: #dc493f;
+  --ui-text-dimmed: #6f6f6f;
   --ui-text-muted: var(--cp-ink-muted);
-  --ui-text-toned: #b9b9b9;
+  --ui-text-toned: #a5a5a5;
   --ui-text: var(--cp-ink);
   --ui-text-highlighted: #ffffff;
+  --ui-color-neutral-950: #090909;
+  --ui-color-neutral-900: #111111;
+  --ui-color-neutral-800: #171717;
+  --ui-color-neutral-700: #202020;
+  --ui-color-neutral-600: #2b2b2b;
+  --ui-color-neutral-500: #6f6f6f;
+  --ui-color-neutral-400: #969696;
+  --ui-color-neutral-300: #b9b9b9;
   --ui-bg: var(--cp-canvas);
   --ui-bg-muted: var(--cp-surface);
   --ui-bg-elevated: var(--cp-surface-subtle);

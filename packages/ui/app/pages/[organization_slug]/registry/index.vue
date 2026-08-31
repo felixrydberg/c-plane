@@ -34,7 +34,7 @@ const { data: garbageCollection, refresh: refreshGarbageCollection } = await use
 const repositoriesUrl = computed(() => organizationId.value && managedRegistry.value
   ? `/api/organization/${organizationId.value as ':organization_id'}/registry/repositories` as const
   : '')
-const { data: repositories, refresh: refreshRepositories } = await useCplaneFetch(repositoriesUrl, { default: () => [] })
+const { data: repositories, status, refresh: refreshRepositories } = await useCplaneFetch(repositoriesUrl, { default: () => [] })
 
 const selectedRepository = ref<Repository | null>(null)
 const deleteModalOpen = ref(false)
@@ -43,7 +43,56 @@ const deleting = ref(false)
 const activating = ref(false)
 const runningGc = ref(false)
 const regionId = ref('')
+const refreshing = ref(false)
+const search = ref('')
 const registryIsActive = computed(() => managedRegistry.value?.status === 'active')
+const UButton = resolveComponent('UButton')
+
+const filteredRepositories = computed(() => {
+  const query = search.value.trim().toLowerCase()
+  return query ? repositories.value.filter(repository => repository.name.toLowerCase().includes(query)) : repositories.value
+})
+
+async function reloadRepositories() {
+  refreshing.value = true
+  try {
+    await refreshRepositories()
+  } finally {
+    refreshing.value = false
+  }
+}
+
+const repositoryColumns: TableColumn<Repository>[] = [
+  {
+    accessorKey: 'name',
+    header: 'Repository',
+    cell: ({ row }) => h('span', { class: 'break-all font-mono text-sm' }, row.original.name),
+  },
+  {
+    id: 'reference',
+    header: 'Reference',
+    meta: { class: { th: 'hidden lg:table-cell', td: 'hidden lg:table-cell' } },
+    cell: ({ row }) => h('span', { class: 'break-all font-mono text-xs text-muted' }, `${registryHost.value}/${organizationSlug.value}/${row.original.name}`),
+  },
+  {
+    accessorKey: 'created_at',
+    header: 'Created',
+    meta: { class: { th: 'hidden sm:table-cell', td: 'hidden sm:table-cell' } },
+    cell: ({ row }) => new Date(row.original.created_at).toLocaleDateString(),
+  },
+  {
+    id: 'actions',
+    header: '',
+    meta: { class: { th: 'text-right', td: 'text-right' } },
+    cell: ({ row }) => canManageRegistry.value ? h(UButton, {
+      icon: ICONS.trash,
+      color: 'error',
+      size: 'sm',
+      disabled: !registryIsActive.value,
+      onClick: () => confirmDelete(row.original),
+    }, { default: () => 'Delete' }) : null,
+  },
+]
 
 function formatTimestamp(value?: string | null) {
   if (!value) return 'Not yet'
@@ -99,14 +148,35 @@ const gcRuns = computed<GcRunRow[]>(() => (garbageCollection.value?.gc_runs.data
 })))
 
 const gcRunColumns: TableColumn<GcRunRow>[] = [
-  { accessorKey: 'started', header: 'Started' },
-  { accessorKey: 'duration', header: 'Duration' },
-  { accessorKey: 'before', header: 'Space before' },
-  { accessorKey: 'after', header: 'Space after' },
-  { accessorKey: 'reclaimed', header: 'Reclaimed' },
+  {
+    accessorKey: 'started',
+    header: 'Started',
+    meta: { class: { th: 'w-[28%] text-left', td: 'whitespace-nowrap' } },
+  },
+  {
+    accessorKey: 'duration',
+    header: 'Duration',
+    meta: { class: { th: 'w-[12%] text-right', td: 'text-right tabular-nums whitespace-nowrap' } },
+  },
+  {
+    accessorKey: 'before',
+    header: 'Space before',
+    meta: { class: { th: 'w-[15%] text-right', td: 'text-right tabular-nums whitespace-nowrap' } },
+  },
+  {
+    accessorKey: 'after',
+    header: 'Space after',
+    meta: { class: { th: 'w-[15%] text-right', td: 'text-right tabular-nums whitespace-nowrap' } },
+  },
+  {
+    accessorKey: 'reclaimed',
+    header: 'Reclaimed',
+    meta: { class: { th: 'w-[15%] text-right', td: 'text-right tabular-nums whitespace-nowrap' } },
+  },
   {
     accessorKey: 'result',
     header: 'Result',
+    meta: { class: { th: 'w-[15%] text-left', td: 'whitespace-nowrap' } },
     cell: ({ row }) => h('div', {
       title: row.original.error,
       class: row.original.result === 'Failed' ? 'text-error' : 'text-success',
@@ -202,14 +272,15 @@ async function deleteRepository() {
 </script>
 
 <template>
-  <div class="flex w-full max-w-[1500px] flex-col gap-5 mx-auto">
+  <div class="flex w-full max-w-375 flex-col gap-4 mx-auto">
     <div class="flex flex-col gap-4 border-b border-default/60 pb-5 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <h1 class="text-2xl font-semibold">Registry</h1>
+        <UiPageEyebrow label="Storage &amp; Databases" />
+        <h1 class="text-2xl font-semibold">S2 - Registry</h1>
         <p class="text-muted text-sm mt-1">Private repositories for {{ organizationSlug }}.</p>
       </div>
       <div v-if="managedRegistry" class="flex flex-wrap justify-end gap-2">
-        <UButton :icon="ICONS.authentication" color="neutral" variant="solid" :to="`/${organizationSlug}/registry/access-tokens`">Manage access tokens</UButton>
+        <UButton :icon="ICONS.authentication" color="neutral" :to="`/${organizationSlug}/registry/access-tokens`">Manage access tokens</UButton>
         <UButton :icon="ICONS.plus" color="primary" :to="`/${route.params.organization_slug}/registry/new`" :disabled="!registryIsActive">New repository</UButton>
       </div>
     </div>
@@ -238,21 +309,20 @@ async function deleteRepository() {
         description="Pulls, pushes, and Registry changes are temporarily unavailable while garbage collection runs."
       />
 
-      <div v-if="!repositories.length" class="flex flex-col items-center justify-center py-14 gap-3 text-center rounded-lg border border-dashed border-default bg-transparent">
-        <UIcon :name="ICONS.registry" class="size-10 text-muted" />
-        <p class="text-muted">No repositories yet.</p>
-        <p class="text-dimmed text-sm">Create your first repository before pushing an image.</p>
+      <div class="flex items-center gap-2">
+        <UInput v-model="search" icon="i-heroicons:magnifying-glass" placeholder="Search repositories..." aria-label="Search repositories" class="min-w-0 flex-1" />
+        <UButton :icon="ICONS.refresh" color="neutral" :loading="refreshing" @click="reloadRepositories">Refresh</UButton>
       </div>
 
-      <section v-for="repository in repositories" :key="repository.id" class="overflow-hidden rounded-lg border border-dashed border-default bg-transparent">
-        <div class="flex items-center justify-between gap-3 border-b border-default p-4">
-          <div class="min-w-0 flex-1">
-            <h2 class="font-semibold">{{ repository.name }}</h2>
-            <p class="mt-1 break-all font-mono text-xs text-muted">{{ registryHost }}/{{ organizationSlug }}/{{ repository.name }}</p>
+      <UiTable :status="status" :items="filteredRepositories" :columns="repositoryColumns" disable-header>
+        <template #empty>
+          <div class="flex flex-col items-center justify-center gap-3 py-14 text-center">
+            <UIcon :name="ICONS.registry" class="size-10 text-muted" />
+            <p class="text-muted">{{ search ? 'No matching repositories.' : 'No repositories yet.' }}</p>
+            <p v-if="!search" class="text-dimmed text-sm">Create your first repository before pushing an image.</p>
           </div>
-          <UButton :icon="ICONS.trash" color="error" size="sm" :disabled="!registryIsActive" @click="confirmDelete(repository)">Delete</UButton>
-        </div>
-      </section>
+        </template>
+      </UiTable>
 
       <section class="rounded-lg border border-default p-5">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -267,7 +337,6 @@ async function deleteRepository() {
             v-if="canManageRegistry"
             :icon="ICONS.refresh"
             color="neutral"
-            variant="solid"
             :disabled="!registryIsActive || Boolean(garbageCollection?.active_job && garbageCollection.active_job.trigger === 'manual')"
             @click="gcModalOpen = true"
           >Run cleanup now</UButton>
@@ -276,16 +345,19 @@ async function deleteRepository() {
         <div class="mt-6 border-t border-default/60 pt-5">
           <h3 class="font-semibold">Recent cleanups</h3>
           <p class="mt-1 text-sm text-muted">Latest garbage-collection runs.</p>
-          <UTable
-            v-if="gcRuns.length"
-            :data="gcRuns"
-            :columns="gcRunColumns"
-            class="mt-4"
-            :ui="{
-              thead: '[&>tr>th]:py-1 [&>tr>th]:px-4 [&>tr>th]:text-sm',
-              td: 'py-2 px-4 bg-elevated/50 border-y border-default first:rounded-l-lg last:rounded-r-lg first:border-l last:border-r text-sm',
-            }"
-          />
+          <div v-if="gcRuns.length" class="mt-4 overflow-x-auto rounded-lg border border-default/60 bg-default">
+            <UTable
+              :data="gcRuns"
+              :columns="gcRunColumns"
+              class="min-w-[760px] w-full table-fixed"
+              :ui="{
+                base: 'border-separate border-spacing-0',
+                thead: 'bg-elevated/20 [&>tr>th]:border-b [&>tr>th]:border-default/60 [&>tr>th]:px-4 [&>tr>th]:py-3 [&>tr>th]:text-xs [&>tr>th]:font-medium [&>tr>th]:text-muted',
+                tbody: '[&>tr]:transition-colors [&>tr:hover]:bg-elevated/20 [&>tr:last-child>td]:border-b-0',
+                td: 'border-b border-default/40 px-4 py-3 text-sm',
+              }"
+            />
+          </div>
           <UPagination
             v-if="garbageCollection?.gc_runs.pagination.total_pages > 1"
             v-model:page="gcPage"
@@ -296,8 +368,6 @@ async function deleteRepository() {
           <p v-if="!gcRuns.length" class="mt-4 text-sm text-muted">No cleanups yet.</p>
         </div>
       </section>
-
-      <RegistryExternalRegistriesPanel v-if="organizationId" :organization-id="organizationId" />
     </template>
 
     <UModal v-model:open="gcModalOpen" title="Run Registry cleanup" description="Registry access will pause while garbage collection removes unreferenced image data.">

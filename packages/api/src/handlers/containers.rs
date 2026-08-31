@@ -400,30 +400,20 @@ pub async fn list_containers(
             return Ok(Json(Vec::new()));
         }
 
-        let container_ids: Vec<Uuid> = pins.container.keys().cloned().collect();
         let pinned_version_ids: Vec<Uuid> = pins.container.values().cloned().collect();
-
-        let containers = container::Entity::find()
-            .filter(container::Column::Id.is_in(container_ids))
-            .all(tx)
-            .await?;
 
         let versions = container_version::Entity::find()
             .filter(container_version::Column::Id.is_in(pinned_version_ids))
+            .find_also_related(container::Entity)
             .all(tx)
             .await?;
 
-        let version_map: HashMap<Uuid, &container_version::Model> =
-            versions.iter().map(|v| (v.id, v)).collect();
-
         let mut responses = Vec::new();
-        for c in containers {
-            if let Some(v) = pins
-                .container
-                .get(&c.id)
-                .and_then(|vid| version_map.get(vid))
+        for (version, container) in versions {
+            if let Some(container) = container
+                && pins.container.get(&container.id) == Some(&version.id)
             {
-                responses.push(build_response(&c, v));
+                responses.push(build_response(&container, &version));
             }
         }
 

@@ -2,7 +2,7 @@
 
 ## Rules
 
-1. **Solid colors only** - major action buttons use solid variants.
+1. **Frosted by default** - major action buttons use the global `frosted` variant from the Nuxt UI theme. Do not recreate it with page-level classes.
 2. **Text + icon** - action buttons include both an icon and a label. Continue and Next are text-only flow-navigation exceptions, along with Cancel and Back.
 3. **No X marks** - never use an X mark for Cancel, Back, Close, or Dismiss.
 4. **Nuxt UI `<UButton>`** - always use the built-in component.
@@ -10,6 +10,14 @@
 ## Variants
 
 Not every button should be primary. `color` communicates **severity**, not importance - match it to what happens when clicked.
+
+### Frosted (default)
+
+The Nuxt UI theme applies `variant="frosted"` by default. Major actions should rely on that default.
+
+```vue
+<UButton :icon="ICONS.plus">New Container</UButton>
+```
 
 ### Primary
 
@@ -25,8 +33,8 @@ For the single most important action on a page: Create, Save, Deploy. Use sparin
 For actions without destructive or primary weight: Edit, Settings, Link, Manage, Hide, Graph. The default choice when primary is already claimed.
 
 ```vue
-<UButton :icon="ICONS.general" variant="solid" color="neutral" @click="openSettings">Settings</UButton>
-<UButton :icon="ICONS.plus" variant="solid" color="neutral" @click="addEnvRow">Add</UButton>
+<UButton :icon="ICONS.general" color="neutral" @click="openSettings">Settings</UButton>
+<UButton :icon="ICONS.plus" color="neutral" @click="addEnvRow">Add</UButton>
 ```
 
 ### Destructive
@@ -65,6 +73,11 @@ Use these icon keys from `~/utils/icons`:
 | `check` | `i-heroicons:check` | Confirm / Save |
 | `refresh` | `i-heroicons:arrow-path` | Retry / Refresh |
 | `download` | `i-heroicons:arrow-down-tray` | Download |
+| `more` | `i-heroicons:ellipsis-horizontal` | More actions |
+| `calendar` | `i-heroicons:calendar-days` | Date range |
+| `chevronLeft` | `i-heroicons:chevron-left` | Previous / back navigation |
+| `chevronRight` | `i-heroicons:chevron-right` | Next / forward navigation |
+| `revision` | `i-heroicons:clock` | Draft / deployed revision control |
 
 Add new keys to `packages/ui/app/utils/icons.ts` and register them here.
 
@@ -88,4 +101,4 @@ The `loading` prop disables the button and shows a spinner - no separate `:disab
 - Use `variant="ghost"` or `variant="soft"` on major actions
 - Use an X mark for Cancel, Back, Close, or Dismiss
 - Use icon-only buttons for actions
-- Use `color="neutral"` with no variant - it is invisible on the page
+- Recreate the frosted treatment with component-level CSS classes

@@ -3702,6 +3702,21 @@
           }
         }
       },
+      "BucketRegionResponse": {
+        "type": "object",
+        "required": [
+          "label",
+          "slug"
+        ],
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          }
+        }
+      },
       "BucketResponse": {
         "type": "object",
         "required": [
@@ -3723,8 +3738,7 @@
             "format": "uuid"
           },
           "region": {
-            "type": "string",
-            "format": "uuid"
+            "$ref": "#/components/schemas/BucketRegionResponse"
           }
         }
       },

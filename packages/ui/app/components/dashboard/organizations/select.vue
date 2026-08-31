@@ -106,9 +106,10 @@ watch(isDropdownOpen, (newValue) => {
       color="neutral"
       variant="soft"
       block
+      size="sm"
       :square="collapsed"
-      class="data-[state=open]:bg-elevated mt-4"
-      :class="[!collapsed && 'py-2']"
+      class="mt-4 min-h-8 border border-default bg-elevated/70 hover:bg-elevated data-[state=open]:bg-elevated"
+      :class="[collapsed ? 'size-8' : 'py-2']"
       :ui="{
         trailingIcon: 'text-dimmed'
       }"

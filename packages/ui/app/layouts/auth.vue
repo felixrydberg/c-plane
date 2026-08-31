@@ -6,6 +6,7 @@ import { ICONS } from '~/utils/icons'
 const store = useStore();
 const route = useRoute();
 const open = ref(true);
+const isOwner = computed(() => store.organization?.member?.role === 'owner')
 
 const routeProjectId = computed(() => route.params.project_id as string | undefined)
 const routeEnvironmentId = computed(() => route.params.environment_id as string | undefined)
@@ -17,9 +18,7 @@ const draftRevisionQuery = computed(() => {
     : ''
 })
 
-const isOwner = computed(() => store.organization?.member?.role === 'owner');
-
-const items = computed<NavigationMenuItem[]>(() => [
+const mainItems = computed<NavigationMenuItem[]>(() => [
   {
     label: 'Overview',
     icon: ICONS.overview,
@@ -27,43 +26,8 @@ const items = computed<NavigationMenuItem[]>(() => [
     exact: true,
   },
   {
-    type: "label",
-    label: 'Project Resources',
-  },
-  {
-    label: 'Containers',
-    icon: ICONS.containers,
-    to: `/${store.organization?.slug}/containers${navProjectId.value ? `/${navProjectId.value}${routeEnvironmentId.value ? `/${routeEnvironmentId.value}` : ''}` : ''}${draftRevisionQuery.value}`,
-  },
-  {
-    label: 'Databases',
-    icon: ICONS.databases,
-    open: true,
-    children: [
-      {
-        label: 'Postgres',
-        to: `/${store.organization?.slug}/databases/postgres${navProjectId.value ? `/${navProjectId.value}` : ''}`,
-      },
-    ]
-  },
-  {
-    label: 'Secrets',
-    icon: ICONS.secrets,
-    disabled: true,
-  },
-  {
-    label: "Storage",
-    icon: ICONS.storage,
-    to: `/${store.organization?.slug}/storage${navProjectId.value ? `/${navProjectId.value}` : ''}`,
-  },
-  {
-    type: "label",
-    label: 'Organization',
-  },
-  {
-    label: "Registry",
-    icon: ICONS.registry,
-    to: `/${store.organization?.slug}/registry`,
+    type: 'label',
+    label: 'Observe',
   },
   {
     label: 'Logs',
@@ -78,34 +42,102 @@ const items = computed<NavigationMenuItem[]>(() => [
     to: `/${store.organization?.slug}/analytics`,
   },
   {
-    type: "label",
-    label: 'Settings',
+    type: 'label',
+    label: 'Build',
   },
-      ...(isOwner.value ? [{
-        label: 'General',
-        icon: ICONS.general,
-        to: `/${store.organization?.slug}/settings`,
-        exact: true,
-      }] : []),
+  {
+    label: 'Compute',
+    icon: ICONS.bolt,
+    trailingIcon: ICONS.chevronRight,
+    open: true,
+    children: [
       {
-        label: 'Members',
-        icon: ICONS.members,
-        to: `/${store.organization?.slug}/settings/members`,
+        label: 'Containers',
+        badge: { label: 'C1', color: 'neutral', variant: 'soft' },
+        to: `/${store.organization?.slug}/containers${navProjectId.value ? `/${navProjectId.value}${routeEnvironmentId.value ? `/${routeEnvironmentId.value}` : ''}` : ''}${draftRevisionQuery.value}`,
+      },
+    ],
+  },
+  {
+    label: 'Storage & Databases',
+    icon: ICONS.databases,
+    trailingIcon: ICONS.chevronRight,
+    open: true,
+    children: [
+      {
+        label: 'Object Storage',
+        badge: { label: 'S1', color: 'neutral', variant: 'soft' },
+        to: `/${store.organization?.slug}/storage${navProjectId.value ? `/${navProjectId.value}` : ''}`,
+      },
+      {
+        label: 'Registry',
+        badge: { label: 'S2', color: 'neutral', variant: 'soft' },
+        to: `/${store.organization?.slug}/registry`,
+      },
+      {
+        label: 'Postgres',
+        badge: { label: 'D1', color: 'neutral', variant: 'soft' },
+        to: `/${store.organization?.slug}/databases/postgres${navProjectId.value ? `/${navProjectId.value}` : ''}`,
+      },
+    ]
+  },
+  {
+    label: 'Integrations',
+    icon: ICONS.link,
+    trailingIcon: ICONS.chevronRight,
+    open: true,
+    children: [
+      {
+        label: 'GitHub',
+        to: `/${store.organization?.slug}/integrations/github`,
         exact: true,
       },
-      ...(isOwner.value ? [{
-        label: 'Authentication',
-        icon: ICONS.authentication,
-        to: `/${store.organization?.slug}/settings/authentication`,
-        exact: true,
-      }] : []),
       {
-        label: 'Audit Log',
-        icon: ICONS.logs,
-        to: `/${store.organization?.slug}/settings/audit-log`,
+        label: 'External Registries',
+        to: `/${store.organization?.slug}/integrations/external-registries`,
         exact: true,
       },
+    ],
+  },
 ] satisfies NavigationMenuItem[]);
+
+const accountItems = computed<NavigationMenuItem[]>(() => [{
+  label: 'Manage organization',
+  trailingIcon: ICONS.chevronRight,
+  children: [
+    ...(isOwner.value ? [{
+      label: 'General',
+      to: `/${store.organization?.slug}/settings`,
+      exact: true,
+    }] : []),
+    {
+      label: 'Members',
+      to: `/${store.organization?.slug}/settings/members`,
+      exact: true,
+    },
+    ...(isOwner.value ? [{
+      label: 'API Keys',
+      to: `/${store.organization?.slug}/settings/authentication`,
+      exact: true,
+    }] : []),
+    {
+      label: 'Audit Log',
+      to: `/${store.organization?.slug}/settings/audit-log`,
+      exact: true,
+    },
+  ],
+}]);
+
+const navigationUi = {
+  list: 'space-y-1',
+  item: 'px-0',
+  label: 'px-3 pb-2 pt-5 text-sm font-normal text-muted first:pt-4',
+  link: 'h-[34px] gap-3 overflow-hidden rounded-md px-3 py-0 font-medium text-default text-sm hover:before:bg-elevated',
+  childItem: '[&>a]:font-medium',
+  childLink: 'px-3 py-2 text-sm',
+  linkLeadingIcon: 'size-5 text-dimmed',
+  linkTrailingIcon: 'size-4 rotate-0 text-muted opacity-60 transition-transform duration-200 ease-out group-hover:text-default group-hover:opacity-100 group-data-[state=open]:rotate-90',
+}
 </script>
 
 <template>
@@ -116,8 +148,8 @@ const items = computed<NavigationMenuItem[]>(() => [
       rail
       :ui="{
         container: 'h-full',
-        inner: 'bg-default divide-default',
-        body: 'py-0',
+        inner: 'bg-default divide-y-0',
+        body: 'px-2 py-0',
       }"
     >
       <template #header="{ collapsed }">
@@ -126,17 +158,25 @@ const items = computed<NavigationMenuItem[]>(() => [
 
       <template #default="slotProps">
         <dashboard-organizations-select :collapsed="!open" />
-        <USeparator />
+        <dashboard-projects-nav :collapsed="!open" />
+        <USeparator class="px-2" />
         <UNavigationMenu
-          :key="slotProps?.state ?? 'expanded'"
+          :key="`main-${slotProps?.state ?? 'expanded'}`"
           :collapsed="!open"
           :popover="!open"
-          :items="items"
+          :items="mainItems"
           orientation="vertical"
-          :ui="{
-            label: 'font-mono text-[10px] font-normal uppercase tracking-[0.08em] text-[#797979]',
-            link: 'p-1.5 overflow-hidden',
-          }"
+          :ui="navigationUi"
+        />
+
+        <USeparator class="px-2" />
+        <UNavigationMenu
+          :key="`account-${open ? 'expanded' : 'collapsed'}`"
+          :collapsed="!open"
+          :popover="!open"
+          :items="accountItems"
+          orientation="vertical"
+          :ui="navigationUi"
         />
       </template>
 
@@ -154,7 +194,30 @@ const items = computed<NavigationMenuItem[]>(() => [
           aria-label="Toggle sidebar"
           @click="open = !open"
         />
-        <dashboard-projects-nav />
+        <nav
+          v-if="store.breadcrumbs.length"
+          aria-label="Breadcrumb"
+          class="min-w-0 flex flex-1 items-center gap-1 overflow-hidden text-sm"
+        >
+          <template v-for="(breadcrumb, index) in store.breadcrumbs" :key="`${breadcrumb.label}-${index}`">
+            <UIcon
+              v-if="index > 0"
+              :name="ICONS.chevronRight"
+              class="size-4 shrink-0 text-dimmed"
+              aria-hidden="true"
+            />
+            <NuxtLink
+              v-if="breadcrumb.to && index < store.breadcrumbs.length - 1"
+              :to="breadcrumb.to"
+              class="max-w-48 truncate text-muted transition-colors hover:text-default"
+            >
+              {{ breadcrumb.label }}
+            </NuxtLink>
+            <span v-else class="max-w-56 truncate font-medium">
+              {{ breadcrumb.label }}
+            </span>
+          </template>
+        </nav>
       </div>
 
       <DashboardProjectsDeploymentAlert v-if="store.environment" />

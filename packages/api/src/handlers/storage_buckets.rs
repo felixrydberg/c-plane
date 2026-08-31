@@ -28,11 +28,17 @@ pub struct ListBucketsQuery {
 }
 
 #[derive(Serialize, ToSchema)]
+pub struct BucketRegionResponse {
+    pub label: String,
+    pub slug: String,
+}
+
+#[derive(Serialize, ToSchema)]
 pub struct BucketResponse {
     pub id: Uuid,
     pub project_id: Uuid,
     pub name: String,
-    pub region: Uuid,
+    pub region: BucketRegionResponse,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -110,7 +116,7 @@ pub async fn create_bucket(
     }
     Ok((
         axum::http::StatusCode::CREATED,
-        Json(response(&created, region.id)),
+        Json(response(&created, &region)),
     ))
 }
 
@@ -128,17 +134,20 @@ pub async fn list_buckets(
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
     verify_project_in_org(tx, query.project_id, organization_id).await?;
-    let buckets = storage::Entity::find()
+    let bucket_rows = storage::Entity::find()
         .filter(storage::Column::ProjectId.eq(query.project_id))
         .order_by_asc(storage::Column::Name)
         .find_also_related(bucket::Entity)
+        .and_also_related(region::Entity)
         .all(tx)
-        .await?
+        .await?;
+    let buckets = bucket_rows
         .into_iter()
-        .map(|(storage, bucket)| {
-            let bucket =
-                bucket.ok_or_else(|| AppError::NotFound("Bucket foundation not found".into()))?;
-            Ok(response(&storage, bucket.region_id))
+        .map(|(storage, bucket, region)| {
+            bucket.ok_or_else(|| AppError::NotFound("Bucket foundation not found".into()))?;
+            let region =
+                region.ok_or_else(|| AppError::NotFound("Bucket region not found".into()))?;
+            Ok(response(&storage, &region))
         })
         .collect::<Result<Vec<_>, AppError>>()?;
     scoped.commit().await?;
@@ -158,19 +167,18 @@ pub async fn delete_bucket(
     verify_org_owner(&tenant_db, organization_id)?;
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
-    let bucket = storage::Entity::find_by_id(bucket_id)
+    let (bucket, foundation, region) = storage::Entity::find_by_id(bucket_id)
         .filter(storage::Column::OrganizationId.eq(organization_id))
+        .find_also_related(bucket::Entity)
+        .and_also_related(region::Entity)
         .one(tx)
         .await?
         .ok_or_else(|| AppError::NotFound("Bucket not found".into()))?;
     verify_project_in_org(tx, bucket.project_id, organization_id).await?;
-    let (_, region) = bucket::Entity::find_by_id(bucket.bucket_id)
-        .find_also_related(region::Entity)
-        .one(tx)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Bucket foundation not found".into()))?;
+    foundation.ok_or_else(|| AppError::NotFound("Bucket foundation not found".into()))?;
+    let region = region.ok_or_else(|| AppError::NotFound("Bucket region not found".into()))?;
     let provider_id = region
-        .and_then(|region| region.s3_provider_id)
+        .s3_provider_id
         .ok_or_else(|| AppError::Conflict("Region has no S3 provider".into()))?;
     let access_keys = bucket_grant::Entity::find()
         .filter(bucket_grant::Column::BucketId.eq(bucket.bucket_id))
@@ -237,12 +245,15 @@ pub async fn delete_bucket(
     Ok(axum::http::StatusCode::NO_CONTENT)
 }
 
-fn response(bucket: &storage::Model, region: Uuid) -> BucketResponse {
+fn response(bucket: &storage::Model, region: &region::Model) -> BucketResponse {
     BucketResponse {
         id: bucket.id,
         project_id: bucket.project_id,
         name: bucket.name.clone(),
-        region,
+        region: BucketRegionResponse {
+            label: region.display_name.clone(),
+            slug: region.slug.clone(),
+        },
     }
 }
 
