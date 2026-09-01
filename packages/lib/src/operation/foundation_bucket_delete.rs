@@ -66,7 +66,7 @@ async fn provider_credentials(
         .database
         .query_one(Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
-            "SELECT s3_providers.endpoint_url, s3_providers.provider_region, secret.ciphertext FROM s3_providers JOIN secret ON secret.id=s3_providers.credential_secret_id WHERE s3_providers.id=$1::uuid AND s3_providers.is_active=true",
+            "SELECT s3_providers.endpoint_url, s3_providers.provider_region, secret.ciphertext FROM s3_providers JOIN secret ON secret.id=s3_providers.credential_secret_id WHERE s3_providers.id=$1::uuid AND s3_providers.is_active=true AND secret.scope='platform'::secret_scope AND secret.organization_id IS NULL",
             vec![provider_id.into()],
         ))
         .await?

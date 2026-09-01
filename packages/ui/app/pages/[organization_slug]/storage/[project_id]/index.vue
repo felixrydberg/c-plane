@@ -136,7 +136,7 @@ const columns: TableColumn<Bucket>[] = [
         :icon="ICONS.refresh"
         color="neutral"
         :loading="refreshing"
-        aria-label="Reload buckets"
+        aria-label="Refresh buckets"
         @click="reloadBuckets"
       >
         Refresh

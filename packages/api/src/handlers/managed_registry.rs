@@ -275,7 +275,19 @@ pub async fn run_garbage_collection(
                 "Registry garbage collection is already running".into(),
             ));
         }
-        Some(_) => {}
+        Some(job) => {
+            tx.execute(Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
+                "UPDATE worker_queue SET available_at=NOW(), payload=jsonb_build_object('trigger', 'manual'), updated_at=NOW() WHERE id=$1 AND organization_id=$2 AND queue_name=$3 AND job_type=$4 AND status='queued'",
+                vec![
+                    job.id.into(),
+                    organization_id.into(),
+                    Operation::<RegistryGc>::QUEUE.into(),
+                    Operation::<RegistryGc>::NAME.into(),
+                ],
+            ))
+            .await?;
+        }
         None => {
             Operation::<RegistryGc>::new(tx, organization_id, "manual").await?;
         }

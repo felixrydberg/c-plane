@@ -60,7 +60,7 @@ watch(() => store.refreshKey, () => { refreshDatabases() })
         :icon="ICONS.refresh"
         color="neutral"
         :loading="refreshing"
-        aria-label="Reload databases"
+        aria-label="Refresh databases"
         @click="reloadDatabases"
       >
         Refresh

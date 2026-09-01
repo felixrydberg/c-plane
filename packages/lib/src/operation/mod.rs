@@ -171,27 +171,32 @@ pub async fn finish(
     operation: &Operation,
     outcome: &std::result::Result<(), String>,
 ) -> std::result::Result<(), DbErr> {
+    let retry = outcome.is_err() && operation.metadata.attempts < operation.metadata.max_attempts;
     let (status, error) = match outcome {
         Ok(()) => ("succeeded", None),
+        Err(error) if retry => ("queued", Some(error.clone())),
         Err(error) => ("failed", Some(error.clone())),
     };
     let transaction = database.begin().await?;
     let updated = transaction
         .execute(Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
-            "UPDATE worker_queue SET status=$3, last_error=$4, locked_by=NULL, lease_expires_at=NULL, finished_at=NOW(), updated_at=NOW() WHERE id=$1::uuid AND status='running' AND locked_by=$2",
+            "UPDATE worker_queue SET status=$3, last_error=$4, available_at=CASE WHEN $5 THEN NOW() + (POWER(2, attempts - 1) * INTERVAL '1 minute') ELSE available_at END, locked_by=NULL, lease_expires_at=NULL, finished_at=CASE WHEN $5 THEN NULL ELSE NOW() END, updated_at=NOW() WHERE id=$1::uuid AND status='running' AND locked_by=$2",
             vec![
                 operation.metadata.id.into(),
                 consumer.to_owned().into(),
                 status.into(),
                 error.into(),
+                retry.into(),
             ],
         ))
         .await?;
     if updated.rows_affected() != 1 {
         return Err(DbErr::Custom("job lease was lost before completion".into()));
     }
-    operation.complete(&transaction).await?;
+    if !retry {
+        operation.complete(&transaction).await?;
+    }
     transaction.commit().await
 }
 

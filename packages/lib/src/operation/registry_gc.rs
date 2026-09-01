@@ -1,6 +1,7 @@
 use chrono::Utc;
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseTransaction, DbErr, Statement};
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use uuid::Uuid;
 
 use super::{Context, Operation, Result};
@@ -19,6 +20,7 @@ struct GcReport {
 impl Operation<RegistryGc> {
     pub const QUEUE: &'static str = "maintenance";
     pub const NAME: &'static str = "registry_gc";
+    pub const GC_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
     pub async fn new(
         transaction: &DatabaseTransaction,
@@ -65,6 +67,7 @@ impl Operation<RegistryGc> {
                 ))
                 .header("x-cplane-token", context.service_token)
                 .header("x-cplane-job-id", self.metadata.id.to_string())
+                .timeout(Self::GC_REQUEST_TIMEOUT)
                 .send()
                 .await
                 .map_err(|error| format!("registry garbage-collection request failed: {error}"))?;
@@ -121,19 +124,16 @@ impl Operation<RegistryGc> {
         &self,
         transaction: &DatabaseTransaction,
     ) -> std::result::Result<(), DbErr> {
-        let organization_id = self.metadata.organization_id.expect("checked by run");
-        let updated = transaction
+        let organization_id = self.metadata.organization_id.ok_or_else(|| {
+            DbErr::Custom("registry garbage-collection job requires organization_id".into())
+        })?;
+        transaction
             .execute(Statement::from_sql_and_values(
                 DatabaseBackend::Postgres,
                 "UPDATE managed_registry SET status='active', gc_active_job_id=NULL, updated_at=NOW() WHERE organization_id=$2::uuid AND gc_active_job_id=$1::uuid",
                 vec![self.metadata.id.into(), organization_id.into()],
             ))
             .await?;
-        if updated.rows_affected() != 1 {
-            return Err(DbErr::Custom(
-                "managed Registry no longer owns the garbage-collection job".into(),
-            ));
-        }
         Ok(())
     }
 }
