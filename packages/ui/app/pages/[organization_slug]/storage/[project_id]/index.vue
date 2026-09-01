@@ -120,7 +120,7 @@ const columns: TableColumn<Bucket>[] = [
     <div class="flex flex-col gap-4 border-b border-default/60 pb-5 sm:flex-row sm:items-end sm:justify-between">
       <div><UiPageEyebrow label="Storage &amp; Databases" /><h1 class="text-2xl font-semibold">S1 - Object Storage</h1><p class="text-muted text-sm mt-1">High-performance object storage for files and objects.</p></div>
       <div class="flex flex-wrap justify-end gap-2">
-        <UButton :icon="ICONS.authentication" variant="ghost" color="neutral" :to="`/${route.params.organization_slug}/storage/${projectId}/access-tokens`">Manage access tokens</UButton>
+        <UButton :icon="ICONS.authentication" color="neutral" :to="`/${route.params.organization_slug}/storage/${projectId}/access-tokens`">Manage access tokens</UButton>
         <UButton :icon="ICONS.plus" color="primary" :to="`/${route.params.organization_slug}/storage/${projectId}/new`">New bucket</UButton>
       </div>
     </div>
@@ -134,12 +134,13 @@ const columns: TableColumn<Bucket>[] = [
       />
       <UButton
         :icon="ICONS.refresh"
-        variant="ghost"
         color="neutral"
         :loading="refreshing"
-        aria-label="Reload buckets"
+        aria-label="Refresh buckets"
         @click="reloadBuckets"
-      />
+      >
+        Refresh
+      </UButton>
     </div>
     <UiTable :status="status" :items="filteredBuckets" :columns="columns" disable-header selectable @select="openBucket">
       <template #empty>

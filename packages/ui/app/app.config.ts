@@ -2,6 +2,7 @@ export default defineAppConfig({
   ui: {
     colors: {
       primary: 'coral',
+      secondary: 'graphite',
       neutral: 'graphite',
     },
     button: {
@@ -17,12 +18,12 @@ export default defineAppConfig({
       },
       compoundVariants: [
         { color: 'primary', variant: 'frosted', class: '[--button-frosted-color:var(--ui-primary)] focus-visible:outline-primary/25' },
-        { color: 'secondary', variant: 'frosted', class: '[--button-frosted-color:var(--ui-secondary)] focus-visible:outline-secondary/25' },
+        { color: 'secondary', variant: 'frosted', class: '[--button-frosted-color:var(--cp-surface-subtle)] text-default shadow-none focus-visible:outline-inverted/25 dark:[--button-frosted-color:var(--ui-color-neutral-900)] dark:text-white' },
         { color: 'success', variant: 'frosted', class: '[--button-frosted-color:var(--ui-success)] focus-visible:outline-success/25' },
         { color: 'info', variant: 'frosted', class: '[--button-frosted-color:var(--ui-info)] focus-visible:outline-info/25' },
         { color: 'warning', variant: 'frosted', class: '[--button-frosted-color:var(--ui-warning)] focus-visible:outline-warning/25' },
         { color: 'error', variant: 'frosted', class: '[--button-frosted-color:var(--ui-error)] focus-visible:outline-error/25' },
-        { color: 'neutral', variant: 'frosted', class: '[--button-frosted-color:var(--ui-color-neutral-300)] focus-visible:outline-inverted/25 dark:[--button-frosted-color:var(--ui-color-neutral-900)]' },
+        { color: 'neutral', variant: 'frosted', class: '[--button-frosted-color:var(--cp-surface-subtle)] text-default shadow-none focus-visible:outline-inverted/25 dark:[--button-frosted-color:var(--ui-color-neutral-900)] dark:text-white' },
       ],
       defaultVariants: {
         variant: 'frosted',

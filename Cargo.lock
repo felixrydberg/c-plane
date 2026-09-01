@@ -1017,13 +1017,9 @@ dependencies = [
 name = "c-plane-worker"
 version = "0.1.0"
 dependencies = [
- "aws-sdk-s3",
- "chrono",
  "lib",
  "reqwest 0.12.28",
  "sea-orm",
- "serde",
- "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",

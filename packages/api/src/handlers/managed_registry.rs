@@ -3,7 +3,7 @@ use axum::{
     extract::{Path, Query},
     http::StatusCode,
 };
-use chrono::{DateTime, FixedOffset, Utc};
+use chrono::{DateTime, FixedOffset};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction,
     EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, Set, Statement,
@@ -28,13 +28,12 @@ use lib::entities::{
     region::{RegionRoutingMode, RegionStatus},
     secret::SecretScope,
 };
+use lib::operation::{Operation, registry_gc::RegistryGc};
 
 use super::{databases::verify_org_access, registry_access_tokens::record_event};
 
 const REGISTRY_BUCKET_NAME: &str = "registry";
 const ACCESS_KEY_PREFIX: &str = "CP";
-const GC_QUEUE: &str = "maintenance";
-const GC_JOB_TYPE: &str = "registry_gc";
 
 #[derive(Deserialize, ToSchema)]
 pub struct ActivateManagedRegistryRequest {
@@ -279,13 +278,18 @@ pub async fn run_garbage_collection(
         Some(job) => {
             tx.execute(Statement::from_sql_and_values(
                 DatabaseBackend::Postgres,
-                "UPDATE worker_queue SET available_at=NOW(), payload=jsonb_build_object('trigger', 'manual'), updated_at=NOW() WHERE id=$1 AND organization_id=$2 AND status='queued'",
-                vec![job.id.into(), organization_id.into()],
+                "UPDATE worker_queue SET available_at=NOW(), payload=jsonb_build_object('trigger', 'manual'), updated_at=NOW() WHERE id=$1 AND organization_id=$2 AND queue_name=$3 AND job_type=$4 AND status='queued'",
+                vec![
+                    job.id.into(),
+                    organization_id.into(),
+                    Operation::<RegistryGc>::QUEUE.into(),
+                    Operation::<RegistryGc>::NAME.into(),
+                ],
             ))
             .await?;
         }
         None => {
-            insert_gc_job(tx, organization_id, "manual", Utc::now().fixed_offset()).await?;
+            Operation::<RegistryGc>::new(tx, organization_id, "manual").await?;
         }
     }
     record_event(
@@ -519,8 +523,13 @@ async fn active_gc_job(
     let row = tx
         .query_one(Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
-            "SELECT id, status, COALESCE(payload->>'trigger', 'manual') AS trigger, available_at FROM worker_queue WHERE id=$1 AND organization_id=$2 AND job_type='registry_gc' AND status IN ('queued', 'running') LIMIT 1",
-            vec![job_id.into(), registry.organization_id.into()],
+            "SELECT id, status, COALESCE(payload->>'trigger', 'manual') AS trigger, available_at FROM worker_queue WHERE id=$1 AND organization_id=$2 AND queue_name=$3 AND job_type=$4 AND status IN ('queued', 'running') LIMIT 1",
+            vec![
+                job_id.into(),
+                registry.organization_id.into(),
+                Operation::<RegistryGc>::QUEUE.into(),
+                Operation::<RegistryGc>::NAME.into(),
+            ],
         ))
         .await?;
     row.map(|row| {
@@ -532,37 +541,6 @@ async fn active_gc_job(
         })
     })
     .transpose()
-}
-
-async fn insert_gc_job(
-    tx: &DatabaseTransaction,
-    organization_id: Uuid,
-    trigger: &str,
-    available_at: DateTime<FixedOffset>,
-) -> Result<Uuid, AppError> {
-    let job_id = Uuid::new_v4();
-    let dedupe_key = format!("registry_gc:{organization_id}");
-    tx.execute(Statement::from_sql_and_values(
-        DatabaseBackend::Postgres,
-        "INSERT INTO worker_queue (id, organization_id, queue_name, job_type, dedupe_key, payload, available_at) VALUES ($1, $2, $3, $4, $5, jsonb_build_object('trigger', $6::text), $7)",
-        vec![
-            job_id.into(),
-            organization_id.into(),
-            GC_QUEUE.into(),
-            GC_JOB_TYPE.into(),
-            dedupe_key.into(),
-            trigger.to_owned().into(),
-            available_at.into(),
-        ],
-    ))
-    .await?;
-    tx.execute(Statement::from_sql_and_values(
-        DatabaseBackend::Postgres,
-        "UPDATE managed_registry SET gc_active_job_id=$2, updated_at=NOW() WHERE organization_id=$1",
-        vec![organization_id.into(), job_id.into()],
-    ))
-    .await?;
-    Ok(job_id)
 }
 
 fn status_name(status: &ManagedRegistryStatus) -> &'static str {

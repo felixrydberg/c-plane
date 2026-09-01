@@ -13,6 +13,60 @@ pub type Result<T> = std::result::Result<T, Error>;
 const BUCKET_PREFIX: &str = "cp-";
 const DELETE_BATCH_SIZE: i32 = 1_000;
 
+#[derive(Debug)]
+struct S3ProviderError {
+    code: Option<String>,
+    message: Option<String>,
+}
+
+impl std::fmt::Display for S3ProviderError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match (&self.code, &self.message) {
+            (Some(code), Some(message)) => write!(formatter, "{code}: {message}"),
+            (Some(code), None) => formatter.write_str(code),
+            (None, Some(message)) => formatter.write_str(message),
+            (None, None) => formatter.write_str("S3 provider request failed"),
+        }
+    }
+}
+
+impl std::error::Error for S3ProviderError {}
+
+fn s3_provider_error<E>(error: E) -> Error
+where
+    E: std::error::Error + Send + Sync + 'static + ProvideErrorMetadata,
+{
+    Box::new(S3ProviderError {
+        code: error.code().map(str::to_owned),
+        message: error.message().map(str::to_owned),
+    })
+}
+
+pub fn error_details(error: &Error) -> (Option<&str>, Option<&str>) {
+    error
+        .as_ref()
+        .downcast_ref::<S3ProviderError>()
+        .map(|error| (error.code.as_deref(), error.message.as_deref()))
+        .unwrap_or((None, None))
+}
+
+pub fn is_credentials_error(error: &Error) -> bool {
+    error_details(error)
+        .0
+        .is_some_and(is_credentials_error_code)
+}
+
+fn is_credentials_error_code(code: &str) -> bool {
+    matches!(
+        code,
+        "ExpiredToken"
+            | "InvalidAccessKeyId"
+            | "InvalidSecurity"
+            | "InvalidToken"
+            | "SignatureDoesNotMatch"
+    )
+}
+
 pub async fn create(
     client: &aws_sdk_s3::Client,
     region: Option<&str>,
@@ -29,9 +83,10 @@ pub async fn create(
                     .build(),
             )
             .send()
-            .await?;
+            .await
+            .map_err(s3_provider_error)?;
     } else {
-        request.send().await?;
+        request.send().await.map_err(s3_provider_error)?;
     }
     Ok(())
 }
@@ -124,14 +179,14 @@ pub async fn delete(client: &aws_sdk_s3::Client, bucket_id: Uuid) -> Result<()> 
         .await
         && error.as_service_error().and_then(|error| error.code()) != Some("NoSuchBucket")
     {
-        return Err(Box::new(error));
+        return Err(s3_provider_error(error));
     }
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::physical_bucket_name;
+    use super::{is_credentials_error_code, physical_bucket_name};
     use uuid::Uuid;
 
     #[test]
@@ -142,6 +197,13 @@ mod tests {
             physical_bucket_name(id),
             "cp-67e5504410b1426f9247bb680e5fe0c8"
         );
+    }
+
+    #[test]
+    fn identifies_credential_error_codes() {
+        assert!(is_credentials_error_code("InvalidAccessKeyId"));
+        assert!(is_credentials_error_code("SignatureDoesNotMatch"));
+        assert!(!is_credentials_error_code("AccessDenied"));
     }
 }
 
