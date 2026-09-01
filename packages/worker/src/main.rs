@@ -1,13 +1,9 @@
-use sea_orm::{
-    ConnectionTrait, Database, DatabaseBackend, DatabaseConnection, QueryResult, Statement,
-    TransactionTrait, Value,
-};
+use lib::operation::{self, Context, Operation};
+use sea_orm::{Database, DatabaseConnection};
 use std::{env, time::Duration};
 use tokio::{task::JoinSet, time::Instant};
 use tracing::{error, info, warn};
 use uuid::Uuid;
-
-mod services;
 
 pub(crate) type Error = Box<dyn std::error::Error + Send + Sync>;
 pub(crate) type Result<T> = std::result::Result<T, Error>;
@@ -23,16 +19,6 @@ pub(crate) struct Config {
     pub(crate) registry_http: reqwest::Client,
     pub(crate) registry_internal_url: String,
     pub(crate) service_token: String,
-}
-
-#[derive(Clone)]
-pub(crate) struct Job {
-    pub(crate) id: Uuid,
-    pub(crate) organization_id: Option<Uuid>,
-    pub(crate) queue_name: String,
-    pub(crate) job_type: String,
-    pub(crate) attempts: i32,
-    pub(crate) max_attempts: i32,
 }
 
 #[tokio::main]
@@ -108,20 +94,35 @@ impl Config {
 
 async fn consume(database: DatabaseConnection, config: Config, consumer: String) {
     loop {
-        match claim_job(&database, &config.queues, &consumer).await {
-            Ok(Some(job)) if job.attempts > job.max_attempts => {
-                let error = format!("maximum attempts ({}) exceeded", job.max_attempts);
-                if let Err(finish_error) = finish_job(&database, &consumer, &job, Err(error)).await
+        match operation::pull(&database, &config.queues, &consumer).await {
+            Ok(Some(operation))
+                if operation.metadata.attempts > operation.metadata.max_attempts =>
+            {
+                let job = &operation.metadata;
+                let outcome = Err(format!("maximum attempts ({}) exceeded", job.max_attempts));
+                if let Err(finish_error) =
+                    operation::finish(&database, &consumer, &operation, &outcome).await
                 {
                     error!(job_id = %job.id, %finish_error, "failed to exhaust job");
+                } else if let Err(error) = outcome {
+                    warn!(job_id = %job.id, %error, "job failed");
                 }
             }
-            Ok(Some(job)) => {
+            Ok(Some(operation)) => {
+                let job = &operation.metadata;
                 info!(job_id = %job.id, queue = job.queue_name, job_type = job.job_type, attempt = job.attempts, "job claimed");
-                if let Some(result) = run_with_lease(&database, &config, &consumer, &job).await {
-                    if let Err(finish_error) = finish_job(&database, &consumer, &job, result).await
+                if let Some(outcome) =
+                    run_with_lease(&database, &config, &consumer, &operation).await
+                {
+                    if let Err(finish_error) =
+                        operation::finish(&database, &consumer, &operation, &outcome).await
                     {
                         error!(job_id = %job.id, %finish_error, "failed to finish job");
+                    } else {
+                        match outcome {
+                            Ok(()) => info!(job_id = %job.id, "job succeeded"),
+                            Err(error) => warn!(job_id = %job.id, %error, "job failed"),
+                        }
                     }
                 } else {
                     warn!(job_id = %job.id, "job lease lost; handler cancelled");
@@ -136,44 +137,28 @@ async fn consume(database: DatabaseConnection, config: Config, consumer: String)
     }
 }
 
-async fn claim_job(
-    database: &DatabaseConnection,
-    queues: &str,
-    consumer: &str,
-) -> Result<Option<Job>> {
-    let row = database
-        .query_one(statement(
-            "WITH candidate AS (SELECT id FROM worker_queue WHERE queue_name=ANY(string_to_array($1, ',')) AND ((status='queued' AND available_at<=NOW()) OR (status='running' AND lease_expires_at<NOW())) ORDER BY created_at, id FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE worker_queue job SET status='running', attempts=job.attempts+1, locked_by=$2, lease_expires_at=NOW()+INTERVAL '30 seconds', started_at=COALESCE(job.started_at, NOW()), updated_at=NOW() FROM candidate WHERE job.id=candidate.id RETURNING job.id, job.organization_id, job.queue_name, job.job_type, job.attempts, job.max_attempts",
-            vec![queues.to_owned().into(), consumer.to_owned().into()],
-        ))
-        .await?;
-    row.map(job_from_row).transpose()
-}
-
-fn job_from_row(row: QueryResult) -> Result<Job> {
-    Ok(Job {
-        id: row.try_get("", "id")?,
-        organization_id: row.try_get("", "organization_id")?,
-        queue_name: row.try_get("", "queue_name")?,
-        job_type: row.try_get("", "job_type")?,
-        attempts: row.try_get("", "attempts")?,
-        max_attempts: row.try_get("", "max_attempts")?,
-    })
-}
-
 async fn run_with_lease(
     database: &DatabaseConnection,
     config: &Config,
     consumer: &str,
-    job: &Job,
+    operation: &Operation,
 ) -> Option<std::result::Result<(), String>> {
-    let mut handler = Box::pin(services::run(database, config, consumer, job));
+    let job = &operation.metadata;
+    let context = Context {
+        database,
+        consumer,
+        secrets: &config.secrets,
+        registry_http: &config.registry_http,
+        registry_internal_url: &config.registry_internal_url,
+        service_token: &config.service_token,
+    };
+    let mut run = Box::pin(operation.run(&context));
     let mut heartbeat =
         tokio::time::interval_at(Instant::now() + HEARTBEAT_INTERVAL, HEARTBEAT_INTERVAL);
     loop {
         tokio::select! {
-            result = &mut handler => return Some(result.map_err(|error| error.to_string())),
-            _ = heartbeat.tick() => match renew_lease(database, job.id, consumer).await {
+            result = &mut run => return Some(result.map_err(|error| error.to_string())),
+            _ = heartbeat.tick() => match operation::renew(database, job.id, consumer).await {
                 Ok(true) => {},
                 Ok(false) => return None,
                 Err(error) => {
@@ -183,49 +168,6 @@ async fn run_with_lease(
             }
         }
     }
-}
-
-async fn renew_lease(database: &DatabaseConnection, job_id: Uuid, consumer: &str) -> Result<bool> {
-    let result = database
-        .execute(statement(
-            "UPDATE worker_queue SET lease_expires_at=NOW()+INTERVAL '30 seconds', updated_at=NOW() WHERE id=$1::uuid AND status='running' AND locked_by=$2",
-            vec![job_id.into(), consumer.to_owned().into()],
-        ))
-        .await?;
-    Ok(result.rows_affected() == 1)
-}
-
-async fn finish_job(
-    database: &DatabaseConnection,
-    consumer: &str,
-    job: &Job,
-    result: std::result::Result<(), String>,
-) -> Result<()> {
-    let (status, last_error) = match &result {
-        Ok(()) => ("succeeded", None),
-        Err(error) => ("failed", Some(error.clone())),
-    };
-    let transaction = database.begin().await?;
-    let updated = transaction
-        .execute(statement(
-            "UPDATE worker_queue SET status=$3, last_error=$4, locked_by=NULL, lease_expires_at=NULL, finished_at=NOW(), updated_at=NOW() WHERE id=$1::uuid AND status='running' AND locked_by=$2",
-            vec![job.id.into(), consumer.to_owned().into(), status.into(), last_error.clone().into()],
-        ))
-        .await?;
-    if updated.rows_affected() != 1 {
-        return Err(message("job lease was lost before completion"));
-    }
-    services::record_completion(&transaction, job).await?;
-    transaction.commit().await?;
-    match result {
-        Ok(()) => info!(job_id = %job.id, "job succeeded"),
-        Err(error) => warn!(job_id = %job.id, %error, "job failed"),
-    }
-    Ok(())
-}
-
-pub(crate) fn statement(sql: &str, values: Vec<Value>) -> Statement {
-    Statement::from_sql_and_values(DatabaseBackend::Postgres, sql, values)
 }
 
 fn required_env(name: &str) -> Result<String> {

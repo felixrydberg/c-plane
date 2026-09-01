@@ -144,8 +144,15 @@ impl S3ProviderClient {
         buckets::create(&client, Some(region.as_str()), bucket_id)
             .await
             .map_err(|error| {
-                tracing::error!(%provider_id, %error, "S3 provider bucket creation failed");
-                AppError::Internal("S3 provider bucket creation failed".into())
+                s3_bucket_operation_error(
+                    provider_id,
+                    bucket_id,
+                    &provider,
+                    &region,
+                    "create",
+                    &error,
+                    AppError::Internal("S3 provider bucket creation failed".into()),
+                )
             })
     }
 
@@ -157,8 +164,15 @@ impl S3ProviderClient {
             .unwrap_or_else(|| "us-east-1".into());
         let client = aws_sdk_s3::Client::from_conf(s3_config(&provider, &region));
         buckets::delete(&client, bucket_id).await.map_err(|error| {
-            tracing::error!(%provider_id, %error, "S3 provider bucket deletion failed");
-            AppError::Conflict("S3 provider bucket deletion failed".into())
+            s3_bucket_operation_error(
+                provider_id,
+                bucket_id,
+                &provider,
+                &region,
+                "delete",
+                &error,
+                AppError::Conflict("S3 provider bucket deletion failed".into()),
+            )
         })
     }
 
@@ -212,6 +226,37 @@ impl S3ProviderClient {
             .await
             .map_err(|error| AppError::Internal(error.to_string()))?;
         Ok(())
+    }
+}
+
+fn s3_bucket_operation_error(
+    provider_id: Uuid,
+    bucket_id: Uuid,
+    provider: &S3ProviderCredentials,
+    region: &str,
+    operation: &'static str,
+    error: &lib::buckets::Error,
+    fallback: AppError,
+) -> AppError {
+    let (error_code, error_message) = buckets::error_details(error);
+    let credentials_error = buckets::is_credentials_error(error);
+    tracing::error!(
+        %provider_id,
+        %bucket_id,
+        provider_name = %provider.name,
+        %region,
+        operation,
+        error_code = error_code.unwrap_or("unknown"),
+        error_message = error_message.unwrap_or("unknown"),
+        error = %error,
+        credentials_error,
+        "S3 provider bucket operation failed"
+    );
+
+    if credentials_error {
+        AppError::ServiceUnavailable("S3 provider credentials are invalid".into())
+    } else {
+        fallback
     }
 }
 

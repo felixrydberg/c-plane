@@ -58,12 +58,13 @@ watch(() => store.refreshKey, () => { refreshDatabases() })
       />
       <UButton
         :icon="ICONS.refresh"
-        variant="ghost"
         color="neutral"
         :loading="refreshing"
         aria-label="Reload databases"
         @click="reloadDatabases"
-      />
+      >
+        Refresh
+      </UButton>
     </div>
 
     <div v-if="status === 'pending'" class="flex items-center justify-center rounded-lg border border-default/60 bg-default py-14">
