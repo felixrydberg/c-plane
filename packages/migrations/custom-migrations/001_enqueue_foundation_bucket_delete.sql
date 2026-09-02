@@ -4,20 +4,7 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
-DECLARE
-    provider_id uuid;
 BEGIN
-    SELECT regions.s3_provider_id
-    INTO provider_id
-    FROM public.regions AS regions
-    WHERE regions.id = OLD.region_id;
-
-    IF provider_id IS NULL THEN
-        RAISE EXCEPTION 'Cannot enqueue provider deletion for bucket %: region % has no S3 provider',
-            OLD.id,
-            OLD.region_id;
-    END IF;
-
     INSERT INTO public.worker_queue (
         id,
         queue_name,
@@ -32,7 +19,7 @@ BEGIN
         OLD.id::text,
         pg_catalog.jsonb_build_object(
             'bucket_id', OLD.id,
-            'provider_id', provider_id
+            'provider_id', OLD.s3_provider_id
         )
     );
 

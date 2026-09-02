@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
-    pub region_id: Uuid,
+    pub s3_provider_id: Uuid,
     pub sse_secret_id: Uuid,
     pub status: BucketStatus,
     pub created_at: DateTimeWithTimeZone,
@@ -29,12 +29,12 @@ pub enum BucketStatus {
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(
-        belongs_to = "super::region::Entity",
-        from = "Column::RegionId",
-        to = "super::region::Column::Id",
+        belongs_to = "super::s3_provider::Entity",
+        from = "Column::S3ProviderId",
+        to = "super::s3_provider::Column::Id",
         on_delete = "Restrict"
     )]
-    Region,
+    S3Provider,
     #[sea_orm(
         belongs_to = "super::secret::Entity",
         from = "Column::SseSecretId",
@@ -46,9 +46,9 @@ pub enum Relation {
     BucketGrant,
 }
 
-impl Related<super::region::Entity> for Entity {
+impl Related<super::s3_provider::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Region.def()
+        Relation::S3Provider.def()
     }
 }
 

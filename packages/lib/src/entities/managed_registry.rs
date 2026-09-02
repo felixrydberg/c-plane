@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub organization_id: Uuid,
+    pub region_id: Uuid,
     pub bucket_id: Uuid,
     pub credential_id: Uuid,
     pub status: ManagedRegistryStatus,
@@ -44,6 +45,13 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Credential,
+    #[sea_orm(
+        belongs_to = "super::region::Entity",
+        from = "Column::RegionId",
+        to = "super::region::Column::Id",
+        on_delete = "Restrict"
+    )]
+    Region,
 }
 
 impl Related<super::bucket::Entity> for Entity {
@@ -55,6 +63,12 @@ impl Related<super::bucket::Entity> for Entity {
 impl Related<super::credential::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Credential.def()
+    }
+}
+
+impl Related<super::region::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Region.def()
     }
 }
 

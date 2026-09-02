@@ -1,10 +1,10 @@
 {
+  "id": "46d17a25-21eb-4bb2-a0cf-93975242a829",
+  "prevIds": [
+    "0506a92e-fd11-401a-ab30-92cd3437121b"
+  ],
   "version": "8",
   "dialect": "postgres",
-  "id": "4a6091f2-98b4-4906-b503-b921c74ace24",
-  "prevIds": [
-    "00000000-0000-0000-0000-000000000000"
-  ],
   "ddl": [
     {
       "values": [
@@ -95,6 +95,15 @@
     },
     {
       "values": [
+        "active",
+        "maintenance"
+      ],
+      "name": "managed_registry_status",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
         "pending",
         "accepted",
         "declined",
@@ -171,6 +180,12 @@
     },
     {
       "isRlsEnabled": true,
+      "name": "clickhouse_providers",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": true,
       "name": "clusters",
       "entityType": "tables",
       "schema": "public"
@@ -226,6 +241,12 @@
     {
       "isRlsEnabled": true,
       "name": "managed_registry",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": true,
+      "name": "managed_registry_gc_runs",
       "entityType": "tables",
       "schema": "public"
     },
@@ -292,12 +313,6 @@
     {
       "isRlsEnabled": true,
       "name": "registry_access_tokens",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": true,
-      "name": "registry_maintenance",
       "entityType": "tables",
       "schema": "public"
     },
@@ -733,7 +748,7 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "region_id",
+      "name": "s3_provider_id",
       "entityType": "columns",
       "schema": "public",
       "table": "bucket"
@@ -906,6 +921,123 @@
       "entityType": "columns",
       "schema": "public",
       "table": "bucket_grant"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "clickhouse_providers"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "clickhouse_providers"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "endpoint_url",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "clickhouse_providers"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "cluster_name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "clickhouse_providers"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "credential_secret_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "clickhouse_providers"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "bucket_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "clickhouse_providers"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "storage_credential_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "clickhouse_providers"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "clickhouse_providers"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "clickhouse_providers"
     },
     {
       "type": "uuid",
@@ -2033,6 +2165,19 @@
       "default": null,
       "generated": null,
       "identity": null,
+      "name": "region_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
       "name": "bucket_id",
       "entityType": "columns",
       "schema": "public",
@@ -2052,14 +2197,27 @@
       "table": "managed_registry"
     },
     {
-      "type": "boolean",
-      "typeSchema": null,
+      "type": "managed_registry_status",
+      "typeSchema": "public",
       "notNull": true,
       "dimensions": 0,
-      "default": "false",
+      "default": "'active'",
       "generated": null,
       "identity": null,
-      "name": "gc_active",
+      "name": "status",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "gc_active_job_id",
       "entityType": "columns",
       "schema": "public",
       "table": "managed_registry"
@@ -2102,6 +2260,110 @@
       "entityType": "columns",
       "schema": "public",
       "table": "managed_registry"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry_gc_runs"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "organization_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry_gc_runs"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "started_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry_gc_runs"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "finished_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry_gc_runs"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "bytes_before",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry_gc_runs"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "bytes_after",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry_gc_runs"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "result",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry_gc_runs"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "error",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry_gc_runs"
     },
     {
       "type": "uuid",
@@ -3068,12 +3330,25 @@
     {
       "type": "uuid",
       "typeSchema": null,
-      "notNull": false,
+      "notNull": true,
       "dimensions": 0,
       "default": null,
       "generated": null,
       "identity": null,
       "name": "s3_provider_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "regions"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "clickhouse_provider_id",
       "entityType": "columns",
       "schema": "public",
       "table": "regions"
@@ -3207,136 +3482,6 @@
       "entityType": "columns",
       "schema": "public",
       "table": "registry_access_tokens"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "'distribution'",
-      "generated": null,
-      "identity": null,
-      "name": "service",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_maintenance"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "gc_access_key_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_maintenance"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "'idle'",
-      "generated": null,
-      "identity": null,
-      "name": "phase",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_maintenance"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "active_job_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_maintenance"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "started_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_maintenance"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "finished_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_maintenance"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "last_result",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_maintenance"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "last_error",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_maintenance"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_maintenance"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "updated_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_maintenance"
     },
     {
       "type": "uuid",
@@ -3763,6 +3908,19 @@
       "generated": null,
       "identity": null,
       "name": "organization_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "storage_bucket"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "region_id",
       "entityType": "columns",
       "schema": "public",
       "table": "storage_bucket"
@@ -4472,7 +4630,7 @@
       "nameExplicit": true,
       "columns": [
         {
-          "value": "region_id",
+          "value": "s3_provider_id",
           "isExpression": false,
           "asc": true,
           "nullsFirst": false,
@@ -4484,7 +4642,7 @@
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "bucket_region_id_idx",
+      "name": "bucket_s3_provider_id_idx",
       "entityType": "indexes",
       "schema": "public",
       "table": "bucket"
@@ -4600,6 +4758,90 @@
       "entityType": "indexes",
       "schema": "public",
       "table": "bucket_grant"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "name",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "clickhouse_providers_name_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "clickhouse_providers"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "credential_secret_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "clickhouse_providers_credential_secret_id_uidx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "clickhouse_providers"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "bucket_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "clickhouse_providers_bucket_id_uidx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "clickhouse_providers"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "storage_credential_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "clickhouse_providers_storage_credential_id_uidx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "clickhouse_providers"
     },
     {
       "nameExplicit": true,
@@ -5347,6 +5589,90 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "status",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "managed_registry_status_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "managed_registry"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "gc_active_job_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "managed_registry_gc_active_job_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "managed_registry"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "region_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "managed_registry_region_id_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "managed_registry"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "organization_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "managed_registry_gc_runs_organization_id_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "managed_registry_gc_runs"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "slug",
           "isExpression": false,
           "asc": true,
@@ -6040,6 +6366,27 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "clickhouse_provider_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "regions_clickhouse_provider_id_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "regions"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "token_hash",
           "isExpression": false,
           "asc": true,
@@ -6105,27 +6452,6 @@
       "entityType": "indexes",
       "schema": "public",
       "table": "registry_access_tokens"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "active_job_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "registry_maintenance_active_job_idx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "registry_maintenance"
     },
     {
       "nameExplicit": true,
@@ -6530,6 +6856,27 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "region_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "storage_bucket_region_id_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "storage_bucket"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "secret",
           "isExpression": false,
           "asc": true,
@@ -6815,16 +7162,16 @@
     {
       "nameExplicit": false,
       "columns": [
-        "region_id"
+        "s3_provider_id"
       ],
       "schemaTo": "public",
-      "tableTo": "regions",
+      "tableTo": "s3_providers",
       "columnsTo": [
         "id"
       ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
-      "name": "bucket_region_id_regions_id_fkey",
+      "name": "bucket_s3_provider_id_s3_providers_id_fkey",
       "entityType": "fks",
       "schema": "public",
       "table": "bucket"
@@ -6898,6 +7245,57 @@
       "entityType": "fks",
       "schema": "public",
       "table": "bucket_grant"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "credential_secret_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "secret",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "clickhouse_providers_credential_secret_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "clickhouse_providers"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "bucket_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "bucket",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "clickhouse_providers_bucket_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "clickhouse_providers"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "storage_credential_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "credential",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "clickhouse_providers_storage_credential_id_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "clickhouse_providers"
     },
     {
       "nameExplicit": false,
@@ -7161,6 +7559,23 @@
     {
       "nameExplicit": false,
       "columns": [
+        "region_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "regions",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "managed_registry_region_id_regions_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "managed_registry"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
         "bucket_id"
       ],
       "schemaTo": "public",
@@ -7171,6 +7586,23 @@
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "name": "managed_registry_bucket_id_bucket_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "managed_registry"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "gc_active_job_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "worker_queue",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "managed_registry_gc_active_job_id_worker_queue_id_fkey",
       "entityType": "fks",
       "schema": "public",
       "table": "managed_registry"
@@ -7193,6 +7625,23 @@
       "entityType": "fks",
       "schema": "public",
       "table": "managed_registry"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "organization_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "managed_registry",
+      "columnsTo": [
+        "organization_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "managed_registry_gc_runs_HPcX8IPUKZjV_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "managed_registry_gc_runs"
     },
     {
       "nameExplicit": false,
@@ -7549,8 +7998,25 @@
         "id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "SET NULL",
+      "onDelete": "RESTRICT",
       "name": "regions_s3_provider_id_s3_providers_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "regions"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "clickhouse_provider_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "clickhouse_providers",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "regions_clickhouse_provider_id_fk",
       "entityType": "fks",
       "schema": "public",
       "table": "regions"
@@ -7571,23 +8037,6 @@
       "entityType": "fks",
       "schema": "public",
       "table": "registry_access_tokens"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        "active_job_id"
-      ],
-      "schemaTo": "public",
-      "tableTo": "worker_queue",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "SET NULL",
-      "name": "registry_maintenance_active_job_id_worker_queue_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "registry_maintenance"
     },
     {
       "nameExplicit": false,
@@ -7802,6 +8251,23 @@
     {
       "nameExplicit": false,
       "columns": [
+        "region_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "regions",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "storage_bucket_region_id_regions_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "storage_bucket"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
         "bucket_id"
       ],
       "schemaTo": "public",
@@ -7915,6 +8381,16 @@
         "id"
       ],
       "nameExplicit": false,
+      "name": "clickhouse_providers_pkey",
+      "schema": "public",
+      "table": "clickhouse_providers",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
       "name": "clusters_pkey",
       "schema": "public",
       "table": "clusters",
@@ -8008,6 +8484,16 @@
       "name": "managed_registry_pkey",
       "schema": "public",
       "table": "managed_registry",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "managed_registry_gc_runs_pkey",
+      "schema": "public",
+      "table": "managed_registry_gc_runs",
       "entityType": "pks"
     },
     {
@@ -8118,16 +8604,6 @@
       "name": "registry_access_tokens_pkey",
       "schema": "public",
       "table": "registry_access_tokens",
-      "entityType": "pks"
-    },
-    {
-      "columns": [
-        "service"
-      ],
-      "nameExplicit": false,
-      "name": "registry_maintenance_pkey",
-      "schema": "public",
-      "table": "registry_maintenance",
       "entityType": "pks"
     },
     {
@@ -8421,17 +8897,6 @@
     {
       "nameExplicit": false,
       "columns": [
-        "gc_access_key_id"
-      ],
-      "nullsNotDistinct": false,
-      "name": "registry_maintenance_gc_access_key_id_key",
-      "schema": "public",
-      "table": "registry_maintenance",
-      "entityType": "uniques"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
         "email"
       ],
       "nullsNotDistinct": false,
@@ -8446,13 +8911,6 @@
       "entityType": "checks",
       "schema": "public",
       "table": "bucket_grant"
-    },
-    {
-      "value": "\"phase\" in ('idle', 'queued', 'draining', 'collecting', 'restoring')",
-      "name": "registry_maintenance_phase_check",
-      "entityType": "checks",
-      "schema": "public",
-      "table": "registry_maintenance"
     },
     {
       "value": "\"mirror_provider_id\" is null or \"mirror_provider_id\" <> \"id\"",
@@ -8546,6 +9004,19 @@
       "entityType": "policies",
       "schema": "public",
       "table": "bucket_grant"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "SELECT",
+      "roles": [
+        "app_tenant"
+      ],
+      "using": "true",
+      "withCheck": null,
+      "name": "clickhouse_providers_tenant_select_rls",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "clickhouse_providers"
     },
     {
       "as": "PERMISSIVE",
@@ -8650,6 +9121,19 @@
       "entityType": "policies",
       "schema": "public",
       "table": "managed_registry"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "ALL",
+      "roles": [
+        "app_tenant"
+      ],
+      "using": "\"managed_registry_gc_runs\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+      "withCheck": "\"managed_registry_gc_runs\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+      "name": "managed_registry_gc_runs_tenant_rls",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "managed_registry_gc_runs"
     },
     {
       "as": "PERMISSIVE",
@@ -8910,6 +9394,19 @@
       "entityType": "policies",
       "schema": "public",
       "table": "storage_bucket"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "ALL",
+      "roles": [
+        "app_tenant"
+      ],
+      "using": "\"worker_queue\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+      "withCheck": "\"worker_queue\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+      "name": "worker_queue_tenant_rls",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "worker_queue"
     }
   ],
   "renames": []

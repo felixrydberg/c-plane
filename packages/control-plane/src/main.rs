@@ -38,6 +38,8 @@ pub enum Route {
     Clusters {},
     #[route("/s3-providers")]
     S3Providers {},
+    #[route("/clickhouse-providers")]
+    ClickHouseProviders {},
     #[route("/audit-logs")]
     AuditLogs {},
 }

@@ -12,8 +12,17 @@ pub async fn create_region(
     display_name: String,
     status: String,
     s3_provider_id: Option<String>,
+    clickhouse_provider_id: Option<String>,
 ) -> Result<()> {
-    server::create_region(&headers, slug, display_name, status, s3_provider_id).await
+    server::create_region(
+        &headers,
+        slug,
+        display_name,
+        status,
+        s3_provider_id,
+        clickhouse_provider_id,
+    )
+    .await
 }
 
 #[patch("/api/infrastructure/regions/{id}", headers: dioxus::fullstack::HeaderMap)]
@@ -23,13 +32,23 @@ pub async fn update_region(
     display_name: String,
     status: String,
     s3_provider_id: Option<String>,
+    clickhouse_provider_id: Option<String>,
 ) -> Result<()> {
-    server::update_region(&headers, id, slug, display_name, status, s3_provider_id).await
+    server::update_region(
+        &headers,
+        id,
+        slug,
+        display_name,
+        status,
+        s3_provider_id,
+        clickhouse_provider_id,
+    )
+    .await
 }
 
 #[delete("/api/infrastructure/regions/{id}", headers: dioxus::fullstack::HeaderMap)]
 pub async fn delete_region(id: String) -> Result<()> {
-    server::delete_resource(&headers, "regions", "region", id).await
+    server::delete_region(&headers, id).await
 }
 
 #[get("/api/infrastructure/clusters")]
@@ -156,6 +175,59 @@ pub async fn delete_s3_provider(id: String) -> Result<()> {
     server::delete_s3_provider(&headers, id).await
 }
 
+#[get("/api/infrastructure/clickhouse-providers")]
+pub async fn list_clickhouse_providers() -> Result<Vec<ClickHouseProvider>> {
+    server::list_clickhouse_providers().await
+}
+
+#[post("/api/infrastructure/clickhouse-providers", headers: dioxus::fullstack::HeaderMap)]
+pub async fn create_clickhouse_provider(
+    name: String,
+    endpoint_url: String,
+    cluster_name: String,
+    username: String,
+    password: String,
+    s3_provider_id: String,
+) -> Result<CreatedClickHouseProvider> {
+    server::create_clickhouse_provider(
+        &headers,
+        name,
+        endpoint_url,
+        cluster_name,
+        ClickHouseCredentials { username, password },
+        s3_provider_id,
+        None,
+    )
+    .await
+}
+
+#[patch("/api/infrastructure/clickhouse-providers/{id}", headers: dioxus::fullstack::HeaderMap)]
+pub async fn update_clickhouse_provider(
+    id: String,
+    name: String,
+    endpoint_url: String,
+    cluster_name: String,
+    username: Option<String>,
+    password: Option<String>,
+) -> Result<()> {
+    let credentials = match (username, password) {
+        (Some(username), Some(password)) => Some(ClickHouseCredentials { username, password }),
+        (None, None) => None,
+        _ => {
+            return Err(dioxus::CapturedError::msg(
+                "Username and password must be replaced together",
+            ));
+        }
+    };
+    server::update_clickhouse_provider(&headers, id, name, endpoint_url, cluster_name, credentials)
+        .await
+}
+
+#[delete("/api/infrastructure/clickhouse-providers/{id}", headers: dioxus::fullstack::HeaderMap)]
+pub async fn delete_clickhouse_provider(id: String) -> Result<()> {
+    server::delete_clickhouse_provider(&headers, id).await
+}
+
 #[get("/api/organizations")]
 pub async fn list_organizations() -> Result<Vec<Organization>> {
     server::list_organizations().await
@@ -191,10 +263,19 @@ pub mod server {
     use super::*;
     use chrono::{Duration, Utc};
     use dioxus::{CapturedError, fullstack::HeaderMap};
-    use lib::secrets::{self, Client, PLATFORM_KEY};
+    use lib::{
+        buckets,
+        entities::{
+            bucket, bucket_grant, clickhouse_provider, credential, region, s3_provider, secret,
+            storage_access_token,
+        },
+        provisioning::provision_platform_bucket,
+        secrets::{self, Client, PLATFORM_KEY},
+    };
     use sea_orm::{
-        ConnectionTrait, Database, DatabaseBackend, DatabaseConnection, QueryResult, Statement,
-        TransactionTrait, Value,
+        ActiveModelTrait, ColumnTrait, ConnectionTrait, Database, DatabaseBackend,
+        DatabaseConnection, EntityTrait, IntoActiveModel, PaginatorTrait, QueryFilter, QueryOrder,
+        QueryResult, Set, Statement, TransactionTrait, Value,
     };
     use serde_json::json;
     use sha2::{Digest, Sha256};
@@ -204,6 +285,7 @@ pub mod server {
 
     static DATABASE: OnceCell<DatabaseConnection> = OnceCell::const_new();
     static SECRETS: OnceCell<Client> = OnceCell::const_new();
+    const CLICKHOUSE_BUCKET_NAME: &str = "clickhouse";
 
     pub async fn initialize() -> Result<()> {
         required(
@@ -255,6 +337,31 @@ pub mod server {
             Ok(value)
         } else {
             Err(CapturedError::msg(format!("Invalid {name}")))
+        }
+    }
+
+    fn region_status(value: &str) -> region::RegionStatus {
+        match value {
+            "active" => region::RegionStatus::Active,
+            "inactive" => region::RegionStatus::Inactive,
+            "maintenance" => region::RegionStatus::Maintenance,
+            _ => unreachable!("region status was validated before conversion"),
+        }
+    }
+
+    fn region_status_name(value: &region::RegionStatus) -> &'static str {
+        match value {
+            region::RegionStatus::Active => "active",
+            region::RegionStatus::Inactive => "inactive",
+            region::RegionStatus::Maintenance => "maintenance",
+        }
+    }
+
+    fn region_routing_mode_name(value: &region::RegionRoutingMode) -> &'static str {
+        match value {
+            region::RegionRoutingMode::Active => "active",
+            region::RegionRoutingMode::Draining => "draining",
+            region::RegionRoutingMode::Disabled => "disabled",
         }
     }
 
@@ -311,18 +418,23 @@ pub mod server {
     }
 
     pub async fn list_regions() -> Result<Vec<Region>> {
-        let rows = database().await?.query_all(statement(
-            "SELECT id::text, slug, display_name, status::text, s3_provider_id::text FROM regions ORDER BY display_name",
-            vec![],
-        )).await.map_err(CapturedError::from_display)?;
-        rows.iter()
-            .map(|row| {
+        let rows = region::Entity::find()
+            .find_also_related(clickhouse_provider::Entity)
+            .order_by_asc(region::Column::DisplayName)
+            .all(database().await?)
+            .await
+            .map_err(CapturedError::from_display)?;
+        rows.into_iter()
+            .map(|(region, clickhouse)| {
+                let clickhouse = clickhouse;
                 Ok(Region {
-                    id: text(row, "id")?,
-                    slug: text(row, "slug")?,
-                    display_name: text(row, "display_name")?,
-                    status: text(row, "status")?,
-                    s3_provider_id: optional_text(row, "s3_provider_id")?,
+                    id: region.id.to_string(),
+                    slug: region.slug,
+                    display_name: region.display_name,
+                    status: region_status_name(&region.status).to_string(),
+                    s3_provider_id: region.s3_provider_id.map(|id| id.to_string()),
+                    clickhouse_provider_id: region.clickhouse_provider_id.map(|id| id.to_string()),
+                    clickhouse_provider_name: clickhouse.map(|provider| provider.name),
                 })
             })
             .collect()
@@ -334,21 +446,36 @@ pub mod server {
         display_name: String,
         status: String,
         s3_provider_id: Option<String>,
+        clickhouse_provider_id: Option<String>,
     ) -> Result<()> {
-        let id = Uuid::new_v4().to_string();
+        let id = Uuid::new_v4();
         let slug = validate_region_slug(slug)?;
         let display_name = required(display_name, "display name")?;
         let status = validate_choice(status, &["active", "inactive", "maintenance"], "status")?;
+        let s3_provider_id = s3_provider_id
+            .map(|id| Uuid::parse_str(&id).map_err(CapturedError::from_display))
+            .transpose()?;
+        let clickhouse_provider_id = clickhouse_provider_id
+            .map(|id| Uuid::parse_str(&id).map_err(CapturedError::from_display))
+            .transpose()?;
         let tx = database()
             .await?
             .begin()
             .await
             .map_err(CapturedError::from_display)?;
-        tx.execute(statement(
-            "INSERT INTO regions (id, slug, display_name, status, s3_provider_id) VALUES ($1::uuid, $2, $3, $4::region_status, $5::uuid)",
-            vec![id.clone().into(), slug.clone().into(), display_name.clone().into(), status.clone().into(), s3_provider_id.clone().into()],
-        )).await.map_err(CapturedError::from_display)?;
-        audit(&tx, headers, "create", "region", Some(&id), json!({"slug": slug, "display_name": display_name, "status": status, "s3_provider_id": s3_provider_id})).await?;
+        region::ActiveModel {
+            id: Set(id),
+            slug: Set(slug.clone()),
+            display_name: Set(display_name.clone()),
+            status: Set(region_status(&status)),
+            s3_provider_id: Set(s3_provider_id),
+            clickhouse_provider_id: Set(clickhouse_provider_id),
+            ..Default::default()
+        }
+        .insert(&tx)
+        .await
+        .map_err(CapturedError::from_display)?;
+        audit(&tx, headers, "create", "region", Some(&id.to_string()), json!({"slug": slug, "display_name": display_name, "status": status, "s3_provider_id": s3_provider_id, "clickhouse_provider_id": clickhouse_provider_id})).await?;
         tx.commit().await.map_err(CapturedError::from_display)?;
         Ok(())
     }
@@ -360,27 +487,72 @@ pub mod server {
         display_name: String,
         status: String,
         s3_provider_id: Option<String>,
+        clickhouse_provider_id: Option<String>,
     ) -> Result<()> {
         let slug = validate_region_slug(slug)?;
         let display_name = required(display_name, "display name")?;
         let status = validate_choice(status, &["active", "inactive", "maintenance"], "status")?;
-        let access_keys = access_keys_for_region(&id).await?;
+        let id = Uuid::parse_str(&id).map_err(CapturedError::from_display)?;
+        let s3_provider_id = s3_provider_id
+            .map(|id| Uuid::parse_str(&id).map_err(CapturedError::from_display))
+            .transpose()?;
+        let clickhouse_provider_id = clickhouse_provider_id
+            .map(|id| Uuid::parse_str(&id).map_err(CapturedError::from_display))
+            .transpose()?;
+        let access_keys = access_keys_for_region(&id.to_string()).await?;
         let tx = database()
             .await?
             .begin()
             .await
             .map_err(CapturedError::from_display)?;
-        let result = tx.execute(statement(
-            "UPDATE regions SET slug=$2, display_name=$3, status=$4::region_status, s3_provider_id=$5::uuid, updated_at=now() WHERE id=$1::uuid",
-            vec![id.clone().into(), slug.clone().into(), display_name.clone().into(), status.clone().into(), s3_provider_id.clone().into()],
-        )).await.map_err(CapturedError::from_display)?;
-        if result.rows_affected() == 0 {
-            return Err(CapturedError::msg("Region not found"));
-        }
-        audit(&tx, headers, "update", "region", Some(&id), json!({"slug": slug, "display_name": display_name, "status": status, "s3_provider_id": s3_provider_id})).await?;
+        let mut active = region::Entity::find_by_id(id)
+            .one(&tx)
+            .await
+            .map_err(CapturedError::from_display)?
+            .ok_or_else(|| CapturedError::msg("Region not found"))?
+            .into_active_model();
+        active.slug = Set(slug.clone());
+        active.display_name = Set(display_name.clone());
+        active.status = Set(region_status(&status));
+        active.s3_provider_id = Set(s3_provider_id);
+        active.clickhouse_provider_id = Set(clickhouse_provider_id);
+        active.updated_at = Set(Utc::now().fixed_offset());
+        active
+            .update(&tx)
+            .await
+            .map_err(CapturedError::from_display)?;
+        audit(&tx, headers, "update", "region", Some(&id.to_string()), json!({"slug": slug, "display_name": display_name, "status": status, "s3_provider_id": s3_provider_id, "clickhouse_provider_id": clickhouse_provider_id})).await?;
         tx.commit().await.map_err(CapturedError::from_display)?;
         invalidate_access_token_caches(&access_keys).await?;
         Ok(())
+    }
+
+    pub async fn delete_region(headers: &HeaderMap, id: String) -> Result<()> {
+        let access_keys = access_keys_for_region(&id).await?;
+        let id = Uuid::parse_str(&id).map_err(CapturedError::from_display)?;
+        let tx = database()
+            .await?
+            .begin()
+            .await
+            .map_err(CapturedError::from_display)?;
+        let deleted = region::Entity::delete_by_id(id)
+            .exec(&tx)
+            .await
+            .map_err(CapturedError::from_display)?;
+        if deleted.rows_affected == 0 {
+            return Err(CapturedError::msg("Resource not found"));
+        }
+        audit(
+            &tx,
+            headers,
+            "delete",
+            "region",
+            Some(&id.to_string()),
+            json!({}),
+        )
+        .await?;
+        tx.commit().await.map_err(CapturedError::from_display)?;
+        invalidate_access_token_caches(&access_keys).await
     }
 
     pub async fn list_clusters() -> Result<Vec<Cluster>> {
@@ -537,20 +709,21 @@ pub mod server {
     }
 
     pub async fn list_s3_providers() -> Result<Vec<S3Provider>> {
-        let rows = database().await?.query_all(statement("SELECT id::text, name, endpoint_url, provider_region, is_active FROM s3_providers ORDER BY endpoint_url", vec![])).await.map_err(CapturedError::from_display)?;
-        rows.iter()
-            .map(|row| {
-                Ok(S3Provider {
-                    id: text(row, "id")?,
-                    name: text(row, "name")?,
-                    endpoint_url: text(row, "endpoint_url")?,
-                    provider_region: optional_text(row, "provider_region")?,
-                    is_active: row
-                        .try_get("", "is_active")
-                        .map_err(CapturedError::from_display)?,
-                })
+        let providers = s3_provider::Entity::find()
+            .order_by_asc(s3_provider::Column::EndpointUrl)
+            .all(database().await?)
+            .await
+            .map_err(CapturedError::from_display)?;
+        Ok(providers
+            .into_iter()
+            .map(|provider| S3Provider {
+                id: provider.id.to_string(),
+                name: provider.name,
+                endpoint_url: provider.endpoint_url,
+                provider_region: Some(provider.provider_region),
+                is_active: provider.is_active,
             })
-            .collect()
+            .collect())
     }
 
     async fn secrets() -> Result<&'static Client> {
@@ -615,15 +788,21 @@ pub mod server {
     }
 
     async fn access_keys_for_organization(organization_id: &str) -> Result<Vec<String>> {
-        let rows = database()
-            .await?
-            .query_all(statement(
-                "SELECT access_key_id FROM storage_access_token WHERE organization_id=$1::uuid",
-                vec![organization_id.to_owned().into()],
-            ))
+        let organization_id =
+            Uuid::parse_str(organization_id).map_err(CapturedError::from_display)?;
+        let rows = storage_access_token::Entity::find()
+            .filter(storage_access_token::Column::OrganizationId.eq(organization_id))
+            .find_also_related(credential::Entity)
+            .all(database().await?)
             .await
             .map_err(CapturedError::from_display)?;
-        rows.iter().map(|row| text(row, "access_key_id")).collect()
+        rows.into_iter()
+            .map(|(_, credential)| {
+                credential
+                    .map(|credential| credential.access_key_id)
+                    .ok_or_else(|| CapturedError::msg("Storage credential not found"))
+            })
+            .collect()
     }
 
     pub async fn create_s3_provider(
@@ -653,13 +832,28 @@ pub mod server {
             .begin()
             .await
             .map_err(CapturedError::from_display)?;
-        tx.execute(statement(
-            "INSERT INTO secret (id, scope, organization_id, ciphertext) VALUES ($1::uuid, 'platform'::secret_scope, NULL, $2)",
-            vec![credential_secret_id.into(), ciphertext.into()],
-        ))
+        secret::ActiveModel {
+            id: Set(credential_secret_id),
+            scope: Set(secret::SecretScope::Platform),
+            organization_id: Set(None),
+            ciphertext: Set(ciphertext),
+            ..Default::default()
+        }
+        .insert(&tx)
         .await
         .map_err(CapturedError::from_display)?;
-        tx.execute(statement("INSERT INTO s3_providers (id, name, endpoint_url, provider_region, credential_secret_id, is_active) VALUES ($1::uuid, $2, $3, $4, $5::uuid, $6)", vec![id.into(), name.clone().into(), endpoint_url.clone().into(), provider_region.clone().into(), credential_secret_id.into(), is_active.into()])).await.map_err(CapturedError::from_display)?;
+        s3_provider::ActiveModel {
+            id: Set(id),
+            name: Set(name.clone()),
+            endpoint_url: Set(endpoint_url.clone()),
+            provider_region: Set(provider_region.clone()),
+            credential_secret_id: Set(credential_secret_id),
+            is_active: Set(is_active),
+            ..Default::default()
+        }
+        .insert(&tx)
+        .await
+        .map_err(CapturedError::from_display)?;
         audit(&tx, headers, "create", "s3_provider", Some(&id.to_string()), json!({"name": name, "endpoint_url": endpoint_url, "provider_region": provider_region, "is_active": is_active})).await?;
         tx.commit().await.map_err(CapturedError::from_display)?;
         invalidate_provider_credentials(&id.to_string()).await
@@ -694,30 +888,37 @@ pub mod server {
             .begin()
             .await
             .map_err(CapturedError::from_display)?;
-        let row = tx
-            .query_one(statement(
-                "SELECT credential_secret_id FROM s3_providers WHERE id=$1::uuid FOR UPDATE",
-                vec![id.clone().into()],
-            ))
+        let id_uuid = Uuid::parse_str(&id).map_err(CapturedError::from_display)?;
+        let provider = s3_provider::Entity::find_by_id(id_uuid)
+            .one(&tx)
             .await
             .map_err(CapturedError::from_display)?
             .ok_or_else(|| CapturedError::msg("S3 provider not found"))?;
-        let credential_secret_id: Uuid = row
-            .try_get("", "credential_secret_id")
-            .map_err(CapturedError::from_display)?;
+        let credential_secret_id = provider.credential_secret_id;
         if let Some(ciphertext) = replacement_ciphertext {
-            let updated = tx
-                .execute(statement(
-                    "UPDATE secret SET ciphertext=$2, updated_at=NOW() WHERE id=$1::uuid",
-                    vec![credential_secret_id.into(), ciphertext.into()],
-                ))
+            let mut secret = secret::Entity::find_by_id(credential_secret_id)
+                .one(&tx)
+                .await
+                .map_err(CapturedError::from_display)?
+                .ok_or_else(|| CapturedError::msg("S3 provider secret not found"))?
+                .into_active_model();
+            secret.ciphertext = Set(ciphertext);
+            secret.updated_at = Set(Utc::now().fixed_offset());
+            secret
+                .update(&tx)
                 .await
                 .map_err(CapturedError::from_display)?;
-            if updated.rows_affected() != 1 {
-                return Err(CapturedError::msg("S3 provider secret not found"));
-            }
         }
-        tx.execute(statement("UPDATE s3_providers SET name=$2, endpoint_url=$3, provider_region=$4, is_active=$5, updated_at=now() WHERE id=$1::uuid", vec![id.clone().into(), name.clone().into(), endpoint_url.clone().into(), provider_region.clone().into(), is_active.into()])).await.map_err(CapturedError::from_display)?;
+        let mut provider = provider.into_active_model();
+        provider.name = Set(name.clone());
+        provider.endpoint_url = Set(endpoint_url.clone());
+        provider.provider_region = Set(provider_region.clone());
+        provider.is_active = Set(is_active);
+        provider.updated_at = Set(Utc::now().fixed_offset());
+        provider
+            .update(&tx)
+            .await
+            .map_err(CapturedError::from_display)?;
         audit(&tx, headers, "update", "s3_provider", Some(&id), json!({"name": name, "endpoint_url": endpoint_url, "provider_region": provider_region, "is_active": is_active, "credentials_rotated": credentials.is_some()})).await?;
         tx.commit().await.map_err(CapturedError::from_display)?;
         invalidate_provider_credentials(&id).await
@@ -729,32 +930,296 @@ pub mod server {
             .begin()
             .await
             .map_err(CapturedError::from_display)?;
-        let row = tx
-            .query_one(statement(
-                "SELECT credential_secret_id FROM s3_providers WHERE id=$1::uuid FOR UPDATE",
-                vec![id.clone().into()],
-            ))
+        let id_uuid = Uuid::parse_str(&id).map_err(CapturedError::from_display)?;
+        let provider = s3_provider::Entity::find_by_id(id_uuid)
+            .one(&tx)
             .await
             .map_err(CapturedError::from_display)?
             .ok_or_else(|| CapturedError::msg("S3 provider not found"))?;
-        let credential_secret_id: Uuid = row
-            .try_get("", "credential_secret_id")
+        s3_provider::Entity::delete_by_id(provider.id)
+            .exec(&tx)
+            .await
             .map_err(CapturedError::from_display)?;
-        tx.execute(statement(
-            "DELETE FROM s3_providers WHERE id=$1::uuid",
-            vec![id.clone().into()],
-        ))
-        .await
-        .map_err(CapturedError::from_display)?;
-        tx.execute(statement(
-            "DELETE FROM secret WHERE id=$1::uuid",
-            vec![credential_secret_id.into()],
-        ))
-        .await
-        .map_err(CapturedError::from_display)?;
+        secret::Entity::delete_by_id(provider.credential_secret_id)
+            .exec(&tx)
+            .await
+            .map_err(CapturedError::from_display)?;
         audit(&tx, headers, "delete", "s3_provider", Some(&id), json!({})).await?;
         tx.commit().await.map_err(CapturedError::from_display)?;
         invalidate_provider_credentials(&id).await
+    }
+
+    async fn insert_clickhouse_provider(
+        connection: &impl ConnectionTrait,
+        id: Uuid,
+        name: &str,
+        endpoint_url: &str,
+        cluster_name: &str,
+        credentials: &ClickHouseCredentials,
+        storage: &lib::provisioning::ProvisionedPlatformBucket,
+    ) -> Result<()> {
+        let credential_secret_id = Uuid::new_v4();
+        let ciphertext = secrets::encrypt(
+            secrets().await?,
+            PLATFORM_KEY,
+            &serde_json::to_vec(credentials).map_err(CapturedError::from_display)?,
+        )
+        .await
+        .map_err(CapturedError::from_display)?;
+        secret::ActiveModel {
+            id: Set(credential_secret_id),
+            scope: Set(secret::SecretScope::Platform),
+            organization_id: Set(None),
+            ciphertext: Set(ciphertext),
+            ..Default::default()
+        }
+        .insert(connection)
+        .await
+        .map_err(CapturedError::from_display)?;
+        clickhouse_provider::ActiveModel {
+            id: Set(id),
+            name: Set(name.to_owned()),
+            endpoint_url: Set(endpoint_url.to_owned()),
+            cluster_name: Set(cluster_name.to_owned()),
+            credential_secret_id: Set(credential_secret_id),
+            bucket_id: Set(storage.bucket_id),
+            storage_credential_id: Set(storage.storage_credential.id),
+            ..Default::default()
+        }
+        .insert(connection)
+        .await
+        .map_err(CapturedError::from_display)?;
+        Ok(())
+    }
+
+    pub async fn list_clickhouse_providers() -> Result<Vec<ClickHouseProvider>> {
+        let rows = clickhouse_provider::Entity::find()
+            .order_by_asc(clickhouse_provider::Column::Name)
+            .all(database().await?)
+            .await
+            .map_err(CapturedError::from_display)?;
+        let mut providers = Vec::with_capacity(rows.len());
+        for provider in rows {
+            let bucket = bucket::Entity::find_by_id(provider.bucket_id)
+                .one(database().await?)
+                .await
+                .map_err(CapturedError::from_display)?
+                .ok_or_else(|| CapturedError::msg("ClickHouse bucket not found"))?;
+            let bucket_provider = s3_provider::Entity::find_by_id(bucket.s3_provider_id)
+                .one(database().await?)
+                .await
+                .map_err(CapturedError::from_display)?
+                .ok_or_else(|| CapturedError::msg("ClickHouse bucket S3 provider not found"))?;
+            let storage_credential = credential::Entity::find_by_id(provider.storage_credential_id)
+                .one(database().await?)
+                .await
+                .map_err(CapturedError::from_display)?
+                .ok_or_else(|| CapturedError::msg("ClickHouse storage credential not found"))?;
+            providers.push(ClickHouseProvider {
+                id: provider.id.to_string(),
+                name: provider.name,
+                endpoint_url: provider.endpoint_url,
+                cluster_name: provider.cluster_name,
+                bucket_id: provider.bucket_id.to_string(),
+                s3_provider_id: bucket.s3_provider_id.to_string(),
+                s3_provider_name: bucket_provider.name,
+                storage_access_key_id: storage_credential.access_key_id,
+                created_at: provider.created_at.to_rfc3339(),
+                updated_at: provider.updated_at.to_rfc3339(),
+            });
+        }
+        Ok(providers)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_clickhouse_provider(
+        headers: &HeaderMap,
+        name: String,
+        endpoint_url: String,
+        cluster_name: String,
+        credentials: ClickHouseCredentials,
+        s3_provider_id: String,
+        storage_credentials: Option<(String, String)>,
+    ) -> Result<CreatedClickHouseProvider> {
+        let id = Uuid::new_v4();
+        let name = required(name, "name")?;
+        let endpoint_url = required(endpoint_url, "endpoint URL")?;
+        let cluster_name = required(cluster_name, "cluster name")?;
+        required(credentials.username.clone(), "username")?;
+        required(credentials.password.clone(), "password")?;
+        let s3_provider_id = Uuid::parse_str(&required(s3_provider_id, "S3 provider")?)
+            .map_err(CapturedError::from_display)?;
+        let tx = database()
+            .await?
+            .begin()
+            .await
+            .map_err(CapturedError::from_display)?;
+        let storage =
+            provision_platform_bucket(&tx, secrets().await?, s3_provider_id, storage_credentials)
+                .await
+                .map_err(CapturedError::from_display)?;
+        let result = async {
+            insert_clickhouse_provider(&tx, id, &name, &endpoint_url, &cluster_name, &credentials, &storage).await?;
+            audit(&tx, headers, "create", "clickhouse_provider", Some(&id.to_string()), json!({"name": name, "endpoint_url": endpoint_url, "cluster_name": cluster_name, "s3_provider_id": s3_provider_id})).await?;
+            tx.commit().await.map_err(CapturedError::from_display)
+        }.await;
+        if let Err(error) = result {
+            let _ = buckets::delete(&storage.provider, storage.bucket_id).await;
+            return Err(error);
+        }
+        Ok(CreatedClickHouseProvider {
+            provider: ClickHouseProvider {
+                id: id.to_string(),
+                name,
+                endpoint_url,
+                cluster_name,
+                bucket_id: storage.bucket_id.to_string(),
+                s3_provider_id: s3_provider_id.to_string(),
+                s3_provider_name: String::new(),
+                storage_access_key_id: storage.access_key_id,
+                created_at: String::new(),
+                updated_at: String::new(),
+            },
+            storage_endpoint_url: env::var("STORAGE_INTERNAL_URL")
+                .unwrap_or_else(|_| "http://storage:8081".to_string()),
+            bucket_name: CLICKHOUSE_BUCKET_NAME.to_string(),
+            secret_access_key: storage.secret_access_key,
+        })
+    }
+
+    pub async fn update_clickhouse_provider(
+        headers: &HeaderMap,
+        id: String,
+        name: String,
+        endpoint_url: String,
+        cluster_name: String,
+        credentials: Option<ClickHouseCredentials>,
+    ) -> Result<()> {
+        let name = required(name, "name")?;
+        let endpoint_url = required(endpoint_url, "endpoint URL")?;
+        let cluster_name = required(cluster_name, "cluster name")?;
+        let replacement_ciphertext = match credentials.as_ref() {
+            Some(credentials) => {
+                required(credentials.username.clone(), "username")?;
+                required(credentials.password.clone(), "password")?;
+                Some(
+                    secrets::encrypt(
+                        secrets().await?,
+                        PLATFORM_KEY,
+                        &serde_json::to_vec(credentials).map_err(CapturedError::from_display)?,
+                    )
+                    .await
+                    .map_err(CapturedError::from_display)?,
+                )
+            }
+            None => None,
+        };
+        let tx = database()
+            .await?
+            .begin()
+            .await
+            .map_err(CapturedError::from_display)?;
+        let id_uuid = Uuid::parse_str(&id).map_err(CapturedError::from_display)?;
+        let provider = clickhouse_provider::Entity::find_by_id(id_uuid)
+            .one(&tx)
+            .await
+            .map_err(CapturedError::from_display)?
+            .ok_or_else(|| CapturedError::msg("ClickHouse provider not found"))?;
+        let credential_secret_id = provider.credential_secret_id;
+        if let Some(ciphertext) = replacement_ciphertext {
+            let mut secret = secret::Entity::find_by_id(credential_secret_id)
+                .one(&tx)
+                .await
+                .map_err(CapturedError::from_display)?
+                .ok_or_else(|| CapturedError::msg("ClickHouse provider secret not found"))?
+                .into_active_model();
+            secret.ciphertext = Set(ciphertext);
+            secret.updated_at = Set(Utc::now().fixed_offset());
+            secret
+                .update(&tx)
+                .await
+                .map_err(CapturedError::from_display)?;
+        }
+        let mut provider = provider.into_active_model();
+        provider.name = Set(name.clone());
+        provider.endpoint_url = Set(endpoint_url.clone());
+        provider.cluster_name = Set(cluster_name.clone());
+        provider.updated_at = Set(Utc::now().fixed_offset());
+        provider
+            .update(&tx)
+            .await
+            .map_err(CapturedError::from_display)?;
+        audit(&tx, headers, "update", "clickhouse_provider", Some(&id), json!({"name": name, "endpoint_url": endpoint_url, "cluster_name": cluster_name, "credentials_rotated": credentials.is_some()})).await?;
+        tx.commit().await.map_err(CapturedError::from_display)?;
+        Ok(())
+    }
+
+    pub async fn delete_clickhouse_provider(headers: &HeaderMap, id: String) -> Result<()> {
+        let tx = database()
+            .await?
+            .begin()
+            .await
+            .map_err(CapturedError::from_display)?;
+        let id_uuid = Uuid::parse_str(&id).map_err(CapturedError::from_display)?;
+        let referenced = region::Entity::find()
+            .filter(region::Column::ClickhouseProviderId.eq(id_uuid))
+            .count(&tx)
+            .await
+            .map_err(CapturedError::from_display)?;
+        if referenced != 0 {
+            return Err(CapturedError::msg(
+                "ClickHouse provider is still assigned to one or more regions",
+            ));
+        }
+        let provider = clickhouse_provider::Entity::find_by_id(id_uuid)
+            .one(&tx)
+            .await
+            .map_err(CapturedError::from_display)?
+            .ok_or_else(|| CapturedError::msg("ClickHouse provider not found"))?;
+        let bucket = bucket::Entity::find_by_id(provider.bucket_id)
+            .one(&tx)
+            .await
+            .map_err(CapturedError::from_display)?
+            .ok_or_else(|| CapturedError::msg("ClickHouse bucket not found"))?;
+        let credential = credential::Entity::find_by_id(provider.storage_credential_id)
+            .one(&tx)
+            .await
+            .map_err(CapturedError::from_display)?
+            .ok_or_else(|| CapturedError::msg("ClickHouse storage credential not found"))?;
+        let access_key_id = credential.access_key_id;
+        clickhouse_provider::Entity::delete_by_id(provider.id)
+            .exec(&tx)
+            .await
+            .map_err(CapturedError::from_display)?;
+        bucket_grant::Entity::delete_many()
+            .filter(bucket_grant::Column::CredentialId.eq(provider.storage_credential_id))
+            .filter(bucket_grant::Column::BucketId.eq(provider.bucket_id))
+            .exec(&tx)
+            .await
+            .map_err(CapturedError::from_display)?;
+        buckets::credentials::delete(&tx, provider.storage_credential_id)
+            .await
+            .map_err(CapturedError::from_display)?;
+        bucket::Entity::delete_by_id(bucket.id)
+            .exec(&tx)
+            .await
+            .map_err(CapturedError::from_display)?;
+        secret::Entity::delete_many()
+            .filter(secret::Column::Id.is_in([provider.credential_secret_id, bucket.sse_secret_id]))
+            .exec(&tx)
+            .await
+            .map_err(CapturedError::from_display)?;
+        audit(
+            &tx,
+            headers,
+            "delete",
+            "clickhouse_provider",
+            Some(&id),
+            json!({"bucket_id": bucket.id}),
+        )
+        .await?;
+        tx.commit().await.map_err(CapturedError::from_display)?;
+        invalidate_access_token_caches(&[access_key_id]).await
     }
 
     fn authorize_service(
@@ -779,25 +1244,27 @@ pub mod server {
         dioxus::server::axum::http::StatusCode,
     > {
         authorize_service(&headers)?;
-        let rows = database()
-            .await
-            .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
-            .query_all(statement("SELECT id::text, slug, display_name, status::text, routing_mode::text FROM regions WHERE status='active' AND routing_mode <> 'disabled' ORDER BY display_name", vec![]))
+        let rows = region::Entity::find()
+            .filter(region::Column::Status.eq(region::RegionStatus::Active))
+            .filter(region::Column::RoutingMode.ne(region::RegionRoutingMode::Disabled))
+            .order_by_asc(region::Column::DisplayName)
+            .all(
+                database()
+                    .await
+                    .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?,
+            )
             .await
             .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
         let regions = rows
-            .iter()
-            .map(|row| {
-                Ok(EligibleRegion {
-                    id: text(row, "id")?,
-                    slug: text(row, "slug")?,
-                    display_name: text(row, "display_name")?,
-                    status: text(row, "status")?,
-                    routing_mode: text(row, "routing_mode")?,
-                })
+            .into_iter()
+            .map(|region| EligibleRegion {
+                id: region.id.to_string(),
+                slug: region.slug,
+                display_name: region.display_name,
+                status: region_status_name(&region.status).to_string(),
+                routing_mode: region_routing_mode_name(&region.routing_mode).to_string(),
             })
-            .collect::<Result<Vec<_>>>()
-            .map_err(|_| dioxus::server::axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+            .collect();
         Ok(dioxus::server::axum::Json(regions))
     }
 

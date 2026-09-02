@@ -10,6 +10,7 @@ FROM tools AS builder
 COPY Cargo.toml Cargo.lock ./
 COPY packages/api/Cargo.toml ./packages/api/Cargo.toml
 COPY packages/api/src/main.rs ./packages/api/src/main.rs
+COPY packages/cli ./packages/cli
 COPY packages/ingress ./packages/ingress
 COPY packages/storage ./packages/storage
 COPY packages/worker ./packages/worker

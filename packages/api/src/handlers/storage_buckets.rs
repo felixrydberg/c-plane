@@ -89,11 +89,12 @@ pub async fn create_bucket(
         .s3_provider_id
         .ok_or_else(|| AppError::Conflict("Region has no S3 provider".into()))?;
     let foundation_bucket_id =
-        buckets::create(tx, &providers, organization_id, region.id, provider_id).await?;
+        buckets::create(tx, &providers, organization_id, provider_id).await?;
     let created = storage::ActiveModel {
         id: Set(Uuid::new_v4()),
         project_id: Set(body.project_id),
         organization_id: Set(organization_id),
+        region_id: Set(region.id),
         bucket_id: Set(foundation_bucket_id),
         name: Set(name.clone()),
     }
@@ -137,19 +138,18 @@ pub async fn list_buckets(
     let bucket_rows = storage::Entity::find()
         .filter(storage::Column::ProjectId.eq(query.project_id))
         .order_by_asc(storage::Column::Name)
-        .find_also_related(bucket::Entity)
-        .and_also_related(region::Entity)
+        .left_join(bucket::Entity)
+        .left_join(region::Entity)
+        .select_also(bucket::Entity)
+        .select_also(region::Entity)
         .all(tx)
         .await?;
-    let buckets = bucket_rows
-        .into_iter()
-        .map(|(storage, bucket, region)| {
-            bucket.ok_or_else(|| AppError::NotFound("Bucket foundation not found".into()))?;
-            let region =
-                region.ok_or_else(|| AppError::NotFound("Bucket region not found".into()))?;
-            Ok(response(&storage, &region))
-        })
-        .collect::<Result<Vec<_>, AppError>>()?;
+    let mut buckets = Vec::with_capacity(bucket_rows.len());
+    for (storage, foundation, region) in bucket_rows {
+        foundation.ok_or_else(|| AppError::NotFound("Bucket foundation not found".into()))?;
+        let region = region.ok_or_else(|| AppError::NotFound("Bucket region not found".into()))?;
+        buckets.push(response(&storage, &region));
+    }
     scoped.commit().await?;
     Ok(Json(buckets))
 }
@@ -169,17 +169,18 @@ pub async fn delete_bucket(
     let tx = scoped.connection();
     let (bucket, foundation, region) = storage::Entity::find_by_id(bucket_id)
         .filter(storage::Column::OrganizationId.eq(organization_id))
-        .find_also_related(bucket::Entity)
-        .and_also_related(region::Entity)
+        .left_join(bucket::Entity)
+        .left_join(region::Entity)
+        .select_also(bucket::Entity)
+        .select_also(region::Entity)
         .one(tx)
         .await?
         .ok_or_else(|| AppError::NotFound("Bucket not found".into()))?;
     verify_project_in_org(tx, bucket.project_id, organization_id).await?;
-    foundation.ok_or_else(|| AppError::NotFound("Bucket foundation not found".into()))?;
-    let region = region.ok_or_else(|| AppError::NotFound("Bucket region not found".into()))?;
-    let provider_id = region
-        .s3_provider_id
-        .ok_or_else(|| AppError::Conflict("Region has no S3 provider".into()))?;
+    let foundation = foundation
+        .ok_or_else(|| AppError::NotFound("Bucket foundation not found".into()))?;
+    let _region = region.ok_or_else(|| AppError::NotFound("Bucket region not found".into()))?;
+    let provider_id = foundation.s3_provider_id;
     let access_keys = bucket_grant::Entity::find()
         .filter(bucket_grant::Column::BucketId.eq(bucket.bucket_id))
         .find_also_related(credential::Entity)

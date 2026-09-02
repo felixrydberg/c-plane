@@ -6,7 +6,7 @@ Storage is the platform's regional S3-compatible object service. Applications us
 
 A bucket is a global logical resource within a project. Its name, region, visibility, credentials, and lifecycle belong to the project.
 
-Every logical bucket has one dedicated real bucket at the configured regional S3 provider. All project branches share that physical bucket while their namespace roots determine which immutable objects each branch can see.
+Every logical bucket has one dedicated real bucket at the S3 provider resolved from its selected C-Plane region. The foundation bucket stores that provider directly; all project branches share the physical bucket while their namespace roots determine which immutable objects each branch can see.
 
 This provides two tenant boundaries: platform authorization and namespace isolation at the Storage API, plus a separate provider bucket for the logical bucket. Provider bucket names and credentials are never exposed. Logical public access is still served by the Storage API; backing buckets remain private.
 

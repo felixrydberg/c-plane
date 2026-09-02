@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "packages/api",
+    "packages/cli",
     "packages/control-plane",
     "packages/ingress",
     "packages/lib",

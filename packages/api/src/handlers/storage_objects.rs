@@ -282,14 +282,17 @@ async fn bucket_descriptor(
         .await?
         .ok_or_else(|| AppError::NotFound("Bucket not found".into()))?;
     verify_project_in_org(tx, bucket.project_id, organization_id).await?;
-    let (_, region) = bucket::Entity::find_by_id(bucket.bucket_id)
+    let (_, region) = storage::Entity::find_by_id(bucket.id)
         .find_also_related(region::Entity)
         .one(tx)
         .await?
         .ok_or_else(|| AppError::NotFound("Bucket foundation not found".into()))?;
-    let provider_id = region
-        .and_then(|region| region.s3_provider_id)
-        .ok_or_else(|| AppError::Conflict("Region has no S3 provider".into()))?;
+    let _region = region.ok_or_else(|| AppError::NotFound("Bucket region not found".into()))?;
+    let foundation = bucket::Entity::find_by_id(bucket.bucket_id)
+        .one(tx)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Bucket foundation not found".into()))?;
+    let provider_id = foundation.s3_provider_id;
     scoped.commit().await?;
     let platform_sse_key = get_app_state()
         .s3_providers

@@ -4,6 +4,7 @@ import { organization } from "../tenants/organization.ts";
 import { app_tenant, orgAllowed } from "../rls.ts";
 import { bucket } from "../infrastructure/buckets.ts";
 import { credential } from "../infrastructure/secrets.ts";
+import { region } from "../infrastructure/regions.ts";
 
 export const storage_bucket = pgTable.withRLS('storage_bucket', {
   id: uuid("id").primaryKey(),
@@ -13,6 +14,9 @@ export const storage_bucket = pgTable.withRLS('storage_bucket', {
   organization_id: uuid("organization_id")
     .notNull()
     .references(() => organization.id, { onDelete: "cascade" }),
+  region_id: uuid("region_id")
+    .notNull()
+    .references(() => region.id, { onDelete: "restrict" }),
   bucket_id: uuid("bucket_id").notNull().references(() => bucket.id, { onDelete: "restrict" }),
   name: text("name").notNull(),
 }, (table) => [
@@ -21,6 +25,7 @@ export const storage_bucket = pgTable.withRLS('storage_bucket', {
   uniqueIndex("storage_bucket_foundation_bucket_uidx").on(table.bucket_id),
   index("storage_bucket_project_id_idx").on(table.project_id),
   index("storage_bucket_organization_id_idx").on(table.organization_id),
+  index("storage_bucket_region_id_idx").on(table.region_id),
   pgPolicy("storage_bucket_tenant_rls", {
     as: "permissive",
     for: "all",

@@ -28,6 +28,13 @@ pub struct Client {
 }
 
 impl Client {
+    pub fn with_token(
+        address: impl Into<String>,
+        token: impl Into<String>,
+    ) -> Result<Self, SecretError> {
+        Self::new(address.into(), Some(token.into()), None)
+    }
+
     pub fn from_env() -> Result<Self, SecretError> {
         let address = required("OPENBAO_ADDR")?;
         let token = env::var("OPENBAO_TOKEN")

@@ -125,9 +125,8 @@ pub async fn get_registry(
         .one(scoped.connection())
         .await?
         .ok_or_else(|| AppError::NotFound("Managed Registry is not activated".into()))?;
-    let foundation =
-        foundation.ok_or_else(|| AppError::NotFound("Managed Registry bucket not found".into()))?;
-    let response = response(&registry, foundation.region_id);
+    foundation.ok_or_else(|| AppError::NotFound("Managed Registry bucket not found".into()))?;
+    let response = response(&registry);
     scoped.commit().await?;
     Ok(Json(response))
 }
@@ -196,9 +195,8 @@ pub async fn activate_registry(
         .one(tx)
         .await?
     {
-        let foundation = foundation
-            .ok_or_else(|| AppError::NotFound("Managed Registry bucket not found".into()))?;
-        let response = response(&existing, foundation.region_id);
+        foundation.ok_or_else(|| AppError::NotFound("Managed Registry bucket not found".into()))?;
+        let response = response(&existing);
         scoped.commit().await?;
         return Ok((StatusCode::OK, Json(response)));
     }
@@ -213,8 +211,9 @@ pub async fn activate_registry(
         .s3_provider_id
         .ok_or_else(|| AppError::Conflict("Region has no S3 provider".into()))?;
     let foundation_bucket_id =
-        buckets::create(tx, &providers, organization_id, region.id, provider_id).await?;
-    let provisioned = provision_metadata(tx, organization_id, foundation_bucket_id).await;
+        buckets::create(tx, &providers, organization_id, provider_id).await?;
+    let provisioned =
+        provision_metadata(tx, organization_id, region.id, foundation_bucket_id).await;
     let registry = match provisioned {
         Ok(registry) => registry,
         Err(error) => {
@@ -238,7 +237,7 @@ pub async fn activate_registry(
             .await;
         return Err(error);
     }
-    let response = response(&registry, region.id);
+    let response = response(&registry);
     if let Err(error) = scoped.commit().await {
         let _ = providers
             .delete_bucket(provider_id, foundation_bucket_id)
@@ -309,6 +308,7 @@ pub async fn run_garbage_collection(
 async fn provision_metadata(
     tx: &DatabaseTransaction,
     organization_id: Uuid,
+    region_id: Uuid,
     foundation_bucket_id: Uuid,
 ) -> Result<managed_registry::Model, AppError> {
     let state = get_app_state();
@@ -357,6 +357,7 @@ async fn provision_metadata(
     .await?;
     Ok(managed_registry::ActiveModel {
         organization_id: Set(organization_id),
+        region_id: Set(region_id),
         bucket_id: Set(foundation_bucket_id),
         credential_id: Set(credential_id),
         status: Set(ManagedRegistryStatus::Active),
@@ -465,10 +466,10 @@ async fn find_registry(
         .ok_or_else(|| AppError::NotFound("Managed Registry is not activated".into()))
 }
 
-fn response(registry: &managed_registry::Model, region_id: Uuid) -> ManagedRegistryResponse {
+fn response(registry: &managed_registry::Model) -> ManagedRegistryResponse {
     ManagedRegistryResponse {
         organization_id: registry.organization_id,
-        region_id,
+        region_id: registry.region_id,
         status: status_name(&registry.status).into(),
         storage_revision: registry.storage_revision,
         created_at: registry.created_at.to_rfc3339(),

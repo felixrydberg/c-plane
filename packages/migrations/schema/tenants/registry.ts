@@ -5,6 +5,7 @@ import { organization } from "./organization.ts";
 import { bucket } from "../infrastructure/buckets.ts";
 import { credential } from "../infrastructure/secrets.ts";
 import { worker_queue } from "../infrastructure/worker-queue.ts";
+import { region } from "../infrastructure/regions.ts";
 
 export const managed_registry_status = pgEnum("managed_registry_status", ["active", "maintenance"]);
 
@@ -12,6 +13,9 @@ export const managed_registry = pgTable.withRLS("managed_registry", {
   organization_id: uuid("organization_id")
     .primaryKey()
     .references(() => organization.id, { onDelete: "cascade" }),
+  region_id: uuid("region_id")
+    .notNull()
+    .references(() => region.id, { onDelete: "restrict" }),
   bucket_id: uuid("bucket_id")
     .notNull()
     .references(() => bucket.id, { onDelete: "restrict" }),
@@ -26,6 +30,7 @@ export const managed_registry = pgTable.withRLS("managed_registry", {
   uniqueIndex("managed_registry_credential_id_uidx").on(table.credential_id),
   index("managed_registry_status_idx").on(table.status),
   index("managed_registry_gc_active_job_idx").on(table.gc_active_job_id),
+  index("managed_registry_region_id_idx").on(table.region_id),
   foreignKey({
     columns: [table.credential_id, table.organization_id],
     foreignColumns: [credential.id, credential.organization_id],

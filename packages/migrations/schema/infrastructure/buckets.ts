@@ -13,7 +13,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { app_tenant, orgAllowed } from "../rls.ts";
-import { region } from "./regions.ts";
+import { s3_provider } from "./durability.ts";
 import { credential, secret } from "./secrets.ts";
 
 export const FOUNDATION_BUCKET_STATUSES = ["active", "deleting"] as const;
@@ -23,14 +23,14 @@ export const foundation_bucket_status = pgEnum("foundation_bucket_status", FOUND
 // Tenant scoping happens on storage_bucket / bucket_grant / storage_access_token.
 export const bucket = pgTable("bucket", {
   id: uuid("id").primaryKey(),
-  region_id: uuid("region_id").notNull().references(() => region.id, { onDelete: "restrict" }),
+  s3_provider_id: uuid("s3_provider_id").notNull().references(() => s3_provider.id, { onDelete: "restrict" }),
   sse_secret_id: uuid("sse_secret_id").notNull().references(() => secret.id, { onDelete: "restrict" }),
   status: foundation_bucket_status("status").notNull().default("active"),
   created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
   updated_at: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 }, (table) => [
   uniqueIndex("bucket_sse_secret_id_uidx").on(table.sse_secret_id),
-  index("bucket_region_id_idx").on(table.region_id),
+  index("bucket_s3_provider_id_idx").on(table.s3_provider_id),
   index("bucket_status_idx").on(table.status),
 ]);
 

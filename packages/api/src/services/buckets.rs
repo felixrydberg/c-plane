@@ -11,7 +11,6 @@ pub async fn create(
     tx: &DatabaseTransaction,
     providers: &S3ProviderClient,
     organization_id: Uuid,
-    region_id: Uuid,
     provider_id: Uuid,
 ) -> Result<Uuid, AppError> {
     let bucket_id = Uuid::new_v4();
@@ -39,7 +38,7 @@ pub async fn create(
     .await?;
     bucket::ActiveModel {
         id: Set(bucket_id),
-        region_id: Set(region_id),
+        s3_provider_id: Set(provider_id),
         sse_secret_id: Set(secret_id),
         status: Set(BucketStatus::Active),
         ..Default::default()

@@ -9,6 +9,7 @@ pub struct Model {
     pub slug: String,
     pub display_name: String,
     pub s3_provider_id: Option<Uuid>,
+    pub clickhouse_provider_id: Option<Uuid>,
     pub status: RegionStatus,
     pub routing_mode: RegionRoutingMode,
     pub created_at: DateTimeWithTimeZone,
@@ -50,11 +51,24 @@ pub enum Relation {
         on_delete = "Restrict"
     )]
     S3Provider,
+    #[sea_orm(
+        belongs_to = "super::clickhouse_provider::Entity",
+        from = "Column::ClickhouseProviderId",
+        to = "super::clickhouse_provider::Column::Id",
+        on_delete = "Restrict"
+    )]
+    ClickhouseProvider,
 }
 
 impl Related<super::s3_provider::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::S3Provider.def()
+    }
+}
+
+impl Related<super::clickhouse_provider::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ClickhouseProvider.def()
     }
 }
 

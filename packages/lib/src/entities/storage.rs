@@ -8,6 +8,7 @@ pub struct Model {
     pub id: Uuid,
     pub project_id: Uuid,
     pub organization_id: Uuid,
+    pub region_id: Uuid,
     pub bucket_id: Uuid,
     pub name: String,
 }
@@ -29,6 +30,13 @@ pub enum Relation {
         on_delete = "Restrict"
     )]
     Bucket,
+    #[sea_orm(
+        belongs_to = "super::region::Entity",
+        from = "Column::RegionId",
+        to = "super::region::Column::Id",
+        on_delete = "Restrict"
+    )]
+    Region,
 }
 
 impl Related<super::project::Entity> for Entity {
@@ -40,6 +48,12 @@ impl Related<super::project::Entity> for Entity {
 impl Related<super::bucket::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Bucket.def()
+    }
+}
+
+impl Related<super::region::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Region.def()
     }
 }
 

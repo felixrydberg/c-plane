@@ -16,6 +16,7 @@ fn Shell(title: &'static str, children: Element) -> Element {
                     Link { to: Route::Regions {}, "Regions" }
                     Link { to: Route::Clusters {}, "Clusters" }
                     Link { to: Route::S3Providers {}, "S3 Providers" }
+                    Link { to: Route::ClickHouseProviders {}, "ClickHouse Providers" }
                     Link { to: Route::AuditLogs {}, "Audit Logs" }
                 }
             }
@@ -43,6 +44,7 @@ pub fn Dashboard() -> Element {
                 SummaryCard { label: "Regions", route: Route::Regions {} }
                 SummaryCard { label: "Clusters", route: Route::Clusters {} }
                 SummaryCard { label: "S3 Providers", route: Route::S3Providers {} }
+                SummaryCard { label: "ClickHouse Providers", route: Route::ClickHouseProviders {} }
                 SummaryCard { label: "Audit Logs", route: Route::AuditLogs {} }
             }
         }
@@ -63,8 +65,15 @@ fn ErrorMessage(message: Signal<Option<String>>) -> Element {
 pub fn Regions() -> Element {
     let mut rows = use_resource(list_regions);
     let providers = use_resource(list_s3_providers);
+    let clickhouse_providers = use_resource(list_clickhouse_providers);
     let rows_state = rows.read().clone();
     let provider_items = providers
+        .read()
+        .as_ref()
+        .and_then(|result| result.as_ref().ok())
+        .cloned()
+        .unwrap_or_default();
+    let clickhouse_items = clickhouse_providers
         .read()
         .as_ref()
         .and_then(|result| result.as_ref().ok())
@@ -73,11 +82,11 @@ pub fn Regions() -> Element {
 
     rsx! {
         Shell { title: "Regions",
-            CreateRegion { providers: provider_items.clone(), on_saved: move |_| rows.restart() }
+            CreateRegion { providers: provider_items.clone(), clickhouse_providers: clickhouse_items.clone(), on_saved: move |_| rows.restart() }
             match rows_state {
                 Some(Ok(items)) => rsx! { table {
-                    thead { tr { th { "Name" } th { "Slug" } th { "Status" } th { "S3 Provider" } th { "Actions" } } }
-                    tbody { for item in items { RegionRow { key: "{item.id}", item, providers: provider_items.clone(), on_saved: move |_| rows.restart() } } }
+                    thead { tr { th { "Name" } th { "Slug" } th { "Status" } th { "S3 Provider" } th { "ClickHouse Provider" } th { "Actions" } } }
+                    tbody { for item in items { RegionRow { key: "{item.id}", item, providers: provider_items.clone(), clickhouse_providers: clickhouse_items.clone(), on_saved: move |_| rows.restart() } } }
                 } },
                 Some(Err(error)) => rsx! { p { class: "state error", "{error}" } },
                 None => rsx! { p { class: "state", "Loading…" } },
@@ -87,11 +96,16 @@ pub fn Regions() -> Element {
 }
 
 #[component]
-fn CreateRegion(providers: Vec<S3Provider>, on_saved: EventHandler<()>) -> Element {
+fn CreateRegion(
+    providers: Vec<S3Provider>,
+    clickhouse_providers: Vec<ClickHouseProvider>,
+    on_saved: EventHandler<()>,
+) -> Element {
     let mut slug = use_signal(String::new);
     let mut name = use_signal(String::new);
     let mut status = use_signal(|| "active".to_string());
     let mut provider = use_signal(String::new);
+    let mut clickhouse_provider = use_signal(String::new);
     let mut message = use_signal(|| None::<String>);
     rsx! {
         details { class: "create", summary { "+ New region" }
@@ -100,10 +114,11 @@ fn CreateRegion(providers: Vec<S3Provider>, on_saved: EventHandler<()>) -> Eleme
                 label { "Slug" input { value: slug, oninput: move |e| slug.set(e.value()) } }
                 label { "Status" select { value: status, onchange: move |e| status.set(e.value()), option { value: "active", "Active" } option { value: "inactive", "Inactive" } option { value: "maintenance", "Maintenance" } } }
                 label { "S3 provider" select { value: provider, onchange: move |e| provider.set(e.value()), option { value: "", "None" } for item in providers { option { value: "{item.id}", "{item.name} — {item.endpoint_url}" } } } }
+                label { "ClickHouse provider" select { value: clickhouse_provider, onchange: move |e| clickhouse_provider.set(e.value()), option { value: "", "None" } for item in clickhouse_providers { option { value: "{item.id}", "{item.name}" } } } }
             }
             ErrorMessage { message }
             button { class: "primary", onclick: move |_| async move {
-                match create_region(slug(), name(), status(), optional(provider())).await {
+                match create_region(slug(), name(), status(), optional(provider()), optional(clickhouse_provider())).await {
                     Ok(()) => { slug.set(String::new()); name.set(String::new()); message.set(None); on_saved.call(()); }
                     Err(error) => message.set(Some(error.to_string())),
                 }
@@ -113,25 +128,32 @@ fn CreateRegion(providers: Vec<S3Provider>, on_saved: EventHandler<()>) -> Eleme
 }
 
 #[component]
-fn RegionRow(item: Region, providers: Vec<S3Provider>, on_saved: EventHandler<()>) -> Element {
+fn RegionRow(
+    item: Region,
+    providers: Vec<S3Provider>,
+    clickhouse_providers: Vec<ClickHouseProvider>,
+    on_saved: EventHandler<()>,
+) -> Element {
     let mut slug = use_signal(|| item.slug.clone());
     let mut name = use_signal(|| item.display_name.clone());
     let mut status = use_signal(|| item.status.clone());
     let mut provider = use_signal(|| item.s3_provider_id.clone().unwrap_or_default());
+    let mut clickhouse_provider = use_signal(|| item.clickhouse_provider_id.clone().unwrap_or_default());
     let mut message = use_signal(|| None::<String>);
     let id = item.id.clone();
     let delete_id = item.id.clone();
     rsx! {
         tr {
-            td { "{item.display_name}" } td { code { "{item.slug}" } } td { "{item.status}" } td { code { {item.s3_provider_id.as_deref().unwrap_or("None")} } }
+            td { "{item.display_name}" } td { code { "{item.slug}" } } td { "{item.status}" } td { code { {item.s3_provider_id.as_deref().unwrap_or("None")} } } td { {item.clickhouse_provider_name.as_deref().unwrap_or("None")} }
             td { details { summary { "Edit" } div { class: "popover form-grid",
                 label { "Name" input { value: name, oninput: move |e| name.set(e.value()) } }
                 label { "Slug" input { value: slug, oninput: move |e| slug.set(e.value()) } }
                 label { "Status" select { value: status, onchange: move |e| status.set(e.value()), option { value: "active", "Active" } option { value: "inactive", "Inactive" } option { value: "maintenance", "Maintenance" } } }
                 label { "S3 provider" select { value: provider, onchange: move |e| provider.set(e.value()), option { value: "", "None" } for value in providers { option { value: "{value.id}", "{value.name} — {value.endpoint_url}" } } } }
+                label { "ClickHouse provider" select { value: clickhouse_provider, onchange: move |e| clickhouse_provider.set(e.value()), option { value: "", "None" } for value in clickhouse_providers { option { value: "{value.id}", "{value.name}" } } } }
                 ErrorMessage { message }
                 div { class: "actions",
-                    button { class: "primary", onclick: move |_| { let id = id.clone(); async move { match update_region(id, slug(), name(), status(), optional(provider())).await { Ok(()) => { message.set(None); on_saved.call(()); }, Err(error) => message.set(Some(error.to_string())) } } }, "Save" }
+                    button { class: "primary", onclick: move |_| { let id = id.clone(); async move { match update_region(id, slug(), name(), status(), optional(provider()), optional(clickhouse_provider())).await { Ok(()) => { message.set(None); on_saved.call(()); }, Err(error) => message.set(Some(error.to_string())) } } }, "Save" }
                     button { class: "danger", onclick: move |_| { let id = delete_id.clone(); async move { match delete_region(id).await { Ok(()) => on_saved.call(()), Err(error) => message.set(Some(error.to_string())) } } }, "Delete" }
                 }
             } } }
@@ -267,6 +289,110 @@ fn S3ProviderRow(item: S3Provider, on_saved: EventHandler<()>) -> Element {
             ErrorMessage { message } div { class: "actions",
                 button { class: "primary", onclick: move |_| { let id = update_id.clone(); async move { match update_s3_provider(id, name(), endpoint(), region(), optional(access()), optional(secret()), optional(session()), active()).await { Ok(()) => { message.set(None); access.set(String::new()); secret.set(String::new()); on_saved.call(()); }, Err(error) => message.set(Some(error.to_string())) } } }, "Save" }
                 button { class: "danger", onclick: move |_| { let id = delete_id.clone(); async move { match delete_s3_provider(id).await { Ok(()) => on_saved.call(()), Err(error) => message.set(Some(error.to_string())) } } }, "Delete" }
+            }
+        } } }
+    } }
+}
+
+#[component]
+pub fn ClickHouseProviders() -> Element {
+    let mut rows = use_resource(list_clickhouse_providers);
+    let s3_providers = use_resource(list_s3_providers);
+    let rows_state = rows.read().clone();
+    let provider_items = s3_providers
+        .read()
+        .as_ref()
+        .and_then(|result| result.as_ref().ok())
+        .cloned()
+        .unwrap_or_default();
+    rsx! { Shell { title: "ClickHouse Providers",
+        CreateClickHouseProvider { s3_providers: provider_items, on_saved: move |_| rows.restart() }
+        match rows_state {
+            Some(Ok(items)) => rsx! { table {
+                thead { tr { th { "Name" } th { "Endpoint" } th { "Cluster" } th { "S3 provider" } th { "Actions" } } }
+                tbody { for item in items { ClickHouseProviderRow { key: "{item.id}", item, on_saved: move |_| rows.restart() } } }
+            } },
+            Some(Err(error)) => rsx! { p { class: "state error", "{error}" } },
+            None => rsx! { p { class: "state", "Loading…" } },
+        }
+    } }
+}
+
+#[component]
+fn CreateClickHouseProvider(s3_providers: Vec<S3Provider>, on_saved: EventHandler<()>) -> Element {
+    let mut name = use_signal(String::new);
+    let mut endpoint = use_signal(String::new);
+    let mut cluster = use_signal(String::new);
+    let mut username = use_signal(String::new);
+    let mut password = use_signal(String::new);
+    let mut s3_provider = use_signal(String::new);
+    let mut message = use_signal(|| None::<String>);
+    let mut created = use_signal(|| None::<CreatedClickHouseProvider>);
+    rsx! { details { class: "create", summary { "+ New ClickHouse provider" }
+        div { class: "form-grid",
+            label { "Name" input { value: name, oninput: move |e| name.set(e.value()) } }
+            label { "Endpoint URL" input { value: endpoint, oninput: move |e| endpoint.set(e.value()) } }
+            label { "Cluster name" input { value: cluster, oninput: move |e| cluster.set(e.value()) } }
+            label { "Username" input { value: username, oninput: move |e| username.set(e.value()) } }
+            label { "Password" input { r#type: "password", value: password, oninput: move |e| password.set(e.value()) } }
+            label { "S3 provider" select { value: s3_provider, onchange: move |e| s3_provider.set(e.value()), option { value: "", "Select S3 provider" } for item in s3_providers { option { value: "{item.id}", "{item.name}" } } } }
+        }
+        ErrorMessage { message }
+        if let Some(value) = created() { p { class: "token",
+            "Storage credentials (shown once): endpoint " code { "{value.storage_endpoint_url}" }
+            ", bucket " code { "{value.bucket_name}" }
+            ", access key " code { "{value.provider.storage_access_key_id}" }
+            ", secret key " code { "{value.secret_access_key}" }
+        } }
+        button { class: "primary", onclick: move |_| async move {
+            match create_clickhouse_provider(name(), endpoint(), cluster(), username(), password(), s3_provider()).await {
+                Ok(value) => {
+                    created.set(Some(value));
+                    message.set(None);
+                    username.set(String::new());
+                    password.set(String::new());
+                    on_saved.call(());
+                }
+                Err(error) => message.set(Some(error.to_string())),
+            }
+        }, "Create provider" }
+    } }
+}
+
+#[component]
+fn ClickHouseProviderRow(item: ClickHouseProvider, on_saved: EventHandler<()>) -> Element {
+    let mut name = use_signal(|| item.name.clone());
+    let mut endpoint = use_signal(|| item.endpoint_url.clone());
+    let mut cluster = use_signal(|| item.cluster_name.clone());
+    let mut username = use_signal(String::new);
+    let mut password = use_signal(String::new);
+    let mut message = use_signal(|| None::<String>);
+    let update_id = item.id.clone();
+    let delete_id = item.id.clone();
+    rsx! { tr {
+        td { "{item.name}" } td { "{item.endpoint_url}" } td { code { "{item.cluster_name}" } } td { "{item.s3_provider_name}" }
+        td { details { summary { "Manage" } div { class: "popover form-grid",
+            label { "Name" input { value: name, oninput: move |e| name.set(e.value()) } }
+            label { "Endpoint URL" input { value: endpoint, oninput: move |e| endpoint.set(e.value()) } }
+            label { "Cluster name" input { value: cluster, oninput: move |e| cluster.set(e.value()) } }
+            label { "Replacement username" input { value: username, oninput: move |e| username.set(e.value()) } }
+            label { "Replacement password" input { r#type: "password", value: password, oninput: move |e| password.set(e.value()) } }
+            p { class: "form-note", "S3 provider placement and storage credentials are immutable. Create a replacement provider to move data." }
+            p { class: "form-error", "Deleting this provider permanently deletes its stored ClickHouse data after asynchronous bucket cleanup." }
+            ErrorMessage { message }
+            div { class: "actions",
+                button { class: "primary", onclick: move |_| { let id = update_id.clone(); async move {
+                    match update_clickhouse_provider(id, name(), endpoint(), cluster(), optional(username()), optional(password())).await {
+                        Ok(()) => { username.set(String::new()); password.set(String::new()); message.set(None); on_saved.call(()); }
+                        Err(error) => message.set(Some(error.to_string())),
+                    }
+                } }, "Save" }
+                button { class: "danger", onclick: move |_| { let id = delete_id.clone(); async move {
+                    match delete_clickhouse_provider(id).await {
+                        Ok(()) => on_saved.call(()),
+                        Err(error) => message.set(Some(error.to_string())),
+                    }
+                } }, "Delete provider and data" }
             }
         } } }
     } }

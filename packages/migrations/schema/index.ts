@@ -1,5 +1,6 @@
 export * from "./events.ts"
 export * from "./infrastructure/clusters.ts"
+export * from "./infrastructure/clickhouse.ts"
 export * from "./infrastructure/audit.ts"
 export * from "./infrastructure/buckets.ts"
 export * from "./infrastructure/durability.ts"

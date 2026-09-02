@@ -1,5 +1,6 @@
 pub mod bucket;
 pub mod bucket_grant;
+pub mod clickhouse_provider;
 pub mod container;
 pub mod container_version;
 pub mod credential;

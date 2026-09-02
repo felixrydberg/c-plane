@@ -7,6 +7,8 @@ pub struct Region {
     pub display_name: String,
     pub status: String,
     pub s3_provider_id: Option<String>,
+    pub clickhouse_provider_id: Option<String>,
+    pub clickhouse_provider_name: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -39,6 +41,34 @@ pub struct S3Provider {
     pub endpoint_url: String,
     pub provider_region: Option<String>,
     pub is_active: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ClickHouseProvider {
+    pub id: String,
+    pub name: String,
+    pub endpoint_url: String,
+    pub cluster_name: String,
+    pub bucket_id: String,
+    pub s3_provider_id: String,
+    pub s3_provider_name: String,
+    pub storage_access_key_id: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CreatedClickHouseProvider {
+    pub provider: ClickHouseProvider,
+    pub storage_endpoint_url: String,
+    pub bucket_name: String,
+    pub secret_access_key: String,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ClickHouseCredentials {
+    pub username: String,
+    pub password: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
