@@ -41,7 +41,7 @@ async function createBucket() {
       <UiBackLink :label="projectName" :to="backUrl()" />
       <UiPageEyebrow label="Storage &amp; Databases" />
       <h1 class="mt-2 text-2xl font-semibold">New Bucket</h1>
-      <p class="mt-1 text-sm text-muted">Create a bucket in S1 - Object Storage, shared by every environment in this project.</p>
+      <p class="mt-1 text-sm text-muted">Create a bucket in Object Storage, shared by every environment in this project.</p>
     </header>
 
     <div class="grid lg:grid-cols-[minmax(0,1fr)_280px]">

@@ -235,14 +235,14 @@ pub fn create_routes() -> Router {
             ],
         )
         .scoped_route(
-            "/api/organization/{organization_id}/registry/repositories",
+            "/api/organization/{organization_id}/projects/{project_id}/registry/repositories",
             [
                 scoped::get(registry_repositories::list_repositories, "registry:read", Role::Member),
                 scoped::post(registry_repositories::create_repository, "registry:create", Role::Member),
             ],
         )
         .scoped_route(
-            "/api/organization/{organization_id}/registry/repositories/{repository_id}",
+            "/api/organization/{organization_id}/projects/{project_id}/registry/repositories/{repository_id}",
             [scoped::delete(registry_repositories::delete_repository, "registry:delete", Role::Admin)],
         )
         .scoped_route(
@@ -268,14 +268,14 @@ pub fn create_routes() -> Router {
             )],
         )
         .scoped_route(
-            "/api/organization/{organization_id}/registry/access-tokens",
+            "/api/organization/{organization_id}/projects/{project_id}/registry/access-tokens",
             [
                 scoped::get(registry_access_tokens::list_access_tokens, "access-token:read", Role::Member),
                 scoped::post(registry_access_tokens::create_access_token, "access-token:create", Role::Member),
             ],
         )
         .scoped_route(
-            "/api/organization/{organization_id}/registry/access-tokens/{token_id}",
+            "/api/organization/{organization_id}/projects/{project_id}/registry/access-tokens/{token_id}",
             [
                 scoped::get(registry_access_tokens::get_access_token, "access-token:read", Role::Member),
                 scoped::patch(registry_access_tokens::update_access_token, "access-token:update", Role::Member),
@@ -555,19 +555,19 @@ mod tests {
             ),
             (
                 "GET",
-                "/api/organization/{organization_id}/registry/repositories",
+                "/api/organization/{organization_id}/projects/{project_id}/registry/repositories",
                 "registry:read",
                 Role::Member,
             ),
             (
                 "POST",
-                "/api/organization/{organization_id}/registry/repositories",
+                "/api/organization/{organization_id}/projects/{project_id}/registry/repositories",
                 "registry:create",
                 Role::Member,
             ),
             (
                 "DELETE",
-                "/api/organization/{organization_id}/registry/repositories/{repository_id}",
+                "/api/organization/{organization_id}/projects/{project_id}/registry/repositories/{repository_id}",
                 "registry:delete",
                 Role::Admin,
             ),
@@ -603,31 +603,31 @@ mod tests {
             ),
             (
                 "GET",
-                "/api/organization/{organization_id}/registry/access-tokens",
+                "/api/organization/{organization_id}/projects/{project_id}/registry/access-tokens",
                 "access-token:read",
                 Role::Member,
             ),
             (
                 "POST",
-                "/api/organization/{organization_id}/registry/access-tokens",
+                "/api/organization/{organization_id}/projects/{project_id}/registry/access-tokens",
                 "access-token:create",
                 Role::Member,
             ),
             (
                 "GET",
-                "/api/organization/{organization_id}/registry/access-tokens/{token_id}",
+                "/api/organization/{organization_id}/projects/{project_id}/registry/access-tokens/{token_id}",
                 "access-token:read",
                 Role::Member,
             ),
             (
                 "PATCH",
-                "/api/organization/{organization_id}/registry/access-tokens/{token_id}",
+                "/api/organization/{organization_id}/projects/{project_id}/registry/access-tokens/{token_id}",
                 "access-token:update",
                 Role::Member,
             ),
             (
                 "DELETE",
-                "/api/organization/{organization_id}/registry/access-tokens/{token_id}",
+                "/api/organization/{organization_id}/projects/{project_id}/registry/access-tokens/{token_id}",
                 "access-token:delete",
                 Role::Admin,
             ),

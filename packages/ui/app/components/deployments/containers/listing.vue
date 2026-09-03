@@ -147,8 +147,8 @@ const deleteModalOpen = computed({
       </div>
       <div v-else class="flex flex-col items-center justify-center gap-3 py-14 text-center">
         <UIcon :name="ICONS.containers" class="size-10 text-muted" />
-        <p class="text-muted">{{ containers.length ? 'No matching containers.' : 'No containers in this environment.' }}</p>
-        <p v-if="!containers.length" class="text-sm text-dimmed">Deploy a container to give this environment a running service.</p>
+        <p class="text-muted">{{ containers.length ? 'No matching containers.' : 'No containers yet.' }}</p>
+        <p v-if="!containers.length" class="text-sm text-dimmed">Create your first container to run a service in this environment.</p>
       </div>
     </template>
   </UiTable>

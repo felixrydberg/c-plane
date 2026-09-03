@@ -15,7 +15,11 @@ use std::env;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{errors::AppError, models::entities::registry_access_token, state::get_app_state};
+use crate::{
+    errors::AppError,
+    models::entities::{project, registry_access_token},
+    state::get_app_state,
+};
 
 #[derive(Debug)]
 pub struct RegistryTokenQuery {
@@ -51,16 +55,71 @@ struct RegistryAccess {
     resource_type: &'static str,
     name: String,
     actions: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    repository_id: Option<Uuid>,
 }
 
 struct RegistryIdentity {
     id: Uuid,
     organization_id: Uuid,
+    project_id: Uuid,
 }
 
 pub(crate) struct SignedRepositoryAccess {
     pub token: String,
     pub repository_name: String,
+}
+
+pub(crate) fn normalize_project_name(name: &str) -> String {
+    let mut normalized = String::new();
+    let mut pending_separator = false;
+
+    for character in name.chars() {
+        if character.is_ascii_alphanumeric() {
+            if pending_separator && !normalized.is_empty() {
+                normalized.push('-');
+            }
+            normalized.push(character.to_ascii_lowercase());
+            pending_separator = false;
+        } else if !normalized.is_empty() {
+            pending_separator = true;
+        }
+    }
+
+    if normalized.is_empty() {
+        "project".into()
+    } else {
+        normalized
+    }
+}
+
+async fn registry_project_name(
+    organization_id: Uuid,
+    project_id: Uuid,
+) -> Result<String, AppError> {
+    project::Entity::find_by_id(project_id)
+        .filter(project::Column::OrganizationId.eq(organization_id))
+        .one(get_app_state().identity_db.connection())
+        .await?
+        .map(|project| normalize_project_name(&project.name))
+        .ok_or_else(|| AppError::NotFound("Project not found".into()))
+}
+
+pub(crate) async fn resolve_registry_project_id(
+    organization_id: Uuid,
+    project_name: &str,
+) -> Result<Uuid, AppError> {
+    let projects = project::Entity::find()
+        .filter(project::Column::OrganizationId.eq(organization_id))
+        .all(get_app_state().identity_db.connection())
+        .await?;
+    projects
+        .into_iter()
+        .find(|project| normalize_project_name(&project.name) == project_name)
+        .map(|project| project.id)
+        .ok_or_else(|| {
+            AppError::BadRequest("Internal registry image has an invalid project name".into())
+        })
 }
 
 #[utoipa::path(
@@ -105,8 +164,13 @@ pub async fn issue_token(
         let Some(requested) = access_for_scope(&scope, &organization_slug) else {
             continue;
         };
-        if let Some(authorized) =
-            authorize_repository(requested, identity.id, identity.organization_id).await?
+        if let Some(authorized) = authorize_repository(
+            requested,
+            identity.id,
+            identity.organization_id,
+            identity.project_id,
+        )
+        .await?
         {
             access.push(authorized);
         }
@@ -136,12 +200,15 @@ pub async fn issue_token(
 
 pub(crate) async fn sign_repository_access(
     organization_id: Uuid,
+    project_id: Uuid,
+    repository_id: Uuid,
     repository_name: &str,
     actions: &[&str],
 ) -> Result<SignedRepositoryAccess, AppError> {
     require_managed_registry(organization_id).await?;
     let organization_slug = organization_slug(organization_id).await?;
-    let repository_name = format!("{organization_slug}/{repository_name}");
+    let project_name = registry_project_name(organization_id, project_id).await?;
+    let repository_name = format!("{organization_slug}/{project_name}/{repository_name}");
     let token_ttl_seconds = get_app_state().config.registry_token_ttl_seconds;
     let now = chrono::Utc::now();
     let issued_at = now.timestamp() as u64;
@@ -158,6 +225,7 @@ pub(crate) async fn sign_repository_access(
             resource_type: "repository",
             name: repository_name.clone(),
             actions: actions.iter().map(|action| (*action).into()).collect(),
+            repository_id: Some(repository_id),
         }],
     })?;
     Ok(SignedRepositoryAccess {
@@ -240,22 +308,27 @@ fn access_for_scope(scope: &str, organization_slug: &str) -> Option<RegistryAcce
         resource_type: "repository",
         name: name.to_owned(),
         actions,
+        repository_id: None,
     })
 }
 
 fn valid_repository_name(name: &str, organization_slug: &str) -> bool {
     let mut segments = name.split('/');
     segments.next() == Some(organization_slug)
+        && segments
+            .next()
+            .filter(|segment| valid_repository_segment(segment))
+            .is_some()
         && segments.clone().next().is_some()
-        && segments.all(|segment| {
-            !segment.is_empty()
-                && segment != "."
-                && segment != ".."
-                && segment.bytes().all(|byte| {
-                    byte.is_ascii_lowercase()
-                        || byte.is_ascii_digit()
-                        || matches!(byte, b'.' | b'_' | b'-')
-                })
+        && segments.all(valid_repository_segment)
+}
+
+fn valid_repository_segment(segment: &str) -> bool {
+    !segment.is_empty()
+        && segment != "."
+        && segment != ".."
+        && segment.bytes().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'_' | b'-')
         })
 }
 
@@ -263,19 +336,32 @@ async fn authorize_repository(
     access: RegistryAccess,
     access_token_id: Uuid,
     organization_id: Uuid,
+    project_id: Uuid,
 ) -> Result<Option<RegistryAccess>, AppError> {
-    let repository_name = access
-        .name
-        .split_once('/')
-        .map(|(_, name)| name)
+    let mut name_parts = access.name.splitn(3, '/');
+    let _organization_slug = name_parts.next();
+    let requested_project_name = name_parts
+        .next()
+        .filter(|name| !name.is_empty())
+        .ok_or_else(|| AppError::Unauthorized("Invalid repository scope".into()))?;
+    let expected_project_name = registry_project_name(organization_id, project_id)
+        .await
+        .map_err(|_| AppError::Unauthorized("Invalid repository scope".into()))?;
+    if requested_project_name != expected_project_name {
+        return Err(AppError::Unauthorized("Invalid repository scope".into()));
+    }
+    let requested_project_id = project_id;
+    let repository_name = name_parts
+        .next()
+        .filter(|name| !name.is_empty())
         .ok_or_else(|| AppError::Unauthorized("Invalid repository scope".into()))?;
     let row = get_app_state()
         .identity_db
         .connection()
         .query_one(Statement::from_sql_and_values(
             DatabaseBackend::Postgres,
-            "SELECT grants.can_pull, grants.can_push FROM registry_repository_grants grants JOIN registry_repositories repositories ON repositories.id = grants.repository_id AND repositories.organization_id = grants.organization_id WHERE grants.access_token_id = $1 AND grants.organization_id = $2 AND repositories.name = $3 LIMIT 1",
-            vec![access_token_id.into(), organization_id.into(), repository_name.into()],
+            "SELECT grants.can_pull, grants.can_push, repositories.id AS repository_id FROM registry_repository_grants grants JOIN registry_repositories repositories ON repositories.id = grants.repository_id AND repositories.project_id = grants.project_id AND repositories.organization_id = grants.organization_id WHERE grants.access_token_id = $1 AND grants.organization_id = $2 AND grants.project_id = $3 AND repositories.name = $4 LIMIT 1",
+            vec![access_token_id.into(), organization_id.into(), requested_project_id.into(), repository_name.into()],
         ))
         .await
         .map_err(|error| AppError::Internal(format!("Failed to authorize repository: {error}")))?;
@@ -288,7 +374,12 @@ async fn authorize_repository(
     let can_push = row
         .try_get::<bool>("", "can_push")
         .map_err(|error| AppError::Internal(format!("Failed to authorize repository: {error}")))?;
-    Ok(Some(apply_repository_grant(access, can_pull, can_push)))
+    let repository_id = row
+        .try_get::<Uuid>("", "repository_id")
+        .map_err(|error| AppError::Internal(format!("Failed to authorize repository: {error}")))?;
+    let mut access = apply_repository_grant(access, can_pull, can_push);
+    access.repository_id = Some(repository_id);
+    Ok(Some(access))
 }
 
 async fn resolve_registry_token(raw_token: &str) -> Result<Option<RegistryIdentity>, AppError> {
@@ -304,6 +395,7 @@ async fn resolve_registry_token(raw_token: &str) -> Result<Option<RegistryIdenti
     Ok(token.map(|token| RegistryIdentity {
         id: token.id,
         organization_id: token.organization_id,
+        project_id: token.project_id,
     }))
 }
 
@@ -367,7 +459,8 @@ fn registry_signing_secret() -> Result<Vec<u8>, AppError> {
 mod tests {
     use super::{
         RegistryAccess, RegistryClaims, access_for_scope, apply_repository_grant,
-        parse_registry_token_query, registry_token_exp, sign_registry_claims_with_secret,
+        normalize_project_name, parse_registry_token_query, registry_token_exp,
+        sign_registry_claims_with_secret,
     };
     use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
     use serde_json::Value;
@@ -390,26 +483,35 @@ mod tests {
     }
 
     #[test]
+    fn normalizes_project_names_for_registry_paths() {
+        assert_eq!(normalize_project_name("My API Project"), "my-api-project");
+    }
+
+    #[test]
     fn grants_only_the_tokens_organization_and_actions() {
-        let access = access_for_scope("repository:acme/api:pull,push,delete", "acme").unwrap();
-        assert_eq!(access.name, "acme/api");
+        let project_id = Uuid::new_v4();
+        let scope = format!("repository:acme/{project_id}/api:pull,push,delete");
+        let access = access_for_scope(&scope, "acme").unwrap();
+        assert_eq!(access.name, format!("acme/{project_id}/api"));
         assert_eq!(access.actions, vec!["pull", "push", "delete"]);
 
-        assert!(access_for_scope("repository:other/api:pull", "acme").is_none());
+        assert!(
+            access_for_scope(&format!("repository:other/{project_id}/api:pull"), "acme").is_none()
+        );
 
-        let access = access_for_scope("repository:acme/api:pull,push,delete", "acme").unwrap();
+        let access = access_for_scope(&scope, "acme").unwrap();
         assert_eq!(
             apply_repository_grant(access, true, false).actions,
             vec!["pull"]
         );
 
-        let access = access_for_scope("repository:acme/api:pull,push,delete", "acme").unwrap();
+        let access = access_for_scope(&scope, "acme").unwrap();
         assert_eq!(
             apply_repository_grant(access, false, true).actions,
             vec!["push", "delete"]
         );
 
-        let access = access_for_scope("repository:acme/api:pull,push,delete", "acme").unwrap();
+        let access = access_for_scope(&scope, "acme").unwrap();
         assert_eq!(
             apply_repository_grant(access, true, true).actions,
             vec!["pull", "push", "delete"]
@@ -433,6 +535,7 @@ mod tests {
                     resource_type: "repository",
                     name: "acme/api".into(),
                     actions: vec!["pull".into()],
+                    repository_id: Some(Uuid::nil()),
                 }],
             },
             &secret,
@@ -447,5 +550,9 @@ mod tests {
 
         assert_eq!(claims["organization_id"], Uuid::nil().to_string());
         assert_eq!(claims["access"][0]["name"], "acme/api");
+        assert_eq!(
+            claims["access"][0]["repository_id"],
+            Uuid::nil().to_string()
+        );
     }
 }

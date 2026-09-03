@@ -9,6 +9,7 @@ const toast = useToast()
 const config = useRuntimeConfig()
 const organizationId = computed(() => store.organization?.id ?? '')
 const organizationSlug = computed(() => store.organization?.slug ?? '')
+const projectId = computed(() => route.params.project_id?.toString() ?? '')
 const registryHost = computed(() => config.public.registryHost)
 const name = ref('')
 const grants = ref<Record<string, RepositoryPermission>>({})
@@ -16,7 +17,7 @@ const loading = ref(false)
 const error = ref('')
 const created = ref<CreatedRegistryAccessToken | null>(null)
 const repositoriesUrl = computed(() => organizationId.value
-  ? `/api/organization/${organizationId.value as ':organization_id'}/registry/repositories` as const
+  ? `/api/organization/${organizationId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/registry/repositories` as const
   : '')
 const { data: repositories } = await useCplaneFetch(repositoriesUrl, { default: () => [] })
 
@@ -29,7 +30,7 @@ watch(repositories, (items) => {
 const selectedPermissions = computed(() => Object.values(grants.value).filter(permission => permission.can_pull || permission.can_push))
 const loginCommand = computed(() => `echo "$CPLANE_REGISTRY_TOKEN" | docker login "${registryHost.value}" --username "${organizationSlug.value}" --password-stdin`)
 
-function backUrl() { return `/${route.params.organization_slug}/registry/access-tokens` }
+function backUrl() { return `/${route.params.organization_slug}/registry/${projectId.value}/access-tokens` }
 function setPull(repositoryId: string, canPull: boolean) {
   const grant = grants.value[repositoryId]
   if (!grant) return
@@ -48,7 +49,7 @@ async function createToken() {
   loading.value = true
   error.value = ''
   try {
-    created.value = await cplaneFetch(`/api/organization/${organizationId.value as ':organization_id'}/registry/access-tokens` as const, {
+    created.value = await cplaneFetch(`/api/organization/${organizationId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/registry/access-tokens` as const, {
       method: 'POST',
       body: { name: name.value.trim(), repository_permissions: selectedPermissions.value },
     })
@@ -73,7 +74,7 @@ async function createToken() {
 
     <section v-if="created" class="space-y-5 py-8 max-w-3xl">
       <p class="rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm">Store the token in a password manager or CI secret before leaving this page.</p>
-      <UFormField label="S2 - Registry"><UInput :model-value="registryHost" readonly class="w-full font-mono" /></UFormField>
+      <UFormField label="Registry"><UInput :model-value="registryHost" readonly class="w-full font-mono" /></UFormField>
       <UFormField label="Username"><UInput :model-value="organizationSlug" readonly class="w-full font-mono" /></UFormField>
       <UFormField label="Access token"><UInput :model-value="created.token" readonly class="w-full font-mono" /></UFormField>
       <UFormField label="Docker login"><UTextarea :model-value="loginCommand" readonly autoresize class="w-full font-mono text-xs" /></UFormField>
@@ -87,12 +88,12 @@ async function createToken() {
           <UFormField label="Name"><UInput v-model="name" placeholder="production-deploy" :disabled="loading" /></UFormField>
         </section>
         <section class="grid gap-4 py-8 lg:grid-cols-[190px_minmax(0,1fr)]">
-          <div><h2 class="text-sm font-semibold">Repository Permissions</h2><p class="mt-1 text-xs text-muted">Choose what this token can do in each organization repository.</p></div>
+          <div><h2 class="text-sm font-semibold">Repository Permissions</h2><p class="mt-1 text-xs text-muted">Choose what this token can do in each project repository.</p></div>
           <div class="overflow-hidden rounded-lg border border-default/60">
             <table class="w-full text-sm">
               <thead class="bg-elevated text-left"><tr><th class="p-3">Repository</th><th class="p-3 text-center">Pull</th><th class="p-3 text-center">Push</th></tr></thead>
               <tbody>
-                <tr v-if="!repositories.length"><td colspan="3" class="p-6 text-center text-muted">No repositories in this organization.</td></tr>
+                <tr v-if="!repositories.length"><td colspan="3" class="p-6 text-center text-muted">No repositories in this project.</td></tr>
                 <tr v-for="repository in repositories" :key="repository.id" class="border-t border-default/60">
                   <td class="p-3 font-medium">{{ repository.name }}</td>
                   <td class="p-3"><div class="flex justify-center"><USwitch :model-value="grants[repository.id]?.can_pull" :disabled="loading" :aria-label="`Pull ${repository.name}`" @update:model-value="setPull(repository.id, Boolean($event))" /></div></td>
@@ -110,6 +111,7 @@ async function createToken() {
           <h2 class="text-sm font-semibold">Token Summary</h2>
           <dl class="mt-5 space-y-4 text-sm">
             <div><dt class="text-xs text-muted">Organization</dt><dd class="mt-1">{{ organizationSlug }}</dd></div>
+            <div><dt class="text-xs text-muted">Project</dt><dd class="mt-1">{{ projectId }}</dd></div>
             <div><dt class="text-xs text-muted">Name</dt><dd class="mt-1 font-mono text-xs">{{ name || 'Not set' }}</dd></div>
             <div><dt class="text-xs text-muted">Repositories</dt><dd class="mt-1">{{ selectedPermissions.length }} granted</dd></div>
           </dl>

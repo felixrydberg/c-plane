@@ -71,7 +71,7 @@
   --ui-border: var(--cp-line);
   --ui-border-muted: var(--cp-line);
   --ui-border-accented: var(--cp-line-strong);
-  --ui-radius: 0.375rem;
+  --ui-radius: 0.25rem;
   --ui-header-height: 4rem;
 }
 

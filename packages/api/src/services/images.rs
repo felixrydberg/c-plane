@@ -7,15 +7,17 @@ use oci_client::{
     secrets::RegistryAuth,
 };
 use reqwest::Url;
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use uuid::Uuid;
 
 use crate::{
     errors::AppError,
     handlers::{
         external_registries::load_secret,
-        registry::{organization_slug, sign_repository_access},
+        registry::{organization_slug, resolve_registry_project_id, sign_repository_access},
     },
-    models::entities::external_registry,
+    models::entities::{external_registry, registry_repository},
+    state::get_app_state,
 };
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
@@ -61,8 +63,23 @@ async fn internal_registry(
     organization_id: Uuid,
 ) -> Result<(Reference, RegistryAuth, Client), AppError> {
     let slug = organization_slug(organization_id).await?;
-    let repository_name = internal_repository_name(reference.repository(), &slug)?;
-    let access = sign_repository_access(organization_id, repository_name, &["pull"]).await?;
+    let (project_name, repository_name) = internal_repository_name(reference.repository(), &slug)?;
+    let project_id = resolve_registry_project_id(organization_id, project_name).await?;
+    let repository = registry_repository::Entity::find()
+        .filter(registry_repository::Column::OrganizationId.eq(organization_id))
+        .filter(registry_repository::Column::ProjectId.eq(project_id))
+        .filter(registry_repository::Column::Name.eq(repository_name))
+        .one(get_app_state().identity_db.connection())
+        .await?
+        .ok_or_else(|| AppError::BadRequest("Internal registry repository was not found".into()))?;
+    let access = sign_repository_access(
+        organization_id,
+        project_id,
+        repository.id,
+        repository_name,
+        &["pull"],
+    )
+    .await?;
     let internal_url =
         env::var("REGISTRY_INTERNAL_URL").unwrap_or_else(|_| "http://registry:5000".into());
     let (registry, protocol) = internal_endpoint(&internal_url)?;
@@ -102,13 +119,25 @@ async fn external_registry(
     Ok((reference.clone(), auth, client))
 }
 
-fn internal_repository_name<'a>(repository: &'a str, slug: &str) -> Result<&'a str, AppError> {
-    repository
+fn internal_repository_name<'a>(
+    repository: &'a str,
+    slug: &str,
+) -> Result<(&'a str, &'a str), AppError> {
+    let scoped = repository
         .strip_prefix(&format!("{slug}/"))
         .filter(|name| !name.is_empty())
         .ok_or_else(|| {
             AppError::BadRequest("Internal registry image must belong to this organization".into())
-        })
+        })?;
+    let (project_name, repository_name) = scoped.split_once('/').ok_or_else(|| {
+        AppError::BadRequest("Internal registry image must include a project name".into())
+    })?;
+    if repository_name.is_empty() {
+        return Err(AppError::BadRequest(
+            "Internal registry repository is required".into(),
+        ));
+    }
+    Ok((project_name, repository_name))
 }
 
 fn validate_external_registry_host(
@@ -213,6 +242,14 @@ mod tests {
         let result = internal_repository_name("other/image", "acme");
         assert!(
             matches!(result, Err(AppError::BadRequest(message)) if message.contains("belong to this organization"))
+        );
+    }
+
+    #[test]
+    fn parses_a_project_scoped_internal_repository() {
+        assert_eq!(
+            internal_repository_name("acme/backend/team/image", "acme").unwrap(),
+            ("backend", "team/image")
         );
     }
 

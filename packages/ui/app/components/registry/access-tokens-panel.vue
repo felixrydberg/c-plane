@@ -3,11 +3,11 @@ import { h } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
 import { ICONS } from '~/utils/icons'
 
-const props = defineProps<{ organizationId: string }>()
+const props = defineProps<{ organizationId: string, projectId: string }>()
 const route = useRoute()
 const toast = useToast()
 const isOwner = computed(() => useStore().organization?.member?.role === 'owner')
-const endpoint = computed(() => `/api/organization/${props.organizationId as ':organization_id'}/registry/access-tokens` as const)
+const endpoint = computed(() => `/api/organization/${props.organizationId as ':organization_id'}/projects/${props.projectId as ':project_id'}/registry/access-tokens` as const)
 const { data: tokens, status, refresh } = await useCplaneFetch(endpoint, { default: () => [] })
 const revokingId = ref('')
 const refreshing = ref(false)
@@ -22,7 +22,7 @@ const filteredTokens = computed(() => {
 async function revoke(token: NonNullable<typeof tokens.value>[number]) {
   revokingId.value = token.id
   try {
-    await cplaneFetch(`/api/organization/${props.organizationId as ':organization_id'}/registry/access-tokens/${token.id as ':token_id'}` as const, { method: 'DELETE' })
+    await cplaneFetch(`/api/organization/${props.organizationId as ':organization_id'}/projects/${props.projectId as ':project_id'}/registry/access-tokens/${token.id as ':token_id'}` as const, { method: 'DELETE' })
     await refresh()
   } catch {
     toast.add({ title: 'Could not revoke token', color: 'error' })
@@ -61,7 +61,7 @@ const columns: TableColumn<NonNullable<typeof tokens.value>[number]>[] = [
         icon: ICONS.pencil,
         color: 'neutral',
         size: 'sm',
-        to: `/${route.params.organization_slug}/registry/access-tokens/${row.original.id}`,
+        to: `/${route.params.organization_slug}/registry/${props.projectId}/access-tokens/${row.original.id}`,
       }, { default: () => 'Edit' }),
       h(UButton, {
         icon: ICONS.trash,
@@ -85,7 +85,7 @@ const columns: TableColumn<NonNullable<typeof tokens.value>[number]>[] = [
       <template #empty>
         <div class="flex flex-col items-center justify-center gap-3 py-14 text-center">
           <UIcon :name="ICONS.authentication" class="size-10 text-muted" />
-          <p class="text-muted">{{ search ? 'No matching access tokens.' : 'No S2 - Registry access tokens for this organization.' }}</p>
+          <p class="text-muted">{{ search ? 'No matching access tokens.' : 'No Registry access tokens for this project.' }}</p>
         </div>
       </template>
     </UiTable>

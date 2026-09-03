@@ -17,7 +17,8 @@ use crate::{
     errors::AppError,
     middleware::auth::AuthContext,
     models::entities::{
-        bucket, bucket_grant, credential, managed_registry, managed_registry_gc_run, region, secret,
+        bucket, bucket_grant, credential, managed_registry, managed_registry_gc_run, project,
+        region, registry_repository, secret,
     },
     services::buckets,
     state::get_app_state,
@@ -30,7 +31,10 @@ use lib::entities::{
 };
 use lib::operation::{Operation, registry_gc::RegistryGc};
 
-use super::{databases::verify_org_access, registry_access_tokens::record_event};
+use super::{
+    databases::verify_org_access, registry::normalize_project_name,
+    registry_access_tokens::record_event,
+};
 
 const REGISTRY_BUCKET_NAME: &str = "registry";
 const ACCESS_KEY_PREFIX: &str = "CP";
@@ -90,6 +94,16 @@ pub struct ResolvedManagedRegistry {
     pub secret_access_key: String,
     pub bucket_name: String,
     pub storage_endpoint_url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repository_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repository_id: Option<Uuid>,
+}
+
+#[derive(Deserialize)]
+pub struct ResolveManagedRegistryQuery {
+    pub repository_name: Option<String>,
+    pub repository_id: Option<Uuid>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -380,6 +394,7 @@ async fn provision_metadata(
 )]
 pub async fn resolve_registry(
     Path(organization_id): Path<Uuid>,
+    Query(query): Query<ResolveManagedRegistryQuery>,
 ) -> Result<Json<ResolvedManagedRegistry>, AppError> {
     let state = get_app_state();
     let (registry, credential, credential_secret) =
@@ -427,15 +442,47 @@ pub async fn resolve_registry(
         ))
         .await?
         .ok_or_else(|| AppError::NotFound("Organization not found".into()))?;
+    let organization_slug: String = organization.try_get("", "slug")?;
+    let repository = match (query.repository_name, query.repository_id) {
+        (None, None) => None,
+        (Some(logical_name), Some(repository_id)) => {
+            let repository = registry_repository::Entity::find_by_id(repository_id)
+                .filter(registry_repository::Column::OrganizationId.eq(organization_id))
+                .one(state.identity_db.connection())
+                .await?
+                .ok_or_else(|| AppError::NotFound("Registry repository not found".into()))?;
+            let project = project::Entity::find_by_id(repository.project_id)
+                .filter(project::Column::OrganizationId.eq(organization_id))
+                .one(state.identity_db.connection())
+                .await?
+                .ok_or_else(|| AppError::NotFound("Project not found".into()))?;
+            let expected_name = format!(
+                "{organization_slug}/{}/{}",
+                normalize_project_name(&project.name),
+                repository.name
+            );
+            if logical_name != expected_name {
+                return Err(AppError::NotFound("Registry repository not found".into()));
+            }
+            Some((logical_name, repository.id))
+        }
+        _ => {
+            return Err(AppError::BadRequest(
+                "Repository name and ID are both required".into(),
+            ));
+        }
+    };
     Ok(Json(ResolvedManagedRegistry {
         organization_id,
-        organization_slug: organization.try_get("", "slug")?,
+        organization_slug,
         storage_revision: registry.storage_revision,
         status: status_name(&registry.status).into(),
         access_key_id: credential.access_key_id,
         secret_access_key: s3_secret.secret_access_key,
         bucket_name: REGISTRY_BUCKET_NAME.into(),
         storage_endpoint_url: state.config.storage_internal_url,
+        repository_name: repository.as_ref().map(|(name, _)| name.clone()),
+        repository_id: repository.map(|(_, id)| id),
     }))
 }
 

@@ -10,11 +10,18 @@ const toast = useToast()
 const config = useRuntimeConfig()
 const orgId = computed(() => store.organization?.id ?? '')
 const organizationSlug = computed(() => store.organization?.slug ?? '')
+const projectId = computed(() => route.params.project_id?.toString() ?? '')
+const project = computed(() => store.projects.find(item => item.id === projectId.value))
 const name = ref('')
 const loading = ref(false)
 const error = ref('')
 const registryHost = computed(() => config.public.registryHost)
-const repositoryReference = computed(() => `${registryHost.value}/${organizationSlug.value}/${name.value || 'repository'}`)
+const projectRegistryName = computed(() => project.value?.name
+  ?.trim()
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '') || projectId.value)
+const repositoryReference = computed(() => `${registryHost.value}/${organizationSlug.value}/${projectRegistryName.value}/${name.value || 'repository'}`)
 const trimmedName = computed(() => name.value.trim())
 const isValidRepositoryName = computed(() => {
   const value = trimmedName.value
@@ -26,14 +33,14 @@ const nameError = computed(() => trimmedName.value && !isValidRepositoryName.val
   ? 'Repository names must use lowercase letters, numbers, dots, underscores, dashes, and slashes'
   : undefined)
 
-function backUrl() { return `/${route.params.organization_slug}/registry` }
+function backUrl() { return `/${route.params.organization_slug}/registry/${projectId.value}` }
 
 async function createRepository() {
   if (!orgId.value || !isValidRepositoryName.value) return
   loading.value = true
   error.value = ''
   try {
-    await cplaneFetch(`/api/organization/${orgId.value as ':organization_id'}/registry/repositories` as const, {
+    await cplaneFetch(`/api/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/registry/repositories` as const, {
       method: 'POST',
       body: { name: name.value.trim() },
     })
@@ -49,10 +56,10 @@ async function createRepository() {
 <template>
   <div class="w-full max-w-[1200px] mx-auto">
     <header class="border-b border-default/60 pb-5">
-      <UiBackLink label="S2 - Registry" :to="backUrl()" />
+      <UiBackLink label="Registry" :to="backUrl()" />
       <UiPageEyebrow label="Storage &amp; Databases" />
       <h1 class="mt-2 text-2xl font-semibold">New Repository</h1>
-      <p class="mt-1 text-sm text-muted">Create a private repository in your organization's namespace.</p>
+      <p class="mt-1 text-sm text-muted">Create a private repository for {{ project?.name ?? 'this project' }}.</p>
     </header>
 
     <div class="grid lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -74,6 +81,7 @@ async function createRepository() {
           <h2 class="text-sm font-semibold">Repository Summary</h2>
           <dl class="mt-5 space-y-4 text-sm">
             <div><dt class="text-xs text-muted">Organization</dt><dd class="mt-1 truncate" :title="organizationSlug">{{ organizationSlug }}</dd></div>
+            <div><dt class="text-xs text-muted">Project</dt><dd class="mt-1 truncate">{{ project?.name ?? projectId }}</dd></div>
             <div><dt class="text-xs text-muted">Image path</dt><dd class="mt-1 truncate font-mono text-xs" :title="repositoryReference">{{ repositoryReference }}</dd></div>
           </dl>
           <div class="mt-8 flex gap-3">

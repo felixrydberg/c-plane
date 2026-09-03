@@ -63,7 +63,7 @@ const replicas = computed(() => [
 watch([dbName, branchName], () => {
   if (!dbName.value || !branchName.value || !projectId.value || !databaseId.value || !branchId.value || !organizationSlug.value) return
   store.setBreadcrumbs([
-    { label: 'D1 - Postgres', to: `/${organizationSlug.value}/databases/postgres/${projectId.value}` },
+    { label: 'Postgres', to: `/${organizationSlug.value}/databases/postgres/${projectId.value}` },
     { label: `${dbName.value} / ${branchName.value}` },
   ])
 }, { immediate: true })
@@ -150,7 +150,7 @@ const connectionString = computed(() => `postgresql://username:password@${dbName
     <div v-if="loading && !dbName" class="flex justify-center py-20"><UIcon name="i-lucide-loader-circle" class="size-5 animate-spin text-muted" /></div>
     <div v-else class="overflow-hidden rounded-lg border border-default/60 bg-default">
       <header class="flex flex-col gap-4 border-b border-default/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div><UiBackLink :label="dbName" :to="backUrl()" /><UiPageEyebrow label="Storage &amp; Databases" /><div class="mt-2 flex items-center gap-2"><h1 class="text-xl font-semibold">{{ dbName }} / {{ branchName }}</h1><UBadge v-if="isDefault" size="sm" variant="soft" color="primary">Default</UBadge></div><p class="mt-1 text-xs text-muted">D1 - Postgres database branch</p></div>
+        <div><UiBackLink :label="dbName" :to="backUrl()" /><UiPageEyebrow label="Storage &amp; Databases" /><div class="mt-2 flex items-center gap-2"><h1 class="text-xl font-semibold">{{ dbName }} / {{ branchName }}</h1><UBadge v-if="isDefault" size="sm" variant="soft" color="primary">Default</UBadge></div><p class="mt-1 text-xs text-muted">Postgres database branch</p></div>
         <UButton :icon="ICONS.plus" :to="`/${route.params.organization_slug}/databases/postgres/${projectId}/new`">New Database</UButton>
       </header>
 

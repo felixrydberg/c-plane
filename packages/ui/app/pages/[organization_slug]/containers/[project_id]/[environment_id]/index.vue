@@ -111,7 +111,7 @@ watch(() => store.refreshKey, () => { refreshData() })
     <div class="flex flex-col gap-4 border-b border-default/60 pb-5 sm:flex-row sm:items-end sm:justify-between">
       <div class="min-w-0">
         <UiPageEyebrow label="Compute" />
-        <h1 class="text-2xl font-semibold">C1 - Containers</h1>
+        <h1 class="mt-2 text-2xl font-semibold">Containers</h1>
         <p class="mt-1 text-sm text-muted">Runtime services in the {{ isViewingDeployed ? 'deployed' : 'draft' }} revision.</p>
       </div>
       <UButton class="shrink-0" :icon="ICONS.plus" :to="`/${route.params.organization_slug}/containers/${projectId}/${environmentId}/new`">New Container</UButton>
@@ -119,7 +119,7 @@ watch(() => store.refreshKey, () => { refreshData() })
 
     <div class="grid overflow-hidden rounded-md border border-dashed border-default bg-transparent sm:grid-cols-3">
       <div class="px-4 py-3"><p class="text-xs text-muted">Environment</p><p class="mt-1 text-sm font-medium">{{ environmentName }}</p></div>
-      <div class="px-4 py-3"><p class="text-xs text-muted">C1 - Containers</p><p class="mt-1 font-mono text-sm">{{ containers.length }}</p></div>
+      <div class="px-4 py-3"><p class="text-xs text-muted">Containers</p><p class="mt-1 font-mono text-sm">{{ containers.length }}</p></div>
       <div class="px-4 py-3"><p class="text-xs text-muted">{{ isViewingDeployed ? 'Deployed' : 'Draft' }} replicas</p><p class="mt-1 font-mono text-sm">{{ containers.reduce((total, container) => total + (container.current_version?.replica_count ?? 0), 0) }}</p></div>
     </div>
 
@@ -133,12 +133,13 @@ watch(() => store.refreshKey, () => { refreshData() })
       />
       <UButton
         :icon="ICONS.refresh"
-        variant="ghost"
         color="neutral"
         :loading="refreshing"
-        aria-label="Reload containers"
+        aria-label="Refresh containers"
         @click="reloadContainers"
-      />
+      >
+        Refresh
+      </UButton>
     </div>
 
     <DeploymentsContainersListing

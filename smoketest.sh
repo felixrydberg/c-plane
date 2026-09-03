@@ -14,7 +14,7 @@ if [ "$status" != 401 ]; then
 fi
 printf '%-14s OK (%s)\n' Registry "$status"
 
-registry_repository="${REGISTRY_REPOSITORY:-test}"
+registry_repository="${REGISTRY_REPOSITORY:-test/acme}"
 registry_username="${REGISTRY_USERNAME:-${CPLANE_REGISTRY_USERNAME:-}}"
 registry_password="${REGISTRY_PASSWORD:-${CPLANE_REGISTRY_PASSWORD:-}}"
 if [ -t 0 ] && { [ -z "$registry_username" ] || [ -z "$registry_password" ]; }; then
@@ -30,7 +30,7 @@ if [ -z "$registry_username" ] || [ -z "$registry_password" ]; then
   exit 1
 fi
 
-image_tag="${SMOKE_TAG:-$registry_repository}"
+image_tag="${SMOKE_TAG:-${registry_repository##*/}}"
 image="$registry_host/$registry_username/$registry_repository:$image_tag"
 printf '%s' "$registry_password" | docker login "$registry_host" --username "$registry_username" --password-stdin
 if [ -n "${SMOKE_IMAGE:-}" ]; then

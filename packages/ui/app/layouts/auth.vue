@@ -53,7 +53,6 @@ const mainItems = computed<NavigationMenuItem[]>(() => [
     children: [
       {
         label: 'Containers',
-        badge: { label: 'C1', color: 'neutral', variant: 'soft' },
         to: `/${store.organization?.slug}/containers${navProjectId.value ? `/${navProjectId.value}${routeEnvironmentId.value ? `/${routeEnvironmentId.value}` : ''}` : ''}${draftRevisionQuery.value}`,
       },
     ],
@@ -66,17 +65,14 @@ const mainItems = computed<NavigationMenuItem[]>(() => [
     children: [
       {
         label: 'Object Storage',
-        badge: { label: 'S1', color: 'neutral', variant: 'soft' },
         to: `/${store.organization?.slug}/storage${navProjectId.value ? `/${navProjectId.value}` : ''}`,
       },
       {
         label: 'Registry',
-        badge: { label: 'S2', color: 'neutral', variant: 'soft' },
-        to: `/${store.organization?.slug}/registry`,
+        to: `/${store.organization?.slug}/registry${navProjectId.value ? `/${navProjectId.value}` : ''}`,
       },
       {
         label: 'Postgres',
-        badge: { label: 'D1', color: 'neutral', variant: 'soft' },
         to: `/${store.organization?.slug}/databases/postgres${navProjectId.value ? `/${navProjectId.value}` : ''}`,
       },
     ]
@@ -123,6 +119,11 @@ const accountItems = computed<NavigationMenuItem[]>(() => [{
     {
       label: 'Audit Log',
       to: `/${store.organization?.slug}/settings/audit-log`,
+      exact: true,
+    },
+    {
+      label: 'Registry',
+      to: `/${store.organization?.slug}/settings/registry`,
       exact: true,
     },
   ],

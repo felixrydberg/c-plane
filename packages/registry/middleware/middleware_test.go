@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,7 +11,13 @@ import (
 
 	"github.com/cplane/cplane/registry/garbagecollection"
 	"github.com/cplane/cplane/registry/tenant"
+	storagedriver "github.com/distribution/distribution/v3/registry/storage/driver"
 	"github.com/golang-jwt/jwt/v5"
+)
+
+const (
+	projectID    = "11111111-1111-4111-8111-111111111111"
+	repositoryID = "22222222-2222-4222-8222-222222222222"
 )
 
 func TestHandlerInjectsResolvedTenant(t *testing.T) {
@@ -19,14 +26,15 @@ func TestHandlerInjectsResolvedTenant(t *testing.T) {
 	called := false
 	h := testHandler(t, resolver.URL, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		metadata, ok := tenant.FromContext(r.Context())
-		if !ok || metadata.OrganizationID != "org-1" || metadata.BucketName != "registry" {
+		if !ok || metadata.OrganizationID != "org-1" || metadata.BucketName != "registry" || metadata.RepositoryID != repositoryID {
 			t.Fatalf("unexpected metadata: %#v, %v", metadata, ok)
 		}
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	response := request(t, h, http.MethodGet, "/v2/acme/api/manifests/latest", token(t, "org-1", "acme/api"))
+	repository := "acme/" + projectID + "/api"
+	response := request(t, h, http.MethodGet, "/v2/"+repository+"/manifests/latest", token(t, "org-1", repository, repositoryID))
 	if response.Code != http.StatusNoContent || !called {
 		t.Fatalf("status=%d called=%v", response.Code, called)
 	}
@@ -39,7 +47,8 @@ func TestHandlerRejectsCrossOrganizationScope(t *testing.T) {
 		t.Fatal("downstream handler must not be called")
 	}))
 
-	response := request(t, h, http.MethodGet, "/v2/other/api/manifests/latest", token(t, "org-1", "other/api"))
+	repository := "other/" + projectID + "/api"
+	response := request(t, h, http.MethodGet, "/v2/"+repository+"/manifests/latest", token(t, "org-1", repository, repositoryID))
 	assertOCIError(t, response, http.StatusUnauthorized, "UNAUTHORIZED")
 }
 
@@ -50,9 +59,10 @@ func TestHandlerGatesAllAccessDuringOrganizationGC(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	mutation := request(t, h, http.MethodPut, "/v2/acme/api/manifests/latest", token(t, "org-1", "acme/api"))
+	repository := "acme/" + projectID + "/api"
+	mutation := request(t, h, http.MethodPut, "/v2/"+repository+"/manifests/latest", token(t, "org-1", repository, repositoryID))
 	assertOCIError(t, mutation, http.StatusServiceUnavailable, "UNAVAILABLE")
-	pull := request(t, h, http.MethodGet, "/v2/acme/api/manifests/latest", token(t, "org-1", "acme/api"))
+	pull := request(t, h, http.MethodGet, "/v2/"+repository+"/manifests/latest", token(t, "org-1", repository, repositoryID))
 	assertOCIError(t, pull, http.StatusServiceUnavailable, "UNAVAILABLE")
 }
 
@@ -60,6 +70,31 @@ func TestHandlerDisablesCatalog(t *testing.T) {
 	h := &Handler{next: http.NotFoundHandler()}
 	response := request(t, h, http.MethodGet, "/v2/_catalog", "")
 	assertOCIError(t, response, http.StatusNotFound, "NAME_UNKNOWN")
+}
+
+func TestMissingRepositoryStorageIsAnIdempotentDelete(t *testing.T) {
+	if !repositoryDeleteSucceeded(storagedriver.PathNotFoundError{Path: "/missing", DriverName: "test"}) {
+		t.Fatal("missing repository must be treated as successfully deleted")
+	}
+	if repositoryDeleteSucceeded(errors.New("storage unavailable")) {
+		t.Fatal("other storage failures must be retried")
+	}
+}
+
+func TestHandlerRejectsRepositoryTokenAfterUUIDChanges(t *testing.T) {
+	resolver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("repository_id") != "33333333-3333-4333-8333-333333333333" {
+			http.NotFound(w, r)
+			return
+		}
+	}))
+	defer resolver.Close()
+	h := testHandler(t, resolver.URL, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("downstream handler must not be called")
+	}))
+	repository := "acme/" + projectID + "/api"
+	response := request(t, h, http.MethodGet, "/v2/"+repository+"/manifests/latest", token(t, "org-1", repository, repositoryID))
+	assertOCIError(t, response, http.StatusUnauthorized, "UNAUTHORIZED")
 }
 
 func TestHandlerRunsInternalGarbageCollection(t *testing.T) {
@@ -117,6 +152,8 @@ func resolverServer(t *testing.T, status string) *httptest.Server {
 		if r.Header.Get("x-cplane-token") != "service-token" {
 			t.Fatal("missing service token")
 		}
+		repositoryName := r.URL.Query().Get("repository_name")
+		resolvedRepositoryID := r.URL.Query().Get("repository_id")
 		_ = json.NewEncoder(w).Encode(tenant.Metadata{
 			OrganizationID:     "org-1",
 			OrganizationSlug:   "acme",
@@ -126,6 +163,8 @@ func resolverServer(t *testing.T, status string) *httptest.Server {
 			BucketName:         "registry",
 			StorageEndpointURL: "http://storage:8081",
 			Status:             status,
+			RepositoryName:     repositoryName,
+			RepositoryID:       resolvedRepositoryID,
 		})
 	}))
 }
@@ -145,12 +184,12 @@ func testHandler(t *testing.T, resolverURL string, next http.Handler) *Handler {
 
 func resolverServerClient() *http.Client { return &http.Client{Timeout: time.Second} }
 
-func token(t *testing.T, organizationID, repository string) string {
+func token(t *testing.T, organizationID, repository, resolvedRepositoryID string) string {
 	t.Helper()
 	now := time.Now()
 	encoded, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims{
 		OrganizationID: organizationID,
-		Access:         []accessClaim{{Type: "repository", Name: repository, Actions: []string{"pull"}}},
+		Access:         []accessClaim{{Type: "repository", Name: repository, Actions: []string{"pull"}, RepositoryID: resolvedRepositoryID}},
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    "cplane-registry",
 			Audience:  jwt.ClaimStrings{"registry.example.com"},

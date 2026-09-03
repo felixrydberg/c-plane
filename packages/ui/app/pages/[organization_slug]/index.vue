@@ -42,7 +42,7 @@ const currentEnvironment = computed(() =>
         <UCard class="border-dashed border-default bg-transparent" :ui="{ body: 'p-5' }">
           <div class="flex items-start justify-between gap-4">
             <div>
-              <p class="text-sm text-muted">D1 - Postgres</p>
+              <p class="text-sm text-muted">Postgres</p>
               <p class="mt-3 text-4xl font-normal tracking-[-0.04em]">0</p>
             </div>
             <div class="flex size-10 items-center justify-center rounded-md bg-primary/10">
@@ -53,7 +53,7 @@ const currentEnvironment = computed(() =>
         <UCard class="border-dashed border-default bg-transparent" :ui="{ body: 'p-5' }">
           <div class="flex items-start justify-between gap-4">
             <div>
-              <p class="text-sm text-muted">C1 - Containers</p>
+              <p class="text-sm text-muted">Containers</p>
               <p class="mt-3 text-4xl font-normal tracking-[-0.04em]">0</p>
             </div>
             <div class="flex size-10 items-center justify-center rounded-md bg-primary/10">

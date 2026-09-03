@@ -7,13 +7,14 @@ const route = useRoute()
 const toast = useToast()
 const organizationId = computed(() => store.organization?.id ?? '')
 const tokenId = computed(() => route.params.token_id?.toString() ?? '')
+const projectId = computed(() => route.params.project_id?.toString() ?? '')
 const grants = ref<Record<string, RepositoryPermission>>({})
 const loading = ref(false)
   const repositoriesUrl = computed(() => organizationId.value
-  ? `/api/organization/${organizationId.value as ':organization_id'}/registry/repositories` as const
+  ? `/api/organization/${organizationId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/registry/repositories` as const
     : '')
   const tokenUrl = computed(() => organizationId.value && tokenId.value
-  ? `/api/organization/${organizationId.value as ':organization_id'}/registry/access-tokens/${tokenId.value as ':token_id'}` as const
+  ? `/api/organization/${organizationId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/registry/access-tokens/${tokenId.value as ':token_id'}` as const
     : '')
   const [{ data: repositories }, { data: token }] = await Promise.all([
   useCplaneFetch(repositoriesUrl, { default: () => [] }),
@@ -28,7 +29,7 @@ watch([repositories, token], ([items, accessToken]) => {
 
 const selectedPermissions = computed(() => Object.values(grants.value).filter(permission => permission.can_pull || permission.can_push))
 
-function backUrl() { return `/${route.params.organization_slug}/registry/access-tokens` }
+function backUrl() { return `/${route.params.organization_slug}/registry/${projectId.value}/access-tokens` }
 function setPull(repositoryId: string, canPull: boolean) {
   const grant = grants.value[repositoryId]
   if (!grant) return
@@ -69,12 +70,12 @@ async function save() {
     <div class="grid lg:grid-cols-[minmax(0,1fr)_280px]">
       <main class="lg:pr-8">
         <section class="grid gap-4 py-8 lg:grid-cols-[190px_minmax(0,1fr)]">
-          <div><h2 class="text-sm font-semibold">Repository Permissions</h2><p class="mt-1 text-xs text-muted">Choose what this token can do in each organization repository.</p></div>
+          <div><h2 class="text-sm font-semibold">Repository Permissions</h2><p class="mt-1 text-xs text-muted">Choose what this token can do in each project repository.</p></div>
           <div class="overflow-hidden rounded-lg border border-default/60">
             <table class="w-full text-sm">
               <thead class="bg-elevated text-left"><tr><th class="p-3">Repository</th><th class="p-3 text-center">Pull</th><th class="p-3 text-center">Push</th></tr></thead>
               <tbody>
-                <tr v-if="!repositories.length"><td colspan="3" class="p-6 text-center text-muted">No repositories in this organization.</td></tr>
+                <tr v-if="!repositories.length"><td colspan="3" class="p-6 text-center text-muted">No repositories in this project.</td></tr>
                 <tr v-for="repository in repositories" :key="repository.id" class="border-t border-default/60">
                   <td class="p-3 font-medium">{{ repository.name }}</td>
                   <td class="p-3"><div class="flex justify-center"><USwitch :model-value="grants[repository.id]?.can_pull" :disabled="loading" :aria-label="`Pull ${repository.name}`" @update:model-value="setPull(repository.id, Boolean($event))" /></div></td>

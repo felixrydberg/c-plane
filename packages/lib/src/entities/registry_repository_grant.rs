@@ -5,6 +5,7 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
+    pub project_id: Uuid,
     pub organization_id: Uuid,
     pub repository_id: Uuid,
     pub access_token_id: Uuid,

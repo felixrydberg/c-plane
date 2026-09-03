@@ -20,7 +20,7 @@ use crate::{
     },
 };
 
-use super::databases::{verify_org_access, verify_org_owner};
+use super::databases::{verify_org_access, verify_org_owner, verify_project_in_org};
 
 #[derive(Clone, Deserialize, Serialize, ToSchema)]
 pub struct RepositoryPermissionRequest {
@@ -43,6 +43,7 @@ pub struct UpdateRegistryAccessTokenRequest {
 #[derive(Serialize, ToSchema)]
 pub struct RegistryAccessTokenResponse {
     pub id: Uuid,
+    pub project_id: Uuid,
     pub name: String,
     pub created_at: String,
 }
@@ -64,9 +65,12 @@ pub struct RegistryAccessTokenDetailsResponse {
 #[utoipa::path(
     post,
     operation_id = "registry_create_access_token",
-    path = "/api/organization/{organization_id}/registry/access-tokens",
+    path = "/api/organization/{organization_id}/projects/{project_id}/registry/access-tokens",
     request_body = CreateRegistryAccessTokenRequest,
-    params(("organization_id" = Uuid, Path, description = "Organization ID")),
+    params(
+        ("organization_id" = Uuid, Path, description = "Organization ID"),
+        ("project_id" = Uuid, Path, description = "Project ID"),
+    ),
     responses(
         (status = 201, description = "Registry access token created; save it now", body = CreatedRegistryAccessTokenResponse),
         (status = 403, description = "Organization access required"),
@@ -77,7 +81,7 @@ pub struct RegistryAccessTokenDetailsResponse {
 )]
 pub async fn create_access_token(
     AuthContext { tenant_db, auth }: AuthContext,
-    Path(organization_id): Path<Uuid>,
+    Path((organization_id, project_id)): Path<(Uuid, Uuid)>,
     Json(body): Json<CreateRegistryAccessTokenRequest>,
 ) -> Result<(StatusCode, Json<CreatedRegistryAccessTokenResponse>), AppError> {
     verify_org_access(&tenant_db, organization_id)?;
@@ -96,10 +100,18 @@ pub async fn create_access_token(
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
+    verify_project_in_org(tx, project_id, organization_id).await?;
     super::managed_registry::require_active(tx, organization_id).await?;
-    verify_repositories(tx, organization_id, &body.repository_permissions).await?;
+    verify_repositories(
+        tx,
+        organization_id,
+        project_id,
+        &body.repository_permissions,
+    )
+    .await?;
     if registry_access_token::Entity::find()
         .filter(registry_access_token::Column::OrganizationId.eq(organization_id))
+        .filter(registry_access_token::Column::ProjectId.eq(project_id))
         .filter(registry_access_token::Column::Name.eq(name))
         .filter(registry_access_token::Column::RevokedAt.is_null())
         .one(tx)
@@ -116,23 +128,32 @@ pub async fn create_access_token(
     let created = registry_access_token::ActiveModel {
         id: Set(id),
         organization_id: Set(organization_id),
+        project_id: Set(project_id),
         name: Set(name.into()),
         token_hash: Set(hex::encode(Sha256::digest(token.as_bytes()))),
         ..Default::default()
     }
     .insert(tx)
     .await?;
-    replace_permissions(tx, organization_id, id, &body.repository_permissions).await?;
-    record_event(
+    replace_permissions(
         tx,
         organization_id,
-        auth.actor_id,
+        project_id,
+        id,
+        &body.repository_permissions,
+    )
+    .await?;
+    crate::services::events::record(
+        tx,
+        organization_id,
+        project_id,
         "registry-access-token:created",
         json!({
             "summary": format!("Created registry access token '{name}'"),
             "target_id": id,
             "repository_ids": body.repository_permissions.iter().map(|permission| permission.repository_id).collect::<Vec<_>>(),
         }),
+        auth.actor_id,
     )
     .await?;
     scoped.commit().await?;
@@ -149,8 +170,11 @@ pub async fn create_access_token(
 #[utoipa::path(
     get,
     operation_id = "registry_list_access_tokens",
-    path = "/api/organization/{organization_id}/registry/access-tokens",
-    params(("organization_id" = Uuid, Path, description = "Organization ID")),
+    path = "/api/organization/{organization_id}/projects/{project_id}/registry/access-tokens",
+    params(
+        ("organization_id" = Uuid, Path, description = "Organization ID"),
+        ("project_id" = Uuid, Path, description = "Project ID"),
+    ),
     responses(
         (status = 200, description = "List of active registry access tokens", body = Vec<RegistryAccessTokenResponse>),
         (status = 403, description = "Organization access required"),
@@ -159,13 +183,15 @@ pub async fn create_access_token(
 )]
 pub async fn list_access_tokens(
     AuthContext { tenant_db, .. }: AuthContext,
-    Path(organization_id): Path<Uuid>,
+    Path((organization_id, project_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<Vec<RegistryAccessTokenResponse>>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
+    verify_project_in_org(tx, project_id, organization_id).await?;
     let tokens = registry_access_token::Entity::find()
         .filter(registry_access_token::Column::OrganizationId.eq(organization_id))
+        .filter(registry_access_token::Column::ProjectId.eq(project_id))
         .filter(registry_access_token::Column::RevokedAt.is_null())
         .order_by_desc(registry_access_token::Column::CreatedAt)
         .all(tx)
@@ -177,9 +203,10 @@ pub async fn list_access_tokens(
 #[utoipa::path(
     get,
     operation_id = "registry_get_access_token",
-    path = "/api/organization/{organization_id}/registry/access-tokens/{token_id}",
+    path = "/api/organization/{organization_id}/projects/{project_id}/registry/access-tokens/{token_id}",
     params(
         ("organization_id" = Uuid, Path, description = "Organization ID"),
+        ("project_id" = Uuid, Path, description = "Project ID"),
         ("token_id" = Uuid, Path, description = "Registry access token ID"),
     ),
     responses(
@@ -190,14 +217,16 @@ pub async fn list_access_tokens(
 )]
 pub async fn get_access_token(
     AuthContext { tenant_db, .. }: AuthContext,
-    Path((organization_id, token_id)): Path<(Uuid, Uuid)>,
+    Path((organization_id, project_id, token_id)): Path<(Uuid, Uuid, Uuid)>,
 ) -> Result<Json<RegistryAccessTokenDetailsResponse>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
-    let token = active_token(tx, organization_id, token_id).await?;
+    verify_project_in_org(tx, project_id, organization_id).await?;
+    let token = active_token(tx, organization_id, project_id, token_id).await?;
     let repository_permissions = registry_repository_grant::Entity::find()
         .filter(registry_repository_grant::Column::AccessTokenId.eq(token_id))
+        .filter(registry_repository_grant::Column::ProjectId.eq(project_id))
         .all(tx)
         .await?
         .into_iter()
@@ -217,10 +246,11 @@ pub async fn get_access_token(
 #[utoipa::path(
     patch,
     operation_id = "registry_update_access_token",
-    path = "/api/organization/{organization_id}/registry/access-tokens/{token_id}",
+    path = "/api/organization/{organization_id}/projects/{project_id}/registry/access-tokens/{token_id}",
     request_body = UpdateRegistryAccessTokenRequest,
     params(
         ("organization_id" = Uuid, Path, description = "Organization ID"),
+        ("project_id" = Uuid, Path, description = "Project ID"),
         ("token_id" = Uuid, Path, description = "Registry access token ID"),
     ),
     responses(
@@ -233,7 +263,7 @@ pub async fn get_access_token(
 )]
 pub async fn update_access_token(
     AuthContext { tenant_db, auth }: AuthContext,
-    Path((organization_id, token_id)): Path<(Uuid, Uuid)>,
+    Path((organization_id, project_id, token_id)): Path<(Uuid, Uuid, Uuid)>,
     Json(body): Json<UpdateRegistryAccessTokenRequest>,
 ) -> Result<StatusCode, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
@@ -246,20 +276,35 @@ pub async fn update_access_token(
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
+    verify_project_in_org(tx, project_id, organization_id).await?;
     super::managed_registry::require_active(tx, organization_id).await?;
-    active_token(tx, organization_id, token_id).await?;
-    verify_repositories(tx, organization_id, &body.repository_permissions).await?;
-    replace_permissions(tx, organization_id, token_id, &body.repository_permissions).await?;
-    record_event(
+    active_token(tx, organization_id, project_id, token_id).await?;
+    verify_repositories(
         tx,
         organization_id,
-        auth.actor_id,
+        project_id,
+        &body.repository_permissions,
+    )
+    .await?;
+    replace_permissions(
+        tx,
+        organization_id,
+        project_id,
+        token_id,
+        &body.repository_permissions,
+    )
+    .await?;
+    crate::services::events::record(
+        tx,
+        organization_id,
+        project_id,
         "registry-access-token:updated",
         json!({
             "summary": "Updated registry access token permissions",
             "target_id": token_id,
             "repository_ids": body.repository_permissions.iter().map(|permission| permission.repository_id).collect::<Vec<_>>(),
         }),
+        auth.actor_id,
     )
     .await?;
     scoped.commit().await?;
@@ -269,9 +314,10 @@ pub async fn update_access_token(
 #[utoipa::path(
     delete,
     operation_id = "registry_revoke_access_token",
-    path = "/api/organization/{organization_id}/registry/access-tokens/{token_id}",
+    path = "/api/organization/{organization_id}/projects/{project_id}/registry/access-tokens/{token_id}",
     params(
         ("organization_id" = Uuid, Path, description = "Organization ID"),
+        ("project_id" = Uuid, Path, description = "Project ID"),
         ("token_id" = Uuid, Path, description = "Registry access token ID"),
     ),
     responses(
@@ -283,23 +329,25 @@ pub async fn update_access_token(
 )]
 pub async fn revoke_access_token(
     AuthContext { tenant_db, auth }: AuthContext,
-    Path((organization_id, token_id)): Path<(Uuid, Uuid)>,
+    Path((organization_id, project_id, token_id)): Path<(Uuid, Uuid, Uuid)>,
 ) -> Result<StatusCode, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
     verify_org_owner(&tenant_db, organization_id)?;
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
-    let token = active_token(tx, organization_id, token_id).await?;
+    verify_project_in_org(tx, project_id, organization_id).await?;
+    let token = active_token(tx, organization_id, project_id, token_id).await?;
     let name = token.name.clone();
     let mut token = token.into_active_model();
     token.revoked_at = Set(Some(Utc::now().fixed_offset()));
     token.update(tx).await?;
-    record_event(
+    crate::services::events::record(
         tx,
         organization_id,
-        auth.actor_id,
+        project_id,
         "registry-access-token:revoked",
         json!({ "summary": format!("Revoked registry access token '{name}'"), "target_id": token_id }),
+        auth.actor_id,
     )
     .await?;
     scoped.commit().await?;
@@ -309,6 +357,7 @@ pub async fn revoke_access_token(
 fn response(token: &registry_access_token::Model) -> RegistryAccessTokenResponse {
     RegistryAccessTokenResponse {
         id: token.id,
+        project_id: token.project_id,
         name: token.name.clone(),
         created_at: token.created_at.to_rfc3339(),
     }
@@ -317,10 +366,12 @@ fn response(token: &registry_access_token::Model) -> RegistryAccessTokenResponse
 async fn active_token(
     tx: &DatabaseTransaction,
     organization_id: Uuid,
+    project_id: Uuid,
     token_id: Uuid,
 ) -> Result<registry_access_token::Model, AppError> {
     registry_access_token::Entity::find_by_id(token_id)
         .filter(registry_access_token::Column::OrganizationId.eq(organization_id))
+        .filter(registry_access_token::Column::ProjectId.eq(project_id))
         .filter(registry_access_token::Column::RevokedAt.is_null())
         .one(tx)
         .await?
@@ -330,6 +381,7 @@ async fn active_token(
 async fn verify_repositories(
     tx: &DatabaseTransaction,
     organization_id: Uuid,
+    project_id: Uuid,
     permissions: &[RepositoryPermissionRequest],
 ) -> Result<(), AppError> {
     let repository_ids = permissions
@@ -339,11 +391,12 @@ async fn verify_repositories(
     let repositories = registry_repository::Entity::find()
         .filter(registry_repository::Column::Id.is_in(repository_ids))
         .filter(registry_repository::Column::OrganizationId.eq(organization_id))
+        .filter(registry_repository::Column::ProjectId.eq(project_id))
         .all(tx)
         .await?;
     if repositories.len() != permissions.len() {
         return Err(AppError::NotFound(
-            "Repository not found in this organization".into(),
+            "Repository not found in this project".into(),
         ));
     }
     Ok(())
@@ -352,6 +405,7 @@ async fn verify_repositories(
 async fn replace_permissions(
     tx: &DatabaseTransaction,
     organization_id: Uuid,
+    project_id: Uuid,
     token_id: Uuid,
     permissions: &[RepositoryPermissionRequest],
 ) -> Result<(), AppError> {
@@ -364,6 +418,7 @@ async fn replace_permissions(
         .map(|permission| registry_repository_grant::ActiveModel {
             id: Set(Uuid::new_v4()),
             organization_id: Set(organization_id),
+            project_id: Set(project_id),
             repository_id: Set(permission.repository_id),
             access_token_id: Set(token_id),
             can_pull: Set(permission.can_pull || permission.can_push),

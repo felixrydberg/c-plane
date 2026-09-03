@@ -1510,6 +1510,488 @@
         "x-cplane-required-scope": "project:manage"
       }
     },
+    "/api/organization/{organization_id}/projects/{project_id}/registry/access-tokens": {
+      "get": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "registry_list_access_tokens",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of active registry access tokens",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RegistryAccessTokenResponse"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization access required"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "access-token:read"
+      },
+      "post": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "registry_create_access_token",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRegistryAccessTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Registry access token created; save it now",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedRegistryAccessTokenResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization access required"
+          },
+          "404": {
+            "description": "Repository not found"
+          },
+          "409": {
+            "description": "Invalid permissions or duplicate token name"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "access-token:create"
+      }
+    },
+    "/api/organization/{organization_id}/projects/{project_id}/registry/access-tokens/{token_id}": {
+      "get": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "registry_get_access_token",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "token_id",
+            "in": "path",
+            "description": "Registry access token ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Registry access token details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryAccessTokenDetailsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Registry access token not found"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "access-token:read"
+      },
+      "delete": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "registry_revoke_access_token",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "token_id",
+            "in": "path",
+            "description": "Registry access token ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Registry access token revoked"
+          },
+          "403": {
+            "description": "Organization access required"
+          },
+          "404": {
+            "description": "Registry access token not found"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "access-token:delete"
+      },
+      "patch": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "registry_update_access_token",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "token_id",
+            "in": "path",
+            "description": "Registry access token ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRegistryAccessTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Registry access token permissions updated"
+          },
+          "403": {
+            "description": "Organization access required"
+          },
+          "404": {
+            "description": "Registry access token or repository not found"
+          },
+          "409": {
+            "description": "Invalid permissions"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "access-token:update"
+      }
+    },
+    "/api/organization/{organization_id}/projects/{project_id}/registry/repositories": {
+      "get": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "list_repositories",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project registry repositories",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RegistryRepositoryResponse"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization access required"
+          },
+          "404": {
+            "description": "Project not found"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "registry:read"
+      },
+      "post": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "create_repository",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRegistryRepositoryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Registry repository created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryRepositoryResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization access required"
+          },
+          "404": {
+            "description": "Project not found"
+          },
+          "409": {
+            "description": "Invalid or duplicate repository name"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "registry:create"
+      }
+    },
+    "/api/organization/{organization_id}/projects/{project_id}/registry/repositories/{repository_id}": {
+      "delete": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "delete_repository",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "repository_id",
+            "in": "path",
+            "description": "Registry repository ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Registry repository deletion queued"
+          },
+          "403": {
+            "description": "Organization access required"
+          },
+          "404": {
+            "description": "Project or registry repository not found"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "registry:delete"
+      }
+    },
     "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens": {
       "get": {
         "tags": [
@@ -2070,259 +2552,6 @@
         "x-cplane-required-scope": "registry:create"
       }
     },
-    "/api/organization/{organization_id}/registry/access-tokens": {
-      "get": {
-        "tags": [
-          "registry"
-        ],
-        "operationId": "registry_list_access_tokens",
-        "parameters": [
-          {
-            "name": "organization_id",
-            "in": "path",
-            "description": "Organization ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "List of active registry access tokens",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/RegistryAccessTokenResponse"
-                  }
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Organization access required"
-          }
-        },
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
-        "x-cplane-required-scope": "access-token:read"
-      },
-      "post": {
-        "tags": [
-          "registry"
-        ],
-        "operationId": "registry_create_access_token",
-        "parameters": [
-          {
-            "name": "organization_id",
-            "in": "path",
-            "description": "Organization ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateRegistryAccessTokenRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Registry access token created; save it now",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreatedRegistryAccessTokenResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Organization access required"
-          },
-          "404": {
-            "description": "Repository not found"
-          },
-          "409": {
-            "description": "Invalid permissions or duplicate token name"
-          }
-        },
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
-        "x-cplane-required-scope": "access-token:create"
-      }
-    },
-    "/api/organization/{organization_id}/registry/access-tokens/{token_id}": {
-      "get": {
-        "tags": [
-          "registry"
-        ],
-        "operationId": "registry_get_access_token",
-        "parameters": [
-          {
-            "name": "organization_id",
-            "in": "path",
-            "description": "Organization ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "token_id",
-            "in": "path",
-            "description": "Registry access token ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Registry access token details",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RegistryAccessTokenDetailsResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Registry access token not found"
-          }
-        },
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
-        "x-cplane-required-scope": "access-token:read"
-      },
-      "delete": {
-        "tags": [
-          "registry"
-        ],
-        "operationId": "registry_revoke_access_token",
-        "parameters": [
-          {
-            "name": "organization_id",
-            "in": "path",
-            "description": "Organization ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "token_id",
-            "in": "path",
-            "description": "Registry access token ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Registry access token revoked"
-          },
-          "403": {
-            "description": "Organization access required"
-          },
-          "404": {
-            "description": "Registry access token not found"
-          }
-        },
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
-        "x-cplane-required-scope": "access-token:delete"
-      },
-      "patch": {
-        "tags": [
-          "registry"
-        ],
-        "operationId": "registry_update_access_token",
-        "parameters": [
-          {
-            "name": "organization_id",
-            "in": "path",
-            "description": "Organization ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "token_id",
-            "in": "path",
-            "description": "Registry access token ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateRegistryAccessTokenRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Registry access token permissions updated"
-          },
-          "403": {
-            "description": "Organization access required"
-          },
-          "404": {
-            "description": "Registry access token or repository not found"
-          },
-          "409": {
-            "description": "Invalid permissions"
-          }
-        },
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
-        "x-cplane-required-scope": "access-token:update"
-      }
-    },
     "/api/organization/{organization_id}/registry/external-registries": {
       "get": {
         "tags": [
@@ -2734,165 +2963,6 @@
           }
         ],
         "x-cplane-required-scope": "registry:update"
-      }
-    },
-    "/api/organization/{organization_id}/registry/repositories": {
-      "get": {
-        "tags": [
-          "registry"
-        ],
-        "operationId": "list_repositories",
-        "parameters": [
-          {
-            "name": "organization_id",
-            "in": "path",
-            "description": "Organization ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Organization registry repositories",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/RegistryRepositoryResponse"
-                  }
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Organization access required"
-          }
-        },
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
-        "x-cplane-required-scope": "registry:read"
-      },
-      "post": {
-        "tags": [
-          "registry"
-        ],
-        "operationId": "create_repository",
-        "parameters": [
-          {
-            "name": "organization_id",
-            "in": "path",
-            "description": "Organization ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateRegistryRepositoryRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Registry repository created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RegistryRepositoryResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Organization access required"
-          },
-          "409": {
-            "description": "Invalid or duplicate repository name"
-          }
-        },
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
-        "x-cplane-required-scope": "registry:create"
-      }
-    },
-    "/api/organization/{organization_id}/registry/repositories/{repository_id}": {
-      "delete": {
-        "tags": [
-          "registry"
-        ],
-        "operationId": "delete_repository",
-        "parameters": [
-          {
-            "name": "organization_id",
-            "in": "path",
-            "description": "Organization ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "repository_id",
-            "in": "path",
-            "description": "Registry repository ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Registry repository deleted"
-          },
-          "403": {
-            "description": "Organization access required"
-          },
-          "404": {
-            "description": "Registry repository not found"
-          },
-          "409": {
-            "description": "Registry cleanup conflict"
-          },
-          "500": {
-            "description": "Registry cleanup failed"
-          },
-          "503": {
-            "description": "Registry is unavailable during maintenance",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
-        "x-cplane-required-scope": "registry:delete"
       }
     },
     "/api/organization/{organization_id}/storage/buckets": {
@@ -4773,6 +4843,7 @@
         "type": "object",
         "required": [
           "id",
+          "project_id",
           "name",
           "created_at"
         ],
@@ -4786,6 +4857,10 @@
           },
           "name": {
             "type": "string"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
           }
         }
       },
@@ -4877,6 +4952,7 @@
         "type": "object",
         "required": [
           "id",
+          "project_id",
           "name",
           "created_at"
         ],
@@ -4890,6 +4966,10 @@
           },
           "name": {
             "type": "string"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
           }
         }
       },
@@ -5010,6 +5090,19 @@
           },
           "organization_slug": {
             "type": "string"
+          },
+          "repository_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "repository_name": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "status": {
             "type": "string"

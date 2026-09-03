@@ -62,7 +62,7 @@ const bucket = computed(() => buckets.value.find(item => item.id === bucketId.va
 watch(bucket, () => {
   if (!bucket.value?.name || !projectId.value || !bucketId.value || !organizationSlug.value) return
   store.setBreadcrumbs([
-    { label: 'S1 - Object Storage', to: `/${organizationSlug.value}/storage/${projectId.value}` },
+    { label: 'Object Storage', to: `/${organizationSlug.value}/storage/${projectId.value}` },
     { label: bucket.value.name },
   ])
 }, { immediate: true })
@@ -343,8 +343,8 @@ const columns: TableColumn<BucketRow>[] = [
   <div class="flex w-full max-w-6xl flex-col gap-5 mx-auto">
     <div class="border-b border-default/60 pb-5">
       <UiPageEyebrow label="Storage &amp; Databases" />
-      <h1 class="mt-1 text-2xl font-semibold">{{ bucket?.name ?? 'Bucket' }}</h1>
-      <p class="mt-1 text-sm text-muted">S1 - Object Storage bucket.</p>
+      <h1 class="mt-2 text-2xl font-semibold">{{ bucket?.name ?? 'Bucket' }}</h1>
+      <p class="mt-1 text-sm text-muted">Object Storage bucket.</p>
     </div>
     <UiTabs v-model="activeView" :items="viewTabs">
       <template #objects>

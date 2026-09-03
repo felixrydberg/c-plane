@@ -10,6 +10,7 @@ use crate::secrets;
 
 pub mod foundation_bucket_delete;
 pub mod registry_gc;
+pub mod registry_repository_delete;
 
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Result<T> = std::result::Result<T, Error>;
@@ -96,6 +97,13 @@ impl Operation<JsonValue> {
             && kind == Operation::<registry_gc::RegistryGc>::NAME
         {
             return Operation::<registry_gc::RegistryGc>::from(self)?
+                .run(context)
+                .await;
+        }
+        if queue == Operation::<registry_repository_delete::RegistryRepositoryDelete>::QUEUE
+            && kind == Operation::<registry_repository_delete::RegistryRepositoryDelete>::NAME
+        {
+            return Operation::<registry_repository_delete::RegistryRepositoryDelete>::from(self)?
                 .run(context)
                 .await;
         }
@@ -236,6 +244,19 @@ mod tests {
                 "unexpected": true
             })))
             .is_err()
+        );
+    }
+
+    #[test]
+    fn creates_typed_registry_repository_delete_operation() {
+        let mut operation = operation(json!({
+            "project_id": Uuid::new_v4(),
+            "repository_id": Uuid::new_v4()
+        }));
+        operation.metadata.job_type = "registry_repository_delete".into();
+        assert!(
+            Operation::<registry_repository_delete::RegistryRepositoryDelete>::from(&operation)
+                .is_ok()
         );
     }
 }

@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -190,7 +191,7 @@ func (d *Driver) GetContent(ctx context.Context, path string) ([]byte, error) {
 		observeOperation("get_content", started, err)
 		return nil, err
 	}
-	content, err := driver.GetContent(ctx, path)
+	content, err := driver.GetContent(ctx, physicalPath(ctx, path))
 	observeOperation("get_content", started, err)
 	if err == nil {
 		telemetry.Bytes.WithLabelValues("download").Add(float64(len(content)))
@@ -204,7 +205,7 @@ func (d *Driver) PutContent(ctx context.Context, path string, content []byte) er
 		observeOperation("put_content", started, err)
 		return err
 	}
-	err = driver.PutContent(ctx, path, content)
+	err = driver.PutContent(ctx, physicalPath(ctx, path), content)
 	observeOperation("put_content", started, err)
 	if err == nil {
 		telemetry.Bytes.WithLabelValues("upload").Add(float64(len(content)))
@@ -218,7 +219,7 @@ func (d *Driver) Reader(ctx context.Context, path string, offset int64) (io.Read
 		observeOperation("reader", started, err)
 		return nil, err
 	}
-	reader, err := driver.Reader(ctx, path, offset)
+	reader, err := driver.Reader(ctx, physicalPath(ctx, path), offset)
 	observeOperation("reader", started, err)
 	if err != nil {
 		return nil, err
@@ -232,7 +233,7 @@ func (d *Driver) Writer(ctx context.Context, path string, appendMode bool) (stor
 		observeOperation("writer", started, err)
 		return nil, err
 	}
-	writer, err := driver.Writer(ctx, path, appendMode)
+	writer, err := driver.Writer(ctx, physicalPath(ctx, path), appendMode)
 	observeOperation("writer", started, err)
 	if err != nil {
 		return nil, err
@@ -254,8 +255,11 @@ func (d *Driver) Stat(ctx context.Context, path string) (storagedriver.FileInfo,
 		observeOperation("stat", started, err)
 		return nil, err
 	}
-	info, err := driver.Stat(ctx, path)
+	info, err := driver.Stat(ctx, physicalPath(ctx, path))
 	observeOperation("stat", started, err)
+	if err == nil {
+		info = mappedFileInfo{FileInfo: info, path: logicalPath(ctx, info.Path())}
+	}
 	return info, err
 }
 func (d *Driver) List(ctx context.Context, path string) ([]string, error) {
@@ -265,8 +269,11 @@ func (d *Driver) List(ctx context.Context, path string) ([]string, error) {
 		observeOperation("list", started, err)
 		return nil, err
 	}
-	paths, err := driver.List(ctx, path)
+	paths, err := driver.List(ctx, physicalPath(ctx, path))
 	observeOperation("list", started, err)
+	for index := range paths {
+		paths[index] = logicalPath(ctx, paths[index])
+	}
 	return paths, err
 }
 func (d *Driver) Move(ctx context.Context, sourcePath, destPath string) error {
@@ -276,7 +283,7 @@ func (d *Driver) Move(ctx context.Context, sourcePath, destPath string) error {
 		observeOperation("move", started, err)
 		return err
 	}
-	err = driver.Move(ctx, sourcePath, destPath)
+	err = driver.Move(ctx, physicalPath(ctx, sourcePath), physicalPath(ctx, destPath))
 	observeOperation("move", started, err)
 	return err
 }
@@ -287,7 +294,7 @@ func (d *Driver) Delete(ctx context.Context, path string) error {
 		observeOperation("delete", started, err)
 		return err
 	}
-	err = driver.Delete(ctx, path)
+	err = driver.Delete(ctx, physicalPath(ctx, path))
 	observeOperation("delete", started, err)
 	return err
 }
@@ -299,7 +306,7 @@ func (d *Driver) RedirectURL(r *http.Request, path string) (string, error) {
 		observeOperation("redirect", started, err)
 		return "", err
 	}
-	redirect, err := driver.RedirectURL(r, path)
+	redirect, err := driver.RedirectURL(r, physicalPath(r.Context(), path))
 	result := "success"
 	if err != nil {
 		result = "error"
@@ -317,12 +324,49 @@ func (d *Driver) Walk(ctx context.Context, path string, f storagedriver.WalkFn, 
 		observeOperation("walk", started, err)
 		return err
 	}
-	err = driver.Walk(ctx, path, f, options...)
+	err = driver.Walk(ctx, physicalPath(ctx, path), func(info storagedriver.FileInfo) error {
+		return f(mappedFileInfo{FileInfo: info, path: logicalPath(ctx, info.Path())})
+	}, options...)
 	observeOperation("walk", started, err)
 	return err
 }
 
 type meteredReadCloser struct{ io.ReadCloser }
+
+type mappedFileInfo struct {
+	storagedriver.FileInfo
+	path string
+}
+
+func (info mappedFileInfo) Path() string { return info.path }
+
+const repositoryRoot = "/docker/registry/v2/repositories/"
+
+func physicalPath(ctx context.Context, path string) string {
+	metadata, ok := tenant.FromContext(ctx)
+	if !ok || metadata.RepositoryName == "" || metadata.RepositoryID == "" {
+		return path
+	}
+	return replaceRepositoryPrefix(path, repositoryRoot+metadata.RepositoryName, repositoryRoot+metadata.RepositoryID)
+}
+
+func logicalPath(ctx context.Context, path string) string {
+	metadata, ok := tenant.FromContext(ctx)
+	if !ok || metadata.RepositoryName == "" || metadata.RepositoryID == "" {
+		return path
+	}
+	return replaceRepositoryPrefix(path, repositoryRoot+metadata.RepositoryID, repositoryRoot+metadata.RepositoryName)
+}
+
+func replaceRepositoryPrefix(path, from, to string) string {
+	if path == from {
+		return to
+	}
+	if strings.HasPrefix(path, from+"/") {
+		return to + strings.TrimPrefix(path, from)
+	}
+	return path
+}
 
 func (reader *meteredReadCloser) Read(buffer []byte) (int, error) {
 	count, err := reader.ReadCloser.Read(buffer)
