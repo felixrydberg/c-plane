@@ -127,7 +127,7 @@ const UButton = resolveComponent('UButton')
 const NuxtLink = resolveComponent('NuxtLink')
 
 function branchUrl(branch: BranchRow) {
-  return `/${route.params.organization_slug}/databases/postgres/${projectId}/${databaseId}/${branch.branch_id}`
+  return `/${route.params.organization_slug}/databases/postgres/${props.projectId}/${props.databaseId}/${branch.branch_id}`
 }
 
 const branchColumns: TableColumn<BranchRow>[] = [

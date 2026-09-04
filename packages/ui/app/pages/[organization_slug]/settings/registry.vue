@@ -39,6 +39,37 @@ const activating = ref(false)
 const runningGc = ref(false)
 const gcModalOpen = ref(false)
 const isActive = computed(() => registry.value?.status === 'active')
+let gcPollTimer: ReturnType<typeof setInterval> | undefined
+
+function stopGcPolling() {
+  if (gcPollTimer) clearInterval(gcPollTimer)
+  gcPollTimer = undefined
+}
+
+async function refreshGc() {
+  try {
+    await refreshGarbageCollection()
+  } catch {
+    return
+  }
+  if (!garbageCollection.value?.active_job) {
+    stopGcPolling()
+    await refreshRegistry()
+  }
+}
+
+function startGcPolling() {
+  if (gcPollTimer) return
+  gcPollTimer = setInterval(() => { void refreshGc() }, 2000)
+  void refreshGc()
+}
+
+watch(() => Boolean(garbageCollection.value?.active_job), (active) => {
+  if (active) startGcPolling()
+  else stopGcPolling()
+}, { immediate: true })
+
+onBeforeUnmount(stopGcPolling)
 
 watchEffect(() => {
   if (!regionId.value) regionId.value = regions.value[0]?.id ?? ''

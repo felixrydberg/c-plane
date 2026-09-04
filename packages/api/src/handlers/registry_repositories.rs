@@ -8,6 +8,7 @@ use uuid::Uuid;
 use crate::{
     errors::AppError, middleware::auth::AuthContext, models::entities::registry_repository,
 };
+use lib::operation::{Operation, registry_repository_delete::RegistryRepositoryDelete};
 
 use super::databases::{verify_org_access, verify_project_in_org};
 
@@ -151,6 +152,13 @@ pub async fn delete_repository(
         .await?
         .ok_or_else(|| AppError::NotFound("Registry repository not found".into()))?;
 
+    Operation::<RegistryRepositoryDelete>::new(
+        tx,
+        organization_id,
+        repository.project_id,
+        repository.id,
+    )
+    .await?;
     crate::services::events::record(
         tx,
         organization_id,

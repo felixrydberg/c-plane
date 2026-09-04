@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { h } from 'vue'
-import type { Database, DatabaseBranch, Environment } from '@cplane/sdk'
+import type { DatabaseBranch, DatabaseWithBranches, Environment } from '@cplane/sdk'
 import type { TableColumn } from '@nuxt/ui'
 import { ICONS } from '~/utils/icons'
 
@@ -10,7 +10,7 @@ type BranchRow = DatabaseBranch & {
   _rowType: 'branch'
 }
 
-type DatabaseRow = Database & {
+type DatabaseRow = DatabaseWithBranches & {
   _rowType: 'database'
   subRows: BranchRow[]
 }
@@ -30,7 +30,6 @@ const databasesUrl = computed(() => orgId.value
 const search = ref('')
 const refreshing = ref(false)
 const projectEnvironments = ref<Environment[]>([])
-const branchRowsByDatabase = ref<Record<string, BranchRow[]>>({})
 
 const deleteModalOpen = ref(false)
 const linkBranchModalOpen = ref(false)
@@ -39,7 +38,7 @@ const busy = ref(false)
 const selectedDatabase = ref<DatabaseRow | null>(null)
 const selectedBranch = ref<BranchRow | null>(null)
 
-const { data: databases, status, refresh: refreshDatabases } = await useFetch<Database[]>(databasesUrl, {
+const { data: databases, status, refresh: refreshDatabases } = await useFetch<DatabaseWithBranches[]>(databasesUrl, {
   default: () => [],
   query: { project_id: projectId },
 })
@@ -52,11 +51,16 @@ const filteredDatabases = computed(() => {
 const databaseRows = computed<DatabaseRow[]>(() => filteredDatabases.value.map(database => ({
   ...database,
   _rowType: 'database' as const,
-  subRows: branchRowsByDatabase.value[database.id] ?? [],
+  subRows: database.branches.map(branch => ({
+    ...branch,
+    _defaultBranchId: database.default_branch_id ?? null,
+    _name: projectEnvironments.value.find(environment => environment.id === branch.branch_id)?.name ?? branch.branch_id,
+    _rowType: 'branch' as const,
+  })),
 })))
 
 const selectedDatabaseBranches = computed(() => selectedDatabase.value
-  ? branchRowsByDatabase.value[selectedDatabase.value.id] ?? []
+  ? databaseRows.value.find(database => database.id === selectedDatabase.value?.id)?.subRows ?? []
   : [])
 
 const unlinkedEnvironments = computed(() => {
@@ -98,29 +102,19 @@ function unlinkedEnvironmentsFor(database: DatabaseRow) {
   return projectEnvironments.value.filter(environment => !linkedBranchIds.has(environment.id))
 }
 
-function setDatabaseBranches(databaseId: string, branches: BranchRow[]) {
-  branchRowsByDatabase.value = { ...branchRowsByDatabase.value, [databaseId]: branches }
+function setDatabaseBranches(databaseId: string, branches: DatabaseBranch[]) {
+  databases.value = databases.value.map(database => database.id === databaseId
+    ? { ...database, branches }
+    : database)
 }
 
 async function fetchRelatedData() {
   if (!orgId.value || !projectId.value) return
 
   try {
-    const environments = await cplaneFetch(`/api/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/environments` as const)
-    const branchEntries = await Promise.all(databases.value.map(async database => {
-      const branches = await cplaneFetch(`/api/organization/${orgId.value as ':organization_id'}/databases/postgres/${database.id as ':database_id'}/branches` as const)
-      return [database.id, branches.map(branch => ({
-        ...branch,
-        _defaultBranchId: database.default_branch_id ?? null,
-        _name: environments.find(environment => environment.id === branch.branch_id)?.name ?? branch.branch_id,
-        _rowType: 'branch' as const,
-      }))] as const
-    }))
-
-    projectEnvironments.value = environments
-    branchRowsByDatabase.value = Object.fromEntries(branchEntries)
+    projectEnvironments.value = await cplaneFetch(`/api/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/environments` as const)
   } catch {
-    branchRowsByDatabase.value = {}
+    projectEnvironments.value = []
   }
 }
 
@@ -128,7 +122,6 @@ async function reloadDatabases() {
   refreshing.value = true
   try {
     await refreshDatabases()
-    await fetchRelatedData()
   } finally {
     refreshing.value = false
   }
@@ -155,12 +148,7 @@ async function linkBranch(environment: Environment) {
       `/api/organization/${orgId.value as ':organization_id'}/databases/postgres/${database.id as ':database_id'}/branches` as const,
       { method: 'POST', body: { branch_id: environment.id } },
     )
-    setDatabaseBranches(database.id, [...(branchRowsByDatabase.value[database.id] ?? []), {
-      ...created,
-      _defaultBranchId: database.default_branch_id ?? null,
-      _name: environment.name,
-      _rowType: 'branch',
-    }])
+    setDatabaseBranches(database.id, [...database.branches, created])
     toast.add({ title: `Linked ${environment.name}`, color: 'success' })
   } catch {
     toast.add({ title: 'Failed to link branch', color: 'error' })
@@ -173,7 +161,10 @@ async function unlinkBranch(branch: BranchRow) {
   busy.value = true
   try {
     await cplaneFetch(`/api/organization/${orgId.value as ':organization_id'}/databases/postgres/${branch.database_id as ':database_id'}/branches/${branch.branch_id as ':branch_id'}` as const, { method: 'DELETE' })
-    setDatabaseBranches(branch.database_id, (branchRowsByDatabase.value[branch.database_id] ?? []).filter(item => item.id !== branch.id))
+    const database = databases.value.find(item => item.id === branch.database_id)
+    if (database) {
+      setDatabaseBranches(branch.database_id, database.branches.filter(item => item.id !== branch.id))
+    }
     selectedBranch.value = null
     toast.add({ title: `Deleted ${branch._name}`, color: 'success' })
   } catch {
@@ -324,7 +315,7 @@ const databaseColumns: TableColumn<PostgresTableRow>[] = [
   },
 ]
 
-onMounted(() => { void fetchRelatedData() })
+watch([orgId, projectId], () => { void fetchRelatedData() }, { immediate: true })
 watch(() => store.refreshKey, () => { void reloadDatabases() })
 </script>
 

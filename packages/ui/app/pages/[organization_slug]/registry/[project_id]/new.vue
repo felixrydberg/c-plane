@@ -18,9 +18,9 @@ const error = ref('')
 const registryHost = computed(() => config.public.registryHost)
 const projectRegistryName = computed(() => project.value?.name
   ?.trim()
-  .toLowerCase()
-  .replace(/[^a-z0-9]+/g, '-')
-  .replace(/^-+|-+$/g, '') || projectId.value)
+  .replace(/[^a-zA-Z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '')
+  .toLowerCase() || 'project')
 const repositoryReference = computed(() => `${registryHost.value}/${organizationSlug.value}/${projectRegistryName.value}/${name.value || 'repository'}`)
 const trimmedName = computed(() => name.value.trim())
 const isValidRepositoryName = computed(() => {

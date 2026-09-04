@@ -108,8 +108,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	organizationLock := h.organizationLock(parsed.OrganizationID)
-	organizationLock.RLock()
-	defer organizationLock.RUnlock()
+	organizationLock.Lock()
+	defer organizationLock.Unlock()
 	repositoryName, repositoryID := repositoryForRequest(r.URL.Path, parsed.Access)
 	if strings.HasPrefix(r.URL.Path, "/v2/") && r.URL.Path != "/v2/" && repositoryName == "" {
 		telemetry.AuthenticationFailures.Inc()
@@ -201,16 +201,20 @@ func (h *Handler) serveGarbageCollection(w http.ResponseWriter, r *http.Request)
 func (h *Handler) serveRepositoryDelete(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, garbageCollectionPathPrefix)
 	parts := strings.Split(path, "/")
-	if len(parts) != 3 || parts[0] == "" || parts[1] != "repositories" {
+	if len(parts) != 5 || parts[0] == "" || parts[1] != "projects" || parts[3] != "repositories" {
 		http.NotFound(w, r)
 		return
 	}
-	organizationID, repositoryID := parts[0], parts[2]
+	organizationID, projectID, repositoryID := parts[0], parts[2], parts[4]
 	if _, err := uuid.Parse(organizationID); err != nil {
 		http.NotFound(w, r)
 		return
 	}
 	if _, err := uuid.Parse(repositoryID); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if _, err := uuid.Parse(projectID); err != nil {
 		http.NotFound(w, r)
 		return
 	}
@@ -226,8 +230,8 @@ func (h *Handler) serveRepositoryDelete(w http.ResponseWriter, r *http.Request) 
 	}
 
 	organizationLock := h.organizationLock(organizationID)
-	organizationLock.RLock()
-	defer organizationLock.RUnlock()
+	organizationLock.Lock()
+	defer organizationLock.Unlock()
 	metadata, err := tenant.Resolve(r.Context(), h.http, h.controlPlaneURL, h.serviceToken, organizationID, "", "")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)

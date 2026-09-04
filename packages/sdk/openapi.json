@@ -454,13 +454,13 @@
         ],
         "responses": {
           "200": {
-            "description": "Project databases",
+            "description": "Project databases with branches",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/DatabaseResponse"
+                    "$ref": "#/components/schemas/DatabaseWithBranchesResponse"
                   }
                 }
               }
@@ -4369,6 +4369,27 @@
             "format": "uuid"
           }
         }
+      },
+      "DatabaseWithBranchesResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/DatabaseResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "branches"
+            ],
+            "properties": {
+              "branches": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/DatabaseBranchResponse"
+                }
+              }
+            }
+          }
+        ]
       },
       "DeleteObjectsResponse": {
         "type": "object",

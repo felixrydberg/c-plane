@@ -21,9 +21,10 @@ const repositoriesUrl = computed(() => organizationId.value && projectId.value
   ? `/api/organization/${organizationId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/registry/repositories` as const
   : '')
 const { data: managedRegistry } = await useCplaneFetch(registryUrl, { default: () => null })
-const { data: repositories, status, refresh } = await useCplaneFetch(repositoriesUrl, { default: () => [] })
+const { data: repositories, status, refresh: refreshRepositories } = await useCplaneFetch(repositoriesUrl, { default: () => [] })
 const selected = ref<Repository | null>(null)
 const deleting = ref(false)
+const refreshing = ref(false)
 const search = ref('')
 const registryIsActive = computed(() => managedRegistry.value?.status === 'active')
 const filteredRepositories = computed(() => {
@@ -32,9 +33,9 @@ const filteredRepositories = computed(() => {
 })
 const projectRegistryName = computed(() => project.value?.name
   ?.trim()
-  .toLowerCase()
-  .replace(/[^a-z0-9]+/g, '-')
-  .replace(/^-+|-+$/g, '') || projectId.value)
+  .replace(/[^a-zA-Z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '')
+  .toLowerCase() || 'project')
 const reference = (repository: Repository) => `${config.public.registryHost}/${organizationSlug.value}/${projectRegistryName.value}/${repository.name}`
 const UButton = resolveComponent('UButton')
 
@@ -54,7 +55,7 @@ const columns: TableColumn<Repository>[] = [
     accessorKey: 'created_at',
     header: 'Created',
     meta: { class: { th: 'hidden sm:table-cell', td: 'hidden sm:table-cell' } },
-    cell: ({ row }) => new Date(row.original.created_at).toLocaleDateString(),
+    cell: ({ row }) => new Date(row.original.created_at).toLocaleDateString('sv-SE', { timeZone: 'UTC' }),
   },
   {
     id: 'actions',
@@ -83,6 +84,16 @@ async function deleteRepository() {
     toast.add({ title: message || 'Failed to delete repository', color: 'error' })
   } finally {
     deleting.value = false
+  }
+}
+
+async function refresh() {
+  if (refreshing.value) return
+  refreshing.value = true
+  try {
+    await refreshRepositories()
+  } finally {
+    refreshing.value = false
   }
 }
 </script>
@@ -122,7 +133,7 @@ async function deleteRepository() {
 
     <div class="flex items-center gap-2">
       <UInput v-model="search" icon="i-heroicons:magnifying-glass" placeholder="Search repositories..." class="min-w-0 flex-1" />
-      <UButton :icon="ICONS.refresh" color="neutral" @click="refresh()">Refresh</UButton>
+      <UButton :icon="ICONS.refresh" color="neutral" :loading="refreshing" @click="refresh">Refresh</UButton>
     </div>
 
     <UiTable :status="status" :items="filteredRepositories" :columns="columns" disable-header>

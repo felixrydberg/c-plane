@@ -184,6 +184,7 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
             crate::handlers::databases::CreateDatabaseRequest,
             crate::handlers::databases::UpdateDatabaseRequest,
             crate::handlers::databases::DatabaseResponse,
+            crate::handlers::databases::DatabaseWithBranchesResponse,
             crate::handlers::databases::CreateDatabaseBranchRequest,
             crate::handlers::databases::UpdateDatabaseBranchRequest,
             crate::handlers::databases::DatabaseBranchResponse,

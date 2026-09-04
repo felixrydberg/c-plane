@@ -113,13 +113,16 @@ pub(crate) async fn resolve_registry_project_id(
         .filter(project::Column::OrganizationId.eq(organization_id))
         .all(get_app_state().identity_db.connection())
         .await?;
-    projects
+    let matching_projects = projects
         .into_iter()
-        .find(|project| normalize_project_name(&project.name) == project_name)
-        .map(|project| project.id)
-        .ok_or_else(|| {
-            AppError::BadRequest("Internal registry image has an invalid project name".into())
-        })
+        .filter(|project| normalize_project_name(&project.name) == project_name)
+        .collect::<Vec<_>>();
+    match matching_projects.as_slice() {
+        [project] => Ok(project.id),
+        _ => Err(AppError::BadRequest(
+            "Internal registry image has an invalid project name".into(),
+        )),
+    }
 }
 
 #[utoipa::path(

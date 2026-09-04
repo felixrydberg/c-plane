@@ -794,6 +794,9 @@ export interface components {
             /** Format: uuid */
             project_id: string;
         };
+        DatabaseWithBranchesResponse: components["schemas"]["DatabaseResponse"] & {
+            branches: components["schemas"]["DatabaseBranchResponse"][];
+        };
         DeleteObjectsResponse: {
             deleted: number;
             next_continuation_token?: string | null;
@@ -1348,13 +1351,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Project databases */
+            /** @description Project databases with branches */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DatabaseResponse"][];
+                    "application/json": components["schemas"]["DatabaseWithBranchesResponse"][];
                 };
             };
         };
