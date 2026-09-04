@@ -29,13 +29,6 @@ const currentSection = computed(() => {
 })
 const projectRoutesEnabled = computed(() => PROJECT_PAGES.includes(currentSection.value))
 const environmentRoutesEnabled = computed(() => ENVIRONMENT_PAGES.includes(currentSection.value))
-const isViewingDeployed = computed(() =>
-  !route.query.revision || route.query.revision === store.environment?.deployed_timeline
-)
-const hasDraftRevision = computed(() =>
-  !!store.environment && store.environment.draft_timeline !== store.environment.deployed_timeline
-)
-
 // Projects are loaded by the auth plugin on every request.
 // Refresh only needed after create/delete.
 async function refreshProjects() {
@@ -53,7 +46,7 @@ const deleteEnvironmentModal = ref(false)
 const renameEnvironmentModal = ref(false)
 const environmentName = ref('')
 const renamingEnvironment = ref(false)
-const revisionContainer = ref<HTMLElement>()
+const graphModalOpen = ref(false)
 
 const projectLabel = computed(() => store.project?.name || 'All Projects')
 
@@ -111,20 +104,6 @@ const environmentMenuItems = computed<DropdownMenuItem[][]>(() => {
   return actions.length ? [environments, actions] : [environments]
 })
 
-const revisionItems = computed<DropdownMenuItem[][]>(() => [[
-  {
-    label: 'Draft',
-    icon: ICONS.pencil,
-    disabled: !hasDraftRevision.value,
-    onSelect() { setRevisionView(false) },
-  },
-  {
-    label: 'Deployed',
-    icon: ICONS.check,
-    onSelect() { setRevisionView(true) },
-  },
-]])
-
 async function selectProject(projectId: string | null) {
   const slug = store.organization?.slug
   if (!slug) return
@@ -157,7 +136,6 @@ async function selectProject(projectId: string | null) {
 }
 
 function selectEnvironment(b: Environment) {
-  const wasViewingDeployed = isViewingDeployed.value
   const slug = store.organization?.slug
   const pid = routeProjectId.value
   if (!pid || !slug || !projectRoutesEnabled.value || !environmentRoutesEnabled.value || b.id === routeEnvironmentId.value) {
@@ -170,40 +148,7 @@ function selectEnvironment(b: Environment) {
   const url = environmentRoutesEnabled.value
     ? `/${slug}/${baseSection}/${pid}/${b.id}`
     : `/${slug}/${baseSection}/${pid}`
-  router.push(`${url}${wasViewingDeployed ? '' : `?revision=${b.draft_timeline}`}`)
-}
-
-function setRevisionView(viewingDeployed: boolean) {
-  if (!store.environment || !hasDraftRevision.value) return
-  const query = { ...route.query }
-  if (viewingDeployed) delete query.revision
-  else query.revision = store.environment.draft_timeline
-  router.push({ query })
-}
-
-function setRevisionHeight(height?: number) {
-  if (revisionContainer.value) revisionContainer.value.style.height = height === undefined ? '' : `${height}px`
-}
-
-function beforeRevisionEnter() {
-  setRevisionHeight(0)
-}
-
-function enterRevision(element: Element) {
-  if (!(element instanceof HTMLElement)) return
-  requestAnimationFrame(() => setRevisionHeight(element.offsetHeight))
-}
-
-function beforeRevisionLeave(element: Element) {
-  if (element instanceof HTMLElement) setRevisionHeight(element.offsetHeight)
-}
-
-function leaveRevision() {
-  requestAnimationFrame(() => setRevisionHeight(0))
-}
-
-function afterRevisionEnter() {
-  setRevisionHeight()
+  router.push(url)
 }
 
 async function onProjectCreated() { await refreshProjects() }
@@ -270,7 +215,6 @@ async function onConfirmDeleteEnvironment() {
   }
 }
 
-const graphModalOpen = ref(false)
 </script>
 
 <template>
@@ -320,55 +264,6 @@ const graphModalOpen = ref(false)
     </UDropdownMenu>
 
     <template v-if="store.project">
-      <div ref="revisionContainer" class="revision-height">
-        <Transition
-          name="revision"
-          @before-enter="beforeRevisionEnter"
-          @enter="enterRevision"
-          @after-enter="afterRevisionEnter"
-          @before-leave="beforeRevisionLeave"
-          @leave="leaveRevision"
-        >
-          <div v-if="store.environment && !props.collapsed" class="space-y-1.5 pt-1">
-            <p class="px-1 text-[10px] font-mono uppercase tracking-[0.08em] text-muted">Revision</p>
-            <div class="grid grid-cols-2 gap-1 rounded-md border border-default bg-elevated/70 p-1">
-              <UButton
-                size="xs"
-                :color="isViewingDeployed ? 'neutral' : 'primary'"
-                :variant="isViewingDeployed ? 'ghost' : 'soft'"
-                :disabled="!hasDraftRevision"
-                class="w-full justify-center"
-                @click="setRevisionView(false)"
-              >
-                Draft
-              </UButton>
-              <UButton
-                size="xs"
-                :color="isViewingDeployed ? 'primary' : 'neutral'"
-                :variant="isViewingDeployed ? 'soft' : 'ghost'"
-                class="w-full justify-center"
-                @click="setRevisionView(true)"
-              >
-                Deployed
-              </UButton>
-            </div>
-          </div>
-        </Transition>
-      </div>
-
-      <UDropdownMenu v-if="props.collapsed" size="sm" :items="revisionItems" :content="{ align: 'start', collisionPadding: 12 }" :ui="{ content: 'w-40' }">
-        <UButton
-          :icon="ICONS.revision"
-          :aria-label="isViewingDeployed ? 'Deployed revision' : 'Draft revision'"
-          :title="isViewingDeployed ? 'Deployed revision' : 'Draft revision'"
-          size="sm"
-          color="neutral"
-          variant="soft"
-          square
-          class="size-8 border border-default bg-elevated/70 hover:bg-elevated data-[state=open]:bg-elevated"
-        />
-      </UDropdownMenu>
-
       <UButton
         :label="props.collapsed ? undefined : 'Environment graph'"
         :icon="ICONS.graph"
@@ -416,49 +311,3 @@ const graphModalOpen = ref(false)
     </UModal>
   </div>
 </template>
-
-<style scoped>
-.revision-height {
-  overflow: hidden;
-  transition: height 180ms cubic-bezier(0.23, 1, 0.32, 1);
-}
-
-.revision-enter-active,
-.revision-leave-active {
-  will-change: opacity, transform;
-  transition-property: opacity, transform;
-  transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
-}
-
-.revision-enter-active {
-  transition-duration: 180ms;
-}
-
-.revision-leave-active {
-  transition-duration: 120ms;
-}
-
-.revision-enter-from,
-.revision-leave-to {
-  opacity: 0;
-  transform: translateY(-6px) scaleY(0.96);
-  transform-origin: top;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .revision-height {
-    transition-duration: 120ms;
-  }
-
-  .revision-enter-active,
-  .revision-leave-active {
-    transition-duration: 120ms;
-    transition-property: opacity;
-  }
-
-  .revision-enter-from,
-  .revision-leave-to {
-    transform: none;
-  }
-}
-</style>

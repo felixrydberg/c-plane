@@ -276,7 +276,7 @@ const columns: TableColumn<BucketRow>[] = [
         return h(NuxtLink, {
           to: { query: { prefix: item.key } },
           class: 'flex min-w-0 items-center gap-2 text-left text-primary hover:underline hover:underline-offset-4',
-        }, [
+        }, () => [
           h(UIcon, { name: ICONS.folder, class: 'size-4 shrink-0 text-muted' }),
           h('span', { class: 'truncate font-medium' }, item.name),
         ])

@@ -220,7 +220,7 @@ const databaseColumns: TableColumn<PostgresTableRow>[] = [
       return h(NuxtLink, {
         to: branchUrl(item),
         class: 'flex min-w-0 items-center gap-2 ps-4',
-      }, [
+      }, () => [
         h('span', { class: 'truncate font-medium text-primary group-hover:underline group-hover:underline-offset-4' }, item._name),
         isDefaultBranch(item)
           ? h('span', { class: 'shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary' }, 'Default')

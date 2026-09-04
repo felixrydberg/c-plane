@@ -39,7 +39,6 @@ const state = reactive({
 })
 
 const computeUnit = ref('0.5')
-const createAsDraft = ref(false)
 
 const regions = ref<Region[]>([])
 const regionId = ref('')
@@ -68,18 +67,16 @@ async function handleCreate() {
       port: state.port, replica_count: state.replicas, public: state.isPublic,
       health_check: { path: state.healthCheckPath }, region_id: regionId.value,
       resources: { cpu: { min: unit.cpu, max: unit.cpu }, memory: { min: `${Math.round(unit.ramGib * 1024)}Mi`, max: `${Math.round(unit.ramGib * 1024)}Mi` } },
-      auto_deploy: !createAsDraft.value,
+      auto_deploy: false,
       external_registry_id: externalRegistryId.value === 'none' ? null : externalRegistryId.value,
     }
     if (Object.keys(envObj).length > 0) body.env = envObj
 
     await cplaneFetch(`/api/organization/${orgId.value as ':organization_id'}/containers` as const, { method: 'POST', body })
     await loadProjectEnvironments(projectId.value, environmentId.value)
-    toast.add({ title: createAsDraft.value ? 'Container draft created' : 'Container created and deployed', color: 'success' })
-    const path = `/${route.params.organization_slug}/containers/${projectId.value}/${environmentId.value}`
-    navigateTo(createAsDraft.value && store.environment?.draft_timeline
-      ? { path, query: { revision: store.environment.draft_timeline } }
-      : path)
+    toast.add({ title: 'Container added', description: 'Review this environment to deploy it.', color: 'success' })
+    const path = `/${route.params.organization_slug}/compute/containers/${projectId.value}/${environmentId.value}`
+    navigateTo(path)
   } catch (e: unknown) {
     error.value = getErrorMessage(e, 'Failed to create container')
     const message = getErrorMessage(e, '')
@@ -87,7 +84,7 @@ async function handleCreate() {
   } finally { loading.value = false }
 }
 
-function backUrl() { return `/${route.params.organization_slug}/containers/${projectId.value}/${environmentId.value}` }
+function backUrl() { return `/${route.params.organization_slug}/compute/containers/${projectId.value}/${environmentId.value}` }
 </script>
 
 <template>
@@ -95,8 +92,8 @@ function backUrl() { return `/${route.params.organization_slug}/containers/${pro
     <header class="border-b border-default/60 pb-5">
       <UiBackLink :label="projectName" :to="backUrl()" />
       <UiPageEyebrow label="Compute" />
-      <h1 class="mt-2 text-2xl font-semibold">New Container</h1>
-      <p class="mt-1 text-sm text-muted">Deploy a service with one continuous configuration.</p>
+      <h1 class="mt-2 text-2xl font-semibold">Add container</h1>
+      <p class="mt-1 text-sm text-muted">Configure a service, then review it with the rest of this environment before deployment.</p>
     </header>
 
     <div class="grid gap-0 lg:grid-cols-[minmax(0,1fr)_280px]">
@@ -130,17 +127,17 @@ function backUrl() { return `/${route.params.organization_slug}/containers/${pro
 
       <aside class="border-t border-default/60 py-7 lg:border-l lg:border-t-0 lg:pl-6">
         <div class="sticky top-6 rounded-lg border border-dashed border-default p-5">
-          <h2 class="text-sm font-semibold">Deployment Summary</h2>
+          <h2 class="text-sm font-semibold">Pending change</h2>
           <dl class="mt-5 space-y-4 text-sm">
             <div><dt class="text-xs text-muted">Project</dt><dd class="mt-1">{{ projectName }}</dd></div>
             <div><dt class="text-xs text-muted">Image</dt><dd class="mt-1 truncate font-mono text-xs">{{ state.image || 'Not set' }}</dd></div>
             <div><dt class="text-xs text-muted">Compute</dt><dd class="mt-1">{{ computeUnit }}</dd></div>
             <div><dt class="text-xs text-muted">Exposure</dt><dd class="mt-1">{{ state.isPublic ? 'Public' : 'Private' }}</dd></div>
           </dl>
-          <UCheckbox v-model="createAsDraft" class="mt-8" label="Create as draft" description="Save this container without deploying it." />
+          <p class="mt-8 text-xs text-muted">This container will be saved with the environment's pending changes. Nothing goes live until you deploy the release.</p>
           <div class="mt-5 flex gap-3">
             <UButton variant="ghost" color="neutral" :to="backUrl()">Cancel</UButton>
-            <UButton :icon="ICONS.check" :loading="loading" :disabled="!state.name.trim() || !state.image.trim() || !regionId" @click="handleCreate">Continue</UButton>
+            <UButton :icon="ICONS.plus" color="primary" :loading="loading" :disabled="!state.name.trim() || !state.image.trim() || !regionId" @click="handleCreate">Add container</UButton>
           </div>
         </div>
       </aside>

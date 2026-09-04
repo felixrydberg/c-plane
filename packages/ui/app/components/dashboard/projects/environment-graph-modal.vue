@@ -215,7 +215,8 @@ async function onEnvironmentCreated(environment: Environment) {
 async function onSelectRepointEnvironment() {
   if (!store.organization?.id || !store.project?.id || !repointEnvironmentId.value) return;
   try {
-    await cplaneFetch(`/api/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${repointEnvironmentId.value as ':environment_id'}` as const, { method: 'PATCH', body: { draft_timeline_id: repointRevisionId.value, deployed_timeline_id: repointRevisionId.value } });
+    const updated = await cplaneFetch(`/api/organization/${store.organization.id as ':organization_id'}/projects/${store.project.id as ':project_id'}/environments/${repointEnvironmentId.value as ':environment_id'}` as const, { method: 'PATCH', body: { draft_timeline_id: repointRevisionId.value, deployed_timeline_id: repointRevisionId.value } });
+    syncEnvironment(store, updated);
     toast.add({ title: 'Environment repointed', color: 'success' });
     store.refreshKey++;
     repointModalOpen.value = false;
@@ -326,34 +327,96 @@ async function loadGraph(preserveSelection = false) {
       yLaneMap.set(r.id, 0);
     });
 
-    let nextDownLane = 1;
-    let nextUpLane = -1;
+    // X: main chain sequential; forks branch off parent X + depth.
     for (const mainRev of mainRevs) {
-      const forked = childrenMap.get(mainRev.id)?.filter(c => !mainRevs.some(mr => mr.id === c.id)) || [];
-      let useUp = true;
+      const forked = childrenMap.get(mainRev.id)?.filter(c => !xPosMap.has(c.id)) || [];
       for (const f of forked) {
-        const lane = useUp ? nextUpLane-- : nextDownLane++;
         const baseX = xPosMap.get(mainRev.id)! + X_SPACING;
-        let current = f;
+        let current: TimelineRevision | null | undefined = f;
         let depth = 0;
-        while (current) {
+        while (current && !xPosMap.has(current.id)) {
           xPosMap.set(current.id, baseX + (depth * X_SPACING));
-          yLaneMap.set(current.id, lane);
           depth++;
-          const next = childrenMap.get(current.id)?.[0];
-          current = next || null;
+          const kids = childrenMap.get(current.id) || [];
+          if (kids.length > 1) break;
+          current = kids.find(k => !xPosMap.has(k.id)) ?? null;
         }
-        useUp = !useUp;
+      }
+    }
+    // Fallback: any node still missing X (nested branches) sits one column past its parent.
+    const byTimeline = [...allRevs].sort((a, b) => a.rev.timeline - b.rev.timeline);
+    for (let pass = 0; pass < byTimeline.length; pass++) {
+      let done = true;
+      for (const { rev } of byTimeline) {
+        if (xPosMap.has(rev.id)) continue;
+        const px = rev.parent_timeline_id ? xPosMap.get(rev.parent_timeline_id) : undefined;
+        if (px !== undefined) xPosMap.set(rev.id, px + X_SPACING);
+        else if (!rev.parent_timeline_id) xPosMap.set(rev.id, 0);
+        else done = false;
+      }
+      if (done) break;
+    }
+
+    // Y: per-column packing. Continuations inherit the parent row; other nodes
+    // take the closest free row to their parent (or 0). A 1-node column
+    // extending a wider column stays on its parent's row instead of recentering.
+    const mainIds = new Set(mainRevs.map(r => r.id));
+    const revById = new Map(allRevs.map(({ rev }) => [rev.id, rev]));
+    const cols = new Map<number, string[]>();
+    for (const { rev } of allRevs) {
+      const x = xPosMap.get(rev.id) ?? 0;
+      const list = cols.get(x) || [];
+      list.push(rev.id);
+      cols.set(x, list);
+    }
+    const sortedXs = [...cols.keys()].sort((a, b) => a - b);
+    for (const x of sortedXs) {
+      const ids = cols.get(x)!;
+      // Siblings grouped so only the first child inherits the parent row.
+      const byParent = new Map<string | null, string[]>();
+      for (const id of ids) {
+        const p = revById.get(id)?.parent_timeline_id ?? null;
+        const list = byParent.get(p) || [];
+        list.push(id);
+        byParent.set(p, list);
+      }
+      const parentRows: { id: string; prow: number }[] = [];
+      const orphans: string[] = [];
+      for (const [, sibs] of byParent) {
+        sibs.sort((a, b) => (revById.get(a)?.timeline ?? 0) - (revById.get(b)?.timeline ?? 0));
+        sibs.forEach((id, i) => {
+          if (i > 0) { orphans.push(id); return; }
+          const p = revById.get(id)?.parent_timeline_id;
+          const prow = p ? yLaneMap.get(p) : undefined;
+          if (prow !== undefined) parentRows.push({ id, prow });
+          else orphans.push(id);
+        });
+      }
+      parentRows.sort((a, b) => {
+        const main = Number(mainIds.has(b.id)) - Number(mainIds.has(a.id));
+        if (main !== 0) return main;
+        return a.prow - b.prow;
+      });
+      const ordered = [...parentRows.map(r => r.id), ...orphans];
+      const used = new Set<number>();
+      for (const id of ordered) {
+        const p = revById.get(id)?.parent_timeline_id;
+        const desired = (p ? yLaneMap.get(p) : undefined) ?? 0;
+        let row = desired;
+        if (used.has(row)) {
+          for (let off = 1; ; off++) {
+            if (!used.has(desired + off)) { row = desired + off; break; }
+            if (!used.has(desired - off)) { row = desired - off; break; }
+          }
+        }
+        yLaneMap.set(id, row);
+        used.add(row);
       }
     }
 
     const newNodes: any[] = [];
     const newEdges: any[] = [];
     const processedEdges = new Set<string>();
-
-    const minLane = Math.min(...yLaneMap.values(), 0);
-    const maxLane = Math.max(...yLaneMap.values(), 0);
-    const centerY = ((maxLane + minLane) / 2) * Y_SPACING;
 
     const seen = new Set<string>();
     const metaMap = new Map<string, NodeMeta>();
@@ -362,9 +425,9 @@ async function loadGraph(preserveSelection = false) {
       if (seen.has(rev.id)) continue;
       seen.add(rev.id);
 
-      const x = xPosMap.get(rev.id) || 0;
-      const lane = yLaneMap.get(rev.id) || 0;
-      const y = lane * Y_SPACING - centerY;
+      const x = xPosMap.get(rev.id) ?? 0;
+      const lane = yLaneMap.get(rev.id) ?? 0;
+      const y = lane * Y_SPACING;
 
       const environmentLabels: string[] = [];
       const pointingEnvironments: EnvironmentMeta[] = [];
@@ -550,7 +613,7 @@ watch(open, (isOpen) => {
                           type="button"
                           :disabled="!b.exists"
                           class="group min-w-0 flex w-full flex-1 items-center gap-3 text-left disabled:opacity-50"
-                          @click="b.exists ? navigateAndClose(`/${store.organization?.slug}/containers/${store.project?.id}/${b.id}`) : undefined"
+                          @click="b.exists ? navigateAndClose(`/${store.organization?.slug}/compute/containers/${store.project?.id}/${b.id}`) : undefined"
                         >
                           <div class="size-8 shrink-0 rounded-md bg-elevated flex items-center justify-center">
                             <UIcon name="i-heroicons:folder" class="size-4 text-muted" />

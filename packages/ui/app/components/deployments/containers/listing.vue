@@ -54,7 +54,7 @@ async function confirmDelete() {
 
 function containerUrl(containerId: string) {
   return {
-    path: `/${route.params.organization_slug}/containers/${props.projectId}/${props.environmentId}/${containerId}`,
+    path: `/${route.params.organization_slug}/compute/containers/${props.projectId}/${props.environmentId}/${containerId}`,
     query: props.revisionId ? { revision: props.revisionId } : undefined,
   }
 }
@@ -66,7 +66,7 @@ const columns: TableColumn<ContainerWithProject>[] = [
     cell: ({ row }) => h(NuxtLink, {
       to: containerUrl(row.original.id),
       class: 'flex min-w-0 items-center gap-2',
-    }, [
+    }, () => [
       h('span', { class: 'truncate font-medium text-primary group-hover:underline group-hover:underline-offset-4' }, row.original.name),
       row.original.current_version?.public
         ? h('span', { class: 'shrink-0 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400' }, 'Public')

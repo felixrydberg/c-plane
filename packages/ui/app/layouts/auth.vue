@@ -53,7 +53,7 @@ const mainItems = computed<NavigationMenuItem[]>(() => [
     children: [
       {
         label: 'Containers',
-        to: `/${store.organization?.slug}/containers${navProjectId.value ? `/${navProjectId.value}${routeEnvironmentId.value ? `/${routeEnvironmentId.value}` : ''}` : ''}${draftRevisionQuery.value}`,
+        to: `/${store.organization?.slug}/compute/containers${navProjectId.value ? `/${navProjectId.value}${routeEnvironmentId.value ? `/${routeEnvironmentId.value}` : ''}` : ''}${draftRevisionQuery.value}`,
       },
     ],
   },
@@ -221,7 +221,7 @@ const navigationUi = {
         </nav>
       </div>
 
-      <DashboardProjectsDeploymentAlert v-if="store.environment" />
+      <DashboardProjectsDeploymentAlert />
 
       <div class="flex-1 bg-default px-6 py-6 lg:px-8">
         <slot />
