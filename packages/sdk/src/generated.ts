@@ -207,6 +207,70 @@ export interface paths {
         patch: operations["update_environment"];
         trace?: never;
     };
+    "/api/organization/{organization_id}/projects/{project_id}/registry/access-tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["registry_list_access_tokens"];
+        put?: never;
+        post: operations["registry_create_access_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organization/{organization_id}/projects/{project_id}/registry/access-tokens/{token_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["registry_get_access_token"];
+        put?: never;
+        post?: never;
+        delete: operations["registry_revoke_access_token"];
+        options?: never;
+        head?: never;
+        patch: operations["registry_update_access_token"];
+        trace?: never;
+    };
+    "/api/organization/{organization_id}/projects/{project_id}/registry/repositories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_repositories"];
+        put?: never;
+        post: operations["create_repository"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organization/{organization_id}/projects/{project_id}/registry/repositories/{repository_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["delete_repository"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens": {
         parameters: {
             query?: never;
@@ -303,38 +367,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/organization/{organization_id}/registry/access-tokens": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["registry_list_access_tokens"];
-        put?: never;
-        post: operations["registry_create_access_token"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/organization/{organization_id}/registry/access-tokens/{token_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["registry_get_access_token"];
-        put?: never;
-        post?: never;
-        delete: operations["registry_revoke_access_token"];
-        options?: never;
-        head?: never;
-        patch: operations["registry_update_access_token"];
-        trace?: never;
-    };
     "/api/organization/{organization_id}/registry/external-registries": {
         parameters: {
             query?: never;
@@ -394,38 +426,6 @@ export interface paths {
         put?: never;
         post: operations["run_garbage_collection"];
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/organization/{organization_id}/registry/repositories": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["list_repositories"];
-        put?: never;
-        post: operations["create_repository"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/organization/{organization_id}/registry/repositories/{repository_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete: operations["delete_repository"];
         options?: never;
         head?: never;
         patch?: never;
@@ -794,6 +794,9 @@ export interface components {
             /** Format: uuid */
             project_id: string;
         };
+        DatabaseWithBranchesResponse: components["schemas"]["DatabaseResponse"] & {
+            branches: components["schemas"]["DatabaseBranchResponse"][];
+        };
         DeleteObjectsResponse: {
             deleted: number;
             next_continuation_token?: string | null;
@@ -925,6 +928,8 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
+            /** Format: uuid */
+            project_id: string;
         };
         RegistryGarbageCollectionResponse: {
             active_job?: null | components["schemas"]["RegistryGcJobResponse"];
@@ -952,6 +957,8 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
+            /** Format: uuid */
+            project_id: string;
         };
         RegistryTokenResponse: {
             access_token: string;
@@ -987,6 +994,9 @@ export interface components {
             /** Format: uuid */
             organization_id: string;
             organization_slug: string;
+            /** Format: uuid */
+            repository_id?: string | null;
+            repository_name?: string | null;
             status: string;
             storage_endpoint_url: string;
             /** Format: uuid */
@@ -1341,13 +1351,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Project databases */
+            /** @description Project databases with branches */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DatabaseResponse"][];
+                    "application/json": components["schemas"]["DatabaseWithBranchesResponse"][];
                 };
             };
         };
@@ -1972,6 +1982,339 @@ export interface operations {
             };
         };
     };
+    registry_list_access_tokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                organization_id: string;
+                /** @description Project ID */
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of active registry access tokens */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistryAccessTokenResponse"][];
+                };
+            };
+            /** @description Organization access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    registry_create_access_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                organization_id: string;
+                /** @description Project ID */
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRegistryAccessTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description Registry access token created; save it now */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedRegistryAccessTokenResponse"];
+                };
+            };
+            /** @description Organization access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Repository not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid permissions or duplicate token name */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    registry_get_access_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                organization_id: string;
+                /** @description Project ID */
+                project_id: string;
+                /** @description Registry access token ID */
+                token_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Registry access token details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistryAccessTokenDetailsResponse"];
+                };
+            };
+            /** @description Registry access token not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    registry_revoke_access_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                organization_id: string;
+                /** @description Project ID */
+                project_id: string;
+                /** @description Registry access token ID */
+                token_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Registry access token revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Organization access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Registry access token not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    registry_update_access_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                organization_id: string;
+                /** @description Project ID */
+                project_id: string;
+                /** @description Registry access token ID */
+                token_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRegistryAccessTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description Registry access token permissions updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Organization access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Registry access token or repository not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid permissions */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_repositories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                organization_id: string;
+                /** @description Project ID */
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Project registry repositories */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistryRepositoryResponse"][];
+                };
+            };
+            /** @description Organization access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Project not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_repository: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                organization_id: string;
+                /** @description Project ID */
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRegistryRepositoryRequest"];
+            };
+        };
+        responses: {
+            /** @description Registry repository created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistryRepositoryResponse"];
+                };
+            };
+            /** @description Organization access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Project not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid or duplicate repository name */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_repository: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                organization_id: string;
+                /** @description Project ID */
+                project_id: string;
+                /** @description Registry repository ID */
+                repository_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Registry repository deletion queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Organization access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Project or registry repository not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     storage_list_access_tokens: {
         parameters: {
             query?: never;
@@ -2321,201 +2664,6 @@ export interface operations {
             };
         };
     };
-    registry_list_access_tokens: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Organization ID */
-                organization_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description List of active registry access tokens */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RegistryAccessTokenResponse"][];
-                };
-            };
-            /** @description Organization access required */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    registry_create_access_token: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Organization ID */
-                organization_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateRegistryAccessTokenRequest"];
-            };
-        };
-        responses: {
-            /** @description Registry access token created; save it now */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CreatedRegistryAccessTokenResponse"];
-                };
-            };
-            /** @description Organization access required */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Repository not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Invalid permissions or duplicate token name */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    registry_get_access_token: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Organization ID */
-                organization_id: string;
-                /** @description Registry access token ID */
-                token_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Registry access token details */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RegistryAccessTokenDetailsResponse"];
-                };
-            };
-            /** @description Registry access token not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    registry_revoke_access_token: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Organization ID */
-                organization_id: string;
-                /** @description Registry access token ID */
-                token_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Registry access token revoked */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Organization access required */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Registry access token not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    registry_update_access_token: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Organization ID */
-                organization_id: string;
-                /** @description Registry access token ID */
-                token_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateRegistryAccessTokenRequest"];
-            };
-        };
-        responses: {
-            /** @description Registry access token permissions updated */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Organization access required */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Registry access token or repository not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Invalid permissions */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     list_external_registries: {
         parameters: {
             query?: never;
@@ -2777,137 +2925,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    list_repositories: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Organization ID */
-                organization_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Organization registry repositories */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RegistryRepositoryResponse"][];
-                };
-            };
-            /** @description Organization access required */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    create_repository: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Organization ID */
-                organization_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateRegistryRepositoryRequest"];
-            };
-        };
-        responses: {
-            /** @description Registry repository created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RegistryRepositoryResponse"];
-                };
-            };
-            /** @description Organization access required */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Invalid or duplicate repository name */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    delete_repository: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Organization ID */
-                organization_id: string;
-                /** @description Registry repository ID */
-                repository_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Registry repository deleted */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Organization access required */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Registry repository not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Registry cleanup conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Registry cleanup failed */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Registry is unavailable during maintenance */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
             };
         };
     };

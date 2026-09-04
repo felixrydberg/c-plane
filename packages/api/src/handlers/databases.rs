@@ -84,6 +84,13 @@ pub struct DatabaseResponse {
     pub default_branch_id: Option<Uuid>,
 }
 
+#[derive(Serialize, ToSchema)]
+pub struct DatabaseWithBranchesResponse {
+    #[serde(flatten)]
+    pub database: DatabaseResponse,
+    pub branches: Vec<DatabaseBranchResponse>,
+}
+
 pub fn validate_backup_retention_days(retention_days: Option<i32>) -> Result<(), AppError> {
     if retention_days.is_some_and(|days| days <= 0) {
         return Err(AppError::BadRequest(

@@ -1,10 +1,10 @@
 {
+  "id": "213e4248-73cd-4ddb-a132-f706a73520d9",
+  "prevIds": [
+    "7068fed7-aa61-4349-b597-e852cc9665e9"
+  ],
   "version": "8",
   "dialect": "postgres",
-  "id": "4a6091f2-98b4-4906-b503-b921c74ace24",
-  "prevIds": [
-    "00000000-0000-0000-0000-000000000000"
-  ],
   "ddl": [
     {
       "values": [
@@ -90,6 +90,15 @@
         "deleting"
       ],
       "name": "foundation_bucket_status",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
+        "active",
+        "maintenance"
+      ],
+      "name": "managed_registry_status",
       "entityType": "enums",
       "schema": "public"
     },
@@ -231,6 +240,12 @@
     },
     {
       "isRlsEnabled": true,
+      "name": "managed_registry_gc_runs",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": true,
       "name": "organization",
       "entityType": "tables",
       "schema": "public"
@@ -292,12 +307,6 @@
     {
       "isRlsEnabled": true,
       "name": "registry_access_tokens",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": true,
-      "name": "registry_maintenance",
       "entityType": "tables",
       "schema": "public"
     },
@@ -2052,14 +2061,27 @@
       "table": "managed_registry"
     },
     {
-      "type": "boolean",
-      "typeSchema": null,
+      "type": "managed_registry_status",
+      "typeSchema": "public",
       "notNull": true,
       "dimensions": 0,
-      "default": "false",
+      "default": "'active'",
       "generated": null,
       "identity": null,
-      "name": "gc_active",
+      "name": "status",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "gc_active_job_id",
       "entityType": "columns",
       "schema": "public",
       "table": "managed_registry"
@@ -2102,6 +2124,110 @@
       "entityType": "columns",
       "schema": "public",
       "table": "managed_registry"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry_gc_runs"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "organization_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry_gc_runs"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "started_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry_gc_runs"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "finished_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry_gc_runs"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "bytes_before",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry_gc_runs"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "bytes_after",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry_gc_runs"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "result",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry_gc_runs"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "error",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry_gc_runs"
     },
     {
       "type": "uuid",
@@ -3068,7 +3194,7 @@
     {
       "type": "uuid",
       "typeSchema": null,
-      "notNull": false,
+      "notNull": true,
       "dimensions": 0,
       "default": null,
       "generated": null,
@@ -3151,6 +3277,19 @@
       "default": null,
       "generated": null,
       "identity": null,
+      "name": "project_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "registry_access_tokens"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
       "name": "organization_id",
       "entityType": "columns",
       "schema": "public",
@@ -3209,136 +3348,6 @@
       "table": "registry_access_tokens"
     },
     {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "'distribution'",
-      "generated": null,
-      "identity": null,
-      "name": "service",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_maintenance"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "gc_access_key_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_maintenance"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "'idle'",
-      "generated": null,
-      "identity": null,
-      "name": "phase",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_maintenance"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "active_job_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_maintenance"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "started_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_maintenance"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "finished_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_maintenance"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "last_result",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_maintenance"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "last_error",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_maintenance"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_maintenance"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "updated_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "registry_maintenance"
-    },
-    {
       "type": "uuid",
       "typeSchema": null,
       "notNull": true,
@@ -3347,6 +3356,19 @@
       "generated": null,
       "identity": null,
       "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "registry_repositories"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "project_id",
       "entityType": "columns",
       "schema": "public",
       "table": "registry_repositories"
@@ -3399,6 +3421,19 @@
       "generated": null,
       "identity": null,
       "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "registry_repository_grants"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "project_id",
       "entityType": "columns",
       "schema": "public",
       "table": "registry_repository_grants"
@@ -5347,6 +5382,69 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "status",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "managed_registry_status_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "managed_registry"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "gc_active_job_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "managed_registry_gc_active_job_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "managed_registry"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "organization_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "managed_registry_gc_runs_organization_id_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "managed_registry_gc_runs"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "slug",
           "isExpression": false,
           "asc": true,
@@ -6061,7 +6159,7 @@
       "nameExplicit": true,
       "columns": [
         {
-          "value": "organization_id",
+          "value": "project_id",
           "isExpression": false,
           "asc": true,
           "nullsFirst": false,
@@ -6080,7 +6178,28 @@
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "registry_access_tokens_organization_name_uidx",
+      "name": "registry_access_tokens_project_name_uidx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "registry_access_tokens"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "project_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "registry_access_tokens_project_id_idx",
       "entityType": "indexes",
       "schema": "public",
       "table": "registry_access_tokens"
@@ -6110,28 +6229,7 @@
       "nameExplicit": true,
       "columns": [
         {
-          "value": "active_job_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "registry_maintenance_active_job_idx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "registry_maintenance"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "organization_id",
+          "value": "project_id",
           "isExpression": false,
           "asc": true,
           "nullsFirst": false,
@@ -6150,7 +6248,28 @@
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "registry_repositories_organization_name_uidx",
+      "name": "registry_repositories_project_name_uidx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "registry_repositories"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "project_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "registry_repositories_project_id_idx",
       "entityType": "indexes",
       "schema": "public",
       "table": "registry_repositories"
@@ -6200,6 +6319,27 @@
       "method": "btree",
       "concurrently": false,
       "name": "registry_repository_grants_token_repository_uidx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "registry_repository_grants"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "project_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "registry_repository_grants_project_id_idx",
       "entityType": "indexes",
       "schema": "public",
       "table": "registry_repository_grants"
@@ -7176,6 +7316,23 @@
       "table": "managed_registry"
     },
     {
+      "nameExplicit": false,
+      "columns": [
+        "gc_active_job_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "worker_queue",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "managed_registry_gc_active_job_id_worker_queue_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "managed_registry"
+    },
+    {
       "nameExplicit": true,
       "columns": [
         "credential_id",
@@ -7193,6 +7350,23 @@
       "entityType": "fks",
       "schema": "public",
       "table": "managed_registry"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "organization_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "managed_registry",
+      "columnsTo": [
+        "organization_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "managed_registry_gc_runs_HPcX8IPUKZjV_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "managed_registry_gc_runs"
     },
     {
       "nameExplicit": false,
@@ -7549,7 +7723,7 @@
         "id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "SET NULL",
+      "onDelete": "RESTRICT",
       "name": "regions_s3_provider_id_s3_providers_id_fkey",
       "entityType": "fks",
       "schema": "public",
@@ -7573,21 +7747,23 @@
       "table": "registry_access_tokens"
     },
     {
-      "nameExplicit": false,
+      "nameExplicit": true,
       "columns": [
-        "active_job_id"
+        "project_id",
+        "organization_id"
       ],
       "schemaTo": "public",
-      "tableTo": "worker_queue",
+      "tableTo": "project",
       "columnsTo": [
-        "id"
+        "id",
+        "organization_id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "SET NULL",
-      "name": "registry_maintenance_active_job_id_worker_queue_id_fkey",
+      "onDelete": "CASCADE",
+      "name": "registry_access_tokens_project_scope_fk",
       "entityType": "fks",
       "schema": "public",
-      "table": "registry_maintenance"
+      "table": "registry_access_tokens"
     },
     {
       "nameExplicit": false,
@@ -7602,6 +7778,25 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "registry_repositories_organization_id_organization_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "registry_repositories"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "project_id",
+        "organization_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "project",
+      "columnsTo": [
+        "id",
+        "organization_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "registry_repositories_project_scope_fk",
       "entityType": "fks",
       "schema": "public",
       "table": "registry_repositories"
@@ -7627,12 +7822,14 @@
       "nameExplicit": true,
       "columns": [
         "repository_id",
+        "project_id",
         "organization_id"
       ],
       "schemaTo": "public",
       "tableTo": "registry_repositories",
       "columnsTo": [
         "id",
+        "project_id",
         "organization_id"
       ],
       "onUpdate": "NO ACTION",
@@ -7646,17 +7843,38 @@
       "nameExplicit": true,
       "columns": [
         "access_token_id",
+        "project_id",
         "organization_id"
       ],
       "schemaTo": "public",
       "tableTo": "registry_access_tokens",
       "columnsTo": [
         "id",
+        "project_id",
         "organization_id"
       ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "registry_repository_grants_token_scope_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "registry_repository_grants"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "project_id",
+        "organization_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "project",
+      "columnsTo": [
+        "id",
+        "organization_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "registry_repository_grants_project_scope_fk",
       "entityType": "fks",
       "schema": "public",
       "table": "registry_repository_grants"
@@ -8015,6 +8233,16 @@
         "id"
       ],
       "nameExplicit": false,
+      "name": "managed_registry_gc_runs_pkey",
+      "schema": "public",
+      "table": "managed_registry_gc_runs",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
       "name": "organization_pkey",
       "schema": "public",
       "table": "organization",
@@ -8118,16 +8346,6 @@
       "name": "registry_access_tokens_pkey",
       "schema": "public",
       "table": "registry_access_tokens",
-      "entityType": "pks"
-    },
-    {
-      "columns": [
-        "service"
-      ],
-      "nameExplicit": false,
-      "name": "registry_maintenance_pkey",
-      "schema": "public",
-      "table": "registry_maintenance",
       "entityType": "pks"
     },
     {
@@ -8283,10 +8501,11 @@
       "nameExplicit": true,
       "columns": [
         "id",
+        "project_id",
         "organization_id"
       ],
       "nullsNotDistinct": false,
-      "name": "registry_access_tokens_id_organization_id_uidx",
+      "name": "registry_access_tokens_id_project_organization_uidx",
       "entityType": "uniques",
       "schema": "public",
       "table": "registry_access_tokens"
@@ -8295,10 +8514,11 @@
       "nameExplicit": true,
       "columns": [
         "id",
+        "project_id",
         "organization_id"
       ],
       "nullsNotDistinct": false,
-      "name": "registry_repositories_id_organization_id_uidx",
+      "name": "registry_repositories_id_project_organization_uidx",
       "entityType": "uniques",
       "schema": "public",
       "table": "registry_repositories"
@@ -8421,17 +8641,6 @@
     {
       "nameExplicit": false,
       "columns": [
-        "gc_access_key_id"
-      ],
-      "nullsNotDistinct": false,
-      "name": "registry_maintenance_gc_access_key_id_key",
-      "schema": "public",
-      "table": "registry_maintenance",
-      "entityType": "uniques"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
         "email"
       ],
       "nullsNotDistinct": false,
@@ -8446,13 +8655,6 @@
       "entityType": "checks",
       "schema": "public",
       "table": "bucket_grant"
-    },
-    {
-      "value": "\"phase\" in ('idle', 'queued', 'draining', 'collecting', 'restoring')",
-      "name": "registry_maintenance_phase_check",
-      "entityType": "checks",
-      "schema": "public",
-      "table": "registry_maintenance"
     },
     {
       "value": "\"mirror_provider_id\" is null or \"mirror_provider_id\" <> \"id\"",
@@ -8650,6 +8852,19 @@
       "entityType": "policies",
       "schema": "public",
       "table": "managed_registry"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "ALL",
+      "roles": [
+        "app_tenant"
+      ],
+      "using": "\"managed_registry_gc_runs\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+      "withCheck": "\"managed_registry_gc_runs\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+      "name": "managed_registry_gc_runs_tenant_rls",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "managed_registry_gc_runs"
     },
     {
       "as": "PERMISSIVE",
@@ -8910,6 +9125,19 @@
       "entityType": "policies",
       "schema": "public",
       "table": "storage_bucket"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "ALL",
+      "roles": [
+        "app_tenant"
+      ],
+      "using": "\"worker_queue\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+      "withCheck": "\"worker_queue\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+      "name": "worker_queue_tenant_rls",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "worker_queue"
     }
   ],
   "renames": []

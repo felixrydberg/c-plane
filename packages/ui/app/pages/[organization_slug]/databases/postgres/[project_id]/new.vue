@@ -52,7 +52,7 @@ function backUrl() { return `/${route.params.organization_slug}/databases/postgr
       <UiBackLink :label="projectName" :to="backUrl()" />
       <UiPageEyebrow label="Storage &amp; Databases" />
       <h1 class="mt-2 text-2xl font-semibold">New Database</h1>
-      <p class="mt-1 text-sm text-muted">Create a D1 - Postgres database.</p>
+      <p class="mt-1 text-sm text-muted">Create a Postgres database.</p>
     </header>
 
     <div class="grid lg:grid-cols-[minmax(0,1fr)_280px]">

@@ -88,7 +88,7 @@ const columns: TableColumn<NonNullable<typeof tokens.value>[number]>[] = [
       <template #empty>
         <div class="flex flex-col items-center justify-center gap-3 py-14 text-center">
           <UIcon :name="ICONS.authentication" class="size-10 text-muted" />
-          <p class="text-muted">{{ search ? 'No matching access tokens.' : 'No S1 - Object Storage access tokens for this project.' }}</p>
+          <p class="text-muted">{{ search ? 'No matching access tokens.' : 'No Object Storage access tokens for this project.' }}</p>
         </div>
       </template>
     </UiTable>

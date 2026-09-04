@@ -78,7 +78,7 @@ const recentActivity = ref<{ refresh: () => Promise<void> } | null>(null)
 watch(name, () => {
   if (!name.value || !containerId.value || !organizationSlug.value) return
   store.setBreadcrumbs([
-    { label: 'C1 - Containers', to: backUrl() },
+    { label: 'Containers', to: backUrl() },
     { label: name.value },
   ])
 }, { immediate: true })
@@ -264,7 +264,7 @@ watch([image, port, replicaCount, isPublic, healthCheckPath], () => markChanged(
     <div v-else-if="loadError" class="rounded-lg border border-default/60 bg-default p-8 text-center">
       <p class="text-sm font-medium">Container unavailable</p>
       <p class="mt-1 text-sm text-muted">{{ loadError }}</p>
-      <UButton class="mt-5" color="neutral" :to="backUrl()">Back to C1 - Containers</UButton>
+      <UButton class="mt-5" color="neutral" :to="backUrl()">Back to Containers</UButton>
     </div>
 
     <div v-else class="overflow-hidden rounded-lg border border-default/60 bg-default">

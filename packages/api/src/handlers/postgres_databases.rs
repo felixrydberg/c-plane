@@ -1,12 +1,13 @@
 use axum::{Json, extract::Path};
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use super::databases::{
     CreateDatabaseBranchRequest, CreateDatabaseRequest, DatabaseBranchResponse, DatabaseResponse,
-    ListDatabasesQuery, UpdateDatabaseBranchRequest, UpdateDatabaseRequest, validate_autoscaling,
-    validate_backup_retention_days, validate_cpu, validate_ram, validate_read_replicas,
-    verify_org_access, verify_project_in_org,
+    DatabaseWithBranchesResponse, ListDatabasesQuery, UpdateDatabaseBranchRequest,
+    UpdateDatabaseRequest, validate_autoscaling, validate_backup_retention_days, validate_cpu,
+    validate_ram, validate_read_replicas, verify_org_access, verify_project_in_org,
 };
 use crate::errors::AppError;
 use crate::middleware::auth::AuthContext;
@@ -142,14 +143,14 @@ pub async fn create_database(
         ("organization_id" = Uuid, Path, description = "Organization ID"),
         ("project_id" = Uuid, Query, description = "Project ID"),
     ),
-    responses((status = 200, description = "Project databases", body = Vec<DatabaseResponse>)),
+    responses((status = 200, description = "Project databases with branches", body = Vec<DatabaseWithBranchesResponse>)),
     tag = "databases/postgres",
 )]
 pub async fn list_databases(
     AuthContext { tenant_db, .. }: AuthContext,
     Path(organization_id): Path<Uuid>,
     axum::extract::Query(query): axum::extract::Query<ListDatabasesQuery>,
-) -> Result<Json<Vec<DatabaseResponse>>, AppError> {
+) -> Result<Json<Vec<DatabaseWithBranchesResponse>>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
@@ -164,9 +165,33 @@ pub async fn list_databases(
         .all(tx)
         .await?;
 
+    let database_ids: Vec<Uuid> = dbs.iter().map(|db| db.id).collect();
+    let branches = if database_ids.is_empty() {
+        Vec::new()
+    } else {
+        postgres_database_branch::Entity::find()
+            .filter(postgres_database_branch::Column::DatabaseId.is_in(database_ids))
+            .all(tx)
+            .await?
+    };
+    let mut branches_by_database: HashMap<Uuid, Vec<DatabaseBranchResponse>> = HashMap::new();
+    for branch in &branches {
+        branches_by_database
+            .entry(branch.database_id)
+            .or_default()
+            .push(branch_to_response(branch));
+    }
+
     scoped.commit().await?;
 
-    Ok(Json(dbs.iter().map(db_to_response).collect()))
+    Ok(Json(
+        dbs.into_iter()
+            .map(|db| DatabaseWithBranchesResponse {
+                branches: branches_by_database.remove(&db.id).unwrap_or_default(),
+                database: db_to_response(&db),
+            })
+            .collect(),
+    ))
 }
 
 #[utoipa::path(

@@ -13,6 +13,7 @@ export type {
   CreatedStorageAccessToken,
   Database,
   DatabaseBranch,
+  DatabaseWithBranches,
   Environment,
   EnvironmentWithProject,
   Event,

@@ -23,6 +23,11 @@ const props = defineProps({
     required: false,
     default: undefined,
   },
+  getSubRows: {
+    type: Function as PropType<(row: T) => T[] | undefined>,
+    required: false,
+    default: undefined,
+  },
   filterClass: {
     type: String,
     required: false,
@@ -60,17 +65,19 @@ const slots = useSlots();
 const _columns = computed(() => {
   const columns: typeof props.columns = [...props.columns];
 
-  if (slots.expanded) {
+  if (slots.expanded || props.getSubRows) {
     columns.unshift({
       id: 'expand',
       meta: { class: { th: 'w-8', td: 'w-8 h-8 py-0' } },
-      cell: ({ row }) => h(UButton, {
-        variant: 'ghost',
-        color: 'neutral',
-        size: 'xs',
-        icon: row.getIsExpanded() ? 'i-heroicons-chevron-down-20-solid' : 'i-heroicons-chevron-right-20-solid',
-        onClick: row.getToggleExpandedHandler(),
-      }),
+      cell: ({ row }) => (slots.expanded || row.getCanExpand())
+        ? h(UButton, {
+            variant: 'ghost',
+            color: 'neutral',
+            size: 'xs',
+            icon: row.getIsExpanded() ? 'i-heroicons-chevron-down-20-solid' : 'i-heroicons-chevron-right-20-solid',
+            onClick: row.getToggleExpandedHandler(),
+          })
+        : h('span', { class: 'block size-6' }),
     });
   }
 
@@ -145,6 +152,8 @@ defineExpose({
           ref="table"
           :data="items"
           :columns="_columns"
+          :get-sub-rows="getSubRows"
+          :expanded-options="slots.expanded ? { getRowCanExpand: () => true } : undefined"
           :loading="props.status === 'pending'"
           class="min-w-full flex-1"
           :ui="{

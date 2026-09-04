@@ -9,8 +9,13 @@ import (
 	"strings"
 )
 
-func Resolve(ctx context.Context, client *http.Client, controlPlaneURL, serviceToken, organizationID string) (Metadata, error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(controlPlaneURL, "/")+"/internal/organizations/"+url.PathEscape(organizationID)+"/registry", nil)
+func Resolve(ctx context.Context, client *http.Client, controlPlaneURL, serviceToken, organizationID, repositoryName, repositoryID string) (Metadata, error) {
+	endpoint := strings.TrimRight(controlPlaneURL, "/") + "/internal/organizations/" + url.PathEscape(organizationID) + "/registry"
+	if repositoryName != "" || repositoryID != "" {
+		query := url.Values{"repository_name": {repositoryName}, "repository_id": {repositoryID}}
+		endpoint += "?" + query.Encode()
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return Metadata{}, err
 	}
@@ -29,6 +34,9 @@ func Resolve(ctx context.Context, client *http.Client, controlPlaneURL, serviceT
 	}
 	if metadata.OrganizationID != organizationID || metadata.BucketName != "registry" {
 		return Metadata{}, fmt.Errorf("resolver returned mismatched metadata")
+	}
+	if repositoryName != "" && (metadata.RepositoryName != repositoryName || metadata.RepositoryID != repositoryID) {
+		return Metadata{}, fmt.Errorf("resolver returned mismatched repository metadata")
 	}
 	return metadata, nil
 }

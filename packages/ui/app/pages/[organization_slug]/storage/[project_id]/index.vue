@@ -116,9 +116,9 @@ const columns: TableColumn<Bucket>[] = [
 </script>
 
 <template>
-  <div class="flex w-full max-w-375 flex-col gap-4 mx-auto">
+  <div class="flex w-full max-w-375 flex-col gap-5 mx-auto">
     <div class="flex flex-col gap-4 border-b border-default/60 pb-5 sm:flex-row sm:items-end sm:justify-between">
-      <div><UiPageEyebrow label="Storage &amp; Databases" /><h1 class="text-2xl font-semibold">S1 - Object Storage</h1><p class="text-muted text-sm mt-1">High-performance object storage for files and objects.</p></div>
+      <div><UiPageEyebrow label="Storage &amp; Databases" /><h1 class="mt-2 text-2xl font-semibold">Object Storage</h1><p class="text-muted text-sm mt-1">High-performance object storage for files and objects.</p></div>
       <div class="flex flex-wrap justify-end gap-2">
         <UButton :icon="ICONS.authentication" color="neutral" :to="`/${route.params.organization_slug}/storage/${projectId}/access-tokens`">Manage access tokens</UButton>
         <UButton :icon="ICONS.plus" color="primary" :to="`/${route.params.organization_slug}/storage/${projectId}/new`">New bucket</UButton>
@@ -151,7 +151,7 @@ const columns: TableColumn<Bucket>[] = [
         </div>
       </template>
     </UiTable>
-    <UModal v-model:open="deleteModalOpen" title="Delete bucket" description="This deletes the physical provider bucket and its logical record. The bucket must be empty.">
+    <UModal v-model:open="deleteModalOpen" title="Delete bucket" description="The bucket must be empty before it can be deleted.">
       <template #body>
         <div class="space-y-4">
           <p class="text-sm">Are you sure you want to delete <strong>{{ selectedBucket?.name }}</strong>?</p>

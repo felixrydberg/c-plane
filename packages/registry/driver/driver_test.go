@@ -3,6 +3,7 @@ package driver
 import (
 	"container/list"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"sync"
@@ -84,6 +85,44 @@ func TestConcurrentMissesUseSingleflight(t *testing.T) {
 	}
 }
 
+func TestRepositoryOperationsTranslateLogicalAndPhysicalPaths(t *testing.T) {
+	logical := repositoryRoot + "acme/11111111-1111-4111-8111-111111111111/api"
+	physical := repositoryRoot + "22222222-2222-4222-8222-222222222222"
+	recorder := &pathDriver{}
+	d := testDriver(1, time.Minute, func(context.Context, tenant.Metadata) (storagedriver.StorageDriver, error) {
+		return recorder, nil
+	})
+	meta := metadata("org-1", "revision-1")
+	meta.RepositoryName = "acme/11111111-1111-4111-8111-111111111111/api"
+	meta.RepositoryID = "22222222-2222-4222-8222-222222222222"
+	ctx := tenant.WithMetadata(context.Background(), meta)
+
+	_, _ = d.GetContent(ctx, logical+"/_manifests/revisions/latest")
+	_ = d.PutContent(ctx, logical+"/_uploads/data", nil)
+	_, _ = d.Stat(ctx, logical+"/_layers/sha256")
+	paths, _ := d.List(ctx, logical+"/_manifests")
+	_ = d.Move(ctx, logical+"/from", logical+"/to")
+	_ = d.Delete(ctx, logical+"/_uploads/old")
+	var walked string
+	_ = d.Walk(ctx, logical, func(info storagedriver.FileInfo) error { walked = info.Path(); return nil })
+
+	wantCalls := []string{
+		"get:" + physical + "/_manifests/revisions/latest",
+		"put:" + physical + "/_uploads/data",
+		"stat:" + physical + "/_layers/sha256",
+		"list:" + physical + "/_manifests",
+		"move:" + physical + "/from:" + physical + "/to",
+		"delete:" + physical + "/_uploads/old",
+		"walk:" + physical,
+	}
+	if fmt.Sprint(recorder.calls) != fmt.Sprint(wantCalls) {
+		t.Fatalf("calls=%v, want %v", recorder.calls, wantCalls)
+	}
+	if paths[0] != logical+"/_manifests/item" || walked != logical+"/walked" {
+		t.Fatalf("reverse mapping list=%v walk=%q", paths, walked)
+	}
+}
+
 func testDriver(capacity int, ttl time.Duration, build driverBuilder) *Driver {
 	return &Driver{
 		capacity: capacity,
@@ -116,6 +155,40 @@ func selectDriver(t *testing.T, d *Driver, metadata tenant.Metadata) {
 }
 
 type noopDriver struct{}
+
+type pathDriver struct {
+	noopDriver
+	calls []string
+}
+
+func (driver *pathDriver) GetContent(_ context.Context, path string) ([]byte, error) {
+	driver.calls = append(driver.calls, "get:"+path)
+	return nil, nil
+}
+func (driver *pathDriver) PutContent(_ context.Context, path string, _ []byte) error {
+	driver.calls = append(driver.calls, "put:"+path)
+	return nil
+}
+func (driver *pathDriver) Stat(_ context.Context, path string) (storagedriver.FileInfo, error) {
+	driver.calls = append(driver.calls, "stat:"+path)
+	return storagedriver.FileInfoInternal{FileInfoFields: storagedriver.FileInfoFields{Path: path}}, nil
+}
+func (driver *pathDriver) List(_ context.Context, path string) ([]string, error) {
+	driver.calls = append(driver.calls, "list:"+path)
+	return []string{path + "/item"}, nil
+}
+func (driver *pathDriver) Move(_ context.Context, source, destination string) error {
+	driver.calls = append(driver.calls, "move:"+source+":"+destination)
+	return nil
+}
+func (driver *pathDriver) Delete(_ context.Context, path string) error {
+	driver.calls = append(driver.calls, "delete:"+path)
+	return nil
+}
+func (driver *pathDriver) Walk(_ context.Context, path string, walk storagedriver.WalkFn, _ ...func(*storagedriver.WalkOptions)) error {
+	driver.calls = append(driver.calls, "walk:"+path)
+	return walk(storagedriver.FileInfoInternal{FileInfoFields: storagedriver.FileInfoFields{Path: path + "/walked"}})
+}
 
 func (noopDriver) Name() string                                                 { return "noop" }
 func (noopDriver) GetContent(context.Context, string) ([]byte, error)           { return nil, nil }

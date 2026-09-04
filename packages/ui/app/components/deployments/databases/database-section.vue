@@ -1,6 +1,10 @@
 <script setup lang="ts">
+import { h } from 'vue'
 import type { DatabaseBranch, Environment } from '@cplane/sdk'
+import type { TableColumn } from '@nuxt/ui'
 import { ICONS } from '~/utils/icons'
+
+type BranchRow = DatabaseBranch & { _name: string }
 
 const props = defineProps<{
   organizationId: string
@@ -16,7 +20,7 @@ const emit = defineEmits<{ deleted: [] }>()
 const toast = useToast()
 const route = useRoute()
 
-const branches = ref<(DatabaseBranch & { _name: string })[]>([])
+const branches = ref<BranchRow[]>([])
 const projectEnvironments = ref<Environment[]>([])
 const branchesLoading = ref(false)
 
@@ -24,7 +28,7 @@ const deleteModalOpen = ref(false)
 const linkBranchModalOpen = ref(false)
 const deleting = ref(false)
 const busy = ref(false)
-const unlinkTarget = ref<(DatabaseBranch & { _name: string }) | null>(null)
+const unlinkTarget = ref<BranchRow | null>(null)
 
 const unlinkModalOpen = computed({
   get: () => !!unlinkTarget.value,
@@ -119,6 +123,64 @@ function isDefaultBranch(b: DatabaseBranch): boolean {
   return defaultBranchId.value !== null && b.id === defaultBranchId.value
 }
 
+const UButton = resolveComponent('UButton')
+const NuxtLink = resolveComponent('NuxtLink')
+
+function branchUrl(branch: BranchRow) {
+  return `/${route.params.organization_slug}/databases/postgres/${props.projectId}/${props.databaseId}/${branch.branch_id}`
+}
+
+const branchColumns: TableColumn<BranchRow>[] = [
+  {
+    id: 'environment',
+    header: 'Environment',
+    cell: ({ row }) => h(NuxtLink, {
+      to: branchUrl(row.original),
+      class: 'flex min-w-0 items-center gap-2',
+    }, [
+      h('span', { class: 'truncate font-medium text-primary group-hover:underline group-hover:underline-offset-4' }, row.original._name),
+      isDefaultBranch(row.original)
+        ? h('span', { class: 'shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary' }, 'Default')
+        : null,
+    ]),
+  },
+  {
+    id: 'cpu',
+    header: 'CPU',
+    cell: ({ row }) => h('span', { class: 'font-mono text-xs text-muted' }, row.original.cpu ? `${parseCpu(row.original.cpu)}c` : '0.5c'),
+  },
+  {
+    id: 'ram',
+    header: 'RAM',
+    cell: ({ row }) => h('span', { class: 'font-mono text-xs text-muted' }, row.original.ram ? `${parseRamGib(row.original.ram)}G` : '1G'),
+  },
+  {
+    id: 'availability',
+    header: 'Availability',
+    cell: ({ row }) => row.original.high_availability ? 'HA' : 'Standard',
+  },
+  {
+    id: 'scaling',
+    header: 'Scaling',
+    cell: ({ row }) => row.original.autoscaling_enabled ? 'Autoscaling' : `${row.original.read_replicas ?? 0} replicas`,
+  },
+  {
+    id: 'actions',
+    header: '',
+    meta: { class: { th: 'text-right', td: 'text-right' } },
+    cell: ({ row }) => !isDefaultBranch(row.original) ? h(UButton, {
+      icon: ICONS.trash,
+      color: 'error',
+      size: 'sm',
+      loading: busy.value && unlinkTarget.value?.id === row.original.id,
+      onClick: (event: MouseEvent) => {
+        event.stopPropagation()
+        unlinkTarget.value = row.original
+      },
+    }, { default: () => 'Delete' }) : null,
+  },
+]
+
 </script>
 
 <template>
@@ -128,7 +190,7 @@ function isDefaultBranch(b: DatabaseBranch): boolean {
       <div class="flex items-center gap-3 min-w-0">
         <div class="min-w-0">
           <span class="block text-sm font-semibold truncate">{{ databaseName }}</span>
-          <span class="mt-0.5 block text-xs text-muted">D1 - Postgres database</span>
+          <span class="mt-0.5 block text-xs text-muted">Postgres database</span>
         </div>
         <span
           v-if="hasHa"
@@ -174,42 +236,15 @@ function isDefaultBranch(b: DatabaseBranch): boolean {
     </div>
 
     <!-- Branches -->
-    <div v-if="branchesLoading" class="px-5 py-6 text-center text-sm text-muted">Loading branches&hellip;</div>
-    <template v-else-if="branches.length > 0">
-      <NuxtLink
-        v-for="b in branches"
-        :key="b.id"
-        :to="`/${route.params.organization_slug}/databases/postgres/${projectId}/${databaseId}/${b.branch_id}`"
-        class="group grid gap-3 border-b border-default/30 px-5 py-4 transition-colors hover:bg-elevated/50 last:border-b-0 lg:grid-cols-[minmax(0,1.7fr)_90px_90px_100px_100px_auto] lg:items-center"
-      >
-        <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-2">
-            <span class="text-sm font-medium truncate">{{ b._name }}</span>
-            <span v-if="isDefaultBranch(b)" class="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary shrink-0">Default</span>
-          </div>
+    <UiTable :status="branchesLoading ? 'pending' : 'success'" :items="branches" :columns="branchColumns" disable-header>
+      <template #empty>
+        <div class="flex flex-col items-center justify-center gap-3 py-14 text-center">
+          <UIcon :name="ICONS.databases" class="size-10 text-muted" />
+          <p class="text-muted">No branches linked.</p>
+          <p class="text-sm text-dimmed">Link a project environment to configure this database for it.</p>
         </div>
-        <span class="font-mono text-xs text-muted">{{ b.cpu ? `${parseCpu(b.cpu)}c` : '0.5c' }}</span>
-        <span class="font-mono text-xs text-muted">{{ b.ram ? `${parseRamGib(b.ram)}G` : '1G' }}</span>
-        <span class="text-xs text-muted">{{ b.high_availability ? 'HA' : 'Standard' }}</span>
-        <span class="text-xs text-muted">{{ b.autoscaling_enabled ? 'Autoscaling' : `${b.read_replicas ?? 0} replicas` }}</span>
-
-        <UButton
-          v-if="!isDefaultBranch(b)"
-          variant="solid"
-          size="xs"
-          color="error"
-          :icon="ICONS.trash"
-          :loading="busy && unlinkTarget?.id === b.id"
-          @click.prevent.stop="unlinkTarget = b"
-        >
-          Delete
-        </UButton>
-      </NuxtLink>
-    </template>
-    <div v-else class="px-5 py-12 text-center">
-      <p class="text-sm font-medium">No branches linked</p>
-  <p class="mt-1 text-sm text-muted">Link a project environment to configure this database for it.</p>
-    </div>
+      </template>
+    </UiTable>
   </section>
 
   <UModal v-model:open="unlinkModalOpen" title="Delete Branch">

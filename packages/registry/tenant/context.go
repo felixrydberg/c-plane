@@ -11,6 +11,8 @@ type Metadata struct {
 	SecretAccessKey    string `json:"secret_access_key"`
 	BucketName         string `json:"bucket_name"`
 	StorageEndpointURL string `json:"storage_endpoint_url"`
+	RepositoryName     string `json:"repository_name,omitempty"`
+	RepositoryID       string `json:"repository_id,omitempty"`
 }
 
 type contextKey struct{}

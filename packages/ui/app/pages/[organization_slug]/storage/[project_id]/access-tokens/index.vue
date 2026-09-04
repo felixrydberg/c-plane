@@ -12,7 +12,7 @@ const isOwner = computed(() => store.organization?.member?.role === 'owner')
   <div class="flex w-full max-w-375 flex-col gap-5 mx-auto">
     <div class="flex flex-col gap-4 border-b border-default/60 pb-5 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <UiBackLink label="S1 - Object Storage" :to="`/${route.params.organization_slug}/storage/${projectId}`" />
+        <UiBackLink label="Object Storage" :to="`/${route.params.organization_slug}/storage/${projectId}`" />
         <UiPageEyebrow label="Storage &amp; Databases" />
         <h1 class="mt-2 text-2xl font-semibold">Access Tokens</h1>
         <p class="mt-1 text-sm text-muted">Credentials for S3 clients targeting this project.</p>

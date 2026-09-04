@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { h } from 'vue'
 import type { ExternalRegistry, ExternalRegistryProvider } from '@cplane/sdk'
+import type { TableColumn } from '@nuxt/ui'
 import { ICONS } from '~/utils/icons'
 import { getErrorMessage } from '~/utils/errors'
 
@@ -7,7 +9,7 @@ const props = defineProps<{ organizationId: string }>()
 const toast = useToast()
 const isOwner = computed(() => useStore().organization?.member?.role === 'owner')
 const endpoint = computed(() => `/api/organization/${props.organizationId as ':organization_id'}/registry/external-registries` as const)
-const { data: registries, refresh } = await useCplaneFetch(endpoint, { default: () => [] })
+const { data: registries, status, refresh } = await useCplaneFetch(endpoint, { default: () => [] })
 
 const modal = ref<'create' | 'rename' | 'rotate' | 'delete' | null>(null)
 const selected = ref<ExternalRegistry | null>(null)
@@ -28,6 +30,48 @@ const needsHost = computed(() => provider.value === 'google_artifact_registry' |
 const hostPlaceholder = computed(() => provider.value === 'aws_ecr'
   ? '123456789012.dkr.ecr.eu-north-1.amazonaws.com'
   : 'europe-west1-docker.pkg.dev')
+const UButton = resolveComponent('UButton')
+
+const columns: TableColumn<ExternalRegistry>[] = [
+  {
+    accessorKey: 'name',
+    header: 'Name',
+  },
+  {
+    accessorKey: 'host',
+    header: 'Host',
+    cell: ({ row }) => h('span', { class: 'font-mono text-xs' }, row.original.host),
+  },
+  {
+    accessorKey: 'username',
+    header: 'Username',
+  },
+  {
+    id: 'actions',
+    header: '',
+    meta: { class: { th: 'text-right', td: 'text-right' } },
+    cell: ({ row }) => isOwner.value ? h('div', { class: 'flex justify-end gap-2' }, [
+      h(UButton, {
+        icon: ICONS.pencil,
+        color: 'neutral',
+        size: 'sm',
+        onClick: () => openAction('rename', row.original),
+      }, { default: () => 'Rename' }),
+      h(UButton, {
+        icon: ICONS.refresh,
+        color: 'neutral',
+        size: 'sm',
+        onClick: () => openAction('rotate', row.original),
+      }, { default: () => 'Rotate token' }),
+      h(UButton, {
+        icon: ICONS.trash,
+        color: 'error',
+        size: 'sm',
+        onClick: () => openAction('delete', row.original),
+      }, { default: () => 'Delete' }),
+    ]) : null,
+  },
+]
 
 function closeModal() {
   modal.value = null
@@ -100,28 +144,15 @@ async function submit() {
       <UButton v-if="isOwner" :icon="ICONS.plus" color="primary" @click="openCreate">Add registry</UButton>
     </div>
 
-    <div v-if="!registries.length" class="rounded-lg border border-dashed border-default py-10 text-center text-sm text-muted">
-      No external registries configured.
-    </div>
-    <div v-else class="overflow-hidden rounded-lg border border-default">
-      <table class="w-full text-sm">
-        <thead class="bg-elevated text-left"><tr><th class="p-3">Name</th><th class="p-3">Host</th><th class="p-3">Username</th><th class="p-3" /></tr></thead>
-        <tbody>
-          <tr v-for="registry in registries" :key="registry.id" class="border-t border-default">
-            <td class="p-3 font-medium">{{ registry.name }}</td>
-            <td class="p-3 font-mono text-xs">{{ registry.host }}</td>
-            <td class="p-3">{{ registry.username }}</td>
-            <td class="p-3">
-              <div v-if="isOwner" class="flex justify-end gap-2">
-                <UButton :icon="ICONS.pencil" color="neutral" size="sm" @click="openAction('rename', registry)">Rename</UButton>
-                <UButton :icon="ICONS.refresh" color="neutral" size="sm" @click="openAction('rotate', registry)">Rotate token</UButton>
-                <UButton :icon="ICONS.trash" color="error" size="sm" @click="openAction('delete', registry)">Delete</UButton>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <UiTable :status="status" :items="registries" :columns="columns" disable-header>
+      <template #empty>
+        <div class="flex flex-col items-center justify-center gap-3 py-14 text-center">
+          <UIcon :name="ICONS.registry" class="size-10 text-muted" />
+          <p class="text-muted">No external registries configured.</p>
+          <p class="text-sm text-dimmed">Add a registry to pull private images into your containers.</p>
+        </div>
+      </template>
+    </UiTable>
 
     <UModal :open="modal === 'create'" title="Add external registry" :ui="{ content: 'max-w-md' }" @update:open="!$event && closeModal()">
       <template #body>

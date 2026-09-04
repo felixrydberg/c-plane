@@ -50,6 +50,8 @@ func Run(
 		controlPlaneURL,
 		serviceToken,
 		organizationID,
+		"",
+		"",
 	)
 	if err != nil {
 		return Report{}, fmt.Errorf("resolve managed Registry: %w", err)

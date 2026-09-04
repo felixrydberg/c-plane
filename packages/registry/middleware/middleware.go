@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -12,11 +13,14 @@ import (
 	"sync"
 	"time"
 
+	registrydriver "github.com/cplane/cplane/registry/driver"
 	"github.com/cplane/cplane/registry/garbagecollection"
 	"github.com/cplane/cplane/registry/telemetry"
 	"github.com/cplane/cplane/registry/tenant"
 	"github.com/distribution/distribution/v3/configuration"
+	storagedriver "github.com/distribution/distribution/v3/registry/storage/driver"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
 
@@ -26,9 +30,10 @@ const (
 )
 
 type accessClaim struct {
-	Type    string   `json:"type"`
-	Name    string   `json:"name"`
-	Actions []string `json:"actions"`
+	Type         string   `json:"type"`
+	Name         string   `json:"name"`
+	Actions      []string `json:"actions"`
+	RepositoryID string   `json:"repository_id"`
 }
 
 type claims struct {
@@ -73,6 +78,10 @@ func New(_ *configuration.Configuration, next http.Handler) http.Handler {
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, garbageCollectionPathPrefix) {
+		if strings.Contains(strings.TrimPrefix(r.URL.Path, garbageCollectionPathPrefix), "/repositories/") {
+			h.serveRepositoryDelete(w, r)
+			return
+		}
 		h.serveGarbageCollection(w, r)
 		return
 	}
@@ -99,14 +108,24 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	organizationLock := h.organizationLock(parsed.OrganizationID)
-	organizationLock.RLock()
-	defer organizationLock.RUnlock()
+	organizationLock.Lock()
+	defer organizationLock.Unlock()
+	repositoryName, repositoryID := repositoryForRequest(r.URL.Path, parsed.Access)
+	if strings.HasPrefix(r.URL.Path, "/v2/") && r.URL.Path != "/v2/" && repositoryName == "" {
+		telemetry.AuthenticationFailures.Inc()
+		writeOCIError(w, http.StatusUnauthorized, "UNAUTHORIZED", "repository scope is not bound to this request")
+		return
+	}
 	resolverStarted := time.Now()
-	metadata, err := tenant.Resolve(r.Context(), h.http, h.controlPlaneURL, h.serviceToken, parsed.OrganizationID)
+	metadata, err := tenant.Resolve(r.Context(), h.http, h.controlPlaneURL, h.serviceToken, parsed.OrganizationID, repositoryName, repositoryID)
 	telemetry.ResolverLatency.Observe(time.Since(resolverStarted).Seconds())
 	if err != nil {
 		telemetry.ResolverRequests.WithLabelValues("error").Inc()
 		logrus.WithError(err).WithField("event", "registry_resolver_failed").Error("managed registry resolution failed")
+		if repositoryName != "" {
+			writeOCIError(w, http.StatusUnauthorized, "UNAUTHORIZED", "repository authorization is no longer valid")
+			return
+		}
 		writeOCIError(w, http.StatusServiceUnavailable, "UNAVAILABLE", "managed registry metadata is unavailable")
 		return
 	}
@@ -177,6 +196,77 @@ func (h *Handler) serveGarbageCollection(w http.ResponseWriter, r *http.Request)
 	if err := json.NewEncoder(w).Encode(report); err != nil {
 		logrus.WithError(err).WithField("organization_id", organizationID).Error("managed registry garbage-collection response failed")
 	}
+}
+
+func (h *Handler) serveRepositoryDelete(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, garbageCollectionPathPrefix)
+	parts := strings.Split(path, "/")
+	if len(parts) != 5 || parts[0] == "" || parts[1] != "projects" || parts[3] != "repositories" {
+		http.NotFound(w, r)
+		return
+	}
+	organizationID, projectID, repositoryID := parts[0], parts[2], parts[4]
+	if _, err := uuid.Parse(organizationID); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if _, err := uuid.Parse(repositoryID); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if _, err := uuid.Parse(projectID); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	providedToken := r.Header.Get("x-cplane-token")
+	if h.serviceToken == "" || subtle.ConstantTimeCompare([]byte(providedToken), []byte(h.serviceToken)) != 1 {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if r.Method != http.MethodDelete {
+		w.Header().Set("Allow", http.MethodDelete)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	organizationLock := h.organizationLock(organizationID)
+	organizationLock.Lock()
+	defer organizationLock.Unlock()
+	metadata, err := tenant.Resolve(r.Context(), h.http, h.controlPlaneURL, h.serviceToken, organizationID, "", "")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	storage, err := registrydriver.NewForTenant(r.Context(), metadata)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	err = storage.Delete(r.Context(), "/docker/registry/v2/repositories/"+repositoryID)
+	if !repositoryDeleteSucceeded(err) {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func repositoryDeleteSucceeded(err error) bool {
+	if err == nil {
+		return true
+	}
+	var missing storagedriver.PathNotFoundError
+	return errors.As(err, &missing)
+}
+
+func repositoryForRequest(path string, accesses []accessClaim) (string, string) {
+	var name, id string
+	for _, access := range accesses {
+		prefix := "/v2/" + access.Name + "/"
+		if access.Type == "repository" && access.RepositoryID != "" && strings.HasPrefix(path, prefix) && len(access.Name) > len(name) {
+			name, id = access.Name, access.RepositoryID
+		}
+	}
+	return name, id
 }
 
 func (h *Handler) organizationLock(organizationID string) *sync.RWMutex {

@@ -6,7 +6,7 @@ import { ICONS } from '~/utils/icons'
   <div class="flex flex-col gap-6 w-full mx-auto max-w-6xl">
     <div>
       <UiPageEyebrow label="Observe" />
-      <h1 class="text-2xl font-semibold">Analytics</h1>
+      <h1 class="mt-2 text-2xl font-semibold">Analytics</h1>
       <p class="text-muted text-sm mt-1">Monitor performance, usage, and trends across your organization.</p>
     </div>
 

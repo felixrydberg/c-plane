@@ -8,7 +8,7 @@ defineOptions({ name: 'OrganizationGithubIntegrationPage' })
   <div class="mx-auto flex w-full max-w-375 flex-col gap-8">
     <div class="border-b border-default/60 pb-5">
       <UiPageEyebrow label="Integrations" />
-      <h1 class="mt-1 text-2xl font-semibold">GitHub</h1>
+      <h1 class="mt-2 text-2xl font-semibold">GitHub</h1>
       <p class="mt-2 max-w-2xl text-sm text-muted">
         Connect a GitHub account or Organization and deploy from selected repositories.
       </p>
