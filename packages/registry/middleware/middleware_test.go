@@ -52,18 +52,28 @@ func TestHandlerRejectsCrossOrganizationScope(t *testing.T) {
 	assertOCIError(t, response, http.StatusUnauthorized, "UNAUTHORIZED")
 }
 
-func TestHandlerGatesAllAccessDuringOrganizationGC(t *testing.T) {
+func TestHandlerBlocksWritesDuringOrganizationGC(t *testing.T) {
 	resolver := resolverServer(t, "maintenance")
 	defer resolver.Close()
+	called := false
 	h := testHandler(t, resolver.URL, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
 	repository := "acme/" + projectID + "/api"
 	mutation := request(t, h, http.MethodPut, "/v2/"+repository+"/manifests/latest", token(t, "org-1", repository, repositoryID))
 	assertOCIError(t, mutation, http.StatusServiceUnavailable, "UNAVAILABLE")
+	deletion := request(t, h, http.MethodDelete, "/v2/"+repository+"/manifests/latest", token(t, "org-1", repository, repositoryID))
+	assertOCIError(t, deletion, http.StatusServiceUnavailable, "UNAVAILABLE")
 	pull := request(t, h, http.MethodGet, "/v2/"+repository+"/manifests/latest", token(t, "org-1", repository, repositoryID))
-	assertOCIError(t, pull, http.StatusServiceUnavailable, "UNAVAILABLE")
+	if pull.Code != http.StatusNoContent || !called {
+		t.Fatalf("reads must stay available during maintenance: status=%d called=%v", pull.Code, called)
+	}
+	tags := request(t, h, http.MethodGet, "/v2/"+repository+"/tags/list", token(t, "org-1", repository, repositoryID))
+	if tags.Code != http.StatusNoContent {
+		t.Fatalf("tag listing must stay available during maintenance: status=%d", tags.Code)
+	}
 }
 
 func TestHandlerDisablesCatalog(t *testing.T) {

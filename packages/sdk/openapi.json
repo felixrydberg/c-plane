@@ -1992,6 +1992,142 @@
         "x-cplane-required-scope": "registry:delete"
       }
     },
+    "/api/organization/{organization_id}/projects/{project_id}/registry/repositories/{repository_id}/tags": {
+      "get": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "list_tags",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "repository_id",
+            "in": "path",
+            "description": "Registry repository ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Repository tag names",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositoryTagsResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization access required"
+          },
+          "404": {
+            "description": "Project or registry repository not found"
+          },
+          "503": {
+            "description": "Container registry is unavailable"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "registry:read"
+      }
+    },
+    "/api/organization/{organization_id}/projects/{project_id}/registry/repositories/{repository_id}/tags/{tag}": {
+      "delete": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "delete_tag",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "repository_id",
+            "in": "path",
+            "description": "Registry repository ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tag",
+            "in": "path",
+            "description": "Tag name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Tag deleted"
+          },
+          "403": {
+            "description": "Organization access required"
+          },
+          "404": {
+            "description": "Project, registry repository, or tag not found"
+          },
+          "503": {
+            "description": "Container registry is unavailable"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "registry:delete"
+      }
+    },
     "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens": {
       "get": {
         "tags": [
@@ -5047,6 +5183,20 @@
           "repository_id": {
             "type": "string",
             "format": "uuid"
+          }
+        }
+      },
+      "RepositoryTagsResponse": {
+        "type": "object",
+        "required": [
+          "tags"
+        ],
+        "properties": {
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },

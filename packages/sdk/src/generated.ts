@@ -271,6 +271,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/organization/{organization_id}/projects/{project_id}/registry/repositories/{repository_id}/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_tags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organization/{organization_id}/projects/{project_id}/registry/repositories/{repository_id}/tags/{tag}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["delete_tag"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens": {
         parameters: {
             query?: never;
@@ -975,6 +1007,9 @@ export interface components {
             can_push: boolean;
             /** Format: uuid */
             repository_id: string;
+        };
+        RepositoryTagsResponse: {
+            tags: string[];
         };
         ResolvedContainerPin: {
             /** Format: uuid */
@@ -2308,6 +2343,102 @@ export interface operations {
             };
             /** @description Project or registry repository not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_tags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                organization_id: string;
+                /** @description Project ID */
+                project_id: string;
+                /** @description Registry repository ID */
+                repository_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Repository tag names */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepositoryTagsResponse"];
+                };
+            };
+            /** @description Organization access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Project or registry repository not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Container registry is unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_tag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                organization_id: string;
+                /** @description Project ID */
+                project_id: string;
+                /** @description Registry repository ID */
+                repository_id: string;
+                /** @description Tag name */
+                tag: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tag deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Organization access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Project, registry repository, or tag not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Container registry is unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

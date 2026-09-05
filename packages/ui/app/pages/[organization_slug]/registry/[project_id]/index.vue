@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { h } from 'vue'
 import type { Repository } from '@cplane/sdk'
-import type { TableColumn } from '@nuxt/ui'
+import type { TableColumn, TableRow } from '@nuxt/ui'
 import { FetchError } from 'ofetch'
 import { ICONS } from '~/utils/icons'
 
@@ -38,12 +38,24 @@ const projectRegistryName = computed(() => project.value?.name
   .toLowerCase() || 'project')
 const reference = (repository: Repository) => `${config.public.registryHost}/${organizationSlug.value}/${projectRegistryName.value}/${repository.name}`
 const UButton = resolveComponent('UButton')
+const NuxtLink = resolveComponent('NuxtLink')
+
+function repositoryUrl(repositoryId: string) {
+  return `/${organizationSlug.value}/registry/${projectId.value}/${repositoryId}`
+}
+
+function openRepository(row: TableRow<Repository>) {
+  return navigateTo(repositoryUrl(row.original.id))
+}
 
 const columns: TableColumn<Repository>[] = [
   {
     accessorKey: 'name',
     header: 'Repository',
-    cell: ({ row }) => h('span', { class: 'break-all font-mono text-sm' }, row.original.name),
+    cell: ({ row }) => h(NuxtLink, {
+      to: repositoryUrl(row.original.id),
+      class: 'break-all font-mono text-sm text-primary group-hover:underline group-hover:underline-offset-4',
+    }, () => row.original.name),
   },
   {
     id: 'reference',
@@ -66,7 +78,7 @@ const columns: TableColumn<Repository>[] = [
       color: 'error',
       size: 'sm',
       disabled: !registryIsActive.value,
-      onClick: () => { selected.value = row.original },
+      onClick: (event: MouseEvent) => { event.stopPropagation(); selected.value = row.original },
     }, { default: () => 'Delete' }) : null,
   },
 ]
@@ -127,7 +139,7 @@ async function refresh() {
       variant="subtle"
       icon="i-heroicons:exclamation-triangle"
       title="Registry maintenance in progress"
-      description="Pulls, pushes, and repository changes are temporarily unavailable."
+      description="Pushes and repository changes are temporarily unavailable. Pulls remain available."
       :actions="[{ label: 'View maintenance', to: `/${organizationSlug}/settings/registry` }]"
     />
 
@@ -136,7 +148,7 @@ async function refresh() {
       <UButton :icon="ICONS.refresh" color="neutral" :loading="refreshing" @click="refresh">Refresh</UButton>
     </div>
 
-    <UiTable :status="status" :items="filteredRepositories" :columns="columns" disable-header>
+    <UiTable :status="status" :items="filteredRepositories" :columns="columns" disable-header selectable @select="openRepository">
       <template #empty>
         <div class="flex flex-col items-center justify-center gap-3 py-14 text-center">
           <UIcon :name="ICONS.registry" class="size-10 text-muted" />

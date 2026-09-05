@@ -18,6 +18,7 @@ use crate::handlers::regions;
 use crate::handlers::registry;
 use crate::handlers::registry_access_tokens;
 use crate::handlers::registry_repositories;
+use crate::handlers::registry_tags;
 use crate::handlers::storage_access_tokens;
 use crate::handlers::storage_buckets;
 use crate::handlers::storage_objects;
@@ -244,6 +245,14 @@ pub fn create_routes() -> Router {
         .scoped_route(
             "/api/organization/{organization_id}/projects/{project_id}/registry/repositories/{repository_id}",
             [scoped::delete(registry_repositories::delete_repository, "registry:delete", Role::Admin)],
+        )
+        .scoped_route(
+            "/api/organization/{organization_id}/projects/{project_id}/registry/repositories/{repository_id}/tags",
+            [scoped::get(registry_tags::list_tags, "registry:read", Role::Member)],
+        )
+        .scoped_route(
+            "/api/organization/{organization_id}/projects/{project_id}/registry/repositories/{repository_id}/tags/{tag}",
+            [scoped::delete(registry_tags::delete_tag, "registry:delete", Role::Admin)],
         )
         .scoped_route(
             "/api/organization/{organization_id}/registry/external-registries",
@@ -568,6 +577,18 @@ mod tests {
             (
                 "DELETE",
                 "/api/organization/{organization_id}/projects/{project_id}/registry/repositories/{repository_id}",
+                "registry:delete",
+                Role::Admin,
+            ),
+            (
+                "GET",
+                "/api/organization/{organization_id}/projects/{project_id}/registry/repositories/{repository_id}/tags",
+                "registry:read",
+                Role::Member,
+            ),
+            (
+                "DELETE",
+                "/api/organization/{organization_id}/projects/{project_id}/registry/repositories/{repository_id}/tags/{tag}",
                 "registry:delete",
                 Role::Admin,
             ),

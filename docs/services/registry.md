@@ -38,8 +38,9 @@ expects public-key-compatible signing keys. Catalog access is disabled.
 ## Garbage collection
 
 Every managed Registry has an `active` or `maintenance` status. While an
-organization is in maintenance, all authenticated Distribution access for that
-organization returns an OCI-shaped `503`; other organizations continue
+organization is in maintenance, all authenticated Distribution writes for that
+organization return an OCI-shaped `503`; reads (pulls, tag listing) stay
+available while other organizations continue
 normally. The API also blocks Registry mutations while it is not active.
 
 Organization admins and owners can queue a cleanup with
