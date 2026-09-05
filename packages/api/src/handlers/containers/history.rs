@@ -40,6 +40,7 @@ fn history_version_ids(
     revisions: &[project_timeline::Model],
     timeline_id: Uuid,
     container_id: Uuid,
+    environment_id: Uuid,
 ) -> Result<Vec<Uuid>, AppError> {
     let revisions: HashMap<_, _> = revisions.iter().map(|r| (r.id, r)).collect();
     let mut next = Some(timeline_id);
@@ -55,6 +56,11 @@ fn history_version_ids(
         let revision = revisions
             .get(&id)
             .ok_or_else(|| AppError::NotFound("Timeline revision is not in this project".into()))?;
+        if revision.environment_id != Some(environment_id) {
+            return Err(AppError::NotFound(
+                "Timeline revision is not in this environment".into(),
+            ));
+        }
         let pin = TimelinePins::from_json_value(&revision.pins)
             .container
             .get(&container_id)
@@ -229,9 +235,15 @@ pub async fn get_container_history(
     let revisions = project_timeline::Entity::find()
         .filter(project_timeline::Column::ProjectId.eq(c.project_id))
         .filter(project_timeline::Column::OrganizationId.eq(organization_id))
+        .filter(project_timeline::Column::EnvironmentId.eq(query.environment_id))
         .all(tx)
         .await?;
-    let ids = history_version_ids(&revisions, query.timeline_id, container_id)?;
+    let ids = history_version_ids(
+        &revisions,
+        query.timeline_id,
+        container_id,
+        query.environment_id,
+    )?;
     let versions = container_version::Entity::find()
         .filter(container_version::Column::ContainerId.eq(container_id))
         .filter(container_version::Column::OrganizationId.eq(organization_id))
@@ -280,25 +292,36 @@ mod tests {
                 json!({"ADDED": "added-secret", "TOKEN": "new-secret"}),
             ),
         ];
-        let revision = |id: u128, parent: Option<u128>, pin: u128| project_timeline::Model {
-            id: Uuid::from_u128(id),
-            parent_timeline_id: parent.map(Uuid::from_u128),
-            project_id: Uuid::nil(),
-            organization_id: Uuid::nil(),
-            environment_id: Some(Uuid::from_u128(id)),
-            timeline: id as i32,
-            name: None,
-            pins: json!({"container": {container_id.to_string(): Uuid::from_u128(pin)}}),
-            created_at: Utc::now().fixed_offset(),
+        let environment_id = Uuid::from_u128(100);
+        let other_environment_id = Uuid::from_u128(200);
+        let revision = |id: u128, parent: Option<u128>, pin: u128, environment_id: Uuid| {
+            project_timeline::Model {
+                id: Uuid::from_u128(id),
+                parent_timeline_id: parent.map(Uuid::from_u128),
+                project_id: Uuid::nil(),
+                organization_id: Uuid::nil(),
+                environment_id: Some(environment_id),
+                timeline: id as i32,
+                name: None,
+                pins: json!({"container": {container_id.to_string(): Uuid::from_u128(pin)}}),
+                created_at: Utc::now().fixed_offset(),
+            }
         };
         let revisions = vec![
-            revision(11, None, 1),
-            revision(12, Some(11), 2),
-            revision(13, Some(11), 3),
-            revision(14, Some(13), 3),
-            revision(15, Some(14), 4),
+            revision(11, None, 1, environment_id),
+            revision(12, Some(11), 2, environment_id),
+            revision(13, Some(11), 3, environment_id),
+            revision(14, Some(13), 3, environment_id),
+            revision(15, Some(14), 4, environment_id),
+            revision(21, None, 4, other_environment_id),
         ];
-        let ids = history_version_ids(&revisions, Uuid::from_u128(15), container_id).unwrap();
+        let ids = history_version_ids(
+            &revisions,
+            Uuid::from_u128(15),
+            container_id,
+            environment_id,
+        )
+        .unwrap();
         assert_eq!(
             ids,
             vec![Uuid::from_u128(4), Uuid::from_u128(3), Uuid::from_u128(1)]
@@ -335,14 +358,31 @@ mod tests {
             Some(ContainerHistoryBaseline::Initial)
         ));
 
-        let historical =
-            history_version_ids(&revisions, Uuid::from_u128(11), container_id).unwrap();
+        let historical = history_version_ids(
+            &revisions,
+            Uuid::from_u128(11),
+            container_id,
+            environment_id,
+        )
+        .unwrap();
         assert_eq!(historical, vec![Uuid::from_u128(1)]);
         let truncated = history_entries(&[Uuid::from_u128(3)], &versions).unwrap();
         assert!(matches!(
             truncated[0].baseline,
             Some(ContainerHistoryBaseline::EarliestAvailable)
         ));
-        assert!(history_version_ids(&revisions, Uuid::from_u128(15), Uuid::nil()).is_err());
+        assert!(
+            history_version_ids(
+                &revisions,
+                Uuid::from_u128(21),
+                container_id,
+                environment_id,
+            )
+            .is_err()
+        );
+        assert!(
+            history_version_ids(&revisions, Uuid::from_u128(15), Uuid::nil(), environment_id,)
+                .is_err()
+        );
     }
 }

@@ -4,7 +4,8 @@ Keep hand-written SQL migrations in this directory. The files are applied in lex
 
 Run `deno task --cwd packages/migrations migrate:clean` from the repository root to regenerate the Drizzle baseline and recreate every custom migration.
 
-Do not hand-edit SQL under `drizzle/`; it is disposable. For an incremental schema
-change needing custom SQL, run `migrate:generate` to capture the schema snapshot,
-then copy the canonical SQL from this directory into that generated `migration.sql`.
-Custom SQL must also work after `migrate:clean` creates a baseline with the new schema.
+Maintainers must not author custom SQL directly under `drizzle/`; it is disposable.
+For an incremental schema change needing custom SQL, run `migrate:generate` to
+capture the schema snapshot, then edit the generated `migration.sql` by copying in
+the canonical custom migration SQL from this directory. Custom SQL must also work
+after `migrate:clean` creates a baseline with the new schema.
