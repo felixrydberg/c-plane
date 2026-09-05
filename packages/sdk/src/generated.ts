@@ -47,6 +47,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/organization/{organization_id}/containers/{container_id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_container_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/organization/{organization_id}/databases/postgres": {
         parameters: {
             query?: never;
@@ -639,6 +655,25 @@ export interface components {
             /** Format: uuid */
             project_id: string;
             region: components["schemas"]["BucketRegionResponse"];
+        };
+        /** @enum {string} */
+        ContainerChangeType: "added" | "changed" | "removed";
+        /** @enum {string} */
+        ContainerHistoryBaseline: "initial" | "earliest_available";
+        ContainerHistoryChange: {
+            after: unknown;
+            before: unknown;
+            change_type: components["schemas"]["ContainerChangeType"];
+            field: string;
+        };
+        ContainerHistoryEntry: {
+            baseline?: null | components["schemas"]["ContainerHistoryBaseline"];
+            changes: components["schemas"]["ContainerHistoryChange"][];
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: int32 */
+            version: number;
         };
         ContainerResponse: {
             created_at: string;
@@ -1328,6 +1363,43 @@ export interface operations {
                 content?: never;
             };
             /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_container_history: {
+        parameters: {
+            query: {
+                /** @description Environment in the container's project */
+                environment_id: string;
+                /** @description Selected revision whose ancestry to show */
+                timeline_id: string;
+            };
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                organization_id: string;
+                /** @description Container ID */
+                container_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Container version ancestry, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContainerHistoryEntry"][];
+                };
+            };
+            /** @description Container, environment, revision, or version not found */
             404: {
                 headers: {
                     [name: string]: unknown;

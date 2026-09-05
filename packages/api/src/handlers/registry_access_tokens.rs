@@ -449,7 +449,7 @@ pub(super) async fn record_event(
         system: Set(false),
         project_id: Set(None),
         actor_id: Set(Some(actor_id)),
-        created_at: Set(Utc::now().naive_utc()),
+        created_at: Set(Utc::now().fixed_offset()),
     }
     .insert(tx)
     .await?;

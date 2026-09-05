@@ -166,11 +166,11 @@ CREATE TABLE "event" (
 	"id" uuid PRIMARY KEY,
 	"organization_id" uuid NOT NULL,
 	"type" text NOT NULL,
-	"payload" json NOT NULL,
+	"payload" jsonb NOT NULL,
 	"system" boolean DEFAULT false NOT NULL,
 	"project_id" uuid,
 	"actor_id" uuid,
-	"created_at" timestamp DEFAULT now() NOT NULL
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 ALTER TABLE "event" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
