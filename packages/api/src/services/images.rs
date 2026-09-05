@@ -16,7 +16,7 @@ use crate::{
         external_registries::load_secret,
         registry::{organization_slug, resolve_registry_project_id, sign_repository_access},
     },
-    models::entities::{external_registry, registry_repository},
+    models::entities::{external_registry, managed_registry, registry_repository},
     state::get_app_state,
 };
 
@@ -62,6 +62,10 @@ async fn internal_registry(
     reference: &Reference,
     organization_id: Uuid,
 ) -> Result<(Reference, RegistryAuth, Client), AppError> {
+    managed_registry::Entity::find_by_id(organization_id)
+        .one(get_app_state().identity_db.connection())
+        .await?
+        .ok_or_else(|| AppError::Conflict("Activate Managed Registry first".into()))?;
     let slug = organization_slug(organization_id).await?;
     let (project_name, repository_name) = internal_repository_name(reference.repository(), &slug)?;
     let project_id = resolve_registry_project_id(organization_id, project_name).await?;

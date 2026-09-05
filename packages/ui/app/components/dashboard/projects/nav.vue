@@ -29,6 +29,10 @@ const currentSection = computed(() => {
 })
 const projectRoutesEnabled = computed(() => PROJECT_PAGES.includes(currentSection.value))
 const environmentRoutesEnabled = computed(() => ENVIRONMENT_PAGES.includes(currentSection.value))
+const isViewingDeployed = computed(() =>
+  route.query.revision === store.environment?.deployed_timeline
+)
+
 // Projects are loaded by the auth plugin on every request.
 // Refresh only needed after create/delete.
 async function refreshProjects() {
@@ -148,7 +152,7 @@ function selectEnvironment(b: Environment) {
   const url = environmentRoutesEnabled.value
     ? `/${slug}/${baseSection}/${pid}/${b.id}`
     : `/${slug}/${baseSection}/${pid}`
-  router.push(url)
+  router.push(`${url}?revision=${isViewingDeployed.value ? b.deployed_timeline : b.draft_timeline}`)
 }
 
 async function onProjectCreated() { await refreshProjects() }
@@ -309,5 +313,5 @@ async function onConfirmDeleteEnvironment() {
         </div>
       </template>
     </UModal>
-  </div>
+</div>
 </template>

@@ -24,7 +24,8 @@ const fieldLabels: Record<string, string> = {
   replica_count: 'Replicas',
   port: 'Port',
   public: 'Public access',
-  resources: 'Resources',
+  cpu: 'CPU',
+  memory: 'Memory',
   health_check: 'Health check',
 }
 

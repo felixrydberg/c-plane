@@ -25,6 +25,9 @@ const { data: events, status } = await useCplaneFetch<AuditEvent[]>(endpoint, {
   default: () => [],
 })
 
+const AUDIT_PAGE_SIZE = 20
+const offset = ref(0)
+
 const auditRange = ref('7')
 const auditRangeItems = [
   { label: 'Last 7 days', value: '7' },
@@ -56,13 +59,20 @@ const filteredEvents = computed(() => {
   })
 })
 
+const paginatedEvents = computed(() => filteredEvents.value.slice(offset.value, offset.value + AUDIT_PAGE_SIZE))
+const showPagination = computed(() => filteredEvents.value.length > AUDIT_PAGE_SIZE)
+
+watch([auditRange, auditAction], () => {
+  offset.value = 0
+})
+
 const formatDate = (value: string) => new Date(value).toLocaleDateString('sv-SE')
 
 const columns: TableColumn<AuditEvent>[] = [
   {
     accessorKey: 'created_at',
     header: 'Action Time ↓',
-    cell: item => h('div', { class: 'flex flex-col' }, [
+    cell: item => h('div', { class: 'flex items-baseline gap-2 whitespace-nowrap' }, [
       h('span', { class: 'text-sm text-default' }, formatDate(item.row.original.created_at)),
       h(NuxtTime, {
         class: 'font-mono text-xs text-muted',
@@ -76,25 +86,22 @@ const columns: TableColumn<AuditEvent>[] = [
   {
     accessorKey: 'action',
     header: 'Action Type',
-    cell: item => h('span', { class: 'text-sm capitalize' }, item.row.original.action),
+    cell: item => h('span', { class: 'text-sm capitalize whitespace-nowrap' }, item.row.original.action),
   },
   {
     accessorKey: 'summary',
     header: 'Resource',
-    cell: item => h('span', { class: 'text-sm' }, item.row.original.summary),
+    cell: item => h('span', { class: 'text-sm whitespace-nowrap' }, item.row.original.summary),
   },
   {
     accessorKey: 'actor_name',
     header: 'Actor',
-    cell: item => h('div', { class: 'flex flex-col' }, [
-      h('span', { class: 'text-sm' }, item.row.original.actor_name ?? '-'),
-      h('span', { class: 'text-xs text-muted' }, item.row.original.actor_id ? 'user' : 'system'),
-    ]),
+    cell: item => h('span', { class: 'text-sm whitespace-nowrap' }, item.row.original.actor_name ?? 'System'),
   },
   {
     id: 'context',
     header: 'Actor Context',
-    cell: item => h('span', { class: 'text-sm text-muted' }, item.row.original.actor_id ? 'Organization' : '-'),
+    cell: item => h('span', { class: 'text-sm text-muted whitespace-nowrap' }, item.row.original.actor_id ? 'Organization' : '-'),
   },
 ]
 </script>
@@ -114,7 +121,17 @@ const columns: TableColumn<AuditEvent>[] = [
         />
       </div>
 
-      <UiTable :status="status" :items="filteredEvents" :columns="columns" disable-header>
+      <UiTable
+        :key="`${auditRange}:${auditAction}`"
+        v-model:offset="offset"
+        :status="status"
+        :items="paginatedEvents"
+        :columns="columns"
+        disable-header
+        :pagination="showPagination"
+        :total="filteredEvents.length"
+        :limit="AUDIT_PAGE_SIZE"
+      >
         <template #empty>
           <p class="py-12 text-sm text-muted">No events recorded in this time range.</p>
         </template>

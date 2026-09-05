@@ -142,7 +142,8 @@ CREATE TABLE "container_version" (
 	"port" integer,
 	"env" jsonb,
 	"env_secret_refs" jsonb,
-	"resources" jsonb,
+	"cpu" text,
+	"memory" text,
 	"external_registry_id" uuid,
 	"health_check" jsonb,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL

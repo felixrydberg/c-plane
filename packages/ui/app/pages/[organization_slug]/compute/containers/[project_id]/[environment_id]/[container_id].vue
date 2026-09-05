@@ -3,6 +3,7 @@ import type { ContainerVersion } from '@cplane/sdk'
 import { ICONS } from '~/utils/icons'
 import { loadProjectEnvironments } from '~/utils/auth'
 import { getErrorMessage } from '~/utils/errors'
+import { CPU_PRESETS, MEMORY_PRESETS_MIB, formatMemoryMib, nearestPreset } from '~/utils/compute-units'
 
 definePageMeta({ key: route => `container-workbench-${route.params.project_id}` })
 
@@ -64,6 +65,16 @@ const image = ref('')
 const externalRegistryId = ref('none')
 const port = ref<number | null>(null)
 const replicaCount = ref(1)
+const cpu = ref(0.5)
+const memoryMib = ref(1024)
+const cpuIndex = computed({
+  get: () => Math.max(0, CPU_PRESETS.indexOf(nearestPreset(CPU_PRESETS, cpu.value))),
+  set: (i: number) => { cpu.value = CPU_PRESETS[i] ?? CPU_PRESETS[0] ?? 0.5 },
+})
+const memoryIndex = computed({
+  get: () => Math.max(0, MEMORY_PRESETS_MIB.indexOf(nearestPreset(MEMORY_PRESETS_MIB, memoryMib.value))),
+  set: (i: number) => { memoryMib.value = MEMORY_PRESETS_MIB[i] ?? MEMORY_PRESETS_MIB[0] ?? 1024 },
+})
 const isPublic = ref(false)
 const healthCheckPath = ref('')
 const envRows = ref<{ key: string; value: string }[]>([])
@@ -72,6 +83,7 @@ const saving = ref(false)
 const refreshing = ref(false)
 const loading = ref(true)
 const loadError = ref('')
+const forking = ref(false)
 const restoring = ref(false)
 const versionHistory = ref<{ refresh: () => Promise<void> } | null>(null)
 
@@ -104,6 +116,9 @@ async function fetchContainer() {
       const healthCheckPathValue = healthCheck && typeof healthCheck === 'object' && 'path' in healthCheck ? healthCheck.path : undefined
       healthCheckPath.value = typeof healthCheckPathValue === 'string' ? healthCheckPathValue : ''
       envRows.value = buildEnvRows(c.current_version.env)
+      const resources = resolveResources(c.current_version.cpu, c.current_version.memory)
+      cpu.value = resources.cpu
+      memoryMib.value = resources.memoryMib
     }
     hasChanges.value = false
 
@@ -119,6 +134,18 @@ watch([containerId, selectedTimelineId], fetchContainer, { immediate: true })
 function buildEnvRows(env: ContainerVersion['env']): { key: string; value: string }[] {
   if (!env || typeof env !== 'object' || Array.isArray(env)) return []
   return Object.entries(env).map(([key, value]) => ({ key, value: String(value) }))
+}
+
+function toPositiveNumber(value: unknown, fallback: number): number {
+  const n = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''))
+  return Number.isFinite(n) && n > 0 ? n : fallback
+}
+
+function resolveResources(cpuRaw: ContainerVersion['cpu'], memoryRaw: ContainerVersion['memory']): { cpu: number; memoryMib: number } {
+  return {
+    cpu: nearestPreset(CPU_PRESETS, toPositiveNumber(cpuRaw, 0.5)),
+    memoryMib: nearestPreset(MEMORY_PRESETS_MIB, Math.round(toPositiveNumber(memoryRaw, 1024))),
+  }
 }
 
 function markChanged() { hasChanges.value = true }
@@ -146,6 +173,7 @@ async function save() {
           replica_count: replicaCount.value,
           public: isPublic.value,
           env: Object.keys(env).length > 0 ? env : null,
+          cpu: String(cpu.value), memory: `${Math.round(memoryMib.value)}Mi`,
           health_check: healthCheckPath.value ? { path: healthCheckPath.value } : null,
           auto_deploy: false,
         },
@@ -156,9 +184,9 @@ async function save() {
       await refreshEnvironmentList()
     }
     await router.replace({
-      query: Object.fromEntries(Object.entries(route.query).filter(([key]) => key !== 'revision')),
+      query: { ...route.query, revision: environment.value?.draft_timeline },
     })
-    toast.add({ title: 'Changes saved', description: 'Review this environment to deploy them.', color: 'success' })
+    toast.add({ title: 'Container changes saved', description: 'Review this environment to deploy them.', color: 'success' })
     hasChanges.value = false
     await versionHistory.value?.refresh()
   } catch (e: unknown) {
@@ -166,6 +194,25 @@ async function save() {
     toast.add({ title: 'Failed to save', description: message, color: 'error' })
   } finally {
     saving.value = false
+  }
+}
+
+async function forkRevision() {
+  if (!orgId.value || !projectId.value || !environment.value || !selectedTimelineId.value) return
+  forking.value = true
+  try {
+    await cplaneFetch(
+      `/api/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/environments/${environment.value.id as ':environment_id'}` as const,
+      { method: 'PATCH', body: { draft_timeline_id: selectedTimelineId.value } },
+    )
+    await loadProjectEnvironments(projectId.value, environmentId.value)
+    await refreshEnvironmentList()
+    await router.replace({ query: { ...route.query, revision: selectedTimelineId.value } })
+    toast.add({ title: 'Revision is now the draft', color: 'success' })
+  } catch {
+    toast.add({ title: 'Failed to fork revision', color: 'error' })
+  } finally {
+    forking.value = false
   }
 }
 
@@ -199,6 +246,7 @@ const yamlPreview = computed(() => [
   `name: ${name.value}`,
   `image: ${image.value}`,
   `externalRegistry: ${externalRegistryId.value === 'none' ? 'null' : externalRegistryId.value}`,
+  `compute: ${cpu.value} CPU · ${formatMemoryMib(memoryMib.value)}`,
   `port: ${port.value ?? 'null'}`,
   `replicas: ${replicaCount.value}`,
   `public: ${isPublic.value}`,
@@ -232,6 +280,7 @@ async function refreshLatest() {
   }
 }
 
+watch([image, port, replicaCount, cpu, memoryMib, isPublic, healthCheckPath], () => markChanged())
 </script>
 
 <template>
@@ -331,8 +380,8 @@ async function refreshLatest() {
                   </div>
                 </section>
                 <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
-                  <div><h3 class="text-sm font-semibold">Compute</h3><p class="mt-1 text-xs text-muted">Network port and scale.</p></div>
-                  <div class="grid gap-3 sm:grid-cols-2"><UFormField label="Port"><UInput v-model.number="port" type="number" class="w-full" :disabled="!isEditable" @input="markChanged" /></UFormField><UFormField label="Replicas"><UInput v-model.number="replicaCount" type="number" :min="0" class="w-full" :disabled="!isEditable" @input="markChanged" /></UFormField></div>
+                  <div><h3 class="text-sm font-semibold">Compute</h3><p class="mt-1 text-xs text-muted">CPU, memory, network port and scale.</p></div>
+                  <div class="grid gap-3 sm:grid-cols-2"><UFormField :label="`CPU · ${cpu} cores`" description="Preset cores per replica."><USlider v-model="cpuIndex" :min="0" :max="CPU_PRESETS.length - 1" :step="1" class="py-1" :disabled="!isEditable" :ui="{ range: 'transition-all duration-150 ease-out', thumb: 'transition-all duration-150 ease-out' }" /></UFormField><UFormField :label="`Memory · ${formatMemoryMib(memoryMib)}`" description="Preset memory per replica."><USlider v-model="memoryIndex" :min="0" :max="MEMORY_PRESETS_MIB.length - 1" :step="1" class="py-1" :disabled="!isEditable" :ui="{ range: 'transition-all duration-150 ease-out', thumb: 'transition-all duration-150 ease-out' }" /></UFormField><UFormField label="Port"><UInput v-model.number="port" type="number" class="w-full" :disabled="!isEditable" @input="markChanged" /></UFormField><UFormField label="Replicas"><UInput v-model.number="replicaCount" type="number" :min="0" class="w-full" :disabled="!isEditable" @input="markChanged" /></UFormField></div>
                 </section>
                 <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
                   <div><h3 class="text-sm font-semibold">Visibility</h3><p class="mt-1 text-xs text-muted">Control service access.</p></div>
@@ -364,8 +413,9 @@ async function refreshLatest() {
                     <UButton :icon="ICONS.check" color="primary" :loading="saving" :disabled="!hasChanges" @click="save">Save changes</UButton>
                   </template>
                   <template v-else>
-                    <p class="mr-auto text-sm text-muted">Restore this version to make it the next pending change.</p>
-                    <UButton :icon="ICONS.refresh" color="primary" :loading="restoring" @click="restoreVersion">Restore this version</UButton>
+                    <p class="mr-auto text-sm text-muted">Fork this revision to edit it.</p>
+                    <UButton :icon="ICONS.pencil" color="neutral" :loading="forking" @click="forkRevision">Fork revision</UButton>
+                    <UButton v-if="revisionView === 'historical'" :icon="ICONS.refresh" color="primary" :loading="restoring" @click="restoreVersion">Restore this version</UButton>
                   </template>
                 </div>
               </div>

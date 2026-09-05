@@ -2066,6 +2066,142 @@
         "x-cplane-required-scope": "registry:delete"
       }
     },
+    "/api/organization/{organization_id}/projects/{project_id}/registry/repositories/{repository_id}/tags": {
+      "get": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "list_tags",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "repository_id",
+            "in": "path",
+            "description": "Registry repository ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Repository tag names",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositoryTagsResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization access required"
+          },
+          "404": {
+            "description": "Project or registry repository not found"
+          },
+          "503": {
+            "description": "Container registry is unavailable"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "registry:read"
+      }
+    },
+    "/api/organization/{organization_id}/projects/{project_id}/registry/repositories/{repository_id}/tags/{tag}": {
+      "delete": {
+        "tags": [
+          "registry"
+        ],
+        "operationId": "delete_tag",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "repository_id",
+            "in": "path",
+            "description": "Registry repository ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tag",
+            "in": "path",
+            "description": "Tag name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Tag deleted"
+          },
+          "403": {
+            "description": "Organization access required"
+          },
+          "404": {
+            "description": "Project, registry repository, or tag not found"
+          },
+          "503": {
+            "description": "Container registry is unavailable"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "x-cplane-required-scope": "registry:delete"
+      }
+    },
     "/api/organization/{organization_id}/projects/{project_id}/storage/access-tokens": {
       "get": {
         "tags": [
@@ -4021,6 +4157,12 @@
           "created_at"
         ],
         "properties": {
+          "cpu": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "created_at": {
             "type": "string"
           },
@@ -4040,6 +4182,12 @@
           "image": {
             "type": "string"
           },
+          "memory": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "port": {
             "type": [
               "integer",
@@ -4057,7 +4205,6 @@
           "resolved_image": {
             "type": "string"
           },
-          "resources": {},
           "version": {
             "type": "integer",
             "format": "int32"
@@ -4119,6 +4266,12 @@
           "auto_deploy": {
             "type": "boolean"
           },
+          "cpu": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "env": {},
           "environment_id": {
             "type": "string",
@@ -4134,6 +4287,12 @@
           "health_check": {},
           "image": {
             "type": "string"
+          },
+          "memory": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "name": {
             "type": "string"
@@ -4159,8 +4318,7 @@
           "replica_count": {
             "type": "integer",
             "format": "int32"
-          },
-          "resources": {}
+          }
         }
       },
       "CreateDatabaseBranchRequest": {
@@ -5196,6 +5354,20 @@
           }
         }
       },
+      "RepositoryTagsResponse": {
+        "type": "object",
+        "required": [
+          "tags"
+        ],
+        "properties": {
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "ResolvedContainerPin": {
         "type": "object",
         "required": [
@@ -5503,6 +5675,12 @@
           "auto_deploy": {
             "type": "boolean"
           },
+          "cpu": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "env": {},
           "external_registry_id": {
             "type": [
@@ -5513,6 +5691,12 @@
           },
           "health_check": {},
           "image": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "memory": {
             "type": [
               "string",
               "null"
@@ -5543,8 +5727,7 @@
               "null"
             ],
             "format": "int32"
-          },
-          "resources": {}
+          }
         }
       },
       "UpdateDatabaseBranchRequest": {

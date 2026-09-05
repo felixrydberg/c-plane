@@ -139,7 +139,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if metadata.Status != "active" {
+	// Reads stay available during maintenance so pulls and tag browsing keep
+	// working; only writes are blocked while garbage collection runs.
+	if metadata.Status != "active" && r.Method != http.MethodGet && r.Method != http.MethodHead {
 		telemetry.WriteRejections.Inc()
 		logrus.WithFields(logrus.Fields{"event": "registry_access_rejected", "organization_id": metadata.OrganizationID}).Warn("managed registry is unavailable")
 		writeOCIError(w, http.StatusServiceUnavailable, "UNAVAILABLE", "registry is unavailable during maintenance")

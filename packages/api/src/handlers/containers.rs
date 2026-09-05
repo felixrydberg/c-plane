@@ -8,7 +8,10 @@ use std::collections::HashMap;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use super::{databases::verify_org_access, external_registries::find_registry};
+use super::{
+    databases::{validate_cpu, validate_ram, verify_org_access},
+    external_registries::find_registry,
+};
 use crate::errors::AppError;
 use crate::middleware::auth::{AuthContext, RequestAuthContext};
 use crate::models::entities::{
@@ -30,7 +33,8 @@ pub struct CreateContainerRequest {
     pub replica_count: i32,
     pub port: Option<i32>,
     pub env: Option<serde_json::Value>,
-    pub resources: Option<serde_json::Value>,
+    pub cpu: Option<String>,
+    pub memory: Option<String>,
     pub external_registry_id: Option<Uuid>,
     pub health_check: Option<serde_json::Value>,
     #[serde(default)]
@@ -58,7 +62,10 @@ pub struct UpdateContainerRequest {
     pub replica_count: Option<i32>,
     pub port: Option<i32>,
     pub env: Option<serde_json::Value>,
-    pub resources: Option<serde_json::Value>,
+    #[serde(default, deserialize_with = "deserialize_present_nullable")]
+    pub cpu: Option<Option<String>>,
+    #[serde(default, deserialize_with = "deserialize_present_nullable")]
+    pub memory: Option<Option<String>>,
     #[serde(default, deserialize_with = "deserialize_present_nullable")]
     pub external_registry_id: Option<Option<Uuid>>,
     pub health_check: Option<serde_json::Value>,
@@ -115,7 +122,8 @@ pub struct ContainerVersionResponse {
     pub replica_count: i32,
     pub port: Option<i32>,
     pub env: Option<serde_json::Value>,
-    pub resources: Option<serde_json::Value>,
+    pub cpu: Option<String>,
+    pub memory: Option<String>,
     pub external_registry_id: Option<Uuid>,
     pub health_check: Option<serde_json::Value>,
     pub created_at: String,
@@ -131,7 +139,8 @@ fn resolve_latest_version(version: &container_version::Model) -> ContainerVersio
         replica_count: version.replica_count,
         port: version.port,
         env: version.env.clone(),
-        resources: version.resources.clone(),
+        cpu: version.cpu.clone(),
+        memory: version.memory.clone(),
         external_registry_id: version.external_registry_id,
         health_check: version.health_check.clone(),
         created_at: version.created_at.to_string(),
@@ -144,7 +153,8 @@ fn has_config_change(req: &UpdateContainerRequest) -> bool {
         || req.replica_count.is_some()
         || req.port.is_some()
         || req.env.is_some()
-        || req.resources.is_some()
+        || req.cpu.is_some()
+        || req.memory.is_some()
         || req.external_registry_id.is_some()
         || req.health_check.is_some()
 }
@@ -160,6 +170,23 @@ pub(crate) fn validate_replica_count(replica_count: i32) -> Result<(), AppError>
         ));
     }
     Ok(())
+}
+
+pub(crate) fn validate_container_resources(
+    cpu: &Option<String>,
+    memory: &Option<String>,
+) -> Result<(), AppError> {
+    match (cpu, memory) {
+        (None, None) => Ok(()),
+        (Some(cpu), Some(memory)) => {
+            validate_cpu(cpu)?;
+            validate_ram(memory)?;
+            Ok(())
+        }
+        _ => Err(AppError::BadRequest(
+            "Resources require both cpu and memory".into(),
+        )),
+    }
 }
 
 pub(crate) fn validate_port(port: i32) -> Result<(), AppError> {
@@ -279,6 +306,7 @@ pub async fn create_container(
     if let Some(port) = body.port {
         validate_port(port)?;
     }
+    validate_container_resources(&body.cpu, &body.memory)?;
 
     let container_id = Uuid::new_v4();
     let version_id = Uuid::new_v4();
@@ -321,7 +349,8 @@ pub async fn create_container(
         replica_count: Set(body.replica_count),
         port: Set(body.port),
         env: Set(body.env.clone()),
-        resources: Set(body.resources.clone()),
+        cpu: Set(body.cpu.clone()),
+        memory: Set(body.memory.clone()),
         external_registry_id: Set(external_registry_id),
         health_check: Set(body.health_check.clone()),
         created_at: Set(Utc::now().fixed_offset()),
@@ -689,6 +718,10 @@ async fn update_container_with_options(
             .await?
             .ok_or_else(|| AppError::NotFound("Container version not found".into()))?;
 
+        let next_cpu = body.cpu.clone().unwrap_or_else(|| base.cpu.clone());
+        let next_memory = body.memory.clone().unwrap_or_else(|| base.memory.clone());
+        validate_container_resources(&next_cpu, &next_memory)?;
+
         let next_image = body
             .image
             .as_deref()
@@ -729,7 +762,8 @@ async fn update_container_with_options(
             replica_count: Set(body.replica_count.unwrap_or(base.replica_count)),
             port: Set(body.port.or(base.port)),
             env: Set(body.env.clone().or(base.env.clone())),
-            resources: Set(body.resources.clone().or(base.resources.clone())),
+            cpu: Set(next_cpu),
+            memory: Set(next_memory),
             external_registry_id: Set(external_registry_id),
             health_check: Set(body.health_check.clone().or(base.health_check.clone())),
             created_at: Set(Utc::now().fixed_offset()),
@@ -789,7 +823,23 @@ async fn update_container_with_options(
 
 #[cfg(test)]
 mod redeploy_tests {
-    use super::{is_exact_latest_image, validate_port, validate_replica_count};
+    use super::{
+        UpdateContainerRequest, has_config_change, is_exact_latest_image,
+        validate_container_resources, validate_port, validate_replica_count,
+    };
+
+    #[test]
+    fn update_resources_distinguish_omitted_and_null() {
+        let omitted: UpdateContainerRequest = serde_json::from_str("{}").unwrap();
+        assert_eq!(omitted.cpu, None);
+        assert_eq!(omitted.memory, None);
+
+        let cleared: UpdateContainerRequest =
+            serde_json::from_str(r#"{"cpu":null,"memory":null}"#).unwrap();
+        assert_eq!(cleared.cpu, Some(None));
+        assert_eq!(cleared.memory, Some(None));
+        assert!(has_config_change(&cleared));
+    }
 
     #[test]
     fn only_exact_latest_images_can_be_redeployed() {
@@ -811,6 +861,17 @@ mod redeploy_tests {
         assert!(validate_port(0).is_err());
         assert!(validate_port(-80).is_err());
         assert!(validate_port(65536).is_err());
+    }
+
+    #[test]
+    fn resources_require_valid_cpu_and_memory() {
+        let cpu = |v: &str| Some(v.to_string());
+        let memory = |v: &str| Some(v.to_string());
+        assert!(validate_container_resources(&None, &None).is_ok());
+        assert!(validate_container_resources(&cpu("0.5"), &memory("1024Mi")).is_ok());
+        assert!(validate_container_resources(&cpu("0.5"), &None).is_err());
+        assert!(validate_container_resources(&cpu("big"), &memory("1024Mi")).is_err());
+        assert!(validate_container_resources(&cpu("0.5"), &memory("1GiB")).is_err());
     }
 }
 

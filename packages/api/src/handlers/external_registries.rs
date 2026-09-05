@@ -8,7 +8,14 @@ use serde_json::json;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{errors::AppError, middleware::auth::AuthContext, models::entities::external_registry};
+use crate::{
+    errors::AppError,
+    middleware::auth::AuthContext,
+    models::entities::{external_registry, secret},
+    services::buckets::tenant_key,
+    state::get_app_state,
+};
+use lib::entities::secret::SecretScope;
 
 use super::{
     databases::{verify_org_access, verify_org_owner},
@@ -105,11 +112,11 @@ pub async fn create_external_registry(
     let username = required(body.username, "Username")?;
     let token = required_secret(body.token)?;
     let registry_id = Uuid::new_v4();
-    store_secret(organization_id, registry_id, &token).await?;
 
     let result = async {
         let scoped = tenant_db.begin_scoped_transaction().await?;
         let tx = scoped.connection();
+        store_secret(tx, organization_id, registry_id, &token).await?;
         let created = external_registry::ActiveModel {
             id: Set(registry_id),
             organization_id: Set(organization_id),
@@ -209,6 +216,7 @@ pub async fn rotate_external_registry_token(
     let mut active: external_registry::ActiveModel = registry.into();
     active.updated_at = Set(Utc::now().fixed_offset());
     active.update(tx).await.map_err(map_registry_write_error)?;
+    store_secret(tx, organization_id, registry_id, &token).await?;
     record_event(
         tx,
         organization_id,
@@ -217,7 +225,6 @@ pub async fn rotate_external_registry_token(
         json!({"summary": format!("Rotated token for external registry '{registry_name}'"), "target_id": registry_id}),
     )
     .await?;
-    store_secret(organization_id, registry_id, &token).await?;
     scoped.commit().await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -242,6 +249,7 @@ pub async fn delete_external_registry(
         .exec(tx)
         .await
         .map_err(map_registry_delete_error)?;
+    secret::Entity::delete_by_id(registry_id).exec(tx).await?;
     record_event(
         tx,
         organization_id,
@@ -319,23 +327,64 @@ fn valid_dns_label(value: &str) -> bool {
             .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
 
+#[derive(Serialize, Deserialize)]
+struct ExternalRegistrySecret {
+    token: String,
+}
+
+// ponytail: secret id == registry id, no extra column/migration for one token.
 async fn store_secret(
-    _organization_id: Uuid,
-    _registry_id: Uuid,
-    _token: &str,
+    tx: &impl ConnectionTrait,
+    organization_id: Uuid,
+    registry_id: Uuid,
+    token: &str,
 ) -> Result<(), AppError> {
-    pending_secret_migration()
+    let plaintext = serde_json::to_vec(&ExternalRegistrySecret {
+        token: token.to_owned(),
+    })
+    .map_err(|error| AppError::Internal(error.to_string()))?;
+    let ciphertext =
+        lib::secrets::encrypt(&get_app_state().secrets, &tenant_key(organization_id), &plaintext)
+            .await?;
+    if let Some(existing) = secret::Entity::find_by_id(registry_id)
+        .filter(secret::Column::OrganizationId.eq(organization_id))
+        .one(tx)
+        .await?
+    {
+        let mut active: secret::ActiveModel = existing.into();
+        active.ciphertext = Set(ciphertext);
+        active.updated_at = Set(Utc::now().fixed_offset());
+        active.update(tx).await?;
+    } else {
+        secret::ActiveModel {
+            id: Set(registry_id),
+            scope: Set(SecretScope::Tenant),
+            organization_id: Set(Some(organization_id)),
+            ciphertext: Set(ciphertext),
+            ..Default::default()
+        }
+        .insert(tx)
+        .await?;
+    }
+    Ok(())
 }
 
-pub async fn load_secret(_organization_id: Uuid, _registry_id: Uuid) -> Result<String, AppError> {
-    pending_secret_migration()
-}
-
-// ponytail: fail closed until external registry tokens use Postgres Secret rows.
-fn pending_secret_migration<T>() -> Result<T, AppError> {
-    Err(AppError::ServiceUnavailable(
-        "Secret storage migration is not complete".into(),
-    ))
+pub async fn load_secret(organization_id: Uuid, registry_id: Uuid) -> Result<String, AppError> {
+    let row = secret::Entity::find_by_id(registry_id)
+        .filter(secret::Column::OrganizationId.eq(organization_id))
+        .one(get_app_state().identity_db.connection())
+        .await?
+        .filter(|row| row.scope == SecretScope::Tenant)
+        .filter(|row| row.organization_id == Some(organization_id))
+        .ok_or_else(|| {
+            AppError::Conflict("External registry credentials are unavailable".into())
+        })?;
+    let plaintext =
+        lib::secrets::decrypt(&get_app_state().secrets, &tenant_key(organization_id), &row.ciphertext)
+            .await?;
+    let secret: ExternalRegistrySecret = serde_json::from_slice(&plaintext)
+        .map_err(|error| AppError::Internal(error.to_string()))?;
+    Ok(secret.token)
 }
 
 fn required(value: String, name: &str) -> Result<String, AppError> {

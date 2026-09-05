@@ -20,6 +20,7 @@ use crate::{
     models::entities::{project, registry_access_token},
     state::get_app_state,
 };
+use lib::entities::managed_registry::ManagedRegistryStatus;
 
 #[derive(Debug)]
 pub struct RegistryTokenQuery {
@@ -160,7 +161,7 @@ pub async fn issue_token(
         ));
     }
 
-    require_managed_registry(identity.organization_id).await?;
+    let reads_only = !registry_is_active(identity.organization_id).await?;
     let token_ttl_seconds = get_app_state().config.registry_token_ttl_seconds;
     let mut access = Vec::new();
     for scope in query.scope {
@@ -174,8 +175,9 @@ pub async fn issue_token(
             identity.project_id,
         )
         .await?
+            && let Some(granted) = restrict_to_reads(authorized, reads_only)
         {
-            access.push(authorized);
+            access.push(granted);
         }
     }
     let now = chrono::Utc::now();
@@ -208,7 +210,6 @@ pub(crate) async fn sign_repository_access(
     repository_name: &str,
     actions: &[&str],
 ) -> Result<SignedRepositoryAccess, AppError> {
-    require_managed_registry(organization_id).await?;
     let organization_slug = organization_slug(organization_id).await?;
     let project_name = registry_project_name(organization_id, project_id).await?;
     let repository_name = format!("{organization_slug}/{project_name}/{repository_name}");
@@ -413,19 +414,36 @@ fn apply_repository_grant(
     access
 }
 
-async fn require_managed_registry(organization_id: Uuid) -> Result<(), AppError> {
-    use crate::models::entities::managed_registry;
-    use lib::entities::managed_registry::ManagedRegistryStatus;
-    let registry = managed_registry::Entity::find_by_id(organization_id)
-        .one(get_app_state().identity_db.connection())
-        .await?
-        .ok_or_else(|| AppError::Conflict("Activate Managed Registry first".into()))?;
-    if registry.status != ManagedRegistryStatus::Active {
+pub(crate) async fn require_managed_registry(organization_id: Uuid) -> Result<(), AppError> {
+    if !registry_is_active(organization_id).await? {
         return Err(AppError::ServiceUnavailable(
             "Managed Registry is unavailable during maintenance".into(),
         ));
     }
     Ok(())
+}
+
+pub(crate) async fn registry_is_active(organization_id: Uuid) -> Result<bool, AppError> {
+    use crate::models::entities::managed_registry;
+    let registry = managed_registry::Entity::find_by_id(organization_id)
+        .one(get_app_state().identity_db.connection())
+        .await?
+        .ok_or_else(|| AppError::Conflict("Activate Managed Registry first".into()))?;
+    Ok(registry.status == ManagedRegistryStatus::Active)
+}
+
+/// During maintenance only pull grants are issued; push/delete scopes are dropped.
+fn restrict_to_reads(
+    mut access: RegistryAccess,
+    reads_only: bool,
+) -> Option<RegistryAccess> {
+    if reads_only {
+        access.actions.retain(|action| action == "pull");
+        if access.actions.is_empty() {
+            return None;
+        }
+    }
+    Some(access)
 }
 
 pub(crate) async fn organization_slug(organization_id: Uuid) -> Result<String, AppError> {
@@ -463,7 +481,7 @@ mod tests {
     use super::{
         RegistryAccess, RegistryClaims, access_for_scope, apply_repository_grant,
         normalize_project_name, parse_registry_token_query, registry_token_exp,
-        sign_registry_claims_with_secret,
+        restrict_to_reads, sign_registry_claims_with_secret,
     };
     use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
     use serde_json::Value;
@@ -518,6 +536,29 @@ mod tests {
         assert_eq!(
             apply_repository_grant(access, true, true).actions,
             vec!["pull", "push", "delete"]
+        );
+    }
+
+    #[test]
+    fn maintenance_tokens_keep_pull_only() {
+        let access = |actions: &[&str]| RegistryAccess {
+            resource_type: "repository",
+            name: "acme/api".into(),
+            actions: actions.iter().map(|action| (*action).into()).collect(),
+            repository_id: None,
+        };
+        assert_eq!(
+            restrict_to_reads(access(&["pull", "push", "delete"]), true)
+                .unwrap()
+                .actions,
+            vec!["pull"]
+        );
+        assert!(restrict_to_reads(access(&["push", "delete"]), true).is_none());
+        assert_eq!(
+            restrict_to_reads(access(&["pull", "push"]), false)
+                .unwrap()
+                .actions,
+            vec!["pull", "push"]
         );
     }
 

@@ -26,7 +26,6 @@ const emit = defineEmits<{ refresh: [view: 'draft' | 'deployed'] }>()
 const toast = useToast()
 const route = useRoute()
 const deleteTarget = ref<ContainerWithProject | null>(null)
-const removeAsDraft = ref(false)
 const removing = ref(false)
 const UButton = resolveComponent('UButton')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
@@ -35,18 +34,17 @@ const NuxtTime = resolveComponent('NuxtTime')
 
 async function confirmDelete() {
   if (!deleteTarget.value || !props.organizationId || !props.draftRevisionId || !deleteTarget.value.id) return
-  const deploy = !removeAsDraft.value
   removing.value = true
   try {
     await cplaneFetch(`/api/organization/${props.organizationId as ':organization_id'}/containers/${deleteTarget.value.id as ':container_id'}` as const, {
       method: 'DELETE',
-      query: { environment_id: props.environmentId ?? undefined, timeline_id: props.draftRevisionId, deploy: deploy || undefined },
+      query: { environment_id: props.environmentId ?? undefined, timeline_id: props.draftRevisionId },
     })
-    toast.add({ title: deploy ? 'Container removed and deployed' : 'Container removed from draft', color: 'success' })
+    toast.add({ title: 'Container removal saved', description: 'Review this environment to deploy it.', color: 'success' })
     deleteTarget.value = null
-    emit('refresh', deploy ? 'deployed' : 'draft')
+    emit('refresh', 'draft')
   } catch {
-    toast.add({ title: deploy ? 'Failed to remove and deploy container' : 'Failed to remove container from draft', color: 'error' })
+    toast.add({ title: 'Failed to save container removal', color: 'error' })
   } finally {
     removing.value = false
   }
@@ -156,10 +154,9 @@ const deleteModalOpen = computed({
   <UModal v-model:open="deleteModalOpen" title="Remove Container">
     <template #body>
       <p class="text-sm">Remove <strong>{{ deleteTarget?.name }}</strong> from this environment?</p>
-      <UCheckbox v-model="removeAsDraft" class="mt-4" label="Remove as draft" description="Save this removal without deploying it." />
       <div class="flex justify-end gap-3 pt-4">
         <UButton variant="ghost" color="neutral" @click="deleteTarget = null">Cancel</UButton>
-        <UButton color="error" :icon="ICONS.trash" :loading="removing" @click="confirmDelete">{{ removeAsDraft ? 'Remove from draft' : 'Remove and deploy' }}</UButton>
+        <UButton color="error" :icon="ICONS.trash" :loading="removing" @click="confirmDelete">Remove container</UButton>
       </div>
     </template>
   </UModal>

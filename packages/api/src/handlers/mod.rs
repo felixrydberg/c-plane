@@ -12,6 +12,7 @@ pub mod regions;
 pub mod registry;
 pub mod registry_access_tokens;
 pub mod registry_repositories;
+pub mod registry_tags;
 pub mod storage_access_tokens;
 pub mod storage_buckets;
 pub mod storage_objects;

@@ -11,7 +11,7 @@ A container deployment is a user-defined workload running inside a platform-mana
 
 **Optional:**
 - `env` — environment variables. Each entry is either a plain value or a reference to a platform secret.
-- `resources` — CPU and memory requests/limits. Defaults apply if not set (0.1 CPU / 128Mi).
+- `cpu` / `memory` — per-replica limits as text (e.g. cpu `"0.5"`, memory `"1024Mi"`). Defaults apply if unset (0.1 CPU / 128Mi).
 - `replicas` — number of instances. Default: 1. Zero-downtime rolling updates require ≥ 2.
 - `public` — whether to expose the deployment on a public hostname. Default: false.
 - `external_registry_id` — optional organization-owned registry credentials for private images.

@@ -17,6 +17,21 @@ export const COMPUTE_UNITS: ComputeUnit[] = [
 
 export const COMPUTE_UNIT_ITEMS = COMPUTE_UNITS.map(u => ({ label: u.label, value: u.label }))
 
+export const CPU_PRESETS = [0.5, 1, 2, 4, 8, 16]
+export const MEMORY_PRESETS_MIB = [128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]
+
+export function nearestPreset(presets: number[], value: number): number {
+  let best = presets[0] ?? value
+  for (const preset of presets) {
+    if (Math.abs(preset - value) < Math.abs(best - value)) best = preset
+  }
+  return best
+}
+
+export function formatMemoryMib(mib: number): string {
+  return mib >= 1024 && mib % 1024 === 0 ? `${mib / 1024} GB` : `${mib} MiB`
+}
+
 export function findComputeUnit(cpu: number, ramGib: number): ComputeUnit | undefined {
   return COMPUTE_UNITS.find(u => u.cpu === cpu && u.ramGib === ramGib)
 }

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Region } from '@cplane/sdk'
 import { ICONS } from '~/utils/icons'
-import { COMPUTE_UNIT_ITEMS, computeUnitByLabel } from '~/utils/compute-units'
+import { CPU_PRESETS, MEMORY_PRESETS_MIB, formatMemoryMib, nearestPreset } from '~/utils/compute-units'
 import { getErrorMessage } from '~/utils/errors'
 import { loadProjectEnvironments } from '~/utils/auth'
 
@@ -34,11 +34,20 @@ const state = reactive({
   image: '',
   port: 80,
   replicas: 1,
+  cpu: 0.5,
+  memoryMib: 1024,
   isPublic: false,
   healthCheckPath: '/health',
 })
 
-const computeUnit = ref('0.5')
+const cpuIndex = computed({
+  get: () => Math.max(0, CPU_PRESETS.indexOf(nearestPreset(CPU_PRESETS, state.cpu))),
+  set: (i: number) => { state.cpu = CPU_PRESETS[i] ?? CPU_PRESETS[0] ?? 0.5 },
+})
+const memoryIndex = computed({
+  get: () => Math.max(0, MEMORY_PRESETS_MIB.indexOf(nearestPreset(MEMORY_PRESETS_MIB, state.memoryMib))),
+  set: (i: number) => { state.memoryMib = MEMORY_PRESETS_MIB[i] ?? MEMORY_PRESETS_MIB[0] ?? 1024 },
+})
 
 const regions = ref<Region[]>([])
 const regionId = ref('')
@@ -57,7 +66,6 @@ function removeEnvRow(i: number) { envRows.value.splice(i, 1) }
 async function handleCreate() {
   if (!orgId.value || !projectId.value || !regionId.value || !environmentId.value) return
   loading.value = true; error.value = ''
-  const unit = computeUnitByLabel(computeUnit.value)
   try {
     const envObj: Record<string, string> = {}
     for (const row of envRows.value) { const k = row.key.trim(); if (k) envObj[k] = row.value }
@@ -66,7 +74,8 @@ async function handleCreate() {
       name: state.name.trim(), image: state.image.trim(), project_id: projectId.value, environment_id: environmentId.value,
       port: state.port, replica_count: state.replicas, public: state.isPublic,
       health_check: { path: state.healthCheckPath }, region_id: regionId.value,
-      resources: { cpu: { min: unit.cpu, max: unit.cpu }, memory: { min: `${Math.round(unit.ramGib * 1024)}Mi`, max: `${Math.round(unit.ramGib * 1024)}Mi` } },
+      cpu: String(state.cpu),
+      memory: `${Math.round(state.memoryMib)}Mi`,
       auto_deploy: false,
       external_registry_id: externalRegistryId.value === 'none' ? null : externalRegistryId.value,
     }
@@ -104,7 +113,7 @@ function backUrl() { return `/${route.params.organization_slug}/compute/containe
         </section>
         <section class="grid gap-4 py-7 lg:grid-cols-[190px_minmax(0,1fr)]">
           <div><h2 class="text-sm font-semibold">Compute</h2><p class="mt-1 text-xs text-muted">CPU, memory, network, and scale.</p></div>
-          <div class="grid gap-3 sm:grid-cols-3"><UFormField label="Compute Unit" description="1 CU = 1 vCPU + 2 GB RAM. Scale from 0.25 to 32 CU."><USelect v-model="computeUnit" :items="COMPUTE_UNIT_ITEMS" class="w-full" /></UFormField><UFormField label="Port" description="The container port your app listens on (1–65535)."><UInput v-model.number="state.port" type="number" :min="1" :max="65535" class="w-full" /></UFormField><UFormField label="Replicas" description="Number of container instances to run."><UInputNumber v-model="state.replicas" :min="1" :step="1" class="w-full" /></UFormField></div>
+          <div class="grid gap-3 sm:grid-cols-2"><UFormField :label="`CPU · ${state.cpu} cores`" description="Preset cores per replica."><USlider v-model="cpuIndex" :min="0" :max="CPU_PRESETS.length - 1" :step="1" class="py-1" :ui="{ range: 'transition-all duration-150 ease-out', thumb: 'transition-all duration-150 ease-out' }" /></UFormField><UFormField :label="`Memory · ${formatMemoryMib(state.memoryMib)}`" description="Preset memory per replica."><USlider v-model="memoryIndex" :min="0" :max="MEMORY_PRESETS_MIB.length - 1" :step="1" class="py-1" :ui="{ range: 'transition-all duration-150 ease-out', thumb: 'transition-all duration-150 ease-out' }" /></UFormField><UFormField label="Port" description="The container port your app listens on (1–65535)."><UInput v-model.number="state.port" type="number" :min="1" :max="65535" class="w-full" /></UFormField><UFormField label="Replicas" description="Number of container instances to run."><UInputNumber v-model="state.replicas" :min="1" :step="1" class="w-full" /></UFormField></div>
         </section>
         <section class="grid gap-4 py-7 lg:grid-cols-[190px_minmax(0,1fr)]">
           <div><h2 class="text-sm font-semibold">Deployment</h2><p class="mt-1 text-xs text-muted">Placement, health, and visibility.</p></div>
@@ -131,7 +140,7 @@ function backUrl() { return `/${route.params.organization_slug}/compute/containe
           <dl class="mt-5 space-y-4 text-sm">
             <div><dt class="text-xs text-muted">Project</dt><dd class="mt-1">{{ projectName }}</dd></div>
             <div><dt class="text-xs text-muted">Image</dt><dd class="mt-1 truncate font-mono text-xs">{{ state.image || 'Not set' }}</dd></div>
-            <div><dt class="text-xs text-muted">Compute</dt><dd class="mt-1">{{ computeUnit }}</dd></div>
+            <div><dt class="text-xs text-muted">Compute</dt><dd class="mt-1">{{ state.cpu }} CPU · {{ formatMemoryMib(state.memoryMib) }}</dd></div>
             <div><dt class="text-xs text-muted">Exposure</dt><dd class="mt-1">{{ state.isPublic ? 'Public' : 'Private' }}</dd></div>
           </dl>
           <p class="mt-8 text-xs text-muted">This container will be saved with the environment's pending changes. Nothing goes live until you deploy the release.</p>

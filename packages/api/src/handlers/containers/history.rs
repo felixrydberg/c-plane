@@ -89,7 +89,8 @@ fn config(version: &container_version::Model) -> Value {
         "replica_count": version.replica_count,
         "port": version.port,
         "public": version.public,
-        "resources": version.resources,
+        "cpu": version.cpu,
+        "memory": version.memory,
         "health_check": version.health_check,
     })
 }
@@ -134,7 +135,8 @@ fn version_changes(
         "replica_count",
         "port",
         "public",
-        "resources",
+        "cpu",
+        "memory",
         "health_check",
     ] {
         push_change(
@@ -268,7 +270,7 @@ mod tests {
                 "organization_id": Uuid::nil(), "version": number,
                 "image": "app:latest", "resolved_image": format!("app@sha256:{replicas}"),
                 "public": false, "replica_count": replicas, "port": 80,
-                "env": env, "resources": {"cpu": "0.5", "memory": "128Mi"},
+                "env": env, "cpu": "0.5", "memory": "128Mi",
                 "external_registry_id": null, "health_check": null,
                 "created_at": "2026-09-05T12:00:00Z"
             }))
