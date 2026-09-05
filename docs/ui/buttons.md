@@ -75,6 +75,7 @@ Use these icon keys from `~/utils/icons`:
 | `download` | `i-heroicons:arrow-down-tray` | Download |
 | `more` | `i-heroicons:ellipsis-horizontal` | More actions |
 | `calendar` | `i-heroicons:calendar-days` | Date range |
+| `settings` | `i-heroicons:cog-6-tooth` | Settings / Manage |
 | `chevronLeft` | `i-heroicons:chevron-left` | Previous / back navigation |
 | `chevronRight` | `i-heroicons:chevron-right` | Next / forward navigation |
 | `revision` | `i-heroicons:clock` | Draft / deployed revision control |

@@ -9,6 +9,7 @@ export const ICONS = {
   logs: 'i-heroicons:numbered-list',
   analytics: 'i-heroicons:chart-bar',
   general: 'i-heroicons:adjustments-horizontal',
+  settings: 'i-heroicons:cog-6-tooth',
   members: 'i-heroicons:user-group',
   authentication: 'i-heroicons:key',
   folder: 'i-heroicons:folder',

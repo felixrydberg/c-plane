@@ -103,6 +103,7 @@ const mainItems = computed<NavigationMenuItem[]>(() => [
 
 const accountItems = computed<NavigationMenuItem[]>(() => [{
   label: 'Manage organization',
+  icon: ICONS.settings,
   trailingIcon: ICONS.chevronRight,
   children: [
     ...(isOwner.value ? [{
