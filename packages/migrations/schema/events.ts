@@ -1,4 +1,4 @@
-import { boolean, index, json, pgPolicy, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, jsonb, pgPolicy, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { organization } from "./tenants/organization.ts";
 import type { EventType } from "../utils/event-types.ts";
 export type { EventType } from "../utils/event-types.ts";
@@ -10,11 +10,11 @@ export const event = pgTable.withRLS("event", {
   .notNull()
   .references(() => organization.id, { onDelete: "cascade" }),
   type: text("type").$type<EventType>().notNull(),
-  payload: json("payload").notNull(),
+  payload: jsonb("payload").notNull(),
   system: boolean("system").notNull().default(false),
   project_id: uuid("project_id"),
   actor_id: uuid("actor_id"),
-  created_at: timestamp("created_at").notNull().defaultNow(),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index("event_organization_id_idx").on(table.organization_id),
   index("event_type_idx").on(table.type),

@@ -73,7 +73,7 @@ const refreshing = ref(false)
 const loading = ref(true)
 const loadError = ref('')
 const restoring = ref(false)
-const recentActivity = ref<{ refresh: () => Promise<void> } | null>(null)
+const versionHistory = ref<{ refresh: () => Promise<void> } | null>(null)
 
 watch(name, () => {
   if (!name.value || !containerId.value || !organizationSlug.value) return
@@ -160,7 +160,7 @@ async function save() {
     })
     toast.add({ title: 'Changes saved', description: 'Review this environment to deploy them.', color: 'success' })
     hasChanges.value = false
-    await recentActivity.value?.refresh()
+    await versionHistory.value?.refresh()
   } catch (e: unknown) {
     const message = getErrorMessage(e, '')
     toast.add({ title: 'Failed to save', description: message, color: 'error' })
@@ -224,7 +224,7 @@ async function refreshLatest() {
       query: Object.fromEntries(Object.entries(route.query).filter(([key]) => key !== 'revision')),
     })
     toast.add({ title: 'Latest image refreshed', description: 'The resolved image is now a pending change.', color: 'success' })
-    await recentActivity.value?.refresh()
+    await versionHistory.value?.refresh()
   } catch (e: unknown) {
     toast.add({ title: 'Failed to refresh latest image', description: getErrorMessage(e, ''), color: 'error' })
   } finally {
@@ -336,7 +336,7 @@ async function refreshLatest() {
                 </section>
                 <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
                   <div><h3 class="text-sm font-semibold">Visibility</h3><p class="mt-1 text-xs text-muted">Control service access.</p></div>
-                  <UCheckbox v-model="isPublic" label="Publicly accessible" :disabled="!isEditable" @change="markChanged" />
+                  <div class="grid grid-cols-2 gap-2"><button type="button" class="flex flex-col items-start gap-0.5 rounded-md border-2 p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60" :class="!isPublic ? 'border-primary bg-primary/10' : 'border-default/40 hover:border-default/60'" :disabled="!isEditable" @click="isPublic && (isPublic = false, markChanged())"><span class="text-sm font-semibold">Private</span><span class="text-xs text-muted">Internal network only</span></button><button type="button" class="flex flex-col items-start gap-0.5 rounded-md border-2 p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60" :class="isPublic ? 'border-primary bg-primary/10' : 'border-default/40 hover:border-default/60'" :disabled="!isEditable" @click="!isPublic && (isPublic = true, markChanged())"><span class="text-sm font-semibold">Public</span><span class="text-xs text-muted">Accessible from the web</span></button></div>
                 </section>
                 <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
                   <div><h3 class="text-sm font-semibold">Health Check</h3><p class="mt-1 text-xs text-muted">Availability endpoint.</p></div>
@@ -373,7 +373,15 @@ async function refreshLatest() {
           </UiTabs>
         </main>
 
-        <DeploymentsRecentActivity v-if="orgId && projectId && containerId" ref="recentActivity" :organization-id="orgId" :project-id="projectId" :environment-id="environmentId" event-type-prefix="container" :target-id="containerId" />
+        <DeploymentsContainersVersionHistory
+          v-if="orgId && containerId && environmentId && selectedTimelineId"
+          :key="`${orgId}-${containerId}-${environmentId}-${selectedTimelineId}`"
+          ref="versionHistory"
+          :organization-id="orgId"
+          :container-id="containerId"
+          :environment-id="environmentId"
+          :timeline-id="selectedTimelineId"
+        />
       </div>
     </div>
   </div>

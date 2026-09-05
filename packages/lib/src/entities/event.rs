@@ -13,7 +13,7 @@ pub struct Model {
     pub system: bool,
     pub project_id: Option<Uuid>,
     pub actor_id: Option<Uuid>,
-    pub created_at: DateTime,
+    pub created_at: DateTimeWithTimeZone,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
