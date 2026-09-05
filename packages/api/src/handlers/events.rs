@@ -166,7 +166,7 @@ pub async fn list_events(
                     .into(),
                 actor_id: event.actor_id,
                 actor_name: event.actor_id.and_then(|id| actor_names.get(&id).cloned()),
-                created_at: event.created_at.to_string(),
+                created_at: event.created_at.to_rfc3339(),
             })
             .collect(),
     ))

@@ -137,7 +137,7 @@ const branchColumns: TableColumn<BranchRow>[] = [
     cell: ({ row }) => h(NuxtLink, {
       to: branchUrl(row.original),
       class: 'flex min-w-0 items-center gap-2',
-    }, [
+    }, () => [
       h('span', { class: 'truncate font-medium text-primary group-hover:underline group-hover:underline-offset-4' }, row.original._name),
       isDefaultBranch(row.original)
         ? h('span', { class: 'shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary' }, 'Default')

@@ -37,21 +37,28 @@ const { data: environmentList, refresh: refreshEnvironmentList } = await useCpla
   immediate: computed(() => !!environmentsUrl.value),
 })
 const environment = computed(() =>
-  environmentList.value?.find(item => item.id === environmentId.value) ?? null
+  store.environment?.id === environmentId.value ? store.environment : (environmentList.value?.find(item => item.id === environmentId.value) ?? null)
 )
 const selectedTimelineId = computed(() => {
   const revision = route.query.revision
-  return typeof revision === 'string' ? revision : environment.value?.deployed_timeline
+  return typeof revision === 'string' ? revision : environment.value?.draft_timeline
 })
-const revisionView = computed<'synced' | 'deployed' | 'draft' | 'historical'>(() => {
+const revisionView = computed<'synced' | 'pending' | 'historical'>(() => {
   if (
-    selectedTimelineId.value === environment.value?.deployed_timeline
+    selectedTimelineId.value === environment.value?.draft_timeline
     && environment.value?.deployed_timeline === environment.value?.draft_timeline
   ) return 'synced'
-  if (selectedTimelineId.value === environment.value?.deployed_timeline) return 'deployed'
-  if (selectedTimelineId.value === environment.value?.draft_timeline) return 'draft'
+  if (selectedTimelineId.value === environment.value?.draft_timeline) return 'pending'
   return 'historical'
 })
+const isEditable = computed(() => revisionView.value !== 'historical')
+const isLiveVersion = computed(() => selectedTimelineId.value === environment.value?.deployed_timeline)
+
+const activeTab = ref('overview')
+const tabs = [
+  { label: 'Usage', value: 'overview', slot: 'overview' },
+  { label: 'Configuration', value: 'configuration', slot: 'configuration' },
+]
 
 const name = ref('')
 const image = ref('')
@@ -78,7 +85,7 @@ const loading = ref(true)
 const loadError = ref('')
 const forking = ref(false)
 const restoring = ref(false)
-const recentActivity = ref<{ refresh: () => Promise<void> } | null>(null)
+const versionHistory = ref<{ refresh: () => Promise<void> } | null>(null)
 
 watch(name, () => {
   if (!name.value || !containerId.value || !organizationSlug.value) return
@@ -181,7 +188,7 @@ async function save() {
     })
     toast.add({ title: 'Container changes saved', description: 'Review this environment to deploy them.', color: 'success' })
     hasChanges.value = false
-    await recentActivity.value?.refresh()
+    await versionHistory.value?.refresh()
   } catch (e: unknown) {
     const message = getErrorMessage(e, '')
     toast.add({ title: 'Failed to save', description: message, color: 'error' })
@@ -232,9 +239,7 @@ async function restoreVersion() {
 
 function backUrl() {
   const orgSlug = route.params.organization_slug?.toString() ?? ''
-  const path = `/${orgSlug}/containers/${projectId.value}/${environmentId.value}`
-  const revision = route.query.revision
-  return typeof revision === 'string' ? `${path}?revision=${encodeURIComponent(revision)}` : path
+  return `/${orgSlug}/compute/containers/${projectId.value}/${environmentId.value}`
 }
 
 const yamlPreview = computed(() => [
@@ -251,7 +256,7 @@ const yamlPreview = computed(() => [
 const canRefreshLatest = computed(() => image.value.trim().endsWith(':latest'))
 
 async function refreshLatest() {
-  if (!orgId.value || !containerId.value || !environmentId.value || !selectedTimelineId.value || hasChanges.value) return
+  if (!orgId.value || !containerId.value || !environmentId.value || !selectedTimelineId.value || hasChanges.value || !isEditable.value) return
   refreshing.value = true
   try {
     await cplaneFetch(`/api/organization/${orgId.value as ':organization_id'}/containers/${containerId.value as ':container_id'}` as const, {
@@ -267,7 +272,7 @@ async function refreshLatest() {
       query: Object.fromEntries(Object.entries(route.query).filter(([key]) => key !== 'revision')),
     })
     toast.add({ title: 'Latest image refreshed', description: 'The resolved image is now a pending change.', color: 'success' })
-    await recentActivity.value?.refresh()
+    await versionHistory.value?.refresh()
   } catch (e: unknown) {
     toast.add({ title: 'Failed to refresh latest image', description: getErrorMessage(e, ''), color: 'error' })
   } finally {
@@ -295,52 +300,107 @@ watch([image, port, replicaCount, cpu, memoryMib, isPublic, healthCheckPath], ()
         <div class="min-w-0">
           <UiBackLink :label="projectName" :to="backUrl()" />
           <UiPageEyebrow label="Compute" />
-          <div class="mt-2 flex flex-wrap items-center gap-2">
-            <h1 class="truncate text-xl font-semibold">{{ name }}</h1>
-          </div>
+          <h1 class="mt-2 truncate text-xl font-semibold">{{ name }}</h1>
           <p class="mt-1 text-xs text-muted">{{ environment?.name ?? environmentId }} · {{ image }} · Port {{ port ?? 'none' }} · {{ replicaCount }} replica{{ replicaCount === 1 ? '' : 's' }}</p>
         </div>
       </header>
 
       <div class="grid min-h-180 xl:grid-cols-[minmax(0,1fr)_280px]">
         <main class="min-w-0 px-5 py-4">
-          <div>
+          <UiTabs v-model="activeTab" :items="tabs">
+            <template #overview>
+              <div class="space-y-6 pt-4">
+                <div>
+                  <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <h2 class="text-base font-semibold">Usage</h2>
+                      <p class="mt-1 text-sm text-muted">Runtime usage for this container.</p>
+                    </div>
+                    <UButton :icon="ICONS.calendar" color="neutral" variant="outline">Last 24 hours</UButton>
+                  </div>
+                </div>
+
+                <div v-if="!isLiveVersion" class="rounded-md border border-dashed border-default p-5">
+                  <p class="text-sm font-medium">Usage belongs to the live version</p>
+                  <p class="mt-1 text-sm text-muted">This pending or historical version is not running yet. Return to the environment to open the live version.</p>
+                </div>
+
+                <template v-else>
+                  <dl class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div
+                      v-for="stat in [
+                        ['Replicas', replicaCount, 'Current revision'],
+                        ['Restart Count', '—', 'Metrics unavailable'],
+                        ['CPU (Current)', '—', 'Metrics unavailable'],
+                        ['RAM (Current)', '—', 'Metrics unavailable'],
+                      ]"
+                      :key="String(stat[0])"
+                      class="rounded-lg border border-default/60 bg-default px-4 py-3"
+                    >
+                      <dt class="text-xs text-muted">{{ stat[0] }}</dt>
+                      <dd class="mt-1 text-xl font-semibold">{{ stat[1] }}</dd>
+                      <p class="mt-1 text-[11px] text-muted">{{ stat[2] }}</p>
+                    </div>
+                  </dl>
+
+                <section v-for="metric in ['CPU Usage', 'RAM Usage']" :key="metric" class="overflow-hidden rounded-lg border border-default/60 bg-default">
+                  <div class="border-b border-default/60 bg-elevated/20 px-4 py-2.5">
+                    <div class="flex items-center justify-between gap-4">
+                      <h3 class="text-sm font-medium text-muted">{{ metric }}</h3>
+                      <span class="font-mono text-xs text-muted">Usage · Request · Limit</span>
+                    </div>
+                  </div>
+                  <div class="p-4">
+                    <div class="flex min-h-40 items-center justify-center rounded-md border border-dashed border-default/60 px-6 text-center">
+                      <div>
+                        <UIcon name="i-heroicons:chart-bar" class="size-6 text-muted" />
+                        <p class="mt-3 text-sm font-medium">Telemetry connection pending</p>
+                        <p class="mt-1 text-sm text-muted">Metrics will appear here once telemetry is available.</p>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+                </template>
+              </div>
+            </template>
+
+            <template #configuration>
               <div class="divide-y divide-default/60 pt-4">
                 <section class="grid gap-4 py-6 first:pt-2 lg:grid-cols-[180px_minmax(0,1fr)]">
                   <div><h3 class="text-sm font-semibold">Image</h3><p class="mt-1 text-xs text-muted">Container identity and image.</p></div>
                   <div class="space-y-3">
                     <UInput v-model="name" disabled class="w-full" />
                     <div class="flex gap-2">
-                      <UInput v-model="image" placeholder="nginx:latest" class="min-w-0 flex-1" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @input="markChanged" />
-                      <UButton v-if="canRefreshLatest && (revisionView === 'draft' || revisionView === 'synced')" :icon="ICONS.refresh" color="neutral" :loading="refreshing" :disabled="hasChanges" @click="refreshLatest">Refresh latest</UButton>
+                      <UInput v-model="image" placeholder="nginx:latest" class="min-w-0 flex-1" :disabled="!isEditable" @input="markChanged" />
+                      <UButton v-if="canRefreshLatest && isEditable" :icon="ICONS.refresh" color="neutral" :loading="refreshing" :disabled="hasChanges" @click="refreshLatest">Refresh latest</UButton>
                     </div>
                     <UFormField label="External registry" description="Optional credentials for a private image.">
-                      <USelect v-model="externalRegistryId" :items="externalRegistryItems" class="w-full" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @change="markChanged" />
+                      <USelect v-model="externalRegistryId" :items="externalRegistryItems" class="w-full" :disabled="!isEditable" @change="markChanged" />
                     </UFormField>
                   </div>
                 </section>
                 <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
                   <div><h3 class="text-sm font-semibold">Compute</h3><p class="mt-1 text-xs text-muted">CPU, memory, network port and scale.</p></div>
-                  <div class="grid gap-3 sm:grid-cols-2"><UFormField :label="`CPU · ${cpu} cores`" description="Preset cores per replica."><USlider v-model="cpuIndex" :min="0" :max="CPU_PRESETS.length - 1" :step="1" class="py-1" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" :ui="{ range: 'transition-all duration-150 ease-out', thumb: 'transition-all duration-150 ease-out' }" /></UFormField><UFormField :label="`Memory · ${formatMemoryMib(memoryMib)}`" description="Preset memory per replica."><USlider v-model="memoryIndex" :min="0" :max="MEMORY_PRESETS_MIB.length - 1" :step="1" class="py-1" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" :ui="{ range: 'transition-all duration-150 ease-out', thumb: 'transition-all duration-150 ease-out' }" /></UFormField><UFormField label="Port"><UInput v-model.number="port" type="number" class="w-full" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @input="markChanged" /></UFormField><UFormField label="Replicas"><UInput v-model.number="replicaCount" type="number" :min="0" class="w-full" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @input="markChanged" /></UFormField></div>
+                  <div class="grid gap-3 sm:grid-cols-2"><UFormField :label="`CPU · ${cpu} cores`" description="Preset cores per replica."><USlider v-model="cpuIndex" :min="0" :max="CPU_PRESETS.length - 1" :step="1" class="py-1" :disabled="!isEditable" :ui="{ range: 'transition-all duration-150 ease-out', thumb: 'transition-all duration-150 ease-out' }" /></UFormField><UFormField :label="`Memory · ${formatMemoryMib(memoryMib)}`" description="Preset memory per replica."><USlider v-model="memoryIndex" :min="0" :max="MEMORY_PRESETS_MIB.length - 1" :step="1" class="py-1" :disabled="!isEditable" :ui="{ range: 'transition-all duration-150 ease-out', thumb: 'transition-all duration-150 ease-out' }" /></UFormField><UFormField label="Port"><UInput v-model.number="port" type="number" class="w-full" :disabled="!isEditable" @input="markChanged" /></UFormField><UFormField label="Replicas"><UInput v-model.number="replicaCount" type="number" :min="0" class="w-full" :disabled="!isEditable" @input="markChanged" /></UFormField></div>
                 </section>
                 <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
                   <div><h3 class="text-sm font-semibold">Visibility</h3><p class="mt-1 text-xs text-muted">Control service access.</p></div>
-                  <UCheckbox v-model="isPublic" label="Publicly accessible" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @change="markChanged" />
+                  <div class="grid grid-cols-2 gap-2"><button type="button" class="flex flex-col items-start gap-0.5 rounded-md border-2 p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60" :class="!isPublic ? 'border-primary bg-primary/10' : 'border-default/40 hover:border-default/60'" :disabled="!isEditable" @click="isPublic && (isPublic = false, markChanged())"><span class="text-sm font-semibold">Private</span><span class="text-xs text-muted">Internal network only</span></button><button type="button" class="flex flex-col items-start gap-0.5 rounded-md border-2 p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60" :class="isPublic ? 'border-primary bg-primary/10' : 'border-default/40 hover:border-default/60'" :disabled="!isEditable" @click="!isPublic && (isPublic = true, markChanged())"><span class="text-sm font-semibold">Public</span><span class="text-xs text-muted">Accessible from the web</span></button></div>
                 </section>
                 <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
                   <div><h3 class="text-sm font-semibold">Health Check</h3><p class="mt-1 text-xs text-muted">Availability endpoint.</p></div>
-                  <UInput v-model="healthCheckPath" placeholder="/health" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @input="markChanged" />
+                  <UInput v-model="healthCheckPath" placeholder="/health" :disabled="!isEditable" @input="markChanged" />
                 </section>
                 <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
                   <div><h3 class="text-sm font-semibold">Environment</h3><p class="mt-1 text-xs text-muted">Custom environment variables.</p></div>
                   <div class="space-y-3">
                     <div v-for="(row, i) in envRows" :key="i" class="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)_auto]">
-                      <UInput v-model="row.key" placeholder="KEY" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @input="markChanged" />
-                      <UInput v-model="row.value" placeholder="value" type="password" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @input="markChanged" />
-                      <UButton size="xs" color="error" :icon="ICONS.trash" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @click="removeEnvRow(i)">Remove</UButton>
+                      <UInput v-model="row.key" placeholder="KEY" :disabled="!isEditable" @input="markChanged" />
+                      <UInput v-model="row.value" placeholder="value" type="password" :disabled="!isEditable" @input="markChanged" />
+                      <UButton size="xs" color="error" :icon="ICONS.trash" :disabled="!isEditable" @click="removeEnvRow(i)">Remove</UButton>
                     </div>
                     <p v-if="envRows.length === 0" class="text-sm text-muted">No environment variables configured.</p>
-                    <UButton size="sm" color="neutral" :icon="ICONS.plus" :disabled="revisionView !== 'draft' && revisionView !== 'synced'" @click="addEnvRow">Add Variable</UButton>
+                    <UButton size="sm" color="neutral" :icon="ICONS.plus" :disabled="!isEditable" @click="addEnvRow">Add Variable</UButton>
                   </div>
                 </section>
                 <section class="grid gap-4 py-6 lg:grid-cols-[180px_minmax(0,1fr)]">
@@ -348,21 +408,30 @@ watch([image, port, replicaCount, cpu, memoryMib, isPublic, healthCheckPath], ()
                   <pre class="overflow-x-auto rounded-md bg-elevated/40 p-4 font-mono text-xs text-muted">{{ yamlPreview }}</pre>
                 </section>
                 <div class="flex justify-end gap-3 py-5">
-                  <template v-if="revisionView === 'draft' || revisionView === 'synced'">
+                  <template v-if="isEditable">
                     <UButton variant="ghost" color="neutral" :to="backUrl()">Cancel</UButton>
-                    <UButton :icon="ICONS.check" :loading="saving" :disabled="!hasChanges" @click="save">Save Changes</UButton>
+                    <UButton :icon="ICONS.check" color="primary" :loading="saving" :disabled="!hasChanges" @click="save">Save changes</UButton>
                   </template>
                   <template v-else>
                     <p class="mr-auto text-sm text-muted">Fork this revision to edit it.</p>
                     <UButton :icon="ICONS.pencil" color="neutral" :loading="forking" @click="forkRevision">Fork revision</UButton>
-                    <UButton v-if="revisionView === 'historical'" :icon="ICONS.refresh" :loading="restoring" @click="restoreVersion">Restore this version</UButton>
+                    <UButton v-if="revisionView === 'historical'" :icon="ICONS.refresh" color="primary" :loading="restoring" @click="restoreVersion">Restore this version</UButton>
                   </template>
                 </div>
               </div>
-          </div>
+            </template>
+          </UiTabs>
         </main>
 
-        <DeploymentsRecentActivity v-if="orgId && projectId && containerId" ref="recentActivity" :organization-id="orgId" :project-id="projectId" :environment-id="environmentId" event-type-prefix="container" :target-id="containerId" />
+        <DeploymentsContainersVersionHistory
+          v-if="orgId && containerId && environmentId && selectedTimelineId"
+          :key="`${orgId}-${containerId}-${environmentId}-${selectedTimelineId}`"
+          ref="versionHistory"
+          :organization-id="orgId"
+          :container-id="containerId"
+          :environment-id="environmentId"
+          :timeline-id="selectedTimelineId"
+        />
       </div>
     </div>
   </div>

@@ -50,6 +50,7 @@ const deleteEnvironmentModal = ref(false)
 const renameEnvironmentModal = ref(false)
 const environmentName = ref('')
 const renamingEnvironment = ref(false)
+const graphModalOpen = ref(false)
 
 const projectLabel = computed(() => store.project?.name || 'All Projects')
 
@@ -139,7 +140,6 @@ async function selectProject(projectId: string | null) {
 }
 
 function selectEnvironment(b: Environment) {
-  const wasViewingDeployed = isViewingDeployed.value
   const slug = store.organization?.slug
   const pid = routeProjectId.value
   if (!pid || !slug || !projectRoutesEnabled.value || !environmentRoutesEnabled.value || b.id === routeEnvironmentId.value) {
@@ -152,7 +152,7 @@ function selectEnvironment(b: Environment) {
   const url = environmentRoutesEnabled.value
     ? `/${slug}/${baseSection}/${pid}/${b.id}`
     : `/${slug}/${baseSection}/${pid}`
-  router.push(`${url}?revision=${wasViewingDeployed ? b.deployed_timeline : b.draft_timeline}`)
+  router.push(`${url}?revision=${isViewingDeployed.value ? b.deployed_timeline : b.draft_timeline}`)
 }
 
 async function onProjectCreated() { await refreshProjects() }
@@ -219,7 +219,6 @@ async function onConfirmDeleteEnvironment() {
   }
 }
 
-const graphModalOpen = ref(false)
 </script>
 
 <template>

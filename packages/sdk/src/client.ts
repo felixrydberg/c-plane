@@ -12,6 +12,7 @@ export type Sdk = {
     create_container: Operation<"/api/organization/{organization_id}/containers", 'post'>
     delete_container: Operation<"/api/organization/{organization_id}/containers/{container_id}", 'delete'>
     get_container: Operation<"/api/organization/{organization_id}/containers/{container_id}", 'get'>
+    get_container_history: Operation<"/api/organization/{organization_id}/containers/{container_id}/history", 'get'>
     list_containers: Operation<"/api/organization/{organization_id}/containers", 'get'>
     redeploy_container: Operation<"/api/organization/{organization_id}/containers/{container_id}/deploy", 'post'>
     update_container: Operation<"/api/organization/{organization_id}/containers/{container_id}", 'patch'>
@@ -103,6 +104,7 @@ export const createSdk = (options: SdkOptions = {}): Sdk => {
       create_container: (...args: Parameters<Operation<"/api/organization/{organization_id}/containers", 'post'>>) => client.POST("/api/organization/{organization_id}/containers", ...args),
       delete_container: (...args: Parameters<Operation<"/api/organization/{organization_id}/containers/{container_id}", 'delete'>>) => client.DELETE("/api/organization/{organization_id}/containers/{container_id}", ...args),
       get_container: (...args: Parameters<Operation<"/api/organization/{organization_id}/containers/{container_id}", 'get'>>) => client.GET("/api/organization/{organization_id}/containers/{container_id}", ...args),
+      get_container_history: (...args: Parameters<Operation<"/api/organization/{organization_id}/containers/{container_id}/history", 'get'>>) => client.GET("/api/organization/{organization_id}/containers/{container_id}/history", ...args),
       list_containers: (...args: Parameters<Operation<"/api/organization/{organization_id}/containers", 'get'>>) => client.GET("/api/organization/{organization_id}/containers", ...args),
       redeploy_container: (...args: Parameters<Operation<"/api/organization/{organization_id}/containers/{container_id}/deploy", 'post'>>) => client.POST("/api/organization/{organization_id}/containers/{container_id}/deploy", ...args),
       update_container: (...args: Parameters<Operation<"/api/organization/{organization_id}/containers/{container_id}", 'patch'>>) => client.PATCH("/api/organization/{organization_id}/containers/{container_id}", ...args)

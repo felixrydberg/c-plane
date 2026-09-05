@@ -140,6 +140,14 @@ pub fn create_routes() -> Router {
             ],
         )
         .scoped_route(
+            "/api/organization/{organization_id}/containers/{container_id}/history",
+            [scoped::get(
+                containers::history::get_container_history,
+                "container:read",
+                Role::Member,
+            )],
+        )
+        .scoped_route(
             "/api/organization/{organization_id}/containers/{container_id}/deploy",
             [scoped::post(
                 containers::redeploy_container,

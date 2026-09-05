@@ -1,3 +1,5 @@
+pub mod history;
+
 use axum::{Json, extract::Path};
 use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};

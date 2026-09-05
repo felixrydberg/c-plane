@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '@nuxt/ui'
+import DashboardProjectsDeploymentAlert from '~/components/dashboard/projects/deployment-alert.vue'
 import { ICONS } from '~/utils/icons'
 
 const store = useStore();
@@ -56,7 +57,7 @@ const mainItems = computed<NavigationMenuItem[]>(() => [
     children: [
       {
         label: 'Containers',
-        to: `/${store.organization?.slug}/containers${navProjectId.value ? `/${navProjectId.value}${routeEnvironmentId.value ? `/${routeEnvironmentId.value}` : ''}` : ''}${revisionQuery.value}`,
+        to: `/${store.organization?.slug}/compute/containers${navProjectId.value ? `/${navProjectId.value}${routeEnvironmentId.value ? `/${routeEnvironmentId.value}` : ''}` : ''}${revisionQuery.value}`,
       },
     ],
   },
@@ -224,7 +225,9 @@ const navigationUi = {
         </nav>
       </div>
 
-      <div class="flex-1 bg-default px-6 py-4">
+      <DashboardProjectsDeploymentAlert />
+
+      <div class="flex-1 bg-default px-6 py-6 lg:px-8">
         <slot />
       </div>
     </div>
