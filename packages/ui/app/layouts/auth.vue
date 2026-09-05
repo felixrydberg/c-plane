@@ -12,7 +12,7 @@ const routeEnvironmentId = computed(() => route.params.environment_id as string 
 const navProjectId = computed(() => routeProjectId.value ?? store.project?.id)
 const revisionQuery = computed(() => {
   const revision = typeof route.query.revision === 'string' ? route.query.revision : undefined
-  if (revision === store.environment?.draft_timeline || revision === store.environment?.deployed_timeline) {
+  if (revision !== undefined && (revision === store.environment?.draft_timeline || revision === store.environment?.deployed_timeline)) {
     return `?revision=${revision}`
   }
   if (store.environment && store.environment.draft_timeline !== store.environment.deployed_timeline) {

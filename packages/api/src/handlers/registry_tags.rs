@@ -16,9 +16,7 @@ use crate::{
 
 use super::databases::{verify_org_access, verify_project_in_org};
 
-const DIGEST_HEADER: &str = "docker-content-digest";
-const MANIFEST_ACCEPT: &str = "application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.index.v1+json";
-// ponytail: single tags/list page plus per-tag digest lookups; Link-follow up to MAX_TAGS instead of a cursor protocol.
+// ponytail: single tags/list page; Link-follow up to MAX_TAGS instead of a cursor protocol.
 const TAGS_PAGE_SIZE: u32 = 100;
 const MAX_TAGS: usize = 1000;
 
@@ -147,18 +145,14 @@ pub async fn delete_tag(
         project_id,
         repository.id,
         &repository.name,
-        &["pull", "delete"],
+        &["delete"],
     )
     .await?;
     let base = registry_base_url()?;
     let client = &get_app_state().storage_client;
-    let digest = manifest_digest(client, &base, &access.repository_name, &access.token, &tag)
-        .await?
-        .filter(|digest| !digest.is_empty())
-        .ok_or_else(|| AppError::NotFound("Tag not found".into()))?;
     let response = client
         .delete(format!(
-            "{base}/v2/{}/manifests/{digest}",
+            "{base}/v2/{}/manifests/{tag}",
             access.repository_name
         ))
         .bearer_auth(access.token)
@@ -206,42 +200,6 @@ async fn find_repository(
         .one(tx)
         .await?
         .ok_or_else(|| AppError::NotFound("Registry repository not found".into()))
-}
-
-/// Resolves the manifest digest for a tag. Returns `Ok(None)` when the tag
-/// vanished between listing and lookup.
-async fn manifest_digest(
-    client: &reqwest::Client,
-    base: &str,
-    repository_name: &str,
-    token: &str,
-    tag: &str,
-) -> Result<Option<String>, AppError> {
-    let response = client
-        .head(format!("{base}/v2/{repository_name}/manifests/{tag}"))
-        .bearer_auth(token)
-        .header("Accept", MANIFEST_ACCEPT)
-        .send()
-        .await
-        .map_err(|error| {
-            AppError::ServiceUnavailable(format!("Container registry request failed: {error}"))
-        })?;
-    if response.status() == StatusCode::NOT_FOUND {
-        return Ok(None);
-    }
-    if !response.status().is_success() {
-        return Err(AppError::ServiceUnavailable(format!(
-            "Container registry returned {}",
-            response.status()
-        )));
-    }
-    response
-        .headers()
-        .get(DIGEST_HEADER)
-        .and_then(|value| value.to_str().ok())
-        .map(str::to_owned)
-        .map(Some)
-        .ok_or_else(|| AppError::ServiceUnavailable("Invalid registry response".into()))
 }
 
 fn link_next(headers: &reqwest::header::HeaderMap, base: &str) -> Option<String> {

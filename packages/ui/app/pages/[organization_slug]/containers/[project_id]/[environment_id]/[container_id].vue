@@ -177,7 +177,7 @@ async function save() {
       await refreshEnvironmentList()
     }
     await router.replace({
-      query: Object.fromEntries(Object.entries(route.query).filter(([key]) => key !== 'revision')),
+      query: { ...route.query, revision: environment.value?.draft_timeline },
     })
     toast.add({ title: 'Container changes saved', description: 'Review this environment to deploy them.', color: 'success' })
     hasChanges.value = false

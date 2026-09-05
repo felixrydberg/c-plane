@@ -182,10 +182,11 @@ defineExpose({
         <nav aria-label="Table pages" class="inline-flex items-center rounded-lg border border-default/60 bg-elevated/20 p-1 shadow-sm">
           <UButton
             color="neutral"
-            variant="ghost"
+            variant="solid"
             size="sm"
             :leading-icon="ICONS.chevronLeft"
             class="min-w-22 justify-center"
+            :loading="props.status === 'pending'"
             :disabled="props.status === 'pending' || page === 1"
             @click="onUpdatePage(page - 1)"
           >
@@ -196,7 +197,7 @@ defineExpose({
           </span>
           <UButton
             color="neutral"
-            variant="ghost"
+            variant="solid"
             size="sm"
             :trailing-icon="ICONS.chevronRight"
             class="min-w-18 justify-center"

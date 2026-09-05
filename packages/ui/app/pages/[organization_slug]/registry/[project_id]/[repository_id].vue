@@ -125,6 +125,8 @@ async function deleteSelected() {
     deleteModalOpen.value = false
     selected.value = null
     await refreshTags()
+    offset.value = 0
+    tableReset.value += 1
   } catch {
     toast.add({ title: 'Failed to delete tag', color: 'error' })
   } finally {

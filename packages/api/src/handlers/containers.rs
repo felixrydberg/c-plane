@@ -60,8 +60,10 @@ pub struct UpdateContainerRequest {
     pub replica_count: Option<i32>,
     pub port: Option<i32>,
     pub env: Option<serde_json::Value>,
-    pub cpu: Option<String>,
-    pub memory: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_present_nullable")]
+    pub cpu: Option<Option<String>>,
+    #[serde(default, deserialize_with = "deserialize_present_nullable")]
+    pub memory: Option<Option<String>>,
     #[serde(default, deserialize_with = "deserialize_present_nullable")]
     pub external_registry_id: Option<Option<Uuid>>,
     pub health_check: Option<serde_json::Value>,
@@ -692,7 +694,6 @@ async fn update_container_with_options(
     if let Some(port) = body.port {
         validate_port(port)?;
     }
-    validate_container_resources(&body.cpu, &body.memory)?;
 
     let mut new_version: Option<container_version::Model> = None;
     let mut compute_revision = None;
@@ -714,6 +715,10 @@ async fn update_container_with_options(
             .one(tx)
             .await?
             .ok_or_else(|| AppError::NotFound("Container version not found".into()))?;
+
+        let next_cpu = body.cpu.clone().unwrap_or_else(|| base.cpu.clone());
+        let next_memory = body.memory.clone().unwrap_or_else(|| base.memory.clone());
+        validate_container_resources(&next_cpu, &next_memory)?;
 
         let next_image = body
             .image
@@ -755,8 +760,8 @@ async fn update_container_with_options(
             replica_count: Set(body.replica_count.unwrap_or(base.replica_count)),
             port: Set(body.port.or(base.port)),
             env: Set(body.env.clone().or(base.env.clone())),
-            cpu: Set(body.cpu.clone().or(base.cpu.clone())),
-            memory: Set(body.memory.clone().or(base.memory.clone())),
+            cpu: Set(next_cpu),
+            memory: Set(next_memory),
             external_registry_id: Set(external_registry_id),
             health_check: Set(body.health_check.clone().or(base.health_check.clone())),
             created_at: Set(Utc::now().fixed_offset()),
@@ -817,8 +822,22 @@ async fn update_container_with_options(
 #[cfg(test)]
 mod redeploy_tests {
     use super::{
-        is_exact_latest_image, validate_container_resources, validate_port, validate_replica_count,
+        UpdateContainerRequest, has_config_change, is_exact_latest_image,
+        validate_container_resources, validate_port, validate_replica_count,
     };
+
+    #[test]
+    fn update_resources_distinguish_omitted_and_null() {
+        let omitted: UpdateContainerRequest = serde_json::from_str("{}").unwrap();
+        assert_eq!(omitted.cpu, None);
+        assert_eq!(omitted.memory, None);
+
+        let cleared: UpdateContainerRequest =
+            serde_json::from_str(r#"{"cpu":null,"memory":null}"#).unwrap();
+        assert_eq!(cleared.cpu, Some(None));
+        assert_eq!(cleared.memory, Some(None));
+        assert!(has_config_change(&cleared));
+    }
 
     #[test]
     fn only_exact_latest_images_can_be_redeployed() {

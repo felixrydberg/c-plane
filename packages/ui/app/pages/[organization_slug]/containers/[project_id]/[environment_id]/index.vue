@@ -11,6 +11,7 @@ type ContainerWithProject = Container & {
 const store = useStore()
 const route = useRoute()
 const router = useRouter()
+const toast = useToast()
 const projectId = computed(() => route.params.project_id?.toString() || null)
 const environmentId = computed(() => route.params.environment_id?.toString() || null)
 
