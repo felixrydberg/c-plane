@@ -1,10 +1,10 @@
 {
-  "id": "d084b432-c792-41f0-ad7e-c231fe5b687d",
-  "prevIds": [
-    "1479abde-a17d-434e-9269-c5250035d5f5"
-  ],
   "version": "8",
   "dialect": "postgres",
+  "id": "f4ecba66-c0ad-42ed-9534-d864f18a1f81",
+  "prevIds": [
+    "00000000-0000-0000-0000-000000000000"
+  ],
   "ddl": [
     {
       "values": [
@@ -1567,14 +1567,27 @@
       "table": "container_version"
     },
     {
-      "type": "jsonb",
+      "type": "text",
       "typeSchema": null,
       "notNull": false,
       "dimensions": 0,
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "resources",
+      "name": "cpu",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "container_version"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "memory",
       "entityType": "columns",
       "schema": "public",
       "table": "container_version"
