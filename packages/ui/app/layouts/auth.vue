@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '@nuxt/ui'
-import DashboardProjectsDeploymentAlert from '~/components/dashboard/projects/deployment-alert.vue'
 import { ICONS } from '~/utils/icons'
 
 const store = useStore();
@@ -11,11 +10,15 @@ const isOwner = computed(() => store.organization?.member?.role === 'owner')
 const routeProjectId = computed(() => route.params.project_id as string | undefined)
 const routeEnvironmentId = computed(() => route.params.environment_id as string | undefined)
 const navProjectId = computed(() => routeProjectId.value ?? store.project?.id)
-const draftRevisionQuery = computed(() => {
-  const draftTimeline = store.environment?.draft_timeline
-  return draftTimeline !== undefined && route.query.revision === draftTimeline
-    ? `?revision=${draftTimeline}`
-    : ''
+const revisionQuery = computed(() => {
+  const revision = typeof route.query.revision === 'string' ? route.query.revision : undefined
+  if (revision === store.environment?.draft_timeline || revision === store.environment?.deployed_timeline) {
+    return `?revision=${revision}`
+  }
+  if (store.environment && store.environment.draft_timeline !== store.environment.deployed_timeline) {
+    return `?revision=${store.environment.draft_timeline}`
+  }
+  return ''
 })
 
 const mainItems = computed<NavigationMenuItem[]>(() => [
@@ -53,7 +56,7 @@ const mainItems = computed<NavigationMenuItem[]>(() => [
     children: [
       {
         label: 'Containers',
-        to: `/${store.organization?.slug}/containers${navProjectId.value ? `/${navProjectId.value}${routeEnvironmentId.value ? `/${routeEnvironmentId.value}` : ''}` : ''}${draftRevisionQuery.value}`,
+        to: `/${store.organization?.slug}/containers${navProjectId.value ? `/${navProjectId.value}${routeEnvironmentId.value ? `/${routeEnvironmentId.value}` : ''}` : ''}${revisionQuery.value}`,
       },
     ],
   },
@@ -221,9 +224,7 @@ const navigationUi = {
         </nav>
       </div>
 
-      <DashboardProjectsDeploymentAlert v-if="store.environment" />
-
-      <div class="flex-1 bg-default px-6 py-6 lg:px-8">
+      <div class="flex-1 bg-default px-6 py-4">
         <slot />
       </div>
     </div>

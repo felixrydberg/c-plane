@@ -4011,6 +4011,12 @@
           "created_at"
         ],
         "properties": {
+          "cpu": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "created_at": {
             "type": "string"
           },
@@ -4030,6 +4036,12 @@
           "image": {
             "type": "string"
           },
+          "memory": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "port": {
             "type": [
               "integer",
@@ -4047,7 +4059,6 @@
           "resolved_image": {
             "type": "string"
           },
-          "resources": {},
           "version": {
             "type": "integer",
             "format": "int32"
@@ -4109,6 +4120,12 @@
           "auto_deploy": {
             "type": "boolean"
           },
+          "cpu": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "env": {},
           "environment_id": {
             "type": "string",
@@ -4124,6 +4141,12 @@
           "health_check": {},
           "image": {
             "type": "string"
+          },
+          "memory": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "name": {
             "type": "string"
@@ -4149,8 +4172,7 @@
           "replica_count": {
             "type": "integer",
             "format": "int32"
-          },
-          "resources": {}
+          }
         }
       },
       "CreateDatabaseBranchRequest": {
@@ -5507,6 +5529,12 @@
           "auto_deploy": {
             "type": "boolean"
           },
+          "cpu": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "env": {},
           "external_registry_id": {
             "type": [
@@ -5517,6 +5545,12 @@
           },
           "health_check": {},
           "image": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "memory": {
             "type": [
               "string",
               "null"
@@ -5547,8 +5581,7 @@
               "null"
             ],
             "format": "int32"
-          },
-          "resources": {}
+          }
         }
       },
       "UpdateDatabaseBranchRequest": {

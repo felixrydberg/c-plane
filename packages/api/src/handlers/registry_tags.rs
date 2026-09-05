@@ -1,6 +1,7 @@
 use axum::{Json, extract::Path, http::StatusCode};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::env;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -130,7 +131,7 @@ pub async fn list_tags(
     tag = "registry",
 )]
 pub async fn delete_tag(
-    AuthContext { tenant_db, .. }: AuthContext,
+    AuthContext { tenant_db, auth }: AuthContext,
     Path((organization_id, project_id, repository_id, tag)): Path<(Uuid, Uuid, Uuid, String)>,
 ) -> Result<StatusCode, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
@@ -170,11 +171,26 @@ pub async fn delete_tag(
         return Ok(StatusCode::NO_CONTENT);
     }
     if !response.status().is_success() {
+        tracing::warn!(
+            "registry tag delete returned {} for repository {repository_id}",
+            response.status()
+        );
         return Err(AppError::ServiceUnavailable(format!(
             "Container registry returned {}",
             response.status()
         )));
     }
+    let scoped = tenant_db.begin_scoped_transaction().await?;
+    crate::services::events::record(
+        scoped.connection(),
+        organization_id,
+        project_id,
+        "registry-tag:deleted",
+        json!({ "summary": format!("Deleted tag '{tag}' from registry repository '{}'", repository.name), "target_id": repository.id }),
+        auth.actor_id,
+    )
+    .await?;
+    scoped.commit().await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

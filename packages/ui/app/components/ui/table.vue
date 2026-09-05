@@ -2,6 +2,7 @@
 import type { ContextMenuItem, TableColumn, TableRow } from '@nuxt/ui';
 import type { PropType } from 'vue';
 import { useSlots } from 'vue';
+import { ICONS } from '~/utils/icons';
 
 const _upperFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -90,7 +91,8 @@ const offset = defineModel("offset", {
   default: 0
 });
 
-const page = ref(1);
+const page = computed(() => Math.floor(offset.value / props.limit) + 1);
+const totalPages = computed(() => Math.ceil(props.total / props.limit));
 const emits = defineEmits<{
   (e: 'select', row: TableRow<T>): void;
 }>();
@@ -176,15 +178,36 @@ defineExpose({
           </template>
         </UTable>
       </component>
-      <UPagination
-        v-if="pagination"
-        v-model:page="page"
-        :disabled="total < limit"
-        :items-per-page="limit"
-        :total="total"
-        class="mt-4 mx-auto flex justify-center items-center"
-        @update:page="onUpdatePage"
-      />
+      <div v-if="pagination && total > limit" class="flex justify-center pt-1">
+        <nav aria-label="Table pages" class="inline-flex items-center rounded-lg border border-default/60 bg-elevated/20 p-1 shadow-sm">
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            :leading-icon="ICONS.chevronLeft"
+            class="min-w-22 justify-center"
+            :disabled="props.status === 'pending' || page === 1"
+            @click="onUpdatePage(page - 1)"
+          >
+            Previous
+          </UButton>
+          <span aria-current="page" class="mx-1 min-w-18 rounded-md border border-default/60 bg-default/10 px-3 py-1.5 text-center text-xs font-medium text-muted">
+            Page {{ page }}
+          </span>
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            :trailing-icon="ICONS.chevronRight"
+            class="min-w-18 justify-center"
+            :loading="props.status === 'pending'"
+            :disabled="page >= totalPages"
+            @click="onUpdatePage(page + 1)"
+          >
+            Next
+          </UButton>
+        </nav>
+      </div>
     </div>
   </div>
 </template>

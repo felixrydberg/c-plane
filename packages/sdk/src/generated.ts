@@ -687,6 +687,7 @@ export interface components {
             updated_at: string;
         };
         ContainerVersionResponse: {
+            cpu?: string | null;
             created_at: string;
             env?: unknown;
             /** Format: uuid */
@@ -695,13 +696,13 @@ export interface components {
             /** Format: uuid */
             id: string;
             image: string;
+            memory?: string | null;
             /** Format: int32 */
             port?: number | null;
             public: boolean;
             /** Format: int32 */
             replica_count: number;
             resolved_image: string;
-            resources?: unknown;
             /** Format: int32 */
             version: number;
         };
@@ -719,6 +720,7 @@ export interface components {
         };
         CreateContainerRequest: {
             auto_deploy?: boolean;
+            cpu?: string | null;
             env?: unknown;
             /** Format: uuid */
             environment_id: string;
@@ -726,6 +728,7 @@ export interface components {
             external_registry_id?: string | null;
             health_check?: unknown;
             image: string;
+            memory?: string | null;
             name: string;
             /** Format: int32 */
             port?: number | null;
@@ -736,7 +739,6 @@ export interface components {
             region_id: string;
             /** Format: int32 */
             replica_count?: number;
-            resources?: unknown;
         };
         CreateDatabaseBranchRequest: {
             autoscaling_enabled?: boolean | null;
@@ -1101,18 +1103,19 @@ export interface components {
         };
         UpdateContainerRequest: {
             auto_deploy?: boolean;
+            cpu?: string | null;
             env?: unknown;
             /** Format: uuid */
             external_registry_id?: string | null;
             health_check?: unknown;
             image?: string | null;
+            memory?: string | null;
             name?: string | null;
             /** Format: int32 */
             port?: number | null;
             public?: boolean | null;
             /** Format: int32 */
             replica_count?: number | null;
-            resources?: unknown;
         };
         UpdateDatabaseBranchRequest: {
             autoscaling_enabled?: boolean | null;
