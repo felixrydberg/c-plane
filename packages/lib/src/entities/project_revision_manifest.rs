@@ -2,17 +2,15 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
-#[sea_orm(table_name = "project_timeline")]
+#[sea_orm(table_name = "project_revision_manifest")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
     pub project_id: Uuid,
-    pub environment_id: Option<Uuid>,
     pub organization_id: Uuid,
-    pub timeline: i32,
-    pub name: Option<String>,
-    pub parent_timeline_id: Option<Uuid>,
-    pub manifest_id: Uuid,
+    pub schema_version: i32,
+    pub configuration: serde_json::Value,
+    pub external_registry_ids: Vec<Uuid>,
     pub created_at: DateTimeWithTimeZone,
 }
 
@@ -26,29 +24,11 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Project,
-    #[sea_orm(
-        belongs_to = "super::project_revision_manifest::Entity",
-        from = "Column::ManifestId",
-        to = "super::project_revision_manifest::Column::Id"
-    )]
-    Manifest,
-    #[sea_orm(
-        belongs_to = "Entity",
-        from = "Column::ParentTimelineId",
-        to = "Column::Id"
-    )]
-    Parent,
 }
 
 impl Related<super::project::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Project.def()
-    }
-}
-
-impl Related<super::project_revision_manifest::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Manifest.def()
     }
 }
 

@@ -8,7 +8,8 @@ export type {
   Bucket,
   BucketPermission,
   Container,
-  ContainerVersion,
+  ContainerConfiguration,
+  ContainerHistoryPage,
   CreatedRegistryAccessToken,
   CreatedStorageAccessToken,
   Database,
@@ -30,5 +31,6 @@ export type {
   ResolvedTimeline,
   StorageAccessToken,
   StorageAccessTokenDetails,
+  TimelinePage,
   TimelineRevision,
 } from './types.ts'

@@ -49,7 +49,7 @@
           {
             "name": "timeline_id",
             "in": "query",
-            "description": "Revision whose pinned containers to return",
+            "description": "Revision whose manifest containers to return",
             "required": false,
             "schema": {
               "type": "string",
@@ -159,7 +159,7 @@
           {
             "name": "environment_id",
             "in": "query",
-            "description": "Environment that owns the revision history",
+            "description": "Environment whose draft or revision to read",
             "required": false,
             "schema": {
               "type": "string",
@@ -169,7 +169,7 @@
           {
             "name": "timeline_id",
             "in": "query",
-            "description": "Revision whose pinned container version to return",
+            "description": "Revision whose manifest container to return",
             "required": false,
             "schema": {
               "type": "string",
@@ -309,7 +309,7 @@
           {
             "name": "timeline_id",
             "in": "query",
-            "description": "Revision that supplies the container update base",
+            "description": "Draft revision that supplies the update base",
             "required": true,
             "schema": {
               "type": "string",
@@ -390,7 +390,7 @@
           {
             "name": "timeline_id",
             "in": "query",
-            "description": "Draft revision to deploy",
+            "description": "Draft revision to redeploy",
             "required": true,
             "schema": {
               "type": "string",
@@ -408,9 +408,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Container image is not refreshable"
           },
           "404": {
             "description": "Not found"
@@ -470,24 +467,41 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "History entries per page (default 10, max 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Continuation cursor from a previous page",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Container version ancestry, newest first",
+            "description": "Container configuration changes, newest first",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ContainerHistoryEntry"
-                  }
+                  "$ref": "#/components/schemas/ContainerHistoryPage"
                 }
               }
             }
           },
           "404": {
-            "description": "Container, environment, revision, or version not found"
+            "description": "Container, environment, revision, or manifest not found"
           }
         },
         "security": [
@@ -2526,24 +2540,71 @@
           {
             "name": "environment_id",
             "in": "query",
-            "description": "Environment ID",
+            "description": "Origin environment filter",
             "required": false,
             "schema": {
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size, default 50, max 100",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Continuation cursor from a previous page",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "anchor_revision_id",
+            "in": "query",
+            "description": "Start at this revision; cannot be combined with cursor; in graph mode selects the page containing it",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "graph",
+            "in": "query",
+            "description": "Book pagination: fixed revision-order pages instead of a cursor",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Graph page number, 0 = newest; ignored when anchor_revision_id is set",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Project timelines",
+            "description": "Paginated project timelines",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/TimelineResponse"
-                  }
+                  "$ref": "#/components/schemas/TimelinePageResponse"
                 }
               }
             }
@@ -4030,6 +4091,68 @@
           "removed"
         ]
       },
+      "ContainerConfig": {
+        "type": "object",
+        "required": [
+          "name",
+          "region_id",
+          "image",
+          "resolved_image",
+          "replica_count",
+          "public"
+        ],
+        "properties": {
+          "cpu": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "env": {},
+          "external_registry_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "health_check": {},
+          "image": {
+            "type": "string"
+          },
+          "memory": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "port": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "public": {
+            "type": "boolean"
+          },
+          "region_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "replica_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "resolved_image": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "ContainerHistoryBaseline": {
         "type": "string",
         "enum": [
@@ -4059,8 +4182,8 @@
       "ContainerHistoryEntry": {
         "type": "object",
         "required": [
-          "id",
-          "version",
+          "revision_id",
+          "revision_number",
           "created_at",
           "changes"
         ],
@@ -4084,13 +4207,33 @@
           "created_at": {
             "type": "string"
           },
-          "id": {
+          "revision_id": {
             "type": "string",
             "format": "uuid"
           },
-          "version": {
+          "revision_number": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "ContainerHistoryPage": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContainerHistoryEntry"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -4105,18 +4248,18 @@
           "updated_at"
         ],
         "properties": {
-          "created_at": {
-            "type": "string"
-          },
-          "current_version": {
+          "configuration": {
             "oneOf": [
               {
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/ContainerVersionResponse"
+                "$ref": "#/components/schemas/ContainerConfig"
               }
             ]
+          },
+          "created_at": {
+            "type": "string"
           },
           "id": {
             "type": "string",
@@ -4140,74 +4283,15 @@
             "type": "string",
             "format": "uuid"
           },
+          "revision_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
           "updated_at": {
             "type": "string"
-          }
-        }
-      },
-      "ContainerVersionResponse": {
-        "type": "object",
-        "required": [
-          "id",
-          "version",
-          "image",
-          "resolved_image",
-          "public",
-          "replica_count",
-          "created_at"
-        ],
-        "properties": {
-          "cpu": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "created_at": {
-            "type": "string"
-          },
-          "env": {},
-          "external_registry_id": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "uuid"
-          },
-          "health_check": {},
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "image": {
-            "type": "string"
-          },
-          "memory": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "port": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "public": {
-            "type": "boolean"
-          },
-          "replica_count": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "resolved_image": {
-            "type": "string"
-          },
-          "version": {
-            "type": "integer",
-            "format": "int32"
           }
         }
       },
@@ -4897,6 +4981,53 @@
           }
         }
       },
+      "ListTimelinesQuery": {
+        "type": "object",
+        "properties": {
+          "anchor_revision_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "environment_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "graph": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "limit": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "page": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
       "ManagedRegistryResponse": {
         "type": "object",
         "required": [
@@ -5373,8 +5504,6 @@
         "required": [
           "container_id",
           "container_name",
-          "version_id",
-          "version",
           "image"
         ],
         "properties": {
@@ -5394,14 +5523,6 @@
           },
           "image": {
             "type": "string"
-          },
-          "version": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "version_id": {
-            "type": "string",
-            "format": "uuid"
           }
         }
       },
@@ -5612,12 +5733,107 @@
           }
         }
       },
+      "TimelineGraphNode": {
+        "type": "object",
+        "required": [
+          "id",
+          "timeline",
+          "lane",
+          "child_ids"
+        ],
+        "properties": {
+          "child_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lane": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "parent_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "timeline": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "TimelinePageResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimelineResponse"
+            }
+          },
+          "graph_nodes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/TimelineGraphNode"
+            },
+            "description": "Whole-book topology, loaded once by the modal. Revision details remain paginated."
+          },
+          "has_newer": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "has_older": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "page": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Book page (0 = newest). Present in graph mode.",
+            "minimum": 0
+          },
+          "total_pages": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
       "TimelineResponse": {
         "type": "object",
         "required": [
           "id",
           "timeline",
-          "pins",
           "created_at"
         ],
         "properties": {
@@ -5648,7 +5864,6 @@
             ],
             "format": "uuid"
           },
-          "pins": {},
           "timeline": {
             "type": "integer",
             "format": "int32"

@@ -1,7 +1,8 @@
 use axum::{Json, extract::Path, http::StatusCode};
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, Set,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder,
+    QuerySelect, Set, sea_query::Expr,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -11,7 +12,7 @@ use uuid::Uuid;
 use crate::{
     errors::AppError,
     middleware::auth::AuthContext,
-    models::entities::{external_registry, secret},
+    models::entities::{external_registry, project_revision_manifest, secret},
     services::buckets::tenant_key,
     state::get_app_state,
 };
@@ -22,7 +23,6 @@ use super::{
     registry_access_tokens::record_event,
 };
 
-const DEPENDENCY_CONSTRAINT: &str = "container_version_external_registry_fk";
 const NAME_CONSTRAINT: &str = "external_registry_organization_name_uidx";
 const HOST_USERNAME_CONSTRAINT: &str = "external_registry_organization_host_username_uidx";
 
@@ -245,10 +245,20 @@ pub async fn delete_external_registry(
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
     let registry = find_registry(tx, organization_id, registry_id).await?;
+    external_registry::Entity::find_by_id(registry_id)
+        .filter(external_registry::Column::OrganizationId.eq(organization_id))
+        .lock_exclusive()
+        .one(tx)
+        .await?
+        .ok_or_else(|| AppError::NotFound("External registry not found".into()))?;
+    if manifest_references_registry(tx, organization_id, registry_id).await? {
+        return Err(AppError::Conflict(
+            "Registry is used by one or more revisions".into(),
+        ));
+    }
     external_registry::Entity::delete_by_id(registry_id)
         .exec(tx)
-        .await
-        .map_err(map_registry_delete_error)?;
+        .await?;
     secret::Entity::delete_by_id(registry_id).exec(tx).await?;
     record_event(
         tx,
@@ -332,7 +342,6 @@ struct ExternalRegistrySecret {
     token: String,
 }
 
-// ponytail: secret id == registry id, no extra column/migration for one token.
 async fn store_secret(
     tx: &impl ConnectionTrait,
     organization_id: Uuid,
@@ -343,9 +352,12 @@ async fn store_secret(
         token: token.to_owned(),
     })
     .map_err(|error| AppError::Internal(error.to_string()))?;
-    let ciphertext =
-        lib::secrets::encrypt(&get_app_state().secrets, &tenant_key(organization_id), &plaintext)
-            .await?;
+    let ciphertext = lib::secrets::encrypt(
+        &get_app_state().secrets,
+        &tenant_key(organization_id),
+        &plaintext,
+    )
+    .await?;
     if let Some(existing) = secret::Entity::find_by_id(registry_id)
         .filter(secret::Column::OrganizationId.eq(organization_id))
         .one(tx)
@@ -379,9 +391,12 @@ pub async fn load_secret(organization_id: Uuid, registry_id: Uuid) -> Result<Str
         .ok_or_else(|| {
             AppError::Conflict("External registry credentials are unavailable".into())
         })?;
-    let plaintext =
-        lib::secrets::decrypt(&get_app_state().secrets, &tenant_key(organization_id), &row.ciphertext)
-            .await?;
+    let plaintext = lib::secrets::decrypt(
+        &get_app_state().secrets,
+        &tenant_key(organization_id),
+        &row.ciphertext,
+    )
+    .await?;
     let secret: ExternalRegistrySecret = serde_json::from_slice(&plaintext)
         .map_err(|error| AppError::Internal(error.to_string()))?;
     Ok(secret.token)
@@ -415,12 +430,21 @@ fn map_registry_write_error(error: sea_orm::DbErr) -> AppError {
     }
 }
 
-fn map_registry_delete_error(error: sea_orm::DbErr) -> AppError {
-    if error.to_string().contains(DEPENDENCY_CONSTRAINT) {
-        AppError::Conflict("Registry is used by one or more container versions".into())
-    } else {
-        error.into()
-    }
+async fn manifest_references_registry(
+    tx: &impl ConnectionTrait,
+    organization_id: Uuid,
+    registry_id: Uuid,
+) -> Result<bool, AppError> {
+    let referenced = project_revision_manifest::Entity::find()
+        .filter(project_revision_manifest::Column::OrganizationId.eq(organization_id))
+        .filter(Expr::cust_with_values(
+            "external_registry_ids @> ARRAY[?]::uuid[]",
+            [registry_id],
+        ))
+        .one(tx)
+        .await?
+        .is_some();
+    Ok(referenced)
 }
 
 fn response(registry: &external_registry::Model) -> ExternalRegistryResponse {
@@ -437,11 +461,7 @@ fn response(registry: &external_registry::Model) -> ExternalRegistryResponse {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        DEPENDENCY_CONSTRAINT, ExternalRegistryProvider, map_registry_delete_error,
-        required_secret, trusted_registry_host,
-    };
-    use crate::errors::AppError;
+    use super::{ExternalRegistryProvider, required_secret, trusted_registry_host};
 
     #[test]
     fn allows_only_supported_private_registry_hosts() {
@@ -486,17 +506,5 @@ mod tests {
     fn validates_without_normalizing_tokens() {
         assert_eq!(required_secret(" token ".into()).unwrap(), " token ");
         assert!(required_secret("  ".into()).is_err());
-    }
-
-    #[test]
-    fn maps_only_the_registry_dependency_constraint_to_conflict() {
-        assert!(matches!(
-            map_registry_delete_error(sea_orm::DbErr::Custom(DEPENDENCY_CONSTRAINT.into())),
-            AppError::Conflict(_)
-        ));
-        assert!(matches!(
-            map_registry_delete_error(sea_orm::DbErr::Custom("another constraint".into())),
-            AppError::Internal(_)
-        ));
     }
 }

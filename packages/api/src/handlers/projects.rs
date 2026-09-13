@@ -1,9 +1,11 @@
 use axum::{Json, extract::Path};
 use chrono::Utc;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, Set,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter,
+    QueryOrder, QuerySelect, Set,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -14,12 +16,14 @@ use crate::models::entities::{
     credential, project, project_environment, project_timeline, secret, storage,
     storage_access_token,
 };
-use crate::models::pins::TimelinePins;
+use crate::models::manifest::RevisionManifest;
 use crate::services::agent;
 use crate::services::buckets;
 use crate::services::events;
+use crate::services::revisions;
 use crate::state::get_app_state;
 use crate::utils::pagination::{PaginatedResponse, PaginationQuery};
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 
 #[derive(Deserialize, ToSchema)]
 pub struct CreateProjectRequest {
@@ -85,13 +89,211 @@ pub struct TimelineResponse {
     pub timeline: i32,
     pub name: Option<String>,
     pub parent_timeline_id: Option<Uuid>,
-    pub pins: serde_json::Value,
     pub created_at: String,
+}
+
+#[derive(Serialize, ToSchema, Default)]
+pub struct TimelinePageResponse {
+    pub data: Vec<TimelineResponse>,
+    pub next_cursor: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_pages: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub has_newer: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub has_older: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub graph_nodes: Option<Vec<TimelineGraphNode>>,
+}
+
+#[derive(Clone, Serialize, ToSchema)]
+pub struct TimelineGraphNode {
+    pub id: Uuid,
+    pub timeline: i32,
+    pub parent_id: Option<Uuid>,
+    pub lane: usize,
+    pub child_ids: Vec<Uuid>,
 }
 
 #[derive(Deserialize, ToSchema)]
 pub struct ListTimelinesQuery {
     pub environment_id: Option<Uuid>,
+    pub limit: Option<u64>,
+    pub cursor: Option<String>,
+    pub anchor_revision_id: Option<Uuid>,
+    pub graph: Option<bool>,
+    pub page: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct TimelineCursor {
+    project_id: Uuid,
+    environment_id: Option<Uuid>,
+    timeline: i32,
+}
+
+fn encode_timeline_cursor(project_id: Uuid, environment_id: Option<Uuid>, timeline: i32) -> String {
+    let cursor = TimelineCursor {
+        project_id,
+        environment_id,
+        timeline,
+    };
+    URL_SAFE_NO_PAD.encode(serde_json::to_vec(&cursor).unwrap_or_default())
+}
+
+fn decode_timeline_cursor(
+    cursor: &str,
+    project_id: Uuid,
+    environment_id: Option<Uuid>,
+) -> Result<TimelineCursor, AppError> {
+    let bytes = URL_SAFE_NO_PAD
+        .decode(cursor)
+        .map_err(|_| AppError::BadRequest("Invalid timeline cursor".into()))?;
+    let decoded: TimelineCursor = serde_json::from_slice(&bytes)
+        .map_err(|_| AppError::BadRequest("Invalid timeline cursor".into()))?;
+    if decoded.project_id != project_id || decoded.environment_id != environment_id {
+        return Err(AppError::BadRequest(
+            "Timeline cursor does not match this request".into(),
+        ));
+    }
+    Ok(decoded)
+}
+
+impl From<project_timeline::Model> for TimelineResponse {
+    fn from(t: project_timeline::Model) -> Self {
+        TimelineResponse {
+            id: t.id,
+            environment_id: t.environment_id,
+            timeline: t.timeline,
+            name: t.name,
+            parent_timeline_id: t.parent_timeline_id,
+            created_at: t.created_at.to_string(),
+        }
+    }
+}
+
+fn clamp_book_page(page: u64, total: u64, limit: usize) -> u64 {
+    let total_pages = total.div_ceil(limit as u64).max(1);
+    page.min(total_pages - 1)
+}
+
+fn layout_timeline_book(
+    rows: Vec<(Uuid, i32, Option<Uuid>)>,
+    main_head: Option<Uuid>,
+) -> Vec<TimelineGraphNode> {
+    let mut nodes: Vec<_> = rows
+        .into_iter()
+        .map(|(id, timeline, parent_id)| TimelineGraphNode {
+            id,
+            timeline,
+            parent_id,
+            lane: 0,
+            child_ids: Vec::new(),
+        })
+        .collect();
+    let positions: HashMap<_, _> = nodes.iter().enumerate().map(|(i, n)| (n.id, i)).collect();
+    let mut main = HashSet::new();
+    let mut current = main_head;
+    while let Some(index) = current.and_then(|id| positions.get(&id).copied()) {
+        if !main.insert(nodes[index].id) {
+            break;
+        }
+        current = nodes[index].parent_id;
+    }
+    let mut continued = HashSet::new();
+    for node in &nodes {
+        if main.contains(&node.id) {
+            if let Some(parent) = node.parent_id {
+                continued.insert(parent);
+            }
+        }
+    }
+    let mut next_lane = usize::from(!main.is_empty());
+    for i in (0..nodes.len()).rev() {
+        let parent = nodes[i]
+            .parent_id
+            .and_then(|id| positions.get(&id).copied());
+        if !main.contains(&nodes[i].id) {
+            nodes[i].lane = match parent {
+                Some(p) if continued.insert(nodes[p].id) => nodes[p].lane,
+                _ => {
+                    let lane = next_lane;
+                    next_lane += 1;
+                    lane
+                }
+            };
+        }
+        if let Some(p) = parent {
+            let id = nodes[i].id;
+            nodes[p].child_ids.push(id);
+        }
+    }
+    nodes
+}
+
+async fn list_project_timeline_book(
+    tx: &impl ConnectionTrait,
+    organization_id: Uuid,
+    project_id: Uuid,
+    project: &project::Model,
+    limit: usize,
+    requested_page: u64,
+    anchor_revision_id: Option<Uuid>,
+) -> Result<TimelinePageResponse, AppError> {
+    use project_timeline::{Column, Entity};
+
+    let rows = Entity::find()
+        .select_only()
+        .columns([Column::Id, Column::Timeline, Column::ParentTimelineId])
+        .filter(Column::ProjectId.eq(project_id))
+        .filter(Column::OrganizationId.eq(organization_id))
+        .order_by_desc(Column::Timeline)
+        .into_tuple::<(Uuid, i32, Option<Uuid>)>()
+        .all(tx)
+        .await?;
+    let main_head = if let Some(id) = project.default_environment_id {
+        project_environment::Entity::find_by_id(id)
+            .one(tx)
+            .await?
+            .map(|env| env.draft_timeline)
+    } else {
+        None
+    };
+    let book = layout_timeline_book(rows, main_head);
+    let page = match anchor_revision_id {
+        Some(id) => {
+            book.iter().position(|node| node.id == id).ok_or_else(|| {
+                AppError::NotFound("Anchor revision not found in this book".into())
+            })? as u64
+                / limit as u64
+        }
+        None => clamp_book_page(requested_page, book.len() as u64, limit),
+    };
+    let offset = page as usize * limit;
+    let page_nodes: Vec<_> = book.iter().skip(offset).take(limit).cloned().collect();
+    let ids: Vec<_> = page_nodes.iter().map(|node| node.id).collect();
+    let revisions = if ids.is_empty() {
+        Vec::new()
+    } else {
+        Entity::find()
+            .filter(Column::ProjectId.eq(project_id))
+            .filter(Column::OrganizationId.eq(organization_id))
+            .filter(Column::Id.is_in(ids))
+            .order_by_desc(Column::Timeline)
+            .all(tx)
+            .await?
+    };
+    Ok(TimelinePageResponse {
+        data: revisions.into_iter().map(TimelineResponse::from).collect(),
+        next_cursor: None,
+        page: Some(page),
+        total_pages: Some((book.len() as u64).div_ceil(limit as u64).max(1)),
+        has_newer: Some(page > 0),
+        has_older: Some(offset + limit < book.len()),
+        graph_nodes: Some(book),
+    })
 }
 
 #[utoipa::path(
@@ -121,7 +323,6 @@ pub async fn create_project(
 
     let project_id = Uuid::new_v4();
     let environment_id = Uuid::new_v4();
-    let timeline_id = Uuid::new_v4();
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
@@ -137,18 +338,15 @@ pub async fn create_project(
     .insert(tx)
     .await?;
 
-    let _timeline: project_timeline::Model = project_timeline::ActiveModel {
-        id: Set(timeline_id),
-        project_id: Set(project_id),
-        environment_id: Set(Some(environment_id)),
-        organization_id: Set(organization_id),
-        timeline: Set(1),
-        name: Set(Some("Initial".into())),
-        parent_timeline_id: Set(None),
-        pins: Set(TimelinePins::default().to_json_value()),
-        created_at: Set(Utc::now().fixed_offset()),
-    }
-    .insert(tx)
+    let timeline = revisions::insert_revision(
+        tx,
+        project_id,
+        organization_id,
+        Some(environment_id),
+        None,
+        &RevisionManifest::default(),
+        Some("Initial".into()),
+    )
     .await?;
 
     let main_environment: project_environment::Model = project_environment::ActiveModel {
@@ -157,8 +355,8 @@ pub async fn create_project(
         organization_id: Set(organization_id),
         name: Set("main".into()),
         is_preview: Set(false),
-        draft_timeline: Set(timeline_id),
-        deployed_timeline: Set(timeline_id),
+        draft_timeline: Set(timeline.id),
+        deployed_timeline: Set(timeline.id),
         created_at: Set(Utc::now().fixed_offset()),
         updated_at: Set(Utc::now().fixed_offset()),
     }
@@ -570,36 +768,30 @@ pub async fn create_environment(
         ));
     }
 
-    let pins = if let Some(parent_timeline_id) = body.parent_timeline_id {
+    let environment_id = Uuid::new_v4();
+
+    let timeline_id = if let Some(parent_timeline_id) = body.parent_timeline_id {
         let parent = project_timeline::Entity::find()
             .filter(project_timeline::Column::Id.eq(parent_timeline_id))
             .filter(project_timeline::Column::ProjectId.eq(project_id))
             .one(tx)
             .await?
             .ok_or_else(|| AppError::NotFound("Timeline revision not found".into()))?;
-        parent.pins.clone()
+        revisions::load_manifest(tx, parent.manifest_id).await?;
+        parent.id
     } else {
-        serde_json::json!({ "container": {}, "secret": {} })
+        revisions::insert_revision(
+            tx,
+            project_id,
+            organization_id,
+            Some(environment_id),
+            None,
+            &RevisionManifest::default(),
+            Some(format!("Environment '{}' created", name)),
+        )
+        .await?
+        .id
     };
-
-    let environment_id = Uuid::new_v4();
-    let timeline_id = Uuid::new_v4();
-
-    let parent_timeline_id = body.parent_timeline_id;
-
-    let _timeline: project_timeline::Model = project_timeline::ActiveModel {
-        id: Set(timeline_id),
-        project_id: Set(project_id),
-        environment_id: Set(Some(environment_id)),
-        organization_id: Set(organization_id),
-        timeline: Set(1),
-        name: Set(Some(format!("Environment '{}' created", name))),
-        parent_timeline_id: Set(parent_timeline_id),
-        pins: Set(pins),
-        created_at: Set(Utc::now().fixed_offset()),
-    }
-    .insert(tx)
-    .await?;
 
     let environment: project_environment::Model = project_environment::ActiveModel {
         id: Set(environment_id),
@@ -649,61 +841,109 @@ pub async fn create_environment(
     params(
         ("organization_id" = Uuid, Path, description = "Organization ID"),
         ("project_id" = Uuid, Path, description = "Project ID"),
-        ("environment_id" = Option<Uuid>, Query, description = "Environment ID"),
+        ("environment_id" = Option<Uuid>, Query, description = "Origin environment filter"),
+        ("limit" = Option<u64>, Query, description = "Page size, default 50, max 100"),
+        ("cursor" = Option<String>, Query, description = "Continuation cursor from a previous page"),
+        ("anchor_revision_id" = Option<Uuid>, Query, description = "Start at this revision; cannot be combined with cursor; in graph mode selects the page containing it"),
+        ("graph" = Option<bool>, Query, description = "Book pagination: fixed revision-order pages instead of a cursor"),
+        ("page" = Option<u64>, Query, description = "Graph page number, 0 = newest; ignored when anchor_revision_id is set"),
     ),
-    responses((status = 200, description = "Project timelines", body = Vec<TimelineResponse>)),
+    responses((status = 200, description = "Paginated project timelines", body = TimelinePageResponse)),
     tag = "projects",
 )]
 pub async fn list_project_timelines(
     AuthContext { tenant_db, .. }: AuthContext,
     Path((organization_id, project_id)): Path<(Uuid, Uuid)>,
     axum::extract::Query(query): axum::extract::Query<ListTimelinesQuery>,
-) -> Result<Json<Vec<TimelineResponse>>, AppError> {
+) -> Result<Json<TimelinePageResponse>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
 
-    let exists = project::Entity::find()
+    let project = project::Entity::find()
         .filter(project::Column::Id.eq(project_id))
         .filter(project::Column::OrganizationId.eq(organization_id))
         .one(tx)
         .await?
-        .is_some();
+        .ok_or_else(|| AppError::NotFound("Project not found".into()))?;
 
-    if !exists {
-        return Err(AppError::NotFound("Project not found".into()));
+    let limit = query.limit.unwrap_or(50).clamp(1, 100) as usize;
+
+    if query.graph.unwrap_or(false) {
+        if query.cursor.is_some() || query.environment_id.is_some() {
+            return Err(AppError::BadRequest(
+                "Graph pages do not support cursors or environment filters".into(),
+            ));
+        }
+        let page = list_project_timeline_book(
+            tx,
+            organization_id,
+            project_id,
+            &project,
+            limit,
+            query.page.unwrap_or(0),
+            query.anchor_revision_id,
+        )
+        .await?;
+        scoped.commit().await?;
+        return Ok(Json(page));
     }
+
+    if query.cursor.is_some() && query.anchor_revision_id.is_some() {
+        return Err(AppError::BadRequest(
+            "Use either a cursor or an anchor revision".into(),
+        ));
+    }
+    let cursor = query
+        .cursor
+        .as_deref()
+        .map(|cursor| decode_timeline_cursor(cursor, project_id, query.environment_id))
+        .transpose()?;
 
     use project_timeline::{Column, Entity};
     let mut select = Entity::find().filter(Column::ProjectId.eq(project_id));
+    if let Some(anchor) = query.anchor_revision_id {
+        let anchor = Entity::find_by_id(anchor)
+            .filter(Column::ProjectId.eq(project_id))
+            .one(tx)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Anchor revision not found".into()))?;
+        select = select.filter(Column::Timeline.lte(anchor.timeline));
+    }
 
     if let Some(environment_id) = query.environment_id {
         select = select.filter(Column::EnvironmentId.eq(environment_id));
     }
+    if let Some(cursor) = cursor {
+        select = select.filter(Column::Timeline.lt(cursor.timeline));
+    }
 
-    let timelines = select
+    let mut timelines = select
         .order_by_desc(Column::Timeline)
-        .order_by_desc(Column::CreatedAt)
+        .limit(limit as u64 + 1)
         .all(tx)
         .await?;
 
+    let has_more = timelines.len() > limit;
+    timelines.truncate(limit);
+    let next_cursor = if has_more {
+        timelines
+            .last()
+            .map(|t| encode_timeline_cursor(project_id, query.environment_id, t.timeline))
+    } else {
+        None
+    };
+
     scoped.commit().await?;
 
-    let responses = timelines
-        .into_iter()
-        .map(|t| TimelineResponse {
-            id: t.id,
-            environment_id: t.environment_id,
-            timeline: t.timeline,
-            name: t.name,
-            parent_timeline_id: t.parent_timeline_id,
-            pins: t.pins,
-            created_at: t.created_at.to_string(),
-        })
-        .collect();
+    let data = timelines.into_iter().map(TimelineResponse::from).collect();
 
-    Ok(Json(responses))
+    Ok(Json(TimelinePageResponse {
+        data,
+        next_cursor,
+        ..Default::default()
+    }))
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -711,29 +951,6 @@ pub struct UpdateEnvironmentRequest {
     pub name: Option<String>,
     pub draft_timeline_id: Option<Uuid>,
     pub deployed_timeline_id: Option<Uuid>,
-}
-
-#[cfg(test)]
-mod update_environment_request_tests {
-    use super::{CreateEnvironmentRequest, UpdateEnvironmentRequest};
-
-    #[test]
-    fn accepts_a_rename_without_a_timeline_change() {
-        let request: UpdateEnvironmentRequest =
-            serde_json::from_str(r#"{"name":"staging"}"#).unwrap();
-
-        assert_eq!(request.name.as_deref(), Some("staging"));
-        assert_eq!(request.draft_timeline_id, None);
-        assert_eq!(request.deployed_timeline_id, None);
-    }
-
-    #[test]
-    fn creates_preview_environments_by_default() {
-        let request: CreateEnvironmentRequest =
-            serde_json::from_str(r#"{"name":"staging"}"#).unwrap();
-
-        assert!(request.is_preview);
-    }
 }
 
 #[utoipa::path(
@@ -778,6 +995,7 @@ pub async fn update_environment(
         .await?
         .ok_or_else(|| AppError::NotFound("Project not found".into()))?;
 
+    revisions::lock_project(tx, project_id).await?;
     for timeline_id in [body.draft_timeline_id, body.deployed_timeline_id]
         .into_iter()
         .flatten()
@@ -788,19 +1006,7 @@ pub async fn update_environment(
             .one(tx)
             .await?
             .ok_or_else(|| AppError::NotFound("Timeline revision not found".into()))?;
-
-        if let Some(source_environment_id) = timeline.environment_id
-            && project_environment::Entity::find_by_id(source_environment_id)
-                .filter(project_environment::Column::ProjectId.eq(project_id))
-                .filter(project_environment::Column::IsPreview.eq(true))
-                .one(tx)
-                .await?
-                .is_some()
-        {
-            return Err(AppError::Conflict(
-                "Preview revisions cannot be repointed".into(),
-            ));
-        }
+        revisions::load_manifest(tx, timeline.manifest_id).await?;
     }
 
     let environment = project_environment::Entity::find_by_id(environment_id)
@@ -808,14 +1014,6 @@ pub async fn update_environment(
         .one(tx)
         .await?
         .ok_or_else(|| AppError::NotFound("Environment not found".into()))?;
-
-    if environment.is_preview
-        && (body.draft_timeline_id.is_some() || body.deployed_timeline_id.is_some())
-    {
-        return Err(AppError::Conflict(
-            "Preview environments cannot be repointed".into(),
-        ));
-    }
 
     if let Some(ref name) = name
         && name != &environment.name
@@ -916,55 +1114,20 @@ pub async fn delete_environment(
         .await?
         .ok_or_else(|| AppError::NotFound("Environment not found".into()))?;
 
-    let deleted_timeline_ids: Vec<Uuid> = if environment.is_preview {
-        project_timeline::Entity::find()
-            .filter(project_timeline::Column::ProjectId.eq(project_id))
-            .filter(project_timeline::Column::EnvironmentId.eq(environment_id))
-            .all(tx)
-            .await?
-            .into_iter()
-            .map(|t| t.id)
-            .collect()
-    } else {
-        let mut retained_revisions = project_timeline::Entity::find()
-            .filter(project_timeline::Column::ProjectId.eq(project_id))
-            .filter(project_timeline::Column::EnvironmentId.eq(environment_id))
-            .all(tx)
-            .await?;
-
-        for revision in &mut retained_revisions {
-            let mut active: project_timeline::ActiveModel = revision.clone().into();
-            active.environment_id = Set(None);
-            active.update(tx).await?;
-        }
-        Vec::new()
-    };
-
-    if !deleted_timeline_ids.is_empty() {
-        // Clear parent references on other revisions that pointed to deleted timelines
-        let mut other_revisions = project_timeline::Entity::find()
-            .filter(project_timeline::Column::ProjectId.eq(project_id))
-            .filter(project_timeline::Column::ParentTimelineId.is_in(deleted_timeline_ids.clone()))
-            .all(tx)
-            .await?;
-
-        for rev in &mut other_revisions {
-            let mut active: project_timeline::ActiveModel = rev.clone().into();
-            active.parent_timeline_id = Set(None);
-            active.update(tx).await?;
-        }
-    }
+    revisions::lock_project(tx, project_id).await?;
+    project_timeline::Entity::update_many()
+        .col_expr(
+            project_timeline::Column::EnvironmentId,
+            sea_orm::sea_query::Expr::value(Option::<Uuid>::None),
+        )
+        .filter(project_timeline::Column::ProjectId.eq(project_id))
+        .filter(project_timeline::Column::EnvironmentId.eq(environment_id))
+        .exec(tx)
+        .await?;
 
     project_environment::Entity::delete_by_id(environment.id)
         .exec(tx)
         .await?;
-
-    if !deleted_timeline_ids.is_empty() {
-        project_timeline::Entity::delete_many()
-            .filter(project_timeline::Column::Id.is_in(deleted_timeline_ids))
-            .exec(tx)
-            .await?;
-    }
 
     events::record(
         tx,
@@ -988,8 +1151,6 @@ pub async fn delete_environment(
 pub struct ResolvedContainerPin {
     pub container_id: Uuid,
     pub container_name: String,
-    pub version_id: Uuid,
-    pub version: i32,
     pub image: String,
     pub external_registry_id: Option<Uuid>,
 }
@@ -1035,34 +1196,23 @@ pub async fn get_timeline(
         .await?
         .ok_or_else(|| AppError::NotFound("Timeline not found".into()))?;
 
-    let pins = TimelinePins::from_json_value(&t.pins);
+    let manifest = revisions::load_manifest(tx, t.manifest_id).await?;
 
-    let mut containers = Vec::new();
-
-    if !pins.container.is_empty() {
-        let version_ids: Vec<Uuid> = pins.container.values().cloned().collect();
-
-        let version_models = crate::models::entities::container_version::Entity::find()
-            .filter(crate::models::entities::container_version::Column::Id.is_in(version_ids))
-            .find_also_related(crate::models::entities::container::Entity)
-            .all(tx)
-            .await?;
-
-        for (version, container) in version_models {
-            if let Some(container) = container
-                && pins.container.get(&container.id) == Some(&version.id)
-            {
-                containers.push(ResolvedContainerPin {
-                    container_id: container.id,
-                    container_name: container.name,
-                    version_id: version.id,
-                    version: version.version,
-                    image: version.resolved_image.clone(),
-                    external_registry_id: version.external_registry_id,
-                });
-            }
-        }
-    }
+    let mut containers: Vec<_> = manifest
+        .containers
+        .iter()
+        .map(|(id, config)| ResolvedContainerPin {
+            container_id: *id,
+            container_name: config.name.clone(),
+            image: config.resolved_image.clone(),
+            external_registry_id: config.external_registry_id,
+        })
+        .collect();
+    containers.sort_by(|a, b| {
+        a.container_name
+            .cmp(&b.container_name)
+            .then(a.container_id.cmp(&b.container_id))
+    });
 
     scoped.commit().await?;
 

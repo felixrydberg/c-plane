@@ -29,10 +29,6 @@ const currentSection = computed(() => {
 })
 const projectRoutesEnabled = computed(() => PROJECT_PAGES.includes(currentSection.value))
 const environmentRoutesEnabled = computed(() => ENVIRONMENT_PAGES.includes(currentSection.value))
-const isViewingDeployed = computed(() =>
-  route.query.revision === store.environment?.deployed_timeline
-)
-
 // Projects are loaded by the auth plugin on every request.
 // Refresh only needed after create/delete.
 async function refreshProjects() {
@@ -152,7 +148,8 @@ function selectEnvironment(b: Environment) {
   const url = environmentRoutesEnabled.value
     ? `/${slug}/${baseSection}/${pid}/${b.id}`
     : `/${slug}/${baseSection}/${pid}`
-  router.push(`${url}?revision=${isViewingDeployed.value ? b.deployed_timeline : b.draft_timeline}`)
+  const revision = typeof route.query.revision === 'string' ? route.query.revision : undefined
+  router.push(`${url}${revision ? `?revision=${encodeURIComponent(revision)}` : ''}`)
 }
 
 async function onProjectCreated() { await refreshProjects() }
@@ -305,7 +302,7 @@ async function onConfirmDeleteEnvironment() {
     <UModal v-model:open="deleteEnvironmentModal" title="Delete Environment" :ui="{ content: 'max-w-sm' }">
       <template #body>
         <p class="text-sm">
-          Are you sure you want to delete the environment <strong class="capitalize">{{ store.environment?.name }}</strong>? {{ store.environment?.is_preview ? 'Its timeline revisions will be deleted.' : 'Timeline revisions will be preserved and can be repointed to.' }}
+          Are you sure you want to delete the environment <strong class="capitalize">{{ store.environment?.name }}</strong>? Its timeline revisions will remain in project history and can be repointed to.
         </p>
         <div class="flex justify-end gap-3 pt-4">
           <UButton variant="ghost" color="neutral" @click="deleteEnvironmentModal = false">Cancel</UButton>

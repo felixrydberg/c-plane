@@ -1,2 +1,2 @@
 pub use lib::entities;
-pub mod pins;
+pub mod manifest;
