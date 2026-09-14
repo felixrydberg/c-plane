@@ -368,7 +368,7 @@ watch(() => store.refreshKey, () => { void refreshAll() })
         <p class="mt-1 text-sm text-muted">{{ isRevisionView ? revisionViewDescription : 'Runtime services in this environment.' }}</p>
       </div>
       <UButton v-if="!isRevisionView" :icon="ICONS.plus" color="primary" :to="`/${organizationSlug}/compute/containers/${projectId}/${environmentId}/new`">Add container</UButton>
-      <UButton v-else color="neutral" variant="soft" :to="`/${organizationSlug}/compute/containers/${projectId}/${environmentId}`">Back to current revision</UButton>
+      <UButton v-else color="neutral" variant="ghost" :to="`/${organizationSlug}/compute/containers/${projectId}/${environmentId}`">Back to current revision</UButton>
     </header>
 
     <div class="flex items-center gap-2">
