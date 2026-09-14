@@ -690,6 +690,24 @@ export interface components {
         };
         /** @enum {string} */
         ContainerChangeType: "added" | "changed" | "removed";
+        ContainerConfig: {
+            cpu?: string | null;
+            env?: unknown;
+            /** Format: uuid */
+            external_registry_id?: string | null;
+            health_check?: unknown;
+            image: string;
+            memory?: string | null;
+            name: string;
+            /** Format: int32 */
+            port?: number | null;
+            public: boolean;
+            /** Format: uuid */
+            region_id: string;
+            /** Format: int32 */
+            replica_count: number;
+            resolved_image: string;
+        };
         /** @enum {string} */
         ContainerHistoryBaseline: "initial" | "earliest_available";
         ContainerHistoryChange: {
@@ -703,13 +721,17 @@ export interface components {
             changes: components["schemas"]["ContainerHistoryChange"][];
             created_at: string;
             /** Format: uuid */
-            id: string;
+            revision_id: string;
             /** Format: int32 */
-            version: number;
+            revision_number: number;
+        };
+        ContainerHistoryPage: {
+            data: components["schemas"]["ContainerHistoryEntry"][];
+            next_cursor?: string | null;
         };
         ContainerResponse: {
+            configuration?: null | components["schemas"]["ContainerConfig"];
             created_at: string;
-            current_version?: null | components["schemas"]["ContainerVersionResponse"];
             /** Format: uuid */
             id: string;
             name: string;
@@ -719,27 +741,9 @@ export interface components {
             project_id?: string | null;
             /** Format: uuid */
             region_id: string;
+            /** Format: uuid */
+            revision_id?: string | null;
             updated_at: string;
-        };
-        ContainerVersionResponse: {
-            cpu?: string | null;
-            created_at: string;
-            env?: unknown;
-            /** Format: uuid */
-            external_registry_id?: string | null;
-            health_check?: unknown;
-            /** Format: uuid */
-            id: string;
-            image: string;
-            memory?: string | null;
-            /** Format: int32 */
-            port?: number | null;
-            public: boolean;
-            /** Format: int32 */
-            replica_count: number;
-            resolved_image: string;
-            /** Format: int32 */
-            version: number;
         };
         CreateAccessTokenRequest: {
             bucket_permissions: components["schemas"]["BucketPermissionRequest"][];
@@ -922,6 +926,18 @@ export interface components {
         HealthResponse: {
             status: string;
         };
+        ListTimelinesQuery: {
+            /** Format: uuid */
+            anchor_revision_id?: string | null;
+            cursor?: string | null;
+            /** Format: uuid */
+            environment_id?: string | null;
+            graph?: boolean | null;
+            /** Format: int64 */
+            limit?: number | null;
+            /** Format: int64 */
+            page?: number | null;
+        };
         ManagedRegistryResponse: {
             created_at: string;
             /** Format: uuid */
@@ -1055,10 +1071,6 @@ export interface components {
             /** Format: uuid */
             external_registry_id?: string | null;
             image: string;
-            /** Format: int32 */
-            version: number;
-            /** Format: uuid */
-            version_id: string;
         };
         ResolvedManagedRegistry: {
             access_key_id: string;
@@ -1120,6 +1132,31 @@ export interface components {
             name: string;
             provider_region?: string | null;
         };
+        TimelineGraphNode: {
+            child_ids: string[];
+            /** Format: uuid */
+            id: string;
+            lane: number;
+            /** Format: uuid */
+            parent_id?: string | null;
+            /** Format: int32 */
+            timeline: number;
+        };
+        TimelinePageResponse: {
+            data: components["schemas"]["TimelineResponse"][];
+            /** @description Whole-book topology, loaded once by the modal. Revision details remain paginated. */
+            graph_nodes?: components["schemas"]["TimelineGraphNode"][] | null;
+            has_newer?: boolean | null;
+            has_older?: boolean | null;
+            next_cursor?: string | null;
+            /**
+             * Format: int64
+             * @description Book page (0 = newest). Present in graph mode.
+             */
+            page?: number | null;
+            /** Format: int64 */
+            total_pages?: number | null;
+        };
         TimelineResponse: {
             created_at: string;
             /** Format: uuid */
@@ -1129,7 +1166,6 @@ export interface components {
             name?: string | null;
             /** Format: uuid */
             parent_timeline_id?: string | null;
-            pins: unknown;
             /** Format: int32 */
             timeline: number;
         };
@@ -1193,7 +1229,7 @@ export interface operations {
                 project_id?: string;
                 /** @description Filter by environment */
                 environment_id?: string;
-                /** @description Revision whose pinned containers to return */
+                /** @description Revision whose manifest containers to return */
                 timeline_id?: string;
             };
             header?: never;
@@ -1253,9 +1289,9 @@ export interface operations {
     get_container: {
         parameters: {
             query?: {
-                /** @description Environment that owns the revision history */
+                /** @description Environment whose draft or revision to read */
                 environment_id?: string;
-                /** @description Revision whose pinned container version to return */
+                /** @description Revision whose manifest container to return */
                 timeline_id?: string;
             };
             header?: never;
@@ -1329,7 +1365,7 @@ export interface operations {
             query: {
                 /** @description Environment ID for the revision */
                 environment_id: string;
-                /** @description Revision that supplies the container update base */
+                /** @description Draft revision that supplies the update base */
                 timeline_id: string;
             };
             header?: never;
@@ -1370,7 +1406,7 @@ export interface operations {
             query: {
                 /** @description Environment ID for the revision */
                 environment_id: string;
-                /** @description Draft revision to deploy */
+                /** @description Draft revision to redeploy */
                 timeline_id: string;
             };
             header?: never;
@@ -1393,13 +1429,6 @@ export interface operations {
                     "application/json": components["schemas"]["ContainerResponse"];
                 };
             };
-            /** @description Container image is not refreshable */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
             /** @description Not found */
             404: {
                 headers: {
@@ -1416,6 +1445,10 @@ export interface operations {
                 environment_id: string;
                 /** @description Selected revision whose ancestry to show */
                 timeline_id: string;
+                /** @description History entries per page (default 10, max 50) */
+                limit?: number;
+                /** @description Continuation cursor from a previous page */
+                cursor?: string;
             };
             header?: never;
             path: {
@@ -1428,16 +1461,16 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Container version ancestry, newest first */
+            /** @description Container configuration changes, newest first */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ContainerHistoryEntry"][];
+                    "application/json": components["schemas"]["ContainerHistoryPage"];
                 };
             };
-            /** @description Container, environment, revision, or version not found */
+            /** @description Container, environment, revision, or manifest not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -2708,8 +2741,18 @@ export interface operations {
     list_project_timelines: {
         parameters: {
             query?: {
-                /** @description Environment ID */
+                /** @description Origin environment filter */
                 environment_id?: string;
+                /** @description Page size, default 50, max 100 */
+                limit?: number;
+                /** @description Continuation cursor from a previous page */
+                cursor?: string;
+                /** @description Start at this revision; cannot be combined with cursor; in graph mode selects the page containing it */
+                anchor_revision_id?: string;
+                /** @description Book pagination: fixed revision-order pages instead of a cursor */
+                graph?: boolean;
+                /** @description Graph page number, 0 = newest; ignored when anchor_revision_id is set */
+                page?: number;
             };
             header?: never;
             path: {
@@ -2722,13 +2765,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Project timelines */
+            /** @description Paginated project timelines */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TimelineResponse"][];
+                    "application/json": components["schemas"]["TimelinePageResponse"];
                 };
             };
         };
@@ -3372,7 +3415,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/octet-stream": Blob;
+                    "application/octet-stream": string;
                 };
             };
             /** @description Object key is required */

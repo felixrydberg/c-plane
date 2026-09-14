@@ -11,13 +11,11 @@ const isOwner = computed(() => store.organization?.member?.role === 'owner')
 const routeProjectId = computed(() => route.params.project_id as string | undefined)
 const routeEnvironmentId = computed(() => route.params.environment_id as string | undefined)
 const navProjectId = computed(() => routeProjectId.value ?? store.project?.id)
+const navEnvironmentId = computed(() => routeEnvironmentId.value ?? store.environment?.id)
 const revisionQuery = computed(() => {
   const revision = typeof route.query.revision === 'string' ? route.query.revision : undefined
   if (revision !== undefined && (revision === store.environment?.draft_timeline || revision === store.environment?.deployed_timeline)) {
     return `?revision=${revision}`
-  }
-  if (store.environment && store.environment.draft_timeline !== store.environment.deployed_timeline) {
-    return `?revision=${store.environment.draft_timeline}`
   }
   return ''
 })
@@ -57,7 +55,7 @@ const mainItems = computed<NavigationMenuItem[]>(() => [
     children: [
       {
         label: 'Containers',
-        to: `/${store.organization?.slug}/compute/containers${navProjectId.value ? `/${navProjectId.value}${routeEnvironmentId.value ? `/${routeEnvironmentId.value}` : ''}` : ''}${revisionQuery.value}`,
+        to: `/${store.organization?.slug}/compute/containers${navProjectId.value ? `/${navProjectId.value}${navEnvironmentId.value ? `/${navEnvironmentId.value}` : ''}` : ''}${revisionQuery.value}`,
       },
     ],
   },

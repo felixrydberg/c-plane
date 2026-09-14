@@ -130,26 +130,6 @@ CREATE TABLE "container" (
 );
 --> statement-breakpoint
 ALTER TABLE "container" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-CREATE TABLE "container_version" (
-	"id" uuid PRIMARY KEY,
-	"container_id" uuid NOT NULL,
-	"organization_id" uuid NOT NULL,
-	"version" integer NOT NULL,
-	"image" text NOT NULL,
-	"resolved_image" text NOT NULL,
-	"public" boolean DEFAULT false NOT NULL,
-	"replica_count" integer DEFAULT 1 NOT NULL,
-	"port" integer,
-	"env" jsonb,
-	"env_secret_refs" jsonb,
-	"cpu" text,
-	"memory" text,
-	"external_registry_id" uuid,
-	"health_check" jsonb,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-ALTER TABLE "container_version" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "credential" (
 	"id" uuid PRIMARY KEY,
 	"organization_id" uuid,
@@ -316,6 +296,18 @@ CREATE TABLE "project_environment" (
 );
 --> statement-breakpoint
 ALTER TABLE "project_environment" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE TABLE "project_revision_manifest" (
+	"id" uuid PRIMARY KEY,
+	"project_id" uuid NOT NULL,
+	"organization_id" uuid NOT NULL,
+	"schema_version" integer NOT NULL,
+	"configuration" jsonb NOT NULL,
+	"external_registry_ids" uuid[] DEFAULT '{}'::uuid[] NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "project_revision_manifest_scope_uidx" UNIQUE("id","project_id","organization_id")
+);
+--> statement-breakpoint
+ALTER TABLE "project_revision_manifest" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "project_timeline" (
 	"id" uuid PRIMARY KEY,
 	"project_id" uuid NOT NULL,
@@ -324,9 +316,10 @@ CREATE TABLE "project_timeline" (
 	"timeline" integer NOT NULL,
 	"name" text,
 	"parent_timeline_id" uuid,
-	"pins" jsonb DEFAULT '{}' NOT NULL,
+	"manifest_id" uuid NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "project_timeline_parent_scope_uidx" UNIQUE("id","project_id","organization_id")
+	CONSTRAINT "project_timeline_parent_scope_uidx" UNIQUE("id","project_id","organization_id"),
+	CONSTRAINT "project_timeline_project_id_timeline_uidx" UNIQUE("project_id","timeline")
 );
 --> statement-breakpoint
 ALTER TABLE "project_timeline" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
@@ -508,10 +501,6 @@ CREATE INDEX "cluster_join_credentials_expires_at_idx" ON "cluster_join_credenti
 CREATE INDEX "cluster_join_credentials_token_hash_idx" ON "cluster_join_credentials" ("token_hash");--> statement-breakpoint
 CREATE INDEX "container_organization_id_idx" ON "container" ("organization_id");--> statement-breakpoint
 CREATE INDEX "container_project_id_idx" ON "container" ("project_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "container_version_container_id_version_uidx" ON "container_version" ("container_id","version");--> statement-breakpoint
-CREATE INDEX "container_version_container_id_idx" ON "container_version" ("container_id");--> statement-breakpoint
-CREATE INDEX "container_version_organization_id_idx" ON "container_version" ("organization_id");--> statement-breakpoint
-CREATE INDEX "container_version_external_registry_id_idx" ON "container_version" ("external_registry_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "credential_access_key_id_uidx" ON "credential" ("access_key_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "credential_secret_id_uidx" ON "credential" ("secret_id");--> statement-breakpoint
 CREATE INDEX "credential_organization_id_idx" ON "credential" ("organization_id");--> statement-breakpoint
@@ -551,11 +540,16 @@ CREATE UNIQUE INDEX "project_environment_project_id_name_uidx" ON "project_envir
 CREATE UNIQUE INDEX "project_environment_id_project_id_organization_id_uidx" ON "project_environment" ("id","project_id","organization_id");--> statement-breakpoint
 CREATE INDEX "project_environment_organization_id_idx" ON "project_environment" ("organization_id");--> statement-breakpoint
 CREATE INDEX "project_environment_project_id_idx" ON "project_environment" ("project_id");--> statement-breakpoint
+CREATE INDEX "project_revision_manifest_project_id_idx" ON "project_revision_manifest" ("project_id");--> statement-breakpoint
+CREATE INDEX "project_revision_manifest_organization_id_idx" ON "project_revision_manifest" ("organization_id");--> statement-breakpoint
+CREATE INDEX "project_revision_manifest_external_registry_ids_idx" ON "project_revision_manifest" USING gin ("external_registry_ids");--> statement-breakpoint
 CREATE INDEX "project_timeline_id_idx" ON "project_timeline" ("id");--> statement-breakpoint
 CREATE INDEX "project_timeline_environment_id_idx" ON "project_timeline" ("environment_id");--> statement-breakpoint
 CREATE INDEX "project_timeline_organization_id_idx" ON "project_timeline" ("organization_id");--> statement-breakpoint
 CREATE INDEX "project_timeline_project_id_idx" ON "project_timeline" ("project_id");--> statement-breakpoint
 CREATE INDEX "project_timeline_parent_timeline_id_idx" ON "project_timeline" ("parent_timeline_id");--> statement-breakpoint
+CREATE INDEX "project_timeline_manifest_id_idx" ON "project_timeline" ("manifest_id");--> statement-breakpoint
+CREATE INDEX "project_timeline_project_id_environment_id_timeline_idx" ON "project_timeline" ("project_id","environment_id","timeline" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "regions_slug_idx" ON "regions" ("slug");--> statement-breakpoint
 CREATE INDEX "regions_status_idx" ON "regions" ("status");--> statement-breakpoint
 CREATE INDEX "regions_routing_mode_idx" ON "regions" ("routing_mode");--> statement-breakpoint
@@ -608,9 +602,6 @@ ALTER TABLE "cluster_join_credentials" ADD CONSTRAINT "cluster_join_credentials_
 ALTER TABLE "container" ADD CONSTRAINT "container_project_id_project_id_fkey" FOREIGN KEY ("project_id") REFERENCES "project"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "container" ADD CONSTRAINT "container_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "container" ADD CONSTRAINT "container_region_id_regions_id_fkey" FOREIGN KEY ("region_id") REFERENCES "regions"("id") ON DELETE RESTRICT;--> statement-breakpoint
-ALTER TABLE "container_version" ADD CONSTRAINT "container_version_container_id_container_id_fkey" FOREIGN KEY ("container_id") REFERENCES "container"("id") ON DELETE CASCADE;--> statement-breakpoint
-ALTER TABLE "container_version" ADD CONSTRAINT "container_version_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
-ALTER TABLE "container_version" ADD CONSTRAINT "container_version_external_registry_fk" FOREIGN KEY ("external_registry_id","organization_id") REFERENCES "external_registry"("id","organization_id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "credential" ADD CONSTRAINT "credential_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "credential" ADD CONSTRAINT "credential_secret_id_secret_id_fkey" FOREIGN KEY ("secret_id") REFERENCES "secret"("id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "credential" ADD CONSTRAINT "credential_secret_id_fk" FOREIGN KEY ("secret_id","organization_id") REFERENCES "secret"("id","organization_id") ON DELETE RESTRICT;--> statement-breakpoint
@@ -636,11 +627,14 @@ ALTER TABLE "project" ADD CONSTRAINT "project_organization_id_organization_id_fk
 ALTER TABLE "project" ADD CONSTRAINT "project_default_environment_id_project_environment_id_fkey" FOREIGN KEY ("default_environment_id") REFERENCES "project_environment"("id") ON DELETE SET NULL;--> statement-breakpoint
 ALTER TABLE "project_environment" ADD CONSTRAINT "project_environment_project_id_project_id_fkey" FOREIGN KEY ("project_id") REFERENCES "project"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "project_environment" ADD CONSTRAINT "project_environment_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
-ALTER TABLE "project_environment" ADD CONSTRAINT "project_environment_draft_timeline_project_timeline_id_fkey" FOREIGN KEY ("draft_timeline") REFERENCES "project_timeline"("id") ON DELETE RESTRICT;--> statement-breakpoint
-ALTER TABLE "project_environment" ADD CONSTRAINT "project_environment_deployed_timeline_project_timeline_id_fkey" FOREIGN KEY ("deployed_timeline") REFERENCES "project_timeline"("id") ON DELETE RESTRICT;--> statement-breakpoint
+ALTER TABLE "project_environment" ADD CONSTRAINT "project_environment_draft_scope_fk" FOREIGN KEY ("draft_timeline","project_id","organization_id") REFERENCES "project_timeline"("id","project_id","organization_id");--> statement-breakpoint
+ALTER TABLE "project_environment" ADD CONSTRAINT "project_environment_deployed_scope_fk" FOREIGN KEY ("deployed_timeline","project_id","organization_id") REFERENCES "project_timeline"("id","project_id","organization_id");--> statement-breakpoint
+ALTER TABLE "project_revision_manifest" ADD CONSTRAINT "project_revision_manifest_project_id_project_id_fkey" FOREIGN KEY ("project_id") REFERENCES "project"("id") ON DELETE CASCADE;--> statement-breakpoint
+ALTER TABLE "project_revision_manifest" ADD CONSTRAINT "project_revision_manifest_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "project_timeline" ADD CONSTRAINT "project_timeline_project_id_project_id_fkey" FOREIGN KEY ("project_id") REFERENCES "project"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "project_timeline" ADD CONSTRAINT "project_timeline_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "project_timeline" ADD CONSTRAINT "project_timeline_parent_scope_fk" FOREIGN KEY ("parent_timeline_id","project_id","organization_id") REFERENCES "project_timeline"("id","project_id","organization_id");--> statement-breakpoint
+ALTER TABLE "project_timeline" ADD CONSTRAINT "project_timeline_manifest_scope_fk" FOREIGN KEY ("manifest_id","project_id","organization_id") REFERENCES "project_revision_manifest"("id","project_id","organization_id");--> statement-breakpoint
 ALTER TABLE "regions" ADD CONSTRAINT "regions_s3_provider_id_s3_providers_id_fkey" FOREIGN KEY ("s3_provider_id") REFERENCES "s3_providers"("id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "registry_access_tokens" ADD CONSTRAINT "registry_access_tokens_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "registry_access_tokens" ADD CONSTRAINT "registry_access_tokens_project_scope_fk" FOREIGN KEY ("project_id","organization_id") REFERENCES "project"("id","organization_id") ON DELETE CASCADE;--> statement-breakpoint
@@ -667,7 +661,6 @@ CREATE POLICY "api_keys_tenant_rls" ON "api_keys" AS PERMISSIVE FOR ALL TO "app_
 CREATE POLICY "bucket_grant_platform_select_rls" ON "bucket_grant" AS PERMISSIVE FOR SELECT TO "app_tenant" USING ("bucket_grant"."organization_id" is null);--> statement-breakpoint
 CREATE POLICY "bucket_grant_tenant_rls" ON "bucket_grant" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("bucket_grant"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("bucket_grant"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "container_tenant_rls" ON "container" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("container"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("container"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
-CREATE POLICY "container_version_tenant_rls" ON "container_version" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("container_version"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("container_version"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "credential_platform_select_rls" ON "credential" AS PERMISSIVE FOR SELECT TO "app_tenant" USING ("credential"."organization_id" is null);--> statement-breakpoint
 CREATE POLICY "credential_tenant_rls" ON "credential" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("credential"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("credential"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "event_org_rls" ON "event" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("event"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("event"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
@@ -685,6 +678,9 @@ CREATE POLICY "postgres_database_tenant_rls" ON "postgres_database" AS PERMISSIV
 CREATE POLICY "postgres_database_branch_tenant_rls" ON "postgres_database_branch" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("postgres_database_branch"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("postgres_database_branch"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "project_tenant_rls" ON "project" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("project"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("project"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "project_environment_tenant_rls" ON "project_environment" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("project_environment"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("project_environment"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
+CREATE POLICY "project_revision_manifest_select" ON "project_revision_manifest" AS PERMISSIVE FOR SELECT TO "app_tenant" USING ("project_revision_manifest"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
+CREATE POLICY "project_revision_manifest_insert" ON "project_revision_manifest" AS PERMISSIVE FOR INSERT TO "app_tenant" WITH CHECK ("project_revision_manifest"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
+CREATE POLICY "project_revision_manifest_delete" ON "project_revision_manifest" AS PERMISSIVE FOR DELETE TO "app_tenant" USING ("project_revision_manifest"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "project_timeline_tenant_rls" ON "project_timeline" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("project_timeline"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("project_timeline"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "regions_tenant_select_rls" ON "regions" AS PERMISSIVE FOR SELECT TO "app_tenant" USING (true);--> statement-breakpoint
 CREATE POLICY "registry_access_tokens_tenant_rls" ON "registry_access_tokens" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("registry_access_tokens"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("registry_access_tokens"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint

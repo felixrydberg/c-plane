@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ContainerVersion } from '@cplane/sdk'
+import type { ContainerConfiguration, ResolvedTimeline } from '@cplane/sdk'
 import { ICONS } from '~/utils/icons'
 import { loadProjectEnvironments } from '~/utils/auth'
 import { getErrorMessage } from '~/utils/errors'
@@ -29,7 +29,6 @@ const externalRegistryItems = computed(() => [
   })),
 ])
 
-const projectName = computed(() => store.projects.find(p => p.id === projectId.value)?.name ?? projectId.value ?? '')
 const environmentsUrl = computed(() => orgId.value && projectId.value
   ? `/api/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/environments` as const
   : '')
@@ -37,13 +36,19 @@ const { data: environmentList, refresh: refreshEnvironmentList } = await useCpla
   immediate: computed(() => !!environmentsUrl.value),
 })
 const environment = computed(() =>
-  store.environment?.id === environmentId.value ? store.environment : (environmentList.value?.find(item => item.id === environmentId.value) ?? null)
+  environmentList.value?.find(item => item.id === environmentId.value)
+    ?? (store.environment?.id === environmentId.value ? store.environment : null)
 )
 const selectedTimelineId = computed(() => {
   const revision = route.query.revision
   return typeof revision === 'string' ? revision : environment.value?.draft_timeline
 })
+const requestedRevisionId = computed(() => {
+  const revision = route.query.revision
+  return typeof revision === 'string' && revision.length > 0 ? revision : null
+})
 const revisionView = computed<'synced' | 'pending' | 'historical'>(() => {
+  if (requestedRevisionId.value) return 'historical'
   if (
     selectedTimelineId.value === environment.value?.draft_timeline
     && environment.value?.deployed_timeline === environment.value?.draft_timeline
@@ -53,16 +58,26 @@ const revisionView = computed<'synced' | 'pending' | 'historical'>(() => {
 })
 const isEditable = computed(() => revisionView.value !== 'historical')
 const isLiveVersion = computed(() => selectedTimelineId.value === environment.value?.deployed_timeline)
-
-const activeTab = ref('overview')
-const tabs = [
-  { label: 'Usage', value: 'overview', slot: 'overview' },
-  { label: 'Configuration', value: 'configuration', slot: 'configuration' },
-]
+const revisionUrl = computed(() => orgId.value && projectId.value && requestedRevisionId.value
+  ? `/api/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/timelines/${requestedRevisionId.value as ':timeline_id'}` as const
+  : '')
+const { data: selectedRevision } = await useCplaneFetch<ResolvedTimeline>(revisionUrl, {
+  key: () => `container-revision-meta-${requestedRevisionId.value ?? 'none'}`,
+  immediate: computed(() => !!revisionUrl.value),
+})
+const historicalRevisionLabel = computed(() => selectedRevision.value?.timeline
+  ? `Revision ${selectedRevision.value.timeline} · read-only`
+  : 'Historical · read-only')
+const deployedRevisionLabel = computed(() => selectedRevision.value?.timeline
+  ? `Deployed revision ${selectedRevision.value.timeline} · read-only`
+  : 'Deployed · read-only')
 
 const name = ref('')
 const image = ref('')
+const initialImage = ref('')
+const resolvedImage = ref('')
 const externalRegistryId = ref('none')
+const initialExternalRegistryId = ref('none')
 const port = ref<number | null>(null)
 const replicaCount = ref(1)
 const cpu = ref(0.5)
@@ -83,7 +98,6 @@ const saving = ref(false)
 const refreshing = ref(false)
 const loading = ref(true)
 const loadError = ref('')
-const forking = ref(false)
 const restoring = ref(false)
 const versionHistory = ref<{ refresh: () => Promise<void> } | null>(null)
 
@@ -106,19 +120,26 @@ async function fetchContainer() {
     const url = `/api/organization/${orgId.value as ':organization_id'}/containers/${containerId.value as ':container_id'}` as const
     const c = await cplaneFetch(url, { query: { environment_id: environmentId.value, timeline_id: selectedTimelineId.value } })
     name.value = c.name
-    if (c.current_version) {
-      image.value = c.current_version.image
-      externalRegistryId.value = c.current_version.external_registry_id ?? 'none'
-      port.value = c.current_version.port
-      replicaCount.value = c.current_version.replica_count
-      isPublic.value = c.current_version.public
-      const healthCheck = c.current_version.health_check
+    if (c.configuration) {
+      image.value = c.configuration.image
+      initialImage.value = c.configuration.image
+      resolvedImage.value = c.configuration.resolved_image
+      externalRegistryId.value = c.configuration.external_registry_id ?? 'none'
+      initialExternalRegistryId.value = externalRegistryId.value
+      port.value = c.configuration.port ?? null
+      replicaCount.value = c.configuration.replica_count
+      isPublic.value = c.configuration.public
+      const healthCheck = c.configuration.health_check
       const healthCheckPathValue = healthCheck && typeof healthCheck === 'object' && 'path' in healthCheck ? healthCheck.path : undefined
       healthCheckPath.value = typeof healthCheckPathValue === 'string' ? healthCheckPathValue : ''
-      envRows.value = buildEnvRows(c.current_version.env)
-      const resources = resolveResources(c.current_version.cpu, c.current_version.memory)
+      envRows.value = buildEnvRows(c.configuration.env)
+      const resources = resolveResources(c.configuration.cpu, c.configuration.memory)
       cpu.value = resources.cpu
       memoryMib.value = resources.memoryMib
+    } else {
+      initialImage.value = ''
+      resolvedImage.value = ''
+      initialExternalRegistryId.value = 'none'
     }
     hasChanges.value = false
 
@@ -131,7 +152,7 @@ async function fetchContainer() {
 
 watch([containerId, selectedTimelineId], fetchContainer, { immediate: true })
 
-function buildEnvRows(env: ContainerVersion['env']): { key: string; value: string }[] {
+function buildEnvRows(env: ContainerConfiguration['env']): { key: string; value: string }[] {
   if (!env || typeof env !== 'object' || Array.isArray(env)) return []
   return Object.entries(env).map(([key, value]) => ({ key, value: String(value) }))
 }
@@ -141,7 +162,7 @@ function toPositiveNumber(value: unknown, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback
 }
 
-function resolveResources(cpuRaw: ContainerVersion['cpu'], memoryRaw: ContainerVersion['memory']): { cpu: number; memoryMib: number } {
+function resolveResources(cpuRaw: ContainerConfiguration['cpu'], memoryRaw: ContainerConfiguration['memory']): { cpu: number; memoryMib: number } {
   return {
     cpu: nearestPreset(CPU_PRESETS, toPositiveNumber(cpuRaw, 0.5)),
     memoryMib: nearestPreset(MEMORY_PRESETS_MIB, Math.round(toPositiveNumber(memoryRaw, 1024))),
@@ -163,28 +184,30 @@ async function save() {
       env[row.key] = row.value
     }
 
+    const body: Record<string, unknown> = {
+      port: port.value,
+      replica_count: replicaCount.value,
+      public: isPublic.value,
+      env: Object.keys(env).length > 0 ? env : null,
+      cpu: String(cpu.value), memory: `${Math.round(memoryMib.value)}Mi`,
+      health_check: healthCheckPath.value ? { path: healthCheckPath.value } : null,
+      auto_deploy: false,
+    }
+    if (image.value.trim() !== initialImage.value.trim()) body.image = image.value
+    if (externalRegistryId.value !== initialExternalRegistryId.value) {
+      body.external_registry_id = externalRegistryId.value === 'none' ? null : externalRegistryId.value
+    }
     await cplaneFetch(`/api/organization/${orgId.value as ':organization_id'}/containers/${containerId.value as ':container_id'}` as const, {
-          method: 'PATCH',
-          query: { environment_id: environmentId.value, timeline_id: selectedTimelineId.value },
-        body: {
-          image: image.value,
-          external_registry_id: externalRegistryId.value === 'none' ? null : externalRegistryId.value,
-          port: port.value,
-          replica_count: replicaCount.value,
-          public: isPublic.value,
-          env: Object.keys(env).length > 0 ? env : null,
-          cpu: String(cpu.value), memory: `${Math.round(memoryMib.value)}Mi`,
-          health_check: healthCheckPath.value ? { path: healthCheckPath.value } : null,
-          auto_deploy: false,
-        },
-      }
-    )
+      method: 'PATCH',
+      query: { environment_id: environmentId.value, timeline_id: selectedTimelineId.value },
+      body,
+    })
     if (projectId.value && environmentId.value) {
       await loadProjectEnvironments(projectId.value, environmentId.value)
       await refreshEnvironmentList()
     }
     await router.replace({
-      query: { ...route.query, revision: environment.value?.draft_timeline },
+      query: Object.fromEntries(Object.entries(route.query).filter(([key]) => key !== 'revision')),
     })
     toast.add({ title: 'Container changes saved', description: 'Review this environment to deploy them.', color: 'success' })
     hasChanges.value = false
@@ -194,25 +217,6 @@ async function save() {
     toast.add({ title: 'Failed to save', description: message, color: 'error' })
   } finally {
     saving.value = false
-  }
-}
-
-async function forkRevision() {
-  if (!orgId.value || !projectId.value || !environment.value || !selectedTimelineId.value) return
-  forking.value = true
-  try {
-    await cplaneFetch(
-      `/api/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/environments/${environment.value.id as ':environment_id'}` as const,
-      { method: 'PATCH', body: { draft_timeline_id: selectedTimelineId.value } },
-    )
-    await loadProjectEnvironments(projectId.value, environmentId.value)
-    await refreshEnvironmentList()
-    await router.replace({ query: { ...route.query, revision: selectedTimelineId.value } })
-    toast.add({ title: 'Revision is now the draft', color: 'success' })
-  } catch {
-    toast.add({ title: 'Failed to fork revision', color: 'error' })
-  } finally {
-    forking.value = false
   }
 }
 
@@ -241,6 +245,17 @@ function backUrl() {
   const orgSlug = route.params.organization_slug?.toString() ?? ''
   return `/${orgSlug}/compute/containers/${projectId.value}/${environmentId.value}`
 }
+
+const environmentMetricsUrl = computed(() => {
+  const slug = organizationSlug.value
+  if (!slug) return '/analytics'
+
+  const query = new URLSearchParams()
+  if (projectId.value) query.set('project_id', projectId.value)
+  if (environmentId.value) query.set('environment_id', environmentId.value)
+  const suffix = query.toString()
+  return `/${slug}/analytics${suffix ? `?${suffix}` : ''}`
+})
 
 const yamlPreview = computed(() => [
   `name: ${name.value}`,
@@ -298,74 +313,24 @@ watch([image, port, replicaCount, cpu, memoryMib, isPublic, healthCheckPath], ()
     <div v-else class="overflow-hidden rounded-lg border border-default/60 bg-default">
       <header class="flex flex-col gap-4 border-b border-default/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div class="min-w-0">
-          <UiBackLink :label="projectName" :to="backUrl()" />
+          <UiBackLink :label="environment?.name ?? 'containers'" :to="backUrl()" />
           <UiPageEyebrow label="Compute" />
           <h1 class="mt-2 truncate text-xl font-semibold">{{ name }}</h1>
-          <p class="mt-1 text-xs text-muted">{{ environment?.name ?? environmentId }} · {{ image }} · Port {{ port ?? 'none' }} · {{ replicaCount }} replica{{ replicaCount === 1 ? '' : 's' }}</p>
+          <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+            <span>{{ environment?.name ?? environmentId }} · {{ image }} · Port {{ port ?? 'none' }} · {{ replicaCount }} replica{{ replicaCount === 1 ? '' : 's' }}</span>
+            <UBadge v-if="revisionView === 'historical' && isLiveVersion" color="success" variant="soft" size="sm">{{ deployedRevisionLabel }}</UBadge>
+            <UBadge v-else-if="revisionView === 'historical'" color="neutral" variant="soft" size="sm">{{ historicalRevisionLabel }}</UBadge>
+            <UBadge v-else-if="revisionView === 'pending'" color="warning" variant="soft" size="sm">Pending · not deployed</UBadge>
+          </div>
         </div>
+        <UButton :icon="ICONS.analytics" color="neutral" :to="environmentMetricsUrl">
+          {{ revisionView === 'historical' ? 'View current environment metrics' : 'View environment metrics' }}
+        </UButton>
       </header>
 
       <div class="grid min-h-180 xl:grid-cols-[minmax(0,1fr)_280px]">
         <main class="min-w-0 px-5 py-4">
-          <UiTabs v-model="activeTab" :items="tabs">
-            <template #overview>
-              <div class="space-y-6 pt-4">
-                <div>
-                  <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                    <div>
-                      <h2 class="text-base font-semibold">Usage</h2>
-                      <p class="mt-1 text-sm text-muted">Runtime usage for this container.</p>
-                    </div>
-                    <UButton :icon="ICONS.calendar" color="neutral" variant="outline">Last 24 hours</UButton>
-                  </div>
-                </div>
-
-                <div v-if="!isLiveVersion" class="rounded-md border border-dashed border-default p-5">
-                  <p class="text-sm font-medium">Usage belongs to the live version</p>
-                  <p class="mt-1 text-sm text-muted">This pending or historical version is not running yet. Return to the environment to open the live version.</p>
-                </div>
-
-                <template v-else>
-                  <dl class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <div
-                      v-for="stat in [
-                        ['Replicas', replicaCount, 'Current revision'],
-                        ['Restart Count', '—', 'Metrics unavailable'],
-                        ['CPU (Current)', '—', 'Metrics unavailable'],
-                        ['RAM (Current)', '—', 'Metrics unavailable'],
-                      ]"
-                      :key="String(stat[0])"
-                      class="rounded-lg border border-default/60 bg-default px-4 py-3"
-                    >
-                      <dt class="text-xs text-muted">{{ stat[0] }}</dt>
-                      <dd class="mt-1 text-xl font-semibold">{{ stat[1] }}</dd>
-                      <p class="mt-1 text-[11px] text-muted">{{ stat[2] }}</p>
-                    </div>
-                  </dl>
-
-                <section v-for="metric in ['CPU Usage', 'RAM Usage']" :key="metric" class="overflow-hidden rounded-lg border border-default/60 bg-default">
-                  <div class="border-b border-default/60 bg-elevated/20 px-4 py-2.5">
-                    <div class="flex items-center justify-between gap-4">
-                      <h3 class="text-sm font-medium text-muted">{{ metric }}</h3>
-                      <span class="font-mono text-xs text-muted">Usage · Request · Limit</span>
-                    </div>
-                  </div>
-                  <div class="p-4">
-                    <div class="flex min-h-40 items-center justify-center rounded-md border border-dashed border-default/60 px-6 text-center">
-                      <div>
-                        <UIcon name="i-heroicons:chart-bar" class="size-6 text-muted" />
-                        <p class="mt-3 text-sm font-medium">Telemetry connection pending</p>
-                        <p class="mt-1 text-sm text-muted">Metrics will appear here once telemetry is available.</p>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-                </template>
-              </div>
-            </template>
-
-            <template #configuration>
-              <div class="divide-y divide-default/60 pt-4">
+          <div class="divide-y divide-default/60 pt-4">
                 <section class="grid gap-4 py-6 first:pt-2 lg:grid-cols-[180px_minmax(0,1fr)]">
                   <div><h3 class="text-sm font-semibold">Image</h3><p class="mt-1 text-xs text-muted">Container identity and image.</p></div>
                   <div class="space-y-3">
@@ -374,6 +339,10 @@ watch([image, port, replicaCount, cpu, memoryMib, isPublic, healthCheckPath], ()
                       <UInput v-model="image" placeholder="nginx:latest" class="min-w-0 flex-1" :disabled="!isEditable" @input="markChanged" />
                       <UButton v-if="canRefreshLatest && isEditable" :icon="ICONS.refresh" color="neutral" :loading="refreshing" :disabled="hasChanges" @click="refreshLatest">Refresh latest</UButton>
                     </div>
+                    <p v-if="resolvedImage" class="text-xs text-muted">
+                      <span class="font-medium text-default">Pinned image</span>
+                      <code class="mt-1 block break-all font-mono">{{ resolvedImage }}</code>
+                    </p>
                     <UFormField label="External registry" description="Optional credentials for a private image.">
                       <USelect v-model="externalRegistryId" :items="externalRegistryItems" class="w-full" :disabled="!isEditable" @change="markChanged" />
                     </UFormField>
@@ -413,14 +382,11 @@ watch([image, port, replicaCount, cpu, memoryMib, isPublic, healthCheckPath], ()
                     <UButton :icon="ICONS.check" color="primary" :loading="saving" :disabled="!hasChanges" @click="save">Save changes</UButton>
                   </template>
                   <template v-else>
-                    <p class="mr-auto text-sm text-muted">Fork this revision to edit it.</p>
-                    <UButton :icon="ICONS.pencil" color="neutral" :loading="forking" @click="forkRevision">Fork revision</UButton>
+                    <p class="mr-auto text-sm text-muted">Restore this version to edit it as a pending change.</p>
                     <UButton v-if="revisionView === 'historical'" :icon="ICONS.refresh" color="primary" :loading="restoring" @click="restoreVersion">Restore this version</UButton>
                   </template>
                 </div>
-              </div>
-            </template>
-          </UiTabs>
+          </div>
         </main>
 
         <DeploymentsContainersVersionHistory

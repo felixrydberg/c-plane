@@ -1,7 +1,6 @@
 pub mod bucket;
 pub mod bucket_grant;
 pub mod container;
-pub mod container_version;
 pub mod credential;
 pub mod event;
 pub mod external_registry;
@@ -13,6 +12,7 @@ pub mod postgres_database;
 pub mod postgres_database_branch;
 pub mod project;
 pub mod project_environment;
+pub mod project_revision_manifest;
 pub mod project_timeline;
 pub mod region;
 pub mod registry_access_token;

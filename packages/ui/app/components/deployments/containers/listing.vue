@@ -66,7 +66,7 @@ const columns: TableColumn<ContainerWithProject>[] = [
       class: 'flex min-w-0 items-center gap-2',
     }, () => [
       h('span', { class: 'truncate font-medium text-primary group-hover:underline group-hover:underline-offset-4' }, row.original.name),
-      row.original.current_version?.public
+      row.original.configuration?.public
         ? h('span', { class: 'shrink-0 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400' }, 'Public')
         : null,
     ]),
@@ -74,22 +74,22 @@ const columns: TableColumn<ContainerWithProject>[] = [
   {
     id: 'image',
     header: 'Image',
-    cell: ({ row }) => h('code', { class: 'block max-w-56 truncate text-xs text-muted' }, row.original.current_version?.image ?? 'No version'),
+    cell: ({ row }) => h('code', { class: 'block max-w-56 truncate text-xs text-muted' }, row.original.configuration?.image ?? 'No version'),
   },
   {
     id: 'replicas',
     header: 'Replicas',
-    cell: ({ row }) => row.original.current_version?.replica_count ?? 0,
+    cell: ({ row }) => row.original.configuration?.replica_count ?? 0,
   },
   {
     id: 'port',
     header: 'Port',
-    cell: ({ row }) => row.original.current_version?.port ?? '—',
+    cell: ({ row }) => row.original.configuration?.port ?? '—',
   },
   {
     id: 'access',
     header: 'Access',
-    cell: ({ row }) => row.original.current_version?.public ? 'Public' : 'Private',
+    cell: ({ row }) => row.original.configuration?.public ? 'Public' : 'Private',
   },
   {
     accessorKey: 'updated_at',

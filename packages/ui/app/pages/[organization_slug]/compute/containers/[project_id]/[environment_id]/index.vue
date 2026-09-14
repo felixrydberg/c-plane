@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { h } from 'vue'
-import type { Container, ContainerVersion } from '@cplane/sdk'
+import type { Container, ContainerConfiguration, ResolvedTimeline } from '@cplane/sdk'
 import type { TableColumn } from '@nuxt/ui'
 import { ICONS } from '~/utils/icons'
 import { syncEnvironment } from '~/utils/environments'
@@ -36,7 +36,12 @@ const { data: environmentList, refresh: refreshEnvironments } = await useCplaneF
   immediate: computed(() => !!environmentsUrl.value),
 })
 const fetchedEnvironment = computed(() => environmentList.value?.find(item => item.id === environmentId.value) ?? null)
-const environment = computed(() => store.environment?.id === environmentId.value ? store.environment : fetchedEnvironment.value)
+const environment = computed(() => fetchedEnvironment.value ?? (store.environment?.id === environmentId.value ? store.environment : null))
+const requestedRevisionId = computed(() => {
+  const revision = route.query.revision
+  return typeof revision === 'string' && revision.length > 0 ? revision : null
+})
+const isRevisionView = computed(() => !!requestedRevisionId.value)
 const hasPendingChanges = computed(() => !!environment.value && environment.value.draft_timeline !== environment.value.deployed_timeline)
 
 const containersUrl = computed(() => orgId.value ? `/api/organization/${orgId.value as ':organization_id'}/containers` as const : '')
@@ -61,6 +66,35 @@ const { data: deployedContainers, status: deployedStatus, refresh: refreshDeploy
   default: () => [],
   immediate: fetchReady,
 })
+const { data: revisionContainers, status: revisionStatus, error: revisionError, refresh: refreshRevisionContainers } = await useCplaneFetch<Container[]>(containersUrl, {
+  key: () => `environment-revision-containers-${route.params.project_id}-${route.params.environment_id}-${requestedRevisionId.value ?? 'none'}`,
+  query: {
+    project_id: projectId,
+    environment_id: environmentId,
+    timeline_id: requestedRevisionId,
+  },
+  default: () => [],
+  immediate: computed(() => fetchReady.value && !!requestedRevisionId.value),
+})
+const revisionUrl = computed(() => orgId.value && projectId.value && requestedRevisionId.value
+  ? `/api/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/timelines/${requestedRevisionId.value as ':timeline_id'}` as const
+  : '')
+const { data: selectedRevision } = await useCplaneFetch<ResolvedTimeline>(revisionUrl, {
+  key: () => `environment-revision-meta-${requestedRevisionId.value ?? 'none'}`,
+  immediate: computed(() => !!revisionUrl.value),
+})
+const isDeployedRevision = computed(() => !!requestedRevisionId.value && requestedRevisionId.value === environment.value?.deployed_timeline)
+const revisionViewLabel = computed(() => selectedRevision.value?.timeline
+  ? `${isDeployedRevision.value ? 'Deployed revision' : 'Revision'} ${selectedRevision.value.timeline} · read-only`
+  : 'Revision view · read-only')
+const revisionViewDescription = computed(() => selectedRevision.value?.timeline
+  ? isDeployedRevision.value
+    ? `Services currently running from revision ${selectedRevision.value.timeline}.`
+    : `Services captured in revision ${selectedRevision.value.timeline}.`
+  : 'Services captured in this revision.')
+
+const displayedContainers = computed(() => isRevisionView.value ? (revisionContainers.value ?? []) : (deployedContainers.value ?? []))
+const displayedStatus = computed(() => isRevisionView.value ? revisionStatus.value : deployedStatus.value)
 
 const expandedChangeId = ref<string | null>(null)
 const changesModalOpen = ref(false)
@@ -76,7 +110,7 @@ const filteredDeployedContainers = computed(() => {
   if (!query) return containers
 
   return containers.filter((container) => {
-    const version = container.current_version
+    const version = container.configuration
     return [container.name, version?.image, version?.resolved_image]
       .filter(Boolean)
       .join(' ')
@@ -84,6 +118,21 @@ const filteredDeployedContainers = computed(() => {
       .includes(query)
   })
 })
+const filteredRevisionContainers = computed(() => {
+  const query = search.value.trim().toLowerCase()
+  const containers = revisionContainers.value ?? []
+  if (!query) return containers
+
+  return containers.filter((container) => {
+    const version = container.configuration
+    return [container.name, version?.image, version?.resolved_image]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes(query)
+  })
+})
+const filteredDisplayedContainers = computed(() => isRevisionView.value ? filteredRevisionContainers.value : filteredDeployedContainers.value)
 
 function stableValue(value: unknown): string {
   if (value === null || value === undefined) return ''
@@ -101,24 +150,26 @@ function objectCount(value: unknown): number {
     : 0
 }
 
-function healthCheckPath(version: ContainerVersion | null | undefined): string {
+function healthCheckPath(version: ContainerConfiguration | null | undefined): string {
   const healthCheck = version?.health_check
   if (!healthCheck || typeof healthCheck !== 'object' || !('path' in healthCheck)) return 'None'
   return String((healthCheck as { path?: unknown }).path ?? 'None')
 }
 
-function changeFields(deployed: ContainerVersion | null | undefined, pending: ContainerVersion | null | undefined): ChangeField[] {
+function changeFields(deployed: ContainerConfiguration | null | undefined, pending: ContainerConfiguration | null | undefined): ChangeField[] {
   if (!deployed || !pending) return []
 
   const values: Array<ChangeField & { deployedKey?: string, pendingKey?: string }> = [
+    { label: 'Name', deployed: deployed.name, pending: pending.name },
+    { label: 'Region', deployed: deployed.region_id, pending: pending.region_id },
     { label: 'Image', deployed: deployed.image, pending: pending.image },
     { label: 'Resolved image', deployed: deployed.resolved_image, pending: pending.resolved_image },
     { label: 'Replicas', deployed: String(deployed.replica_count), pending: String(pending.replica_count) },
     { label: 'Port', deployed: deployed.port === null || deployed.port === undefined ? 'None' : String(deployed.port), pending: pending.port === null || pending.port === undefined ? 'None' : String(pending.port) },
     { label: 'Access', deployed: deployed.public ? 'Public' : 'Private', pending: pending.public ? 'Public' : 'Private' },
-    { label: 'Health check', deployed: healthCheckPath(deployed), pending: healthCheckPath(pending) },
+    { label: 'Health check', deployed: healthCheckPath(deployed), pending: healthCheckPath(pending), deployedKey: stableValue(deployed.health_check), pendingKey: stableValue(pending.health_check) },
     { label: 'Environment variables', deployed: `${objectCount(deployed.env)} configured`, pending: `${objectCount(pending.env)} configured`, deployedKey: stableValue(deployed.env), pendingKey: stableValue(pending.env) },
-    { label: 'Resources', deployed: stableValue(deployed.resources) || 'Default', pending: stableValue(pending.resources) || 'Default' },
+    { label: 'Resources', deployed: `${deployed.cpu ?? 'Default'} · ${deployed.memory ?? 'Default'}`, pending: `${pending.cpu ?? 'Default'} · ${pending.memory ?? 'Default'}` },
     { label: 'External registry', deployed: deployed.external_registry_id ?? 'None', pending: pending.external_registry_id ?? 'None' },
   ]
 
@@ -139,9 +190,11 @@ const changes = computed<ContainerChange[]>(() => {
       continue
     }
 
-    const fields = changeFields(deployed.current_version, container.current_version)
-    if (fields.length > 0 || deployed.current_version?.id !== container.current_version?.id) {
-      const differenceCount = fields.length || 1
+    // Compare configuration values, not revision identity: an unrelated container
+    // edit must not mark every container as changed.
+    const fields = changeFields(deployed.configuration, container.configuration)
+    if (fields.length > 0) {
+      const differenceCount = fields.length
       result.push({
         id: container.id,
         name: container.name,
@@ -193,11 +246,11 @@ const deployedColumns: TableColumn<Container>[] = [
     accessorKey: 'name',
     header: 'Service',
     cell: ({ row }) => h(NuxtLink, {
-      to: containerUrl(row.original.id, environment.value?.deployed_timeline),
+      to: containerUrl(row.original.id, requestedRevisionId.value ?? undefined),
       class: 'flex min-w-0 items-center gap-2',
     }, () => [
       h('span', { class: 'truncate font-medium text-primary group-hover:underline group-hover:underline-offset-4' }, row.original.name),
-      row.original.current_version?.public
+      row.original.configuration?.public
         ? h('span', { class: 'shrink-0 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400' }, 'Public')
         : null,
     ]),
@@ -205,22 +258,22 @@ const deployedColumns: TableColumn<Container>[] = [
   {
     id: 'image',
     header: 'Image',
-    cell: ({ row }) => h('code', { class: 'block max-w-56 truncate text-xs text-muted' }, row.original.current_version?.image ?? 'No version'),
+    cell: ({ row }) => h('code', { class: 'block max-w-56 truncate text-xs text-muted' }, row.original.configuration?.image ?? 'No version'),
   },
   {
     id: 'replicas',
     header: 'Replicas',
-    cell: ({ row }) => row.original.current_version?.replica_count ?? 0,
+    cell: ({ row }) => row.original.configuration?.replica_count ?? 0,
   },
   {
     id: 'port',
     header: 'Port',
-    cell: ({ row }) => row.original.current_version?.port ?? '—',
+    cell: ({ row }) => row.original.configuration?.port ?? '—',
   },
   {
     id: 'access',
     header: 'Access',
-    cell: ({ row }) => row.original.current_version?.public ? 'Public' : 'Private',
+    cell: ({ row }) => row.original.configuration?.public ? 'Public' : 'Private',
   },
   {
     accessorKey: 'updated_at',
@@ -232,7 +285,9 @@ const deployedColumns: TableColumn<Container>[] = [
 async function refreshAll() {
   refreshing.value = true
   try {
-    await Promise.all([refreshEnvironments(), refreshDraftContainers(), refreshDeployedContainers()])
+    const refreshes = [refreshEnvironments(), refreshDraftContainers(), refreshDeployedContainers()]
+    if (isRevisionView.value) refreshes.push(refreshRevisionContainers())
+    await Promise.all(refreshes)
     const updated = fetchedEnvironment.value
     if (updated) syncEnvironment(store, updated)
   } finally {
@@ -287,7 +342,7 @@ watch(() => store.refreshKey, () => { void refreshAll() })
 <template>
   <div class="mx-auto flex w-full max-w-375 flex-col gap-5">
     <UAlert
-      v-if="hasPendingChanges"
+      v-if="hasPendingChanges && !isRevisionView"
       color="warning"
       variant="subtle"
       icon="i-heroicons:exclamation-triangle"
@@ -307,11 +362,13 @@ watch(() => store.refreshKey, () => { void refreshAll() })
         <div class="flex flex-wrap items-center gap-2">
           <UiPageEyebrow :label="environment?.name || 'Environment'" />
           <UBadge v-if="environment?.is_preview" color="primary" variant="soft" size="sm">Preview</UBadge>
+          <UBadge v-if="isRevisionView" color="neutral" variant="soft" size="sm">{{ revisionViewLabel }}</UBadge>
         </div>
         <h1 class="mt-2 text-2xl font-semibold">Containers</h1>
-        <p class="mt-1 text-sm text-muted">Runtime services in this environment.</p>
+        <p class="mt-1 text-sm text-muted">{{ isRevisionView ? revisionViewDescription : 'Runtime services in this environment.' }}</p>
       </div>
-      <UButton :icon="ICONS.plus" color="primary" :to="`/${organizationSlug}/compute/containers/${projectId}/${environmentId}/new`">Add container</UButton>
+      <UButton v-if="!isRevisionView" :icon="ICONS.plus" color="primary" :to="`/${organizationSlug}/compute/containers/${projectId}/${environmentId}/new`">Add container</UButton>
+      <UButton v-else color="neutral" variant="ghost" :to="`/${organizationSlug}/compute/containers/${projectId}/${environmentId}`">Back to current revision</UButton>
     </header>
 
     <div class="flex items-center gap-2">
@@ -336,25 +393,26 @@ watch(() => store.refreshKey, () => { void refreshAll() })
     <section>
       <div class="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 class="text-base font-semibold">Currently deployed</h2>
-          <p class="mt-1 text-sm text-muted">Services running in {{ environment?.name || 'this environment' }}.</p>
+          <h2 class="text-base font-semibold">{{ isRevisionView ? 'Revision containers' : 'Currently deployed' }}</h2>
+          <p class="mt-1 text-sm text-muted">{{ isRevisionView ? 'This snapshot is read-only.' : `Services running in ${environment?.name || 'this environment'}.` }}</p>
         </div>
-        <p class="font-mono text-xs text-muted">{{ deployedContainers.length }} container{{ deployedContainers.length === 1 ? '' : 's' }}</p>
+        <p class="font-mono text-xs text-muted">{{ displayedContainers.length }} container{{ displayedContainers.length === 1 ? '' : 's' }}</p>
       </div>
 
       <UiTable
-        :status="deployedStatus"
-        :items="filteredDeployedContainers"
+        :status="displayedStatus"
+        :items="filteredDisplayedContainers"
         :columns="deployedColumns"
         disable-header
         selectable
-        @select="row => navigateTo(containerUrl(row.original.id, environment?.deployed_timeline))"
+        @select="row => navigateTo(containerUrl(row.original.id, requestedRevisionId ?? undefined))"
       >
         <template #empty>
           <div class="flex flex-col items-center justify-center gap-3 py-14 text-center">
             <UIcon :name="ICONS.containers" class="size-10 text-muted" />
-            <p class="text-muted">{{ search ? 'No matching containers.' : 'No containers yet.' }}</p>
-            <p v-if="!search" class="text-sm text-dimmed">Add your first container to run a service in this environment.</p>
+            <p v-if="isRevisionView && revisionError" class="text-muted">This revision could not be loaded.</p>
+            <p v-else class="text-muted">{{ search ? 'No matching containers.' : 'No containers yet.' }}</p>
+            <p v-if="!search && !isRevisionView" class="text-sm text-dimmed">Add your first container to run a service in this environment.</p>
           </div>
         </template>
       </UiTable>
@@ -399,11 +457,11 @@ watch(() => store.refreshKey, () => { void refreshAll() })
                   </div>
                 </div>
 
-                <div v-else-if="change.status === 'added' && change.container?.current_version" class="grid gap-3 text-sm sm:grid-cols-4">
-                  <div><p class="text-xs text-muted">Image</p><p class="mt-1 truncate font-mono text-xs">{{ change.container.current_version.image }}</p></div>
-                  <div><p class="text-xs text-muted">Replicas</p><p class="mt-1">{{ change.container.current_version.replica_count }}</p></div>
-                  <div><p class="text-xs text-muted">Port</p><p class="mt-1">{{ change.container.current_version.port ?? 'None' }}</p></div>
-                  <div><p class="text-xs text-muted">Access</p><p class="mt-1">{{ change.container.current_version.public ? 'Public' : 'Private' }}</p></div>
+                <div v-else-if="change.status === 'added' && change.container?.configuration" class="grid gap-3 text-sm sm:grid-cols-4">
+                  <div><p class="text-xs text-muted">Image</p><p class="mt-1 truncate font-mono text-xs">{{ change.container.configuration.image }}</p></div>
+                  <div><p class="text-xs text-muted">Replicas</p><p class="mt-1">{{ change.container.configuration.replica_count }}</p></div>
+                  <div><p class="text-xs text-muted">Port</p><p class="mt-1">{{ change.container.configuration.port ?? 'None' }}</p></div>
+                  <div><p class="text-xs text-muted">Access</p><p class="mt-1">{{ change.container.configuration.public ? 'Public' : 'Private' }}</p></div>
                 </div>
 
                 <p v-else-if="change.status === 'removed'" class="text-sm text-muted">This container will stop running when the release is deployed.</p>

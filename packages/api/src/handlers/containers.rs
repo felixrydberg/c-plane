@@ -2,9 +2,11 @@ pub mod history;
 
 use axum::{Json, extract::Path};
 use chrono::Utc;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, FromQueryResult, QueryFilter,
+    QueryOrder, Set,
+};
 use serde::{Deserialize, Deserializer, Serialize};
-use std::collections::HashMap;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -14,10 +16,8 @@ use super::{
 };
 use crate::errors::AppError;
 use crate::middleware::auth::{AuthContext, RequestAuthContext};
-use crate::models::entities::{
-    container, container_version, project_environment, project_timeline,
-};
-use crate::models::pins::TimelinePins;
+use crate::models::entities::{container, project, project_environment, project_timeline};
+use crate::models::manifest::{ContainerConfig, RevisionManifest};
 use crate::services::{agent, events, images, revisions};
 use crate::state::TenantDatabase;
 
@@ -105,46 +105,12 @@ pub struct ContainerResponse {
     pub id: Uuid,
     pub organization_id: Uuid,
     pub name: String,
-    pub current_version: Option<ContainerVersionResponse>,
+    pub configuration: Option<ContainerConfig>,
+    pub revision_id: Option<Uuid>,
     pub project_id: Option<Uuid>,
     pub region_id: Uuid,
     pub created_at: String,
     pub updated_at: String,
-}
-
-#[derive(Serialize, ToSchema)]
-pub struct ContainerVersionResponse {
-    pub id: Uuid,
-    pub version: i32,
-    pub image: String,
-    pub resolved_image: String,
-    pub public: bool,
-    pub replica_count: i32,
-    pub port: Option<i32>,
-    pub env: Option<serde_json::Value>,
-    pub cpu: Option<String>,
-    pub memory: Option<String>,
-    pub external_registry_id: Option<Uuid>,
-    pub health_check: Option<serde_json::Value>,
-    pub created_at: String,
-}
-
-fn resolve_latest_version(version: &container_version::Model) -> ContainerVersionResponse {
-    ContainerVersionResponse {
-        id: version.id,
-        version: version.version,
-        image: version.image.clone(),
-        resolved_image: version.resolved_image.clone(),
-        public: version.public,
-        replica_count: version.replica_count,
-        port: version.port,
-        env: version.env.clone(),
-        cpu: version.cpu.clone(),
-        memory: version.memory.clone(),
-        external_registry_id: version.external_registry_id,
-        health_check: version.health_check.clone(),
-        created_at: version.created_at.to_string(),
-    }
 }
 
 fn has_config_change(req: &UpdateContainerRequest) -> bool {
@@ -159,8 +125,29 @@ fn has_config_change(req: &UpdateContainerRequest) -> bool {
         || req.health_check.is_some()
 }
 
-fn is_exact_latest_image(image: &str) -> bool {
-    image.ends_with(":latest")
+fn image_resolution_needed(
+    request: &UpdateContainerRequest,
+    base: &ContainerConfig,
+    redeploy: bool,
+) -> bool {
+    let image_changed = request
+        .image
+        .as_deref()
+        .is_some_and(|image| image.trim() != base.image);
+    let registry_changed = request
+        .external_registry_id
+        .as_ref()
+        .is_some_and(|registry_id| *registry_id != base.external_registry_id);
+    image_changed || registry_changed || redeploy
+}
+
+fn next_external_registry_id(
+    request: &UpdateContainerRequest,
+    base: &ContainerConfig,
+) -> Option<Uuid> {
+    request
+        .external_registry_id
+        .unwrap_or(base.external_registry_id)
 }
 
 pub(crate) fn validate_replica_count(replica_count: i32) -> Result<(), AppError> {
@@ -199,7 +186,7 @@ pub(crate) fn validate_port(port: i32) -> Result<(), AppError> {
 }
 
 async fn selected_external_registry(
-    tx: &impl sea_orm::ConnectionTrait,
+    tx: &impl ConnectionTrait,
     organization_id: Uuid,
     registry_id: Option<Uuid>,
 ) -> Result<Option<crate::models::entities::external_registry::Model>, AppError> {
@@ -212,7 +199,7 @@ async fn selected_external_registry(
 }
 
 async fn get_environment(
-    tx: &impl sea_orm::ConnectionTrait,
+    tx: &impl ConnectionTrait,
     environment_id: Uuid,
     organization_id: Uuid,
     project_id: Option<Uuid>,
@@ -229,43 +216,78 @@ async fn get_environment(
         .ok_or_else(|| AppError::NotFound("Environment not found".into()))
 }
 
-async fn get_environment_timeline_pins(
-    tx: &impl sea_orm::ConnectionTrait,
-    environment: &project_environment::Model,
-) -> Result<TimelinePins, AppError> {
-    let head = project_timeline::Entity::find_by_id(environment.draft_timeline)
+async fn resolve_environment(
+    tx: &impl ConnectionTrait,
+    organization_id: Uuid,
+    project_id: Uuid,
+    environment_id: Option<Uuid>,
+) -> Result<project_environment::Model, AppError> {
+    if let Some(environment_id) = environment_id {
+        return get_environment(tx, environment_id, organization_id, Some(project_id)).await;
+    }
+    let default_id = project::Entity::find_by_id(project_id)
+        .filter(project::Column::OrganizationId.eq(organization_id))
         .one(tx)
         .await?
-        .ok_or_else(|| AppError::NotFound("Environment timeline not found".into()))?;
-    Ok(TimelinePins::from_json_value(&head.pins))
+        .and_then(|project| project.default_environment_id)
+        .ok_or_else(|| AppError::NotFound("Project has no default environment".into()))?;
+    get_environment(tx, default_id, organization_id, Some(project_id)).await
 }
 
-async fn get_project_revision_pins(
-    tx: &impl sea_orm::ConnectionTrait,
-    project_id: Uuid,
+async fn timeline_manifest(
+    tx: &impl ConnectionTrait,
     timeline_id: Uuid,
-) -> Result<TimelinePins, AppError> {
-    let timeline = project_timeline::Entity::find()
+    organization_id: Uuid,
+    project_id: Option<Uuid>,
+) -> Result<(project_timeline::Model, RevisionManifest), AppError> {
+    let mut query = project_timeline::Entity::find()
         .filter(project_timeline::Column::Id.eq(timeline_id))
-        .filter(project_timeline::Column::ProjectId.eq(project_id))
+        .filter(project_timeline::Column::OrganizationId.eq(organization_id));
+    if let Some(project_id) = project_id {
+        query = query.filter(project_timeline::Column::ProjectId.eq(project_id));
+    }
+    let timeline = query
         .one(tx)
         .await?
         .ok_or_else(|| AppError::NotFound("Timeline revision is not in this project".into()))?;
+    let manifest = revisions::load_manifest(tx, timeline.manifest_id).await?;
+    Ok((timeline, manifest))
+}
 
-    Ok(TimelinePins::from_json_value(&timeline.pins))
+async fn draft_manifest(
+    tx: &impl ConnectionTrait,
+    environment: &project_environment::Model,
+) -> Result<(project_timeline::Model, RevisionManifest), AppError> {
+    timeline_manifest(
+        tx,
+        environment.draft_timeline,
+        environment.organization_id,
+        Some(environment.project_id),
+    )
+    .await
 }
 
 fn build_response(
     container: &container::Model,
-    version: &container_version::Model,
+    manifest: &RevisionManifest,
+    revision_id: Uuid,
 ) -> ContainerResponse {
     ContainerResponse {
         id: container.id,
         organization_id: container.organization_id,
-        name: container.name.clone(),
-        current_version: Some(resolve_latest_version(version)),
+        name: manifest
+            .containers
+            .get(&container.id)
+            .map(|config| config.name.clone())
+            .unwrap_or_else(|| container.name.clone()),
+        configuration: manifest.containers.get(&container.id).cloned(),
+        revision_id: Some(revision_id),
         project_id: Some(container.project_id),
-        region_id: container.region_id,
+        region_id: manifest
+            .containers
+            .get(&container.id)
+            .map(|config| config.region_id)
+            .unwrap_or(container.region_id),
         created_at: container.created_at.to_string(),
         updated_at: container.updated_at.to_string(),
     }
@@ -309,7 +331,6 @@ pub async fn create_container(
     validate_container_resources(&body.cpu, &body.memory)?;
 
     let container_id = Uuid::new_v4();
-    let version_id = Uuid::new_v4();
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
@@ -338,32 +359,28 @@ pub async fn create_container(
     .insert(tx)
     .await?;
 
-    let created_version: container_version::Model = container_version::ActiveModel {
-        id: Set(version_id),
-        container_id: Set(container_id),
-        organization_id: Set(organization_id),
-        version: Set(1),
-        image: Set(image.clone()),
-        resolved_image: Set(resolved_image),
-        public: Set(body.public),
-        replica_count: Set(body.replica_count),
-        port: Set(body.port),
-        env: Set(body.env.clone()),
-        cpu: Set(body.cpu.clone()),
-        memory: Set(body.memory.clone()),
-        external_registry_id: Set(external_registry_id),
-        health_check: Set(body.health_check.clone()),
-        created_at: Set(Utc::now().fixed_offset()),
-    }
-    .insert(tx)
-    .await?;
-
-    let mut pins = get_environment_timeline_pins(tx, &environment).await?;
-    pins.set_container(container_id, version_id);
+    let (_, mut manifest) = draft_manifest(tx, &environment).await?;
+    manifest.containers.insert(
+        container_id,
+        ContainerConfig {
+            name: name.clone(),
+            region_id: body.region_id,
+            image,
+            resolved_image,
+            external_registry_id,
+            replica_count: body.replica_count,
+            port: body.port,
+            public: body.public,
+            cpu: body.cpu.clone(),
+            memory: body.memory.clone(),
+            health_check: body.health_check.clone(),
+            env: body.env.clone(),
+        },
+    );
     let revision = revisions::create_revision(
         tx,
         &environment,
-        &pins,
+        &manifest,
         Some(format!("Created container '{}'", name)),
         body.auto_deploy,
     )
@@ -383,7 +400,7 @@ pub async fn create_container(
 
     Ok((
         axum::http::StatusCode::CREATED,
-        Json(build_response(&created_container, &created_version)),
+        Json(build_response(&created_container, &manifest, revision.id)),
     ))
 }
 
@@ -394,7 +411,7 @@ pub async fn create_container(
         ("organization_id" = Uuid, Path, description = "Organization ID"),
         ("project_id" = Option<Uuid>, Query, description = "Filter by project"),
         ("environment_id" = Option<Uuid>, Query, description = "Filter by environment"),
-        ("timeline_id" = Option<Uuid>, Query, description = "Revision whose pinned containers to return"),
+        ("timeline_id" = Option<Uuid>, Query, description = "Revision whose manifest containers to return"),
     ),
     responses(
         (status = 200, description = "List of containers", body = Vec<ContainerResponse>),
@@ -411,94 +428,105 @@ pub async fn list_containers(
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
 
-    let environment = if let Some(environment_id) = query.environment_id {
-        Some(get_environment(tx, environment_id, organization_id, query.project_id).await?)
-    } else if let Some(project_id) = query.project_id {
-        Some(find_main_environment_containers(tx, project_id, organization_id).await?)
+    let mut requested_environment = None;
+    let project_id = if let Some(environment_id) = query.environment_id {
+        let environment =
+            get_environment(tx, environment_id, organization_id, query.project_id).await?;
+        let project_id = environment.project_id;
+        requested_environment = Some(environment);
+        Some(project_id)
     } else {
-        None
+        match (query.project_id, query.timeline_id) {
+            (Some(id), _) => Some(id),
+            (None, Some(id)) => Some(
+                timeline_manifest(tx, id, organization_id, None)
+                    .await?
+                    .0
+                    .project_id,
+            ),
+            _ => None,
+        }
     };
 
-    if let Some(environment) = environment {
-        let pins = if let Some(timeline_id) = query.timeline_id {
-            get_project_revision_pins(tx, environment.project_id, timeline_id).await?
-        } else {
-            get_environment_timeline_pins(tx, &environment).await?
+    if let Some(project_id) = project_id {
+        let environment = match requested_environment {
+            Some(environment) => environment,
+            None => resolve_environment(tx, organization_id, project_id, None).await?,
         };
+        let timeline_id = query.timeline_id.unwrap_or(environment.draft_timeline);
+        let (_, manifest) =
+            timeline_manifest(tx, timeline_id, organization_id, Some(project_id)).await?;
 
-        if pins.container.is_empty() {
-            scoped.commit().await?;
-            return Ok(Json(Vec::new()));
-        }
-
-        let pinned_version_ids: Vec<Uuid> = pins.container.values().cloned().collect();
-
-        let versions = container_version::Entity::find()
-            .filter(container_version::Column::Id.is_in(pinned_version_ids))
-            .find_also_related(container::Entity)
-            .all(tx)
-            .await?;
-
-        let mut responses = Vec::new();
-        for (version, container) in versions {
-            if let Some(container) = container
-                && pins.container.get(&container.id) == Some(&version.id)
-            {
-                responses.push(build_response(&container, &version));
-            }
-        }
-
+        let responses = containers_for_manifest(tx, &manifest, timeline_id).await?;
         scoped.commit().await?;
         return Ok(Json(responses));
     }
 
+    #[derive(FromQueryResult)]
+    struct DefaultManifest {
+        project_id: Uuid,
+        revision_id: Uuid,
+        schema_version: i32,
+        configuration: serde_json::Value,
+    }
+    let defaults = DefaultManifest::find_by_statement(sea_orm::Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "SELECT p.id AS project_id, t.id AS revision_id, m.schema_version, m.configuration
+         FROM project p
+         JOIN project_environment e ON e.id = p.default_environment_id AND e.project_id = p.id
+         JOIN project_timeline t ON t.id = e.draft_timeline AND t.project_id = p.id
+         JOIN project_revision_manifest m ON m.id = t.manifest_id
+         WHERE p.organization_id = $1",
+        [organization_id.into()],
+    ))
+    .all(tx)
+    .await?;
+
     let containers = container::Entity::find()
         .filter(container::Column::OrganizationId.eq(organization_id))
-        .order_by_asc(container::Column::Name)
         .all(tx)
         .await?;
+    let by_id: std::collections::HashMap<Uuid, &container::Model> =
+        containers.iter().map(|c| (c.id, c)).collect();
 
-    if containers.is_empty() {
-        scoped.commit().await?;
-        return Ok(Json(Vec::new()));
+    let mut responses = Vec::new();
+    for row in defaults {
+        let manifest = RevisionManifest::from_json_value(&row.configuration, row.schema_version)?;
+        for container_id in manifest.containers.keys() {
+            if let Some(container) = by_id.get(container_id) {
+                if container.project_id == row.project_id {
+                    responses.push(build_response(container, &manifest, row.revision_id));
+                }
+            }
+        }
     }
-
-    let container_ids: Vec<Uuid> = containers.iter().map(|c| c.id).collect();
-
-    let all_versions = container_version::Entity::find()
-        .filter(container_version::Column::ContainerId.is_in(container_ids))
-        .order_by_desc(container_version::Column::Version)
-        .all(tx)
-        .await?;
-
-    let latest: HashMap<Uuid, &container_version::Model> =
-        all_versions.iter().fold(HashMap::new(), |mut acc, v| {
-            acc.entry(v.container_id).or_insert(v);
-            acc
-        });
+    responses.sort_by(|a, b| a.name.cmp(&b.name));
 
     scoped.commit().await?;
-
-    let responses = containers
-        .iter()
-        .filter_map(|c| latest.get(&c.id).map(|v| build_response(c, v)))
-        .collect();
-
     Ok(Json(responses))
 }
 
-async fn find_main_environment_containers(
-    tx: &impl sea_orm::ConnectionTrait,
-    project_id: Uuid,
-    organization_id: Uuid,
-) -> Result<project_environment::Model, AppError> {
-    project_environment::Entity::find()
-        .filter(project_environment::Column::ProjectId.eq(project_id))
-        .filter(project_environment::Column::OrganizationId.eq(organization_id))
-        .filter(project_environment::Column::Name.eq("main"))
-        .one(tx)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Main environment not found for project".into()))
+async fn containers_for_manifest(
+    tx: &impl ConnectionTrait,
+    manifest: &RevisionManifest,
+    revision_id: Uuid,
+) -> Result<Vec<ContainerResponse>, AppError> {
+    if manifest.containers.is_empty() {
+        return Ok(Vec::new());
+    }
+    let ids: Vec<Uuid> = manifest.containers.keys().copied().collect();
+    let containers = container::Entity::find()
+        .filter(container::Column::Id.is_in(ids))
+        .order_by_asc(container::Column::Name)
+        .all(tx)
+        .await?;
+    let mut responses: Vec<_> = containers
+        .iter()
+        .filter(|container| manifest.containers.contains_key(&container.id))
+        .map(|container| build_response(container, manifest, revision_id))
+        .collect();
+    responses.sort_by(|a, b| a.name.cmp(&b.name).then(a.id.cmp(&b.id)));
+    Ok(responses)
 }
 
 #[utoipa::path(
@@ -507,8 +535,8 @@ async fn find_main_environment_containers(
     params(
         ("organization_id" = Uuid, Path, description = "Organization ID"),
         ("container_id" = Uuid, Path, description = "Container ID"),
-        ("environment_id" = Option<Uuid>, Query, description = "Environment that owns the revision history"),
-        ("timeline_id" = Option<Uuid>, Query, description = "Revision whose pinned container version to return"),
+        ("environment_id" = Option<Uuid>, Query, description = "Environment whose draft or revision to read"),
+        ("timeline_id" = Option<Uuid>, Query, description = "Revision whose manifest container to return"),
     ),
     responses(
         (status = 200, description = "Container details", body = ContainerResponse),
@@ -533,42 +561,36 @@ pub async fn get_container(
         .await?
         .ok_or_else(|| AppError::NotFound("Container not found".into()))?;
 
-    let version = if let Some(timeline_id) = query.timeline_id {
-        let environment_id = query.environment_id.ok_or_else(|| {
-            AppError::BadRequest("environment_id is required with timeline_id".into())
-        })?;
-        let environment =
-            get_environment(tx, environment_id, organization_id, Some(c.project_id)).await?;
-        let pins = get_project_revision_pins(tx, environment.project_id, timeline_id).await?;
-        let version_id = pins.container.get(&c.id).ok_or_else(|| {
-            AppError::NotFound("Container not present in timeline revision".into())
-        })?;
-        container_version::Entity::find_by_id(*version_id)
-            .filter(container_version::Column::ContainerId.eq(c.id))
-            .one(tx)
-            .await?
-            .ok_or_else(|| AppError::NotFound("Container version not found".into()))?
+    let timeline_id = if let Some(timeline_id) = query.timeline_id {
+        if query.environment_id.is_none() {
+            return Err(AppError::BadRequest(
+                "environment_id is required with timeline_id".into(),
+            ));
+        }
+        get_environment(
+            tx,
+            query.environment_id.unwrap(),
+            organization_id,
+            Some(c.project_id),
+        )
+        .await?;
+        timeline_id
     } else {
-        container_version::Entity::find()
-            .filter(container_version::Column::ContainerId.eq(c.id))
-            .order_by_desc(container_version::Column::Version)
-            .one(tx)
+        resolve_environment(tx, organization_id, c.project_id, query.environment_id)
             .await?
-            .ok_or_else(|| AppError::NotFound("Container version not found".into()))?
+            .draft_timeline
     };
 
-    scoped.commit().await?;
+    let (timeline, manifest) =
+        timeline_manifest(tx, timeline_id, organization_id, Some(c.project_id)).await?;
+    if !manifest.containers.contains_key(&c.id) {
+        return Err(AppError::NotFound(
+            "Container not present in timeline revision".into(),
+        ));
+    }
 
-    Ok(Json(ContainerResponse {
-        id: c.id,
-        organization_id: c.organization_id,
-        name: c.name,
-        current_version: Some(resolve_latest_version(&version)),
-        project_id: Some(c.project_id),
-        region_id: c.region_id,
-        created_at: c.created_at.to_string(),
-        updated_at: c.updated_at.to_string(),
-    }))
+    scoped.commit().await?;
+    Ok(Json(build_response(&c, &manifest, timeline.id)))
 }
 
 #[utoipa::path(
@@ -579,7 +601,7 @@ pub async fn get_container(
         ("organization_id" = Uuid, Path, description = "Organization ID"),
         ("container_id" = Uuid, Path, description = "Container ID"),
         ("environment_id" = Uuid, Query, description = "Environment ID for the revision"),
-        ("timeline_id" = Uuid, Query, description = "Revision that supplies the container update base"),
+        ("timeline_id" = Uuid, Query, description = "Draft revision that supplies the update base"),
     ),
     responses(
         (status = 200, description = "Container updated", body = ContainerResponse),
@@ -613,11 +635,10 @@ pub async fn update_container(
         ("organization_id" = Uuid, Path, description = "Organization ID"),
         ("container_id" = Uuid, Path, description = "Container ID"),
         ("environment_id" = Uuid, Query, description = "Environment ID for the revision"),
-        ("timeline_id" = Uuid, Query, description = "Draft revision to deploy"),
+        ("timeline_id" = Uuid, Query, description = "Draft revision to redeploy"),
     ),
     responses(
         (status = 200, description = "Container redeployed", body = ContainerResponse),
-        (status = 400, description = "Container image is not refreshable"),
         (status = 404, description = "Not found"),
     ),
     tag = "containers",
@@ -650,7 +671,7 @@ async fn update_container_with_options(
     container_id: Uuid,
     action: UpdateContainerQuery,
     body: UpdateContainerRequest,
-    force_version: bool,
+    redeploy: bool,
     timeline_summary: &str,
 ) -> Result<Json<ContainerResponse>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
@@ -658,7 +679,7 @@ async fn update_container_with_options(
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
 
-    let mut c = container::Entity::find()
+    let c = container::Entity::find()
         .filter(container::Column::Id.eq(container_id))
         .filter(container::Column::OrganizationId.eq(organization_id))
         .one(tx)
@@ -675,20 +696,20 @@ async fn update_container_with_options(
 
     if action.timeline_id != environment.draft_timeline {
         return Err(AppError::Conflict(
-            "Fork this revision before changing its configuration".into(),
+            "Select the environment's draft revision before changing its configuration".into(),
         ));
     }
 
-    if let Some(ref new_name) = body.name {
-        let trimmed = new_name.trim().to_string();
-        if trimmed.is_empty() {
-            return Err(AppError::BadRequest("Name is required".into()));
+    let next_name = match body.name.as_ref() {
+        Some(new_name) => {
+            let trimmed = new_name.trim().to_string();
+            if trimmed.is_empty() {
+                return Err(AppError::BadRequest("Name is required".into()));
+            }
+            Some(trimmed)
         }
-        let mut active: container::ActiveModel = c.clone().into();
-        active.name = Set(trimmed);
-        active.updated_at = Set(Utc::now().fixed_offset());
-        c = active.update(tx).await?;
-    }
+        None => None,
+    };
 
     if let Some(replica_count) = body.replica_count {
         validate_replica_count(replica_count)?;
@@ -697,27 +718,20 @@ async fn update_container_with_options(
         validate_port(port)?;
     }
 
-    let mut new_version: Option<container_version::Model> = None;
+    let (draft_timeline, manifest) =
+        timeline_manifest(tx, action.timeline_id, organization_id, Some(c.project_id)).await?;
+    let base = manifest
+        .containers
+        .get(&container_id)
+        .cloned()
+        .ok_or_else(|| AppError::NotFound("Container not present in timeline revision".into()))?;
+
+    let should_revise = has_config_change(&body) || next_name.is_some() || redeploy;
     let mut compute_revision = None;
+    let mut response_manifest = manifest.clone();
+    let mut response_revision = draft_timeline.id;
 
-    if has_config_change(&body) || force_version {
-        let mut pins =
-            get_project_revision_pins(tx, environment.project_id, action.timeline_id).await?;
-        let base_version_id = pins.container.get(&container_id).ok_or_else(|| {
-            AppError::NotFound("Container not present in timeline revision".into())
-        })?;
-        let base = container_version::Entity::find_by_id(*base_version_id)
-            .filter(container_version::Column::ContainerId.eq(container_id))
-            .one(tx)
-            .await?
-            .ok_or_else(|| AppError::NotFound("Container version not found".into()))?;
-        let latest_version_number = container_version::Entity::find()
-            .filter(container_version::Column::ContainerId.eq(container_id))
-            .order_by_desc(container_version::Column::Version)
-            .one(tx)
-            .await?
-            .ok_or_else(|| AppError::NotFound("Container version not found".into()))?;
-
+    if should_revise {
         let next_cpu = body.cpu.clone().unwrap_or_else(|| base.cpu.clone());
         let next_memory = body.memory.clone().unwrap_or_else(|| base.memory.clone());
         validate_container_resources(&next_cpu, &next_memory)?;
@@ -731,72 +745,52 @@ async fn update_container_with_options(
         if next_image.is_empty() {
             return Err(AppError::BadRequest("Image is required".into()));
         }
-        if force_version && !is_exact_latest_image(&next_image) {
-            return Err(AppError::BadRequest(
-                "Only images configured with the exact :latest tag can be redeployed".into(),
-            ));
-        }
-        let next_registry_id = body
-            .external_registry_id
-            .unwrap_or(base.external_registry_id);
-        let registry = selected_external_registry(tx, organization_id, next_registry_id).await?;
-        let resolved_image =
-            if body.image.is_some() || body.external_registry_id.is_some() || force_version {
-                images::resolve_image(&next_image, organization_id, registry.as_ref()).await?
-            } else {
-                base.resolved_image.clone()
-            };
-        let external_registry_id = registry.as_ref().map(|registry| registry.id);
-
-        let next_ver = latest_version_number.version + 1;
-        let version_id = Uuid::new_v4();
-
-        let cv = container_version::ActiveModel {
-            id: Set(version_id),
-            container_id: Set(container_id),
-            organization_id: Set(organization_id),
-            version: Set(next_ver),
-            image: Set(next_image),
-            resolved_image: Set(resolved_image),
-            public: Set(body.public.unwrap_or(base.public)),
-            replica_count: Set(body.replica_count.unwrap_or(base.replica_count)),
-            port: Set(body.port.or(base.port)),
-            env: Set(body.env.clone().or(base.env.clone())),
-            cpu: Set(next_cpu),
-            memory: Set(next_memory),
-            external_registry_id: Set(external_registry_id),
-            health_check: Set(body.health_check.clone().or(base.health_check.clone())),
-            created_at: Set(Utc::now().fixed_offset()),
+        let next_registry_id = next_external_registry_id(&body, &base);
+        let needs_image_resolution = image_resolution_needed(&body, &base, redeploy);
+        let (resolved_image, external_registry_id) = if needs_image_resolution {
+            let registry =
+                selected_external_registry(tx, organization_id, next_registry_id).await?;
+            (
+                images::resolve_image(&next_image, organization_id, registry.as_ref()).await?,
+                registry.as_ref().map(|registry| registry.id),
+            )
+        } else {
+            (base.resolved_image.clone(), base.external_registry_id)
         };
 
-        new_version = Some(cv.insert(tx).await?);
+        let next_config = ContainerConfig {
+            name: next_name.unwrap_or_else(|| base.name.clone()),
+            region_id: base.region_id,
+            image: next_image,
+            resolved_image,
+            external_registry_id,
+            replica_count: body.replica_count.unwrap_or(base.replica_count),
+            port: body.port.or(base.port),
+            public: body.public.unwrap_or(base.public),
+            cpu: next_cpu,
+            memory: next_memory,
+            health_check: body.health_check.clone().or(base.health_check.clone()),
+            env: body.env.clone().or(base.env.clone()),
+        };
+        response_manifest
+            .containers
+            .insert(container_id, next_config);
 
-        pins.set_container(container_id, version_id);
         let revision = revisions::create_revision(
             tx,
             &environment,
-            &pins,
+            &response_manifest,
             Some(timeline_summary.into()),
             body.auto_deploy,
         )
         .await?;
+        response_revision = revision.id;
         if body.auto_deploy {
             compute_revision = Some(revision.id);
         }
     }
 
     events::record(tx, organization_id, c.project_id, "container:updated", serde_json::json!({"summary": format!("Updated container '{}'", c.name), "target_id": container_id.to_string(), "environment_id": environment.id.to_string()}), auth.actor_id).await?;
-
-    let latest_version = match new_version {
-        Some(v) => Some(v),
-        None => {
-            container_version::Entity::find()
-                .filter(container_version::Column::ContainerId.eq(container_id))
-                .order_by_desc(container_version::Column::Version)
-                .one(tx)
-                .await?
-        }
-    };
 
     scoped.commit().await?;
     if let Some(revision_id) = compute_revision {
@@ -809,24 +803,21 @@ async fn update_container_with_options(
         .await?;
     }
 
-    Ok(Json(ContainerResponse {
-        id: c.id,
-        organization_id: c.organization_id,
-        name: c.name,
-        current_version: latest_version.map(|v| resolve_latest_version(&v)),
-        project_id: Some(c.project_id),
-        region_id: c.region_id,
-        created_at: c.created_at.to_string(),
-        updated_at: c.updated_at.to_string(),
-    }))
+    Ok(Json(build_response(
+        &c,
+        &response_manifest,
+        response_revision,
+    )))
 }
 
 #[cfg(test)]
 mod redeploy_tests {
     use super::{
-        UpdateContainerRequest, has_config_change, is_exact_latest_image,
-        validate_container_resources, validate_port, validate_replica_count,
+        ContainerConfig, UpdateContainerRequest, has_config_change, image_resolution_needed,
+        next_external_registry_id, validate_container_resources, validate_port,
+        validate_replica_count,
     };
+    use uuid::Uuid;
 
     #[test]
     fn update_resources_distinguish_omitted_and_null() {
@@ -839,14 +830,6 @@ mod redeploy_tests {
         assert_eq!(cleared.cpu, Some(None));
         assert_eq!(cleared.memory, Some(None));
         assert!(has_config_change(&cleared));
-    }
-
-    #[test]
-    fn only_exact_latest_images_can_be_redeployed() {
-        assert!(is_exact_latest_image("nginx:latest"));
-        assert!(is_exact_latest_image("registry.example.com/app:latest"));
-        assert!(!is_exact_latest_image("nginx:Latest"));
-        assert!(!is_exact_latest_image("nginx:latest@sha256:abc"));
     }
 
     #[test]
@@ -872,6 +855,39 @@ mod redeploy_tests {
         assert!(validate_container_resources(&cpu("0.5"), &None).is_err());
         assert!(validate_container_resources(&cpu("big"), &memory("1024Mi")).is_err());
         assert!(validate_container_resources(&cpu("0.5"), &memory("1GiB")).is_err());
+    }
+
+    #[test]
+    fn unchanged_image_and_registry_do_not_resolve_again() {
+        let base = ContainerConfig {
+            name: "web".into(),
+            region_id: Uuid::nil(),
+            image: "web:latest".into(),
+            resolved_image: "web@sha256:old".into(),
+            external_registry_id: Some(Uuid::from_u128(1)),
+            replica_count: 1,
+            port: None,
+            public: false,
+            cpu: None,
+            memory: None,
+            health_check: None,
+            env: None,
+        };
+        let unchanged = UpdateContainerRequest {
+            image: Some("  web:latest  ".into()),
+            external_registry_id: Some(Some(Uuid::from_u128(1))),
+            replica_count: Some(2),
+            ..Default::default()
+        };
+        assert!(!image_resolution_needed(&unchanged, &base, false));
+        assert!(image_resolution_needed(&unchanged, &base, true));
+
+        let cleared = UpdateContainerRequest {
+            external_registry_id: Some(None),
+            ..Default::default()
+        };
+        assert_eq!(next_external_registry_id(&cleared, &base), None);
+        assert!(image_resolution_needed(&cleared, &base, false));
     }
 }
 
@@ -922,13 +938,12 @@ pub async fn delete_container(
         ));
     }
 
-    let mut pins =
-        get_project_revision_pins(tx, environment.project_id, action.timeline_id).await?;
-    pins.remove_container(&container_id);
+    let (_, mut manifest) = draft_manifest(tx, &environment).await?;
+    manifest.containers.remove(&container_id);
     let revision = revisions::create_revision(
         tx,
         &environment,
-        &pins,
+        &manifest,
         Some(format!("Removed container '{}'", c.name)),
         action.deploy,
     )

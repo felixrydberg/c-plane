@@ -30,7 +30,7 @@ export const ICONS = {
   sidebarCloseRight: 'i-heroicons:arrow-right-end-on-rectangle',
   sidebarCloseLeft: 'i-heroicons:arrow-left-end-on-rectangle',
   sidebarCloseLft: 'i-heroicons:arrow-left-end-on-rectangle',
-  graph: 'i-material-symbols:graph-1',
+  graph: 'i-lucide:git-branch',
   revision: 'i-heroicons:clock',
   passkey: 'i-heroicons:lock-closed',
 } as const

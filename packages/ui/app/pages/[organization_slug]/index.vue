@@ -1,14 +1,36 @@
 <script setup lang="ts">
+import type { Container, DatabaseWithBranches } from '@cplane/sdk'
 import { ICONS } from '~/utils/icons'
 
 const store = useStore();
 
 const selectedProject = computed(() => store.project);
+const organizationId = computed(() => store.organization?.id ?? '')
+const projectId = computed(() => selectedProject.value?.id ?? '')
 const currentEnvironment = computed(() =>
   store.environment?.name
   ?? store.environments.find(environment => environment.id === selectedProject.value?.default_environment_id)?.name
   ?? 'No environment selected',
 )
+
+const containersUrl = computed(() => organizationId.value
+  ? `/api/organization/${organizationId.value as ':organization_id'}/containers` as const
+  : '')
+const databasesUrl = computed(() => organizationId.value
+  ? `/api/organization/${organizationId.value as ':organization_id'}/databases/postgres` as const
+  : '')
+const resourcesReady = computed(() => Boolean(organizationId.value && projectId.value))
+
+const { data: containers } = await useCplaneFetch<Container[]>(containersUrl, {
+  default: () => [],
+  immediate: resourcesReady,
+  query: { project_id: projectId },
+})
+const { data: databases } = await useCplaneFetch<DatabaseWithBranches[]>(databasesUrl, {
+  default: () => [],
+  immediate: resourcesReady,
+  query: { project_id: projectId },
+})
 </script>
 
 <template>
@@ -43,7 +65,7 @@ const currentEnvironment = computed(() =>
           <div class="flex items-start justify-between gap-4">
             <div>
               <p class="text-sm text-muted">Postgres</p>
-              <p class="mt-3 text-4xl font-normal tracking-[-0.04em]">0</p>
+              <p class="mt-3 text-4xl font-normal tracking-[-0.04em]">{{ databases?.length ?? 0 }}</p>
             </div>
             <div class="flex size-10 items-center justify-center rounded-md bg-primary/10">
               <UIcon :name="ICONS.databases" class="size-5 text-primary" />
@@ -54,20 +76,13 @@ const currentEnvironment = computed(() =>
           <div class="flex items-start justify-between gap-4">
             <div>
               <p class="text-sm text-muted">Containers</p>
-              <p class="mt-3 text-4xl font-normal tracking-[-0.04em]">0</p>
+              <p class="mt-3 text-4xl font-normal tracking-[-0.04em]">{{ containers?.length ?? 0 }}</p>
             </div>
             <div class="flex size-10 items-center justify-center rounded-md bg-primary/10">
               <UIcon :name="ICONS.containers" class="size-5 text-primary" />
             </div>
           </div>
         </UCard>
-      </div>
-      <div class="flex flex-col gap-2">
-        <span class="text-xl">Heading</span>
-        <span class="text-lg">Heading</span>
-        <span class="text-md">Heading</span>
-        <span class="text-sm">Heading</span>
-        <span class="text-xs">Heading</span>
       </div>
     </section>
   </div>

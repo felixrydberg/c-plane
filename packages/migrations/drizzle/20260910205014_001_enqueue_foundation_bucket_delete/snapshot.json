@@ -1,10 +1,10 @@
 {
+  "id": "bb69f5e4-3ab4-4d07-bf32-c869927e23ea",
+  "prevIds": [
+    "5382cfd8-fa60-41d0-871b-fd133f5278a6"
+  ],
   "version": "8",
   "dialect": "postgres",
-  "id": "f4ecba66-c0ad-42ed-9534-d864f18a1f81",
-  "prevIds": [
-    "00000000-0000-0000-0000-000000000000"
-  ],
   "ddl": [
     {
       "values": [
@@ -204,12 +204,6 @@
     },
     {
       "isRlsEnabled": true,
-      "name": "container_version",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": true,
       "name": "credential",
       "entityType": "tables",
       "schema": "public"
@@ -289,6 +283,12 @@
     {
       "isRlsEnabled": true,
       "name": "project_environment",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": true,
+      "name": "project_revision_manifest",
       "entityType": "tables",
       "schema": "public"
     },
@@ -1422,214 +1422,6 @@
       "entityType": "columns",
       "schema": "public",
       "table": "container"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "container_version"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "container_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "container_version"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "organization_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "container_version"
-    },
-    {
-      "type": "integer",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "version",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "container_version"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "image",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "container_version"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "resolved_image",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "container_version"
-    },
-    {
-      "type": "boolean",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "false",
-      "generated": null,
-      "identity": null,
-      "name": "public",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "container_version"
-    },
-    {
-      "type": "integer",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "1",
-      "generated": null,
-      "identity": null,
-      "name": "replica_count",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "container_version"
-    },
-    {
-      "type": "integer",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "port",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "container_version"
-    },
-    {
-      "type": "jsonb",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "env",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "container_version"
-    },
-    {
-      "type": "jsonb",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "env_secret_refs",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "container_version"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "cpu",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "container_version"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "memory",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "container_version"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "external_registry_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "container_version"
-    },
-    {
-      "type": "jsonb",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "health_check",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "container_version"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "container_version"
     },
     {
       "type": "uuid",
@@ -3059,6 +2851,97 @@
       "name": "id",
       "entityType": "columns",
       "schema": "public",
+      "table": "project_revision_manifest"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "project_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "project_revision_manifest"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "organization_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "project_revision_manifest"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "schema_version",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "project_revision_manifest"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "configuration",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "project_revision_manifest"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 1,
+      "default": "'{}'",
+      "generated": null,
+      "identity": null,
+      "name": "external_registry_ids",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "project_revision_manifest"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "project_revision_manifest"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
       "table": "project_timeline"
     },
     {
@@ -3140,14 +3023,14 @@
       "table": "project_timeline"
     },
     {
-      "type": "jsonb",
+      "type": "uuid",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
-      "default": "'{}'",
+      "default": null,
       "generated": null,
       "identity": null,
-      "name": "pins",
+      "name": "manifest_id",
       "entityType": "columns",
       "schema": "public",
       "table": "project_timeline"
@@ -4975,97 +4858,6 @@
       "nameExplicit": true,
       "columns": [
         {
-          "value": "container_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "version",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": true,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "container_version_container_id_version_uidx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "container_version"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "container_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "container_version_container_id_idx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "container_version"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "organization_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "container_version_organization_id_idx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "container_version"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "external_registry_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "container_version_external_registry_id_idx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "container_version"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
           "value": "access_key_id",
           "isExpression": false,
           "asc": true,
@@ -5962,6 +5754,69 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "project_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "project_revision_manifest_project_id_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "project_revision_manifest"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "organization_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "project_revision_manifest_organization_id_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "project_revision_manifest"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "external_registry_ids",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "gin",
+      "concurrently": false,
+      "name": "project_revision_manifest_external_registry_ids_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "project_revision_manifest"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "id",
           "isExpression": false,
           "asc": true,
@@ -6059,6 +5914,62 @@
       "method": "btree",
       "concurrently": false,
       "name": "project_timeline_parent_timeline_id_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "project_timeline"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "manifest_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "project_timeline_manifest_id_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "project_timeline"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "project_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "environment_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "timeline",
+          "isExpression": false,
+          "asc": false,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "project_timeline_project_id_environment_id_timeline_idx",
       "entityType": "indexes",
       "schema": "public",
       "table": "project_timeline"
@@ -7157,59 +7068,6 @@
     {
       "nameExplicit": false,
       "columns": [
-        "container_id"
-      ],
-      "schemaTo": "public",
-      "tableTo": "container",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "name": "container_version_container_id_container_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "container_version"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        "organization_id"
-      ],
-      "schemaTo": "public",
-      "tableTo": "organization",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "name": "container_version_organization_id_organization_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "container_version"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        "external_registry_id",
-        "organization_id"
-      ],
-      "schemaTo": "public",
-      "tableTo": "external_registry",
-      "columnsTo": [
-        "id",
-        "organization_id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "RESTRICT",
-      "name": "container_version_external_registry_fk",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "container_version"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
         "organization_id"
       ],
       "schemaTo": "public",
@@ -7637,18 +7495,43 @@
       "table": "project_environment"
     },
     {
-      "nameExplicit": false,
+      "nameExplicit": true,
       "columns": [
-        "draft_timeline"
+        "draft_timeline",
+        "project_id",
+        "organization_id"
       ],
       "schemaTo": "public",
       "tableTo": "project_timeline",
       "columnsTo": [
-        "id"
+        "id",
+        "project_id",
+        "organization_id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "RESTRICT",
-      "name": "project_environment_draft_timeline_project_timeline_id_fkey",
+      "onDelete": "NO ACTION",
+      "name": "project_environment_draft_scope_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "project_environment"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "deployed_timeline",
+        "project_id",
+        "organization_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "project_timeline",
+      "columnsTo": [
+        "id",
+        "project_id",
+        "organization_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "project_environment_deployed_scope_fk",
       "entityType": "fks",
       "schema": "public",
       "table": "project_environment"
@@ -7656,19 +7539,36 @@
     {
       "nameExplicit": false,
       "columns": [
-        "deployed_timeline"
+        "project_id"
       ],
       "schemaTo": "public",
-      "tableTo": "project_timeline",
+      "tableTo": "project",
       "columnsTo": [
         "id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "RESTRICT",
-      "name": "project_environment_deployed_timeline_project_timeline_id_fkey",
+      "onDelete": "CASCADE",
+      "name": "project_revision_manifest_project_id_project_id_fkey",
       "entityType": "fks",
       "schema": "public",
-      "table": "project_environment"
+      "table": "project_revision_manifest"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "organization_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "organization",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "project_revision_manifest_organization_id_organization_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "project_revision_manifest"
     },
     {
       "nameExplicit": false,
@@ -7721,6 +7621,27 @@
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "name": "project_timeline_parent_scope_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "project_timeline"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "manifest_id",
+        "project_id",
+        "organization_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "project_revision_manifest",
+      "columnsTo": [
+        "id",
+        "project_id",
+        "organization_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "project_timeline_manifest_scope_fk",
       "entityType": "fks",
       "schema": "public",
       "table": "project_timeline"
@@ -8186,16 +8107,6 @@
         "id"
       ],
       "nameExplicit": false,
-      "name": "container_version_pkey",
-      "schema": "public",
-      "table": "container_version",
-      "entityType": "pks"
-    },
-    {
-      "columns": [
-        "id"
-      ],
-      "nameExplicit": false,
       "name": "credential_pkey",
       "schema": "public",
       "table": "credential",
@@ -8329,6 +8240,16 @@
       "name": "project_environment_pkey",
       "schema": "public",
       "table": "project_environment",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "project_revision_manifest_pkey",
+      "schema": "public",
+      "table": "project_revision_manifest",
       "entityType": "pks"
     },
     {
@@ -8505,7 +8426,32 @@
         "organization_id"
       ],
       "nullsNotDistinct": false,
+      "name": "project_revision_manifest_scope_uidx",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "project_revision_manifest"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "id",
+        "project_id",
+        "organization_id"
+      ],
+      "nullsNotDistinct": false,
       "name": "project_timeline_parent_scope_uidx",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "project_timeline"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "project_id",
+        "timeline"
+      ],
+      "nullsNotDistinct": false,
+      "name": "project_timeline_project_id_timeline_uidx",
       "entityType": "uniques",
       "schema": "public",
       "table": "project_timeline"
@@ -8777,19 +8723,6 @@
     },
     {
       "as": "PERMISSIVE",
-      "for": "ALL",
-      "roles": [
-        "app_tenant"
-      ],
-      "using": "\"container_version\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
-      "withCheck": "\"container_version\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
-      "name": "container_version_tenant_rls",
-      "entityType": "policies",
-      "schema": "public",
-      "table": "container_version"
-    },
-    {
-      "as": "PERMISSIVE",
       "for": "SELECT",
       "roles": [
         "app_tenant"
@@ -9008,6 +8941,45 @@
       "entityType": "policies",
       "schema": "public",
       "table": "project_environment"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "SELECT",
+      "roles": [
+        "app_tenant"
+      ],
+      "using": "\"project_revision_manifest\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+      "withCheck": null,
+      "name": "project_revision_manifest_select",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "project_revision_manifest"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "INSERT",
+      "roles": [
+        "app_tenant"
+      ],
+      "using": null,
+      "withCheck": "\"project_revision_manifest\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+      "name": "project_revision_manifest_insert",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "project_revision_manifest"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "DELETE",
+      "roles": [
+        "app_tenant"
+      ],
+      "using": "\"project_revision_manifest\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+      "withCheck": null,
+      "name": "project_revision_manifest_delete",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "project_revision_manifest"
     },
     {
       "as": "PERMISSIVE",
