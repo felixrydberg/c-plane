@@ -1,16 +1,6 @@
 import useStore from "~/stores/store"
 import { getSession, loadProjectEnvironments } from "~/utils/auth"
 
-async function fetchProjects() {
-  const store = useStore()
-  if (!store.organization?.id) return
-
-  const requestFetch = useCplaneRequestFetch()
-
-    const { data } = await requestFetch(`/api/organization/${store.organization.id as ':organization_id'}/projects` as const)
-  store.projects = data ?? []
-}
-
 async function syncCurrentProjectEnvironments() {
   const store = useStore()
   const route = useRoute()
@@ -36,7 +26,6 @@ export default defineNuxtPlugin(async () => {
   const store = useStore();
   if (import.meta.server && store.session === null) {
     await getSession();
-    await fetchProjects();
     await syncCurrentProjectEnvironments();
   }
 

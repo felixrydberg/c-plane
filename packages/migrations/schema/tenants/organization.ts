@@ -9,7 +9,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { user } from "./studio.ts";
+import { user } from "./auth.ts";
 import { app_tenant, orgAllowed } from "../rls.ts";
 
 export const organization = pgTable.withRLS(
