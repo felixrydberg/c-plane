@@ -77,6 +77,7 @@ const disable2FAState = reactive<Disable2FASchema>({
 const on2FAPasswordSubmit = async () => {
   const { data, error } = await client.twoFactor.enable({
     password: twofaState.password,
+    method: 'totp',
   });
 
   if (error) {
@@ -86,6 +87,11 @@ const on2FAPasswordSubmit = async () => {
       twofaError.value = undefined;
       createAuthError(error);
     }
+    return
+  }
+
+  if (data.method !== 'totp') {
+    twofaError.value = 'TOTP setup is unavailable.';
     return
   }
 

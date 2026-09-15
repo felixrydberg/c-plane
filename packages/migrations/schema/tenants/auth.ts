@@ -55,24 +55,6 @@ export const account = pgTable(
   (table) => [index("account_userId_idx").on(table.userId)],
 );
 
-export const verification = pgTable(
-  "verification",
-  {
-    id: uuid("id")
-      .default(sql`pg_catalog.gen_random_uuid()`)
-      .primaryKey(),
-    identifier: text("identifier").notNull(),
-    value: text("value").notNull(),
-    expiresAt: timestamp("expires_at").notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at")
-      .defaultNow()
-      .$onUpdate(() => /* @__PURE__ */ new Date())
-      .notNull(),
-  },
-  (table) => [index("verification_identifier_idx").on(table.identifier)],
-);
-
 export const twoFactor = pgTable(
   "two_factor",
   {
@@ -84,6 +66,9 @@ export const twoFactor = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    verified: boolean("verified").default(true),
+    failedVerificationCount: integer("failed_verification_count").default(0),
+    lockedUntil: timestamp("locked_until"),
   },
   (table) => [
     index("twoFactor_secret_idx").on(table.secret),
@@ -107,7 +92,7 @@ export const passkey = pgTable(
     deviceType: text("device_type").notNull(),
     backedUp: boolean("backed_up").notNull(),
     transports: text("transports"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at"),
     aaguid: text("aaguid"),
   },
   (table) => [

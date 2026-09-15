@@ -95,8 +95,16 @@ export const getSession = async (cache: boolean = true) => {
           : await cplaneFetch("/ui-api/organization/active", {
             method: "GET",
             credentials: "include"
-          });
+        });
         store.setOrganization(orgResponse || null)
+        const projectsResponse = import.meta.server
+          ? await useCplaneFetch<{ data?: Project[] }>(`/api/organization/${store.organization.id as ':organization_id'}/projects` as const)
+          : await cplaneFetch<{ data?: Project[] }>(`/api/organization/${store.organization.id as ':organization_id'}/projects` as const, {
+            credentials: "include"
+          });
+        store.projects = import.meta.server
+          ? projectsResponse.data.value?.data ?? []
+          : projectsResponse.data ?? []
         const organizations = import.meta.server
           ? await requestFetch!<{ data?: typeof store.organizations }>("/ui-api/organization", {
             method: "GET"

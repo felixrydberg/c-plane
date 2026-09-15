@@ -68,6 +68,22 @@ export const auth = betterAuth({
     get: async key => {
       return redis.get(key)
     },
+    getAndDelete: async key => {
+      return redis.getDel(key)
+    },
+    increment: async (key, ttl) => {
+      if (!Number.isInteger(ttl) || ttl <= 0) {
+        throw new TypeError("Redis increment TTL must be a positive integer")
+      }
+
+      const [value] = await redis
+        .multi()
+        .incr(key)
+        .expire(key, ttl, "NX")
+        .execTyped()
+
+      return value
+    },
     set: async (key, value, ttl) => {
       if (ttl) return redis.set(key, value, { EX: ttl })
       else return redis.set(key, value)
@@ -145,7 +161,7 @@ export const auth = betterAuth({
             name,
             email,
             emailVerified: false,
-          })
+          }, { method: "passkey" })
           const session = await ctx.context.internalAdapter.createSession(user.id)
           if (!session || !authUser) throw new Error("Could not create passkey session")
 
