@@ -2,7 +2,7 @@
   import * as z from 'zod'
   import type { FormSubmitEvent } from '@nuxt/ui'
   import useStore from '~/stores/store'
-  import { createClient } from '~/utils/auth'
+  import { createClient, useAuth } from '~/utils/auth'
   import { passwordConfirmationSchema } from '~/utils/validation'
   import { getQueryValue, useAuthSwitchQuery } from '~/utils/query'
   import { ICONS } from '~/utils/icons'
@@ -15,6 +15,7 @@
   const signupStep = ref<'identity' | 'password'>('identity')
 
   const toast = useToast();
+  const auth = useAuth();
   const identitySchema = z.object({
     name: z.string().trim().min(1, 'Username is required').max(100, 'Username is too long'),
     email: z.string().trim().pipe(z.email('Enter a valid email address')),
@@ -36,7 +37,7 @@
   const authSwitchQuery = useAuthSwitchQuery()
 
   const onUserSignedUp = async () => {
-    await getSession(false);
+    await auth.getSession(false);
 
     if (store.session && store.user) {
       toast.add({

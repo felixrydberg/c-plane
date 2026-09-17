@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import type { Project } from '@cplane/sdk'
 import { getErrorMessage } from '~/utils/errors'
-import { loadProjectEnvironments } from '~/utils/auth'
+import { useAuth } from '~/utils/auth'
 import { ICONS } from '~/utils/icons'
 
 const store = useStore()
 const route = useRoute()
 const router = useRouter()
+const auth = useAuth()
 const name = ref('')
 const loading = ref(false)
 const error = ref('')
@@ -16,7 +17,7 @@ async function loadCreatedProject() {
   if (!createdProject.value) return
 
   try {
-    await loadProjectEnvironments(createdProject.value.id)
+    await auth.loadProjectEnvironments(createdProject.value.id)
     createdProject.value = undefined
     await router.push(`/${route.params.organization_slug}`)
   } catch {

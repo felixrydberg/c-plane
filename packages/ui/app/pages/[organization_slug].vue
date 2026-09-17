@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useAuth } from '~/utils/auth'
+
 definePageMeta({
   layout: 'auth',
   layoutTransition: {
@@ -10,6 +12,7 @@ definePageMeta({
 const store = useStore();
 const route = useRoute();
 const router = useRouter();
+const auth = useAuth();
 
 const organization_slug = computed(() => route.params.organization_slug?.toString());
 
@@ -50,7 +53,7 @@ if (!route.params.organization_slug) {
         throw createError({ statusCode: 404, statusMessage: "Organization not found" });
       }
 
-      await setOrganization(matchedOrg.id, route.fullPath);
+      await auth.setOrganization(matchedOrg.id, route.fullPath);
     }
   } catch {
     throw createError({ statusCode: 404, statusMessage: "Organization not found" });

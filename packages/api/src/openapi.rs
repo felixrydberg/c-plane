@@ -112,6 +112,7 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
         crate::handlers::projects::get_timeline,
         crate::handlers::events::list_events,
         crate::handlers::health::health_check,
+        crate::metrics::endpoint,
         crate::handlers::regions::list_regions,
         crate::handlers::containers::create_container,
         crate::handlers::containers::list_containers,

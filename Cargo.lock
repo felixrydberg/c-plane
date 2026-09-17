@@ -959,6 +959,7 @@ dependencies = [
  "jsonwebtoken",
  "lib",
  "oci-client",
+ "prometheus",
  "redis",
  "reqwest 0.12.28",
  "sea-orm",

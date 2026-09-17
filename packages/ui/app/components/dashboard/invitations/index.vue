@@ -1,8 +1,10 @@
 <script setup lang="ts">
   import { refDebounced } from '@vueuse/core'
+  import { useAuth } from '~/utils/auth'
   
   const store = useStore();
   const toast = useToast();
+  const auth = useAuth();
   const query = ref("");
   const queryDebounced = refDebounced(query, 200);
   const limit = ref(50);
@@ -45,7 +47,7 @@
       }
 
       emits('accepted', invitation);
-      await setOrganization(organization.id, `/${organization.slug}`);
+      await auth.setOrganization(organization.id, `/${organization.slug}`);
     } catch (error) {
       toast.add({
         title: "Error accepting invitation",

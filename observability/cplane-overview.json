@@ -1,0 +1,23 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {"title":"Request rate","type":"timeseries","datasource":{"type":"prometheus","uid":"prometheus"},"gridPos":{"h":8,"w":12,"x":0,"y":0},"targets":[{"refId":"A","expr":"sum(rate(cplane_api_http_requests_total[5m]))","legendFormat":"api"},{"refId":"B","expr":"sum(rate(cplane_ui_http_requests_total[5m]))","legendFormat":"ui"},{"refId":"C","expr":"sum(rate(cplane_ingress_requests_total[5m]))","legendFormat":"ingress"}]},
+    {"title":"5xx rate","type":"timeseries","datasource":{"type":"prometheus","uid":"prometheus"},"gridPos":{"h":8,"w":12,"x":12,"y":0},"targets":[{"refId":"A","expr":"sum(rate(cplane_api_http_requests_total{status=~\"5..\"}[5m]))","legendFormat":"api"},{"refId":"B","expr":"sum(rate(cplane_ui_http_requests_total{status=~\"5..\"}[5m]))","legendFormat":"ui"},{"refId":"C","expr":"sum(rate(cplane_ingress_requests_total{status=~\"5..\"}[5m]))","legendFormat":"ingress"}]},
+    {"title":"p95 request latency","type":"timeseries","datasource":{"type":"prometheus","uid":"prometheus"},"gridPos":{"h":8,"w":12,"x":0,"y":8},"targets":[{"refId":"A","expr":"histogram_quantile(0.95, sum by (le) (rate(cplane_api_http_request_duration_seconds_bucket[5m])))","legendFormat":"api"},{"refId":"B","expr":"histogram_quantile(0.95, sum by (le) (rate(cplane_ui_http_request_duration_seconds_bucket[5m])))","legendFormat":"ui"},{"refId":"C","expr":"histogram_quantile(0.95, sum by (le) (rate(cplane_ingress_request_duration_seconds_bucket[5m])))","legendFormat":"ingress"}]},
+    {"title":"Auth outcomes","type":"timeseries","datasource":{"type":"prometheus","uid":"prometheus"},"gridPos":{"h":8,"w":12,"x":12,"y":8},"fieldConfig":{"defaults":{"unit":"reqps","decimals":2},"overrides":[]},"targets":[{"refId":"A","expr":"sum by (outcome) (rate(cplane_api_auth_requests_total[5m]))","legendFormat":"api {{outcome}}"},{"refId":"B","expr":"sum by (outcome) (rate(cplane_ui_auth_requests_total[5m]))","legendFormat":"ui auth {{outcome}}"}]},
+    {"title":"Database health","type":"stat","datasource":{"type":"prometheus","uid":"prometheus"},"gridPos":{"h":6,"w":8,"x":0,"y":16},"targets":[{"refId":"A","expr":"min(cplane_api_database_up)","legendFormat":"database up"}]},
+    {"title":"Platform counts","type":"timeseries","datasource":{"type":"prometheus","uid":"prometheus"},"gridPos":{"h":6,"w":8,"x":8,"y":16},"targets":[{"refId":"A","expr":"cplane_platform_entities","legendFormat":"{{entity}}"}]},
+    {"title":"Ingress traffic","type":"timeseries","datasource":{"type":"prometheus","uid":"prometheus"},"gridPos":{"h":6,"w":8,"x":16,"y":16},"targets":[{"refId":"A","expr":"sum by (class) (rate(cplane_ingress_body_bytes_total{direction=\"response\"}[5m]))","legendFormat":"{{class}}"}]},
+    {"title":"Ingress rejections","type":"timeseries","datasource":{"type":"prometheus","uid":"prometheus"},"gridPos":{"h":6,"w":24,"x":0,"y":22},"targets":[{"refId":"A","expr":"sum by (class, reason) (rate(cplane_ingress_rejections_total[5m]))","legendFormat":"{{class}} / {{reason}}"}]}
+  ],
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["c-plane"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "title": "C-Plane Overview",
+  "uid": "cplane-overview",
+  "version": 1
+}

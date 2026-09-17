@@ -6,9 +6,10 @@
     "npm:@iconify-json/heroicons@^1.2.3": "1.2.3",
     "npm:@iconify-json/lucide@1.2.97": "1.2.97",
     "npm:@nuxt/eslint@1.15.2": "1.15.2_eslint@10.8.1__jiti@2.7.0_@types+node@25.9.5_@vue+compiler-sfc@3.5.41_esbuild@0.28.2_rolldown@1.2.3_typescript@5.9.3_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0",
-    "npm:@nuxt/kit@^4.5.0": "4.5.2_@types+node@25.9.5_esbuild@0.28.2_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0",
+    "npm:@nuxt/kit@^4.5.0": "4.5.2_@types+node@25.9.5_esbuild@0.28.2_magic-string@1.1.0_magicast@0.5.4_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0",
     "npm:@nuxt/ui@^4.10.0": "4.10.0_tailwindcss@4.3.3_typescript@5.9.3_zod@4.6.5",
     "npm:@pinia/nuxt@~0.11.3": "0.11.3_pinia@3.0.4__typescript@5.9.3__vue@3.5.41___typescript@5.9.3_rolldown@1.2.3_typescript@5.9.3_vue@3.5.41__typescript@5.9.3",
+    "npm:@prometheus-io/client@~0.16.1": "0.16.1",
     "npm:@types/node@^25.5.0": "25.9.5",
     "npm:@vue-flow/background@^1.3.2": "1.3.2_@vue-flow+core@1.48.2__vue@3.5.41___typescript@5.9.3__typescript@5.9.3_vue@3.5.41__typescript@5.9.3_typescript@5.9.3",
     "npm:@vue-flow/controls@^1.1.3": "1.1.3_@vue-flow+core@1.48.2__vue@3.5.41___typescript@5.9.3__typescript@5.9.3_vue@3.5.41__typescript@5.9.3_typescript@5.9.3",
@@ -19,7 +20,7 @@
     "npm:drizzle-orm@1.0.0-rc.4": "1.0.0-rc.4_postgres@3.4.9_zod@4.6.5",
     "npm:eslint@^10.7.0": "10.8.1_jiti@2.7.0",
     "npm:h3@1.15.11": "1.15.11",
-    "npm:nuxt@^4.5.0": "4.5.2_@types+node@25.9.5_zod@4.6.5",
+    "npm:nuxt@^4.5.0": "4.5.2_@types+node@25.9.5_rolldown@1.2.3_@vue+compiler-sfc@3.5.41_drizzle-orm@1.0.0-rc.4__pg@8.23.0__postgres@3.4.9__zod@4.4.3_esbuild@0.28.2_eslint@10.8.1__jiti@2.7.0_pg@8.23.0_pinia@3.0.4__typescript@5.9.3__vue@3.5.41___typescript@5.9.3_postgres@3.4.9_typescript@5.9.3_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0_zod@4.4.3",
     "npm:openapi-fetch@0.15": "0.15.2",
     "npm:openapi-typescript@^7.9.1": "7.13.0_typescript@5.9.3",
     "npm:pinia@^3.0.4": "3.0.4_typescript@5.9.3_vue@3.5.41__typescript@5.9.3",
@@ -361,10 +362,10 @@
       "dependencies": [
         "@better-auth/core",
         "@better-auth/utils@0.4.2",
-        "drizzle-orm@1.0.0-rc.4_postgres@3.4.9_zod@4.6.5"
+        "drizzle-orm"
       ],
       "optionalPeers": [
-        "drizzle-orm@1.0.0-rc.4_postgres@3.4.9_zod@4.6.5"
+        "drizzle-orm"
       ]
     },
     "@better-auth/kysely-adapter@1.7.5_@better-auth+core@1.7.5__@better-auth+utils@0.4.2__@better-fetch+fetch@1.3.2__better-call@1.4.0___zod@4.6.5__jose@6.2.12__kysely@0.29.5__nanostores@1.5.3_@better-auth+utils@0.4.2_kysely@0.29.5_@better-fetch+fetch@1.3.2_better-call@1.4.0__zod@4.6.5_jose@6.2.12_nanostores@1.5.3": {
@@ -503,7 +504,7 @@
       "integrity": "sha512-uZjAFoocWtWHr7YP9jm6FqwI8kjX2QN9bjcncoZt0GS+zExIAP3Ewv6EqEUvVP7w9pjZE+T19QxLHeoacN/MNg==",
       "dependencies": [
         "@dxup/unimport",
-        "@nuxt/kit@4.5.2_@types+node@25.9.5_esbuild@0.28.2_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0",
+        "@nuxt/kit",
         "@vue/compiler-dom",
         "chokidar",
         "knitwork",
@@ -1285,18 +1286,10 @@
     "@nuxt/devalue@2.0.2": {
       "integrity": "sha512-GBzP8zOc7CGWyFQS6dv1lQz8VVpz5C2yRszbXufwG/9zhStTIH50EtD87NmWbTMwXDvZLNg8GIpb1UFdH93JCA=="
     },
-    "@nuxt/devtools-kit@3.4.1_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0_@types+node@25.9.5_esbuild@0.28.2_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0": {
-      "integrity": "sha512-6ltPm2yUW8GvDdf3VJna7+flLi+ej7xRfSr+S4ovevKt/CuPf9EqYOn1jW7Kw/U1MXt/71zkn+/O2vu3G6O9Hg==",
-      "dependencies": [
-        "@nuxt/kit@4.5.2_@types+node@25.9.5_esbuild@0.28.2_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0",
-        "execa",
-        "vite"
-      ]
-    },
     "@nuxt/devtools-kit@3.4.1_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0_magic-string@1.1.0": {
       "integrity": "sha512-6ltPm2yUW8GvDdf3VJna7+flLi+ej7xRfSr+S4ovevKt/CuPf9EqYOn1jW7Kw/U1MXt/71zkn+/O2vu3G6O9Hg==",
       "dependencies": [
-        "@nuxt/kit@4.5.2_magic-string@1.1.0",
+        "@nuxt/kit",
         "execa",
         "vite"
       ]
@@ -1318,9 +1311,9 @@
     "@nuxt/devtools@3.4.1_magic-string@1.1.0_zod@4.6.5": {
       "integrity": "sha512-20zZs6k/zAdi+PM7s1BwxE3hanZ+R1OGi5DWCKPyzSnhUUeeNebvWNgec7Rwnx6iKLkJfK4WFIZ+FL2QurG/ZQ==",
       "dependencies": [
-        "@nuxt/devtools-kit@3.4.1_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0_magic-string@1.1.0",
+        "@nuxt/devtools-kit",
         "@nuxt/devtools-wizard",
-        "@nuxt/kit@4.5.2_magic-string@1.1.0",
+        "@nuxt/kit",
         "@vue/devtools-core",
         "@vue/devtools-kit@8.2.1",
         "birpc@4.0.0",
@@ -1346,47 +1339,7 @@
         "sirv",
         "structured-clone-es",
         "tinyglobby",
-        "unstorage@1.17.5_zod@4.6.5",
-        "vite",
-        "vite-plugin-inspect",
-        "vite-plugin-vue-tracer",
-        "which@6.0.1",
-        "ws"
-      ],
-      "bin": true
-    },
-    "@nuxt/devtools@3.4.1_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0_@types+node@25.9.5_esbuild@0.28.2_jiti@2.7.0_magic-string@1.1.0_rolldown@1.2.3_typescript@5.9.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_vue@3.5.41__typescript@5.9.3": {
-      "integrity": "sha512-20zZs6k/zAdi+PM7s1BwxE3hanZ+R1OGi5DWCKPyzSnhUUeeNebvWNgec7Rwnx6iKLkJfK4WFIZ+FL2QurG/ZQ==",
-      "dependencies": [
-        "@nuxt/devtools-kit@3.4.1_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0_@types+node@25.9.5_esbuild@0.28.2_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0",
-        "@nuxt/devtools-wizard",
-        "@nuxt/kit@4.5.2_@types+node@25.9.5_esbuild@0.28.2_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0",
-        "@vue/devtools-core",
-        "@vue/devtools-kit@8.2.1",
-        "birpc@4.0.0",
-        "consola",
-        "destr",
-        "error-stack-parser-es@2.0.1",
-        "execa",
-        "fast-npm-meta",
-        "get-port-please",
-        "hookable@6.1.1",
-        "image-meta",
-        "is-installed-globally",
-        "launch-editor",
-        "local-pkg",
-        "magicast",
-        "nypm",
-        "ohash",
-        "pathe",
-        "perfect-debounce@2.1.0",
-        "pkg-types@2.3.3",
-        "semver@7.8.5",
-        "simple-git",
-        "sirv",
-        "structured-clone-es",
-        "tinyglobby",
-        "unstorage@1.17.5_db0@0.3.4__drizzle-orm@1.0.0-rc.4___pg@8.23.0___postgres@3.4.9___zod@4.4.3__pg@8.23.0__postgres@3.4.9__zod@4.4.3_ioredis@5.11.1_drizzle-orm@1.0.0-rc.4__pg@8.23.0__postgres@3.4.9__zod@4.4.3_pg@8.23.0_postgres@3.4.9_zod@4.4.3",
+        "unstorage",
         "vite",
         "vite-plugin-inspect",
         "vite-plugin-vue-tracer",
@@ -1434,10 +1387,10 @@
       "integrity": "sha512-LwDavQoLl+y0sIDqWEYbOnM6FOmXVIYSEjuvkO1hgAqhb0CvG3hgTnfE1qkf1jOAZp3CZGP+6rxRAJ0dxhueIQ==",
       "dependencies": [
         "@eslint/config-inspector",
-        "@nuxt/devtools-kit@3.4.1_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0_@types+node@25.9.5_esbuild@0.28.2_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0",
+        "@nuxt/devtools-kit",
         "@nuxt/eslint-config",
         "@nuxt/eslint-plugin",
-        "@nuxt/kit@4.5.2_@types+node@25.9.5_esbuild@0.28.2_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0",
+        "@nuxt/kit",
         "chokidar",
         "eslint",
         "eslint-flat-config-utils",
@@ -1452,8 +1405,8 @@
     "@nuxt/fonts@0.14.0_magic-string@0.30.21_zod@4.6.5": {
       "integrity": "sha512-4uXQl9fa5F4ibdgU8zomoOcyMdnwgdem+Pi8JEqeDYI5yPR32Kam6HnuRr47dTb97CstaepAvXPWQUUHMtjsFQ==",
       "dependencies": [
-        "@nuxt/devtools-kit@3.4.1_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0_@types+node@25.9.5_esbuild@0.28.2_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0",
-        "@nuxt/kit@4.5.2_@types+node@25.9.5_esbuild@0.28.2_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0",
+        "@nuxt/devtools-kit",
+        "@nuxt/kit",
         "consola",
         "defu",
         "fontless",
@@ -1466,7 +1419,7 @@
         "ufo",
         "unifont",
         "unplugin@3.3.0_esbuild@0.28.2_rolldown@1.2.3_rollup@4.62.4_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0_@types+node@25.9.5_jiti@2.7.0",
-        "unstorage@1.17.5_zod@4.6.5"
+        "unstorage"
       ]
     },
     "@nuxt/icon@2.4.1_@types+node@25.9.5_esbuild@0.28.2_magic-string@0.30.21_rolldown@1.2.3_typescript@5.9.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0_vue@3.5.41__typescript@5.9.3": {
@@ -1476,8 +1429,8 @@
         "@iconify/types",
         "@iconify/utils",
         "@iconify/vue",
-        "@nuxt/devtools-kit@3.4.1_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0_@types+node@25.9.5_esbuild@0.28.2_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0",
-        "@nuxt/kit@4.5.2_@types+node@25.9.5_esbuild@0.28.2_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0",
+        "@nuxt/devtools-kit",
+        "@nuxt/kit",
         "consola",
         "local-pkg",
         "mlly",
@@ -1488,33 +1441,7 @@
         "ufo"
       ]
     },
-    "@nuxt/kit@4.5.2_@types+node@25.9.5_esbuild@0.28.2_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0": {
-      "integrity": "sha512-l66LU9DcJYjmNwqwAj2I5UGRrUbnG2DOKGChnN70zIGtn0eq/z87gi/FRgha6eMb9/FmB1PFHgtx6PWVml1C2Q==",
-      "dependencies": [
-        "c12@3.3.4_magicast@0.5.4",
-        "consola",
-        "defu",
-        "destr",
-        "errx",
-        "exsolve",
-        "ignore@7.0.6",
-        "jiti",
-        "klona",
-        "mlly",
-        "nostics",
-        "ohash",
-        "pathe",
-        "pkg-types@2.3.3",
-        "rc9",
-        "scule",
-        "tinyglobby",
-        "ufo",
-        "unctx@3.0.0_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_@types+node@25.9.5_esbuild@0.28.2_jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0",
-        "untyped",
-        "verkit"
-      ]
-    },
-    "@nuxt/kit@4.5.2_magic-string@1.1.0": {
+    "@nuxt/kit@4.5.2_@types+node@25.9.5_esbuild@0.28.2_magic-string@1.1.0_magicast@0.5.4_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0": {
       "integrity": "sha512-l66LU9DcJYjmNwqwAj2I5UGRrUbnG2DOKGChnN70zIGtn0eq/z87gi/FRgha6eMb9/FmB1PFHgtx6PWVml1C2Q==",
       "dependencies": [
         "c12@3.3.4_magicast@0.5.4",
@@ -1544,7 +1471,7 @@
       "integrity": "sha512-sx/vtT8D1WIRUOMuKQz/9z8nZb7jgVWc6HWwlkXKDjYZ84otPFtYCozKqhXWv6xf3JxJvge/RUAOwh9Z7P4nQQ==",
       "dependencies": [
         "@nuxt/devalue",
-        "@nuxt/kit@4.5.2_magic-string@1.1.0",
+        "@nuxt/kit",
         "@unhead/vue@3.3.1_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0_vue@3.5.41__typescript@5.9.3_@types+node@25.9.5_esbuild@0.28.2_jiti@2.7.0_rolldown@1.2.3_typescript@5.9.3",
         "@vue/shared",
         "consola",
@@ -1568,7 +1495,7 @@
         "std-env",
         "ufo",
         "unctx@3.0.0_magic-string@1.1.0_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_@types+node@25.9.5_esbuild@0.28.2_jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0",
-        "unstorage@1.17.5_zod@4.6.5",
+        "unstorage",
         "vue",
         "vue-bundle-renderer",
         "vue-devtools-stub"
@@ -1588,7 +1515,7 @@
     "@nuxt/telemetry@2.8.0_@nuxt+kit@4.5.2__@types+node@25.9.5__esbuild@0.28.2__magic-string@1.1.0__magicast@0.5.4__rolldown@1.2.3__unplugin@3.3.0___esbuild@0.28.2___rolldown@1.2.3___rollup@4.62.4___vite@8.2.1____@types+node@25.9.5____esbuild@0.28.2____jiti@2.7.0____yaml@2.9.0___@types+node@25.9.5___jiti@2.7.0__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0_@types+node@25.9.5_esbuild@0.28.2_magic-string@1.1.0_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0": {
       "integrity": "sha512-zAwXY24KYvpLTmiV+osagd2EHkfs5IF+7oDZYTQoit5r0kPlwaCNlzHp5I/wUAWT4LBw6lG8gZ6bWidAdv/erQ==",
       "dependencies": [
-        "@nuxt/kit@4.5.2_@types+node@25.9.5_esbuild@0.28.2_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0",
+        "@nuxt/kit",
         "citty@0.2.2",
         "consola",
         "ofetch@2.0.0-alpha.3",
@@ -1604,7 +1531,7 @@
         "@iconify/vue",
         "@nuxt/fonts",
         "@nuxt/icon",
-        "@nuxt/kit@4.5.2_@types+node@25.9.5_esbuild@0.28.2_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0",
+        "@nuxt/kit",
         "@nuxt/schema",
         "@nuxtjs/color-mode",
         "@standard-schema/spec",
@@ -1674,7 +1601,7 @@
     "@nuxt/vite-builder@4.5.2_nuxt@4.5.2__@types+node@25.9.5__rolldown@1.2.3__@vue+compiler-sfc@3.5.41__drizzle-orm@1.0.0-rc.4___pg@8.23.0___postgres@3.4.9___zod@4.4.3__esbuild@0.28.2__eslint@10.8.1___jiti@2.7.0__pg@8.23.0__pinia@3.0.4___typescript@5.9.3___vue@3.5.41____typescript@5.9.3__postgres@3.4.9__typescript@5.9.3__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__zod@4.4.3_rolldown@1.2.3_vue@3.5.41__typescript@5.9.3_@types+node@25.9.5_esbuild@0.28.2_eslint@10.8.1__jiti@2.7.0_magic-string@1.1.0_typescript@5.9.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0": {
       "integrity": "sha512-fC8KUs5F1VpSEjTIjmx5pdflciMlp3FDCubx3AXElvRPLtBAPmyB69kmqVFjRnVQ8+vRHNyI7iBHUg9Se8srLA==",
       "dependencies": [
-        "@nuxt/kit@4.5.2_@types+node@25.9.5_esbuild@0.28.2_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0",
+        "@nuxt/kit",
         "@vitejs/plugin-vue",
         "@vitejs/plugin-vue-jsx",
         "autoprefixer",
@@ -1690,7 +1617,7 @@
         "knitwork",
         "mlly",
         "mocked-exports",
-        "nuxt@4.5.2_@types+node@25.9.5_rolldown@1.2.3_@vue+compiler-sfc@3.5.41_drizzle-orm@1.0.0-rc.4__pg@8.23.0__postgres@3.4.9__zod@4.4.3_esbuild@0.28.2_eslint@10.8.1__jiti@2.7.0_pg@8.23.0_pinia@3.0.4__typescript@5.9.3__vue@3.5.41___typescript@5.9.3_postgres@3.4.9_typescript@5.9.3_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0_zod@4.4.3",
+        "nuxt@4.5.2_@types+node@25.9.5_zod@4.6.5",
         "nypm",
         "pathe",
         "pkg-types@2.3.3",
@@ -1714,12 +1641,15 @@
     "@nuxtjs/color-mode@4.0.1_@types+node@25.9.5_esbuild@0.28.2_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0": {
       "integrity": "sha512-eiA7hWXi5zNHaYKyJFCGF6i0wFZtuvR7KDXZ6jiSvwxjCpRFwphrw0MOSmNfArTSSsT1wpW+/2H92cejeVfUlg==",
       "dependencies": [
-        "@nuxt/kit@4.5.2_@types+node@25.9.5_esbuild@0.28.2_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0",
+        "@nuxt/kit",
         "exsolve",
         "pathe",
         "pkg-types@2.3.3",
         "semver@7.8.5"
       ]
+    },
+    "@opentelemetry/api@1.9.1": {
+      "integrity": "sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q=="
     },
     "@opentelemetry/semantic-conventions@1.43.0": {
       "integrity": "sha512-eSYWTm620tTk45EKSedaUL8MFYI8hW164hIXsgIHyxu3VobUB3fFCu5t0hQby6OoWRPsG1KkKUG2M5UadiLiVg=="
@@ -1863,7 +1793,7 @@
     "@pinia/nuxt@0.11.3_pinia@3.0.4__typescript@5.9.3__vue@3.5.41___typescript@5.9.3_rolldown@1.2.3_typescript@5.9.3_vue@3.5.41__typescript@5.9.3": {
       "integrity": "sha512-7WVNHpWx4qAEzOlnyrRC88kYrwnlR/PrThWT0XI1dSNyUAXu/KBv9oR37uCgYkZroqP5jn8DfzbkNF3BtKvE9w==",
       "dependencies": [
-        "@nuxt/kit@4.5.2_@types+node@25.9.5_esbuild@0.28.2_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0",
+        "@nuxt/kit",
         "pinia"
       ]
     },
@@ -1889,6 +1819,13 @@
     },
     "@poppinss/exception@1.2.3": {
       "integrity": "sha512-dCED+QRChTVatE9ibtoaxc+WkdzOSjYTKi/+uacHWIsfodVfpsueo3+DKpgU5Px8qXjgmXkSvhXvSCz3fnP9lw=="
+    },
+    "@prometheus-io/client@0.16.1": {
+      "integrity": "sha512-XkFPsGFGoSs/UMg/vh0QLDpanl/tsrOV5PLHdpGe8Ho+ir/Llhytr15j6y8ZwLrpIGzK9gTVVpIalA6C4UjUZw==",
+      "dependencies": [
+        "@opentelemetry/api",
+        "tdigest"
+      ]
     },
     "@redis/bloom@5.11.0_@redis+client@5.11.0": {
       "integrity": "sha512-KYiVilAhAFN3057afUb/tfYJpsEyTkQB+tQcn5gVVA7DgcNOAj8lLxe4j8ov8BF6I9C1Fe/kwlbuAICcTMX8Lw==",
@@ -3454,7 +3391,7 @@
       "integrity": "sha512-MaU0U/za7N3r6brxD4YB/l4NSrFzLPlANv6wEuQVaIPlD3L4W9rFcQPbL/EilY9BHhHvhfcz3gInDLrEtWT4EA==",
       "dependencies": [
         "browserslist",
-        "caniuse-lite@1.0.30001809",
+        "caniuse-lite",
         "fraction.js",
         "picocolors",
         "postcss",
@@ -3529,7 +3466,7 @@
         "better-call",
         "defu",
         "drizzle-kit",
-        "drizzle-orm@1.0.0-rc.4_postgres@3.4.9_zod@4.6.5",
+        "drizzle-orm",
         "jose",
         "kysely",
         "nanostores",
@@ -3537,7 +3474,7 @@
       ],
       "optionalPeers": [
         "drizzle-kit",
-        "drizzle-orm@1.0.0-rc.4_postgres@3.4.9_zod@4.6.5"
+        "drizzle-orm"
       ]
     },
     "better-call@1.4.0_zod@4.6.5": {
@@ -3558,6 +3495,9 @@
       "dependencies": [
         "file-uri-to-path"
       ]
+    },
+    "bintrees@1.0.2": {
+      "integrity": "sha512-VOMgTMwjAaUG580SXn3LacVgjurrbMme7ZZNYGSSV7mmtY6QQRh0Eg3pwIcntQ77DErK1L0NxkbetjcoXzVwKw=="
     },
     "birpc@2.9.0": {
       "integrity": "sha512-KrayHS5pBi69Xi9JmvoqrIgYGDkD6mcSe/i6YKi3w5kekCLzrX4+nawcXqrj2tIp50Kw/mT/s3p+GVK0A0sKxw=="
@@ -3590,7 +3530,7 @@
       "integrity": "sha512-3GSvyjvDI4Dur1Meg2BekJquu5uF+9R9a1+5M1Mde192eZoXbeXjzgOsgqPS2V8D5wrrip0gR5Hf/GhWQ9ZzaA==",
       "dependencies": [
         "baseline-browser-mapping",
-        "caniuse-lite@1.0.30001810",
+        "caniuse-lite",
         "electron-to-chromium",
         "node-releases",
         "update-browserslist-db"
@@ -3674,11 +3614,8 @@
       "integrity": "sha512-B0hQ1OLyJuHTQSOWXvwibWqM6DCoqJdvBA6X1S/53bd4XU7LJ1yurIPlrsouol3mw1jh9pGI4ivubSpmJeIqCA==",
       "dependencies": [
         "browserslist",
-        "caniuse-lite@1.0.30001809"
+        "caniuse-lite"
       ]
-    },
-    "caniuse-lite@1.0.30001809": {
-      "integrity": "sha512-xxWVywk6a6Arlk+hymeycyn/VgqEfLDxupvhH/xiY5SJ/18kmi9o6MiO320DCUzypORHLtvh0I4i04tUhCNHNQ=="
     },
     "caniuse-lite@1.0.30001810": {
       "integrity": "sha512-TITQPUkaz+aVk5GL6NhOdwk1aEaNTSDPsGFWrTuhKGtjTF70jL/Oht2W4c6rXUe5fu7Ie19VIahAXHIIiWWNeg=="
@@ -4005,22 +3942,13 @@
         "d3-transition"
       ]
     },
-    "db0@0.3.4_drizzle-orm@1.0.0-rc.4__pg@8.23.0__postgres@3.4.9__zod@4.4.3_pg@8.23.0_postgres@3.4.9_zod@4.4.3": {
-      "integrity": "sha512-RiXXi4WaNzPTHEOu8UPQKMooIbqOEyqA1t7Z6MsdxSCeb8iUC9ko3LcmsLmeUt2SM5bctfArZKkRQggKZz7JNw==",
-      "dependencies": [
-        "drizzle-orm@1.0.0-rc.4_pg@8.23.0_postgres@3.4.9_zod@4.4.3"
-      ],
-      "optionalPeers": [
-        "drizzle-orm@1.0.0-rc.4_pg@8.23.0_postgres@3.4.9_zod@4.4.3"
-      ]
-    },
     "db0@0.3.4_drizzle-orm@1.0.0-rc.4__postgres@3.4.9__zod@4.6.5_zod@4.6.5": {
       "integrity": "sha512-RiXXi4WaNzPTHEOu8UPQKMooIbqOEyqA1t7Z6MsdxSCeb8iUC9ko3LcmsLmeUt2SM5bctfArZKkRQggKZz7JNw==",
       "dependencies": [
-        "drizzle-orm@1.0.0-rc.4_postgres@3.4.9_zod@4.6.5"
+        "drizzle-orm"
       ],
       "optionalPeers": [
-        "drizzle-orm@1.0.0-rc.4_postgres@3.4.9_zod@4.6.5"
+        "drizzle-orm"
       ]
     },
     "debug@4.4.3": {
@@ -4119,17 +4047,6 @@
         "jiti"
       ],
       "bin": true
-    },
-    "drizzle-orm@1.0.0-rc.4_pg@8.23.0_postgres@3.4.9_zod@4.4.3": {
-      "integrity": "sha512-BT+pf+qoiYHqltoA88Jmf6ilGMXPlpfE0hEJKc2adRtMCAl25Swk/t5gXcWxZNAwdtf3F5gCd2FpeOyP/pT0Hw==",
-      "dependencies": [
-        "pg",
-        "postgres"
-      ],
-      "optionalPeers": [
-        "pg",
-        "postgres"
-      ]
     },
     "drizzle-orm@1.0.0-rc.4_postgres@3.4.9_zod@4.6.5": {
       "integrity": "sha512-BT+pf+qoiYHqltoA88Jmf6ilGMXPlpfE0hEJKc2adRtMCAl25Swk/t5gXcWxZNAwdtf3F5gCd2FpeOyP/pT0Hw==",
@@ -4782,7 +4699,7 @@
         "pathe",
         "ufo",
         "unifont",
-        "unstorage@1.17.5_zod@4.6.5",
+        "unstorage",
         "vite"
       ],
       "optionalPeers": [
@@ -5649,7 +5566,7 @@
         "cookie-es@2.0.1",
         "croner",
         "crossws@0.3.5",
-        "db0@0.3.4_drizzle-orm@1.0.0-rc.4__postgres@3.4.9__zod@4.6.5_zod@4.6.5",
+        "db0",
         "defu",
         "destr",
         "dot-prop",
@@ -5695,7 +5612,7 @@
         "unenv",
         "unimport@6.4.0_rolldown@1.2.3_@types+node@25.9.5_esbuild@0.28.2_jiti@2.7.0_rollup@4.62.4_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0",
         "unplugin-utils",
-        "unstorage@1.17.5_zod@4.6.5",
+        "unstorage",
         "untyped",
         "unwasm",
         "youch",
@@ -5762,8 +5679,8 @@
       "dependencies": [
         "@dxup/nuxt",
         "@nuxt/cli",
-        "@nuxt/devtools@3.4.1_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0_@types+node@25.9.5_esbuild@0.28.2_jiti@2.7.0_magic-string@1.1.0_rolldown@1.2.3_typescript@5.9.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_vue@3.5.41__typescript@5.9.3",
-        "@nuxt/kit@4.5.2_magic-string@1.1.0",
+        "@nuxt/devtools",
+        "@nuxt/kit",
         "@nuxt/nitro-server",
         "@nuxt/schema",
         "@nuxt/telemetry",
@@ -5832,8 +5749,8 @@
       "dependencies": [
         "@dxup/nuxt",
         "@nuxt/cli",
-        "@nuxt/devtools@3.4.1_magic-string@1.1.0_zod@4.6.5",
-        "@nuxt/kit@4.5.2_magic-string@1.1.0",
+        "@nuxt/devtools",
+        "@nuxt/kit",
         "@nuxt/nitro-server",
         "@nuxt/schema",
         "@nuxt/telemetry",
@@ -7175,6 +7092,12 @@
         "yallist@5.0.0"
       ]
     },
+    "tdigest@0.1.3": {
+      "integrity": "sha512-zbRt+lT+/H4fRItHshczHErVCQnitJk8MfMT24MqFJf3YL7SJJPqGIGeuOdvxXxM/AHFzKBl7WoyaYwqO9s3Kw==",
+      "dependencies": [
+        "bintrees"
+      ]
+    },
     "teex@1.0.1": {
       "integrity": "sha512-eYE6iEI62Ni1H8oIa7KlDU6uQBtqr4Eajni3wX7rpfXD8ysFx8z0+dri+KWEPWpBsxXfxu58x/0jvTVT1ekOSg==",
       "dependencies": [
@@ -7299,17 +7222,6 @@
         "unplugin@2.3.11"
       ]
     },
-    "unctx@3.0.0_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_@types+node@25.9.5_esbuild@0.28.2_jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0": {
-      "integrity": "sha512-DoXdZVeyi2jyEsn86i8MO5RTItm1kffUkH9/+DQORn3Q688AMOy2551CIl6AdGL2UpwD675wtbNOl75wIQN/uA==",
-      "dependencies": [
-        "rolldown",
-        "unplugin@3.3.0_esbuild@0.28.2_rolldown@1.2.3_rollup@4.62.4_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0_@types+node@25.9.5_jiti@2.7.0"
-      ],
-      "optionalPeers": [
-        "rolldown",
-        "unplugin@3.3.0_esbuild@0.28.2_rolldown@1.2.3_rollup@4.62.4_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0_@types+node@25.9.5_jiti@2.7.0"
-      ]
-    },
     "unctx@3.0.0_magic-string@1.1.0_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_@types+node@25.9.5_esbuild@0.28.2_jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0": {
       "integrity": "sha512-DoXdZVeyi2jyEsn86i8MO5RTItm1kffUkH9/+DQORn3Q688AMOy2551CIl6AdGL2UpwD675wtbNOl75wIQN/uA==",
       "dependencies": [
@@ -7411,7 +7323,7 @@
     "unplugin-auto-import@21.1.0_@nuxt+kit@4.5.2__@types+node@25.9.5__esbuild@0.28.2__magic-string@1.1.0__magicast@0.5.4__rolldown@1.2.3__unplugin@3.3.0___esbuild@0.28.2___rolldown@1.2.3___rollup@4.62.4___vite@8.2.1____@types+node@25.9.5____esbuild@0.28.2____jiti@2.7.0____yaml@2.9.0___@types+node@25.9.5___jiti@2.7.0__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0_@vueuse+core@14.4.0__vue@3.5.41___typescript@5.9.3__typescript@5.9.3_@types+node@25.9.5_esbuild@0.28.2_rolldown@1.2.3_typescript@5.9.3_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0_vue@3.5.41__typescript@5.9.3": {
       "integrity": "sha512-EzrSqWIBulEqCuP7idADXH+tVKYrbwKlR5+r/lOWik0o+Ksny1kitmtryHGNSv7puzzORlcIwT/x2JStiszlHA==",
       "dependencies": [
-        "@nuxt/kit@4.5.2_@types+node@25.9.5_esbuild@0.28.2_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0",
+        "@nuxt/kit",
         "@vueuse/core@14.4.0_vue@3.5.41__typescript@5.9.3_typescript@5.9.3",
         "local-pkg",
         "magic-string@1.1.0",
@@ -7421,7 +7333,7 @@
         "unplugin-utils"
       ],
       "optionalPeers": [
-        "@nuxt/kit@4.5.2_@types+node@25.9.5_esbuild@0.28.2_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0",
+        "@nuxt/kit",
         "@vueuse/core@14.4.0_vue@3.5.41__typescript@5.9.3_typescript@5.9.3"
       ]
     },
@@ -7435,7 +7347,7 @@
     "unplugin-vue-components@32.1.0_@nuxt+kit@4.5.2__@types+node@25.9.5__esbuild@0.28.2__magic-string@0.30.21__rolldown@1.2.3__unplugin@3.3.0___esbuild@0.28.2___rolldown@1.2.3___rollup@4.62.4___vite@8.2.1____@types+node@25.9.5____esbuild@0.28.2____jiti@2.7.0____yaml@2.9.0___@types+node@25.9.5___jiti@2.7.0__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0_vue@3.5.41__typescript@5.9.3_@types+node@25.9.5_esbuild@0.28.2_rolldown@1.2.3_typescript@5.9.3_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0": {
       "integrity": "sha512-YiUkSxuRjab18XFOrX5VsIxXzccrfmHVGsGeJgSgklb829DQmCy9E4vvDUE4tuvZZdxyFJZX0Oc4TPnnxiiMyg==",
       "dependencies": [
-        "@nuxt/kit@4.5.2_@types+node@25.9.5_esbuild@0.28.2_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0",
+        "@nuxt/kit",
         "chokidar",
         "local-pkg",
         "magic-string@0.30.21",
@@ -7448,7 +7360,7 @@
         "vue"
       ],
       "optionalPeers": [
-        "@nuxt/kit@4.5.2_@types+node@25.9.5_esbuild@0.28.2_magic-string@0.30.21_rolldown@1.2.3_unplugin@3.3.0__esbuild@0.28.2__rolldown@1.2.3__rollup@4.62.4__vite@8.2.1___@types+node@25.9.5___esbuild@0.28.2___jiti@2.7.0___yaml@2.9.0__@types+node@25.9.5__jiti@2.7.0_vite@8.2.1__@types+node@25.9.5__esbuild@0.28.2__jiti@2.7.0__yaml@2.9.0"
+        "@nuxt/kit"
       ]
     },
     "unplugin@2.3.11": {
@@ -7532,31 +7444,12 @@
       ],
       "scripts": true
     },
-    "unstorage@1.17.5_db0@0.3.4__drizzle-orm@1.0.0-rc.4___pg@8.23.0___postgres@3.4.9___zod@4.4.3__pg@8.23.0__postgres@3.4.9__zod@4.4.3_ioredis@5.11.1_drizzle-orm@1.0.0-rc.4__pg@8.23.0__postgres@3.4.9__zod@4.4.3_pg@8.23.0_postgres@3.4.9_zod@4.4.3": {
-      "integrity": "sha512-0i3iqvRfx29hkNntHyQvJTpf5W9dQ9ZadSoRU8+xVlhVtT7jAX57fazYO9EHvcRCfBCyi5YRya7XCDOsbTgkPg==",
-      "dependencies": [
-        "anymatch",
-        "chokidar",
-        "db0@0.3.4_drizzle-orm@1.0.0-rc.4__pg@8.23.0__postgres@3.4.9__zod@4.4.3_pg@8.23.0_postgres@3.4.9_zod@4.4.3",
-        "destr",
-        "h3",
-        "ioredis",
-        "lru-cache@11.5.2",
-        "node-fetch-native",
-        "ofetch@1.5.1",
-        "ufo"
-      ],
-      "optionalPeers": [
-        "db0@0.3.4_drizzle-orm@1.0.0-rc.4__pg@8.23.0__postgres@3.4.9__zod@4.4.3_pg@8.23.0_postgres@3.4.9_zod@4.4.3",
-        "ioredis"
-      ]
-    },
     "unstorage@1.17.5_zod@4.6.5": {
       "integrity": "sha512-0i3iqvRfx29hkNntHyQvJTpf5W9dQ9ZadSoRU8+xVlhVtT7jAX57fazYO9EHvcRCfBCyi5YRya7XCDOsbTgkPg==",
       "dependencies": [
         "anymatch",
         "chokidar",
-        "db0@0.3.4_drizzle-orm@1.0.0-rc.4__postgres@3.4.9__zod@4.6.5_zod@4.6.5",
+        "db0",
         "destr",
         "h3",
         "ioredis",
@@ -7566,7 +7459,7 @@
         "ufo"
       ],
       "optionalPeers": [
-        "db0@0.3.4_drizzle-orm@1.0.0-rc.4__postgres@3.4.9__zod@4.6.5_zod@4.6.5",
+        "db0",
         "ioredis"
       ]
     },
@@ -8048,6 +7941,7 @@
             "npm:@nuxt/eslint@1.15.2",
             "npm:@nuxt/ui@^4.10.0",
             "npm:@pinia/nuxt@~0.11.3",
+            "npm:@prometheus-io/client@~0.16.1",
             "npm:@vue-flow/background@^1.3.2",
             "npm:@vue-flow/controls@^1.1.3",
             "npm:@vue-flow/core@^1.48.2",

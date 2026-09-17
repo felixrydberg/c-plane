@@ -1,0 +1,18 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: cplane-api
+    static_configs:
+      - targets: [api:8080]
+    metrics_path: /metrics
+
+  - job_name: cplane-ui
+    static_configs:
+      - targets: [ui:3000]
+    metrics_path: /metrics
+
+  - job_name: cplane-ingress
+    static_configs:
+      - targets: [ingress:9090]
+    metrics_path: /metrics

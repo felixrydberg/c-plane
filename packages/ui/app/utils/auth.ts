@@ -3,7 +3,7 @@ import { inferAdditionalFields, twoFactorClient, adminClient, lastLoginMethodCli
 import { passkeyClient } from "@better-auth/passkey/client"
 import type { auth } from "~~/server/utils/auth"
 import { useStore } from "~/stores/store"
-import type { Project } from '@cplane/sdk'
+import type { Environment, Project } from '@cplane/sdk'
 
 export const createClient = () => {
   const url = import.meta.server ? useRequestURL().origin : window.location.origin;
@@ -30,14 +30,32 @@ export const createClient = () => {
 export type ClientType = ReturnType<typeof createClient>
 type InternalFetch = <T = unknown>(url: string, options?: Record<string, unknown>) => Promise<T>;
 
-export async function loadProjectEnvironments(projectId: string, environmentId?: string, requestFetch = cplaneFetch, store = useStore()) {
+type AuthContext = {
+  store: ReturnType<typeof useStore>
+  route: ReturnType<typeof useRoute>
+  router: ReturnType<typeof useRouter>
+  nuxtApp: ReturnType<typeof useNuxtApp>
+  toast: ReturnType<typeof useToast>
+  requestFetch: InternalFetch
+}
+
+const createAuthContext = (): AuthContext => ({
+  store: useStore(),
+  route: useRoute(),
+  router: useRouter(),
+  nuxtApp: useNuxtApp(),
+  toast: useToast(),
+  requestFetch: (import.meta.server ? useCplaneRequestFetch() : cplaneFetch) as unknown as InternalFetch,
+})
+
+async function loadProjectEnvironments(projectId: string, environmentId: string | undefined, context: AuthContext) {
+  const { store, requestFetch } = context
   if (!store.organization?.id) return
 
   const project = store.projects.find(project => project.id === projectId)
   if (!project) return
 
-  const response = await requestFetch(`/api/organization/${store.organization.id as ':organization_id'}/projects/${project.id as ':project_id'}/environments` as const)
-  const environments = response
+  const environments = await requestFetch<Environment[]>(`/api/organization/${store.organization.id as ':organization_id'}/projects/${project.id as ':project_id'}/environments` as const)
   const environment = environments.find(environment => environment.id === environmentId) ?? environments.find(environment => environment.is_default) ?? environments[0] ?? null
 
   store.$patch({
@@ -48,14 +66,8 @@ export async function loadProjectEnvironments(projectId: string, environmentId?:
   })
 }
 
-export const getSession = async (cache: boolean = true) => {
-  const store = useStore();
-  const route = useRoute();
-  const router = useRouter();
-  const nuxtApp = useNuxtApp();
-  const requestFetch: InternalFetch | null = import.meta.server
-    ? (useCplaneRequestFetch() as unknown as InternalFetch)
-    : null;
+const getSession = async (cache: boolean, context: AuthContext) => {
+  const { store, route, router, nuxtApp, requestFetch } = context
   try {
     const client = createClient();
     const { data, error } = await client.getSession({
@@ -88,31 +100,21 @@ export const getSession = async (cache: boolean = true) => {
 
     if (user) {
       try {
-        const orgResponse = import.meta.server
-          ? await requestFetch!<typeof store.organization>("/ui-api/organization/active", {
-            method: "GET"
-          })
-          : await cplaneFetch("/ui-api/organization/active", {
-            method: "GET",
-            credentials: "include"
+        const orgResponse = await requestFetch<typeof store.organization>("/ui-api/organization/active", {
+          method: "GET",
+          ...(import.meta.client ? { credentials: "include" } : {}),
         });
+        const organizationId = orgResponse?.id
+        if (!organizationId) throw new Error('Active organization not found')
         store.setOrganization(orgResponse || null)
-        const projectsResponse = import.meta.server
-          ? await useCplaneFetch<{ data?: Project[] }>(`/api/organization/${store.organization.id as ':organization_id'}/projects` as const)
-          : await cplaneFetch<{ data?: Project[] }>(`/api/organization/${store.organization.id as ':organization_id'}/projects` as const, {
-            credentials: "include"
-          });
-        store.projects = import.meta.server
-          ? projectsResponse.data.value?.data ?? []
-          : projectsResponse.data ?? []
-        const organizations = import.meta.server
-          ? await requestFetch!<{ data?: typeof store.organizations }>("/ui-api/organization", {
-            method: "GET"
-          })
-          : await cplaneFetch<{ data?: typeof store.organizations }>("/ui-api/organization", {
-            method: "GET",
-            credentials: "include"
-          });
+        const projectsResponse = await requestFetch<{ data?: Project[] }>(`/api/organization/${organizationId as ':organization_id'}/projects` as const, {
+          ...(import.meta.client ? { credentials: "include" } : {}),
+        });
+        store.projects = projectsResponse.data ?? []
+        const organizations = await requestFetch<{ data?: typeof store.organizations }>("/ui-api/organization", {
+          method: "GET",
+          ...(import.meta.client ? { credentials: "include" } : {}),
+        });
         store.organizations = organizations.data || [];
       } catch {
         if (route.path !== '/organization/create') {
@@ -131,14 +133,12 @@ export const getSession = async (cache: boolean = true) => {
   }
 }
 
-export const createAuthError = (error: {
+const createAuthError = (error: {
     code?: string | undefined;
     message?: string | undefined;
     status: number;
     statusText: string;
-}) => {
-  const toast = useToast();
-
+}, toast: ReturnType<typeof useToast>) => {
   toast.add({
     title: 'Authentication Error',
     description: error.message || error.statusText,
@@ -146,9 +146,8 @@ export const createAuthError = (error: {
   })
 };
 
-export const signOut = async () => {
-    const store = useStore();
-    const router = useRouter();
+const signOut = async (context: AuthContext) => {
+    const { store, router } = context;
     const client = createClient();
     await client.signOut();
     // We have to set these to null so middleware will allow us to redirect
@@ -158,45 +157,42 @@ export const signOut = async () => {
     store.$reset();
 };
 
-export const setOrganization = async (id: string, redirect: string = '/') => {
-  const store = useStore();
-  const router = useRouter();
-  const requestFetch: InternalFetch | null = import.meta.server
-    ? (useCplaneRequestFetch() as unknown as InternalFetch)
-    : null;
+const setOrganization = async (id: string, redirect: string, context: AuthContext) => {
+  const { store, router, requestFetch } = context;
 
   try {
     type OrgResponse = typeof store.organization & { projects?: Project[] };
-    const data = import.meta.server
-      ? await requestFetch!<OrgResponse>(`/ui-api/organization/${id as ':organization_id'}`)
-      : await cplaneFetch<OrgResponse>(`/ui-api/organization/${id as ':organization_id'}`, {
-        credentials: "include"
-      });
+    const data = await requestFetch<OrgResponse>(`/ui-api/organization/${id as ':organization_id'}`, {
+      ...(import.meta.client ? { credentials: "include" } : {}),
+    });
 
     if (!data) {
       throw new Error("Organization not found");
     }
 
-    if (import.meta.server) {
-      await requestFetch!('/ui-api/organization/active', {
-        method: 'POST',
-        body: {
-          organization_id: id
-        }
-      });
-    } else {
-      await cplaneFetch('/ui-api/organization/active', {
-        method: 'POST',
-        body: {
-          organization_id: id
-        }
-      });
-    }
+    await requestFetch('/ui-api/organization/active', {
+      method: 'POST',
+      body: {
+        organization_id: id
+      }
+    });
     
     store.setOrganization(data || null)
     store.projects = data?.projects ?? [];
     await router.push(redirect);
   } catch {
     throw new Error("Organization not found");
+  }
+}
+
+export const useAuth = () => {
+  const context = createAuthContext()
+
+  return {
+    createAuthError: (error: Parameters<typeof createAuthError>[0]) => createAuthError(error, context.toast),
+    getSession: (cache = true) => getSession(cache, context),
+    loadProjectEnvironments: (projectId: string, environmentId?: string) => loadProjectEnvironments(projectId, environmentId, context),
+    setOrganization: (id: string, redirect = '/') => setOrganization(id, redirect, context),
+    signOut: () => signOut(context),
   }
 }

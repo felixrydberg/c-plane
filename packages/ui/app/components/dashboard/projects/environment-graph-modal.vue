@@ -9,7 +9,7 @@ import { markRaw, computed, nextTick } from 'vue'
 import type { Environment, TimelineRevision, components } from '@cplane/sdk'
 import DotNode from './environment-graph-dot-node.vue'
 import { ICONS } from '~/utils/icons'
-import { loadProjectEnvironments } from '~/utils/auth'
+import { useAuth } from '~/utils/auth'
 import { syncEnvironment } from '~/utils/environments'
 
 const dotNodeType = markRaw(DotNode)
@@ -17,6 +17,7 @@ const dotNodeType = markRaw(DotNode)
 const store = useStore();
 const toast = useToast();
 const route = useRoute();
+const auth = useAuth();
 
 const open = defineModel<boolean>('open', { required: true });
 
@@ -232,7 +233,7 @@ async function onConfirmRemoveEnvironment() {
     removeModalOpen.value = false;
     removeEnvironmentId.value = '';
     removeEnvironmentName.value = '';
-    await loadProjectEnvironments(
+    await auth.loadProjectEnvironments(
       store.project.id,
       store.environment?.id === deletedId ? undefined : store.environment?.id,
     );

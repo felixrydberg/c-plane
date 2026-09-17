@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import * as z from 'zod'
 import useStore from '~/stores/store'
-import { createAuthError, createClient } from '~/utils/auth';
+import { createClient, useAuth } from '~/utils/auth';
 import { useQRCode } from '@vueuse/integrations/useQRCode'
 
 const store = useStore();
 const toast = useToast();
+const auth = useAuth();
 const client = createClient();
 
 const step = ref(0);
@@ -85,7 +86,7 @@ const on2FAPasswordSubmit = async () => {
       twofaError.value = 'The password you entered is incorrect.';
     } else {
       twofaError.value = undefined;
-      createAuthError(error);
+      auth.createAuthError(error);
     }
     return
   }
@@ -154,7 +155,7 @@ const onManagement2FASubmit = async () => {
       management2FAError.value = 'The password you entered is incorrect.';
     } else {
       management2FAError.value = undefined;
-      createAuthError(error);
+      auth.createAuthError(error);
     }
     return;
   }
@@ -181,7 +182,7 @@ const onDisable2FASubmit = async () => {
       disable2FAError.value = 'The password you entered is incorrect.';
     } else {
       disable2FAError.value = undefined;
-      createAuthError(error);
+      auth.createAuthError(error);
     }
     return
   }

@@ -3,18 +3,27 @@ import { getIdentityDb } from "./db";
 import { organization_member, user  } from "~~/server/schema";
 import { eq, and } from "drizzle-orm";
 import type { H3Event } from "h3";
+import { recordSessionCheck } from "./metrics";
 
 export const requireSession = async (event: H3Event) => {
-  const session = await auth.api.getSession({
-    headers: event.headers,
-  });
+  let session;
+  try {
+    session = await auth.api.getSession({
+      headers: event.headers,
+    });
+  } catch (error) {
+    recordSessionCheck(false);
+    throw error;
+  }
 
   if (!session) {
+    recordSessionCheck(false);
     throw createError({
       statusCode: 401,
       statusMessage: "Unauthorized",
     });
   }
+  recordSessionCheck(true);
   return session;
 };
 

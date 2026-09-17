@@ -64,6 +64,9 @@ impl Router {
 
     pub fn route(&self, authority: &str, path: &str, method: &Method) -> Decision {
         if matches_any(&self.authorities.platform, authority) {
+            if path == "/metrics" {
+                return Decision::NotFound;
+            }
             if path_prefix(path, "/api/registry/token") {
                 return proxy("platform.registry-token", Service::Api, TrafficClass::Auth);
             }
@@ -80,6 +83,9 @@ impl Router {
         }
 
         if matches_any(&self.authorities.api, authority) {
+            if path == "/metrics" {
+                return Decision::NotFound;
+            }
             if path_prefix(path, "/api/registry/token") {
                 return proxy("api.registry-token", Service::Api, TrafficClass::Auth);
             }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
+import { useAuth } from '~/utils/auth'
 
 defineProps<{
   collapsed?: boolean
@@ -7,6 +8,7 @@ defineProps<{
 
 const store = useStore();
 const router = useRouter();
+const auth = useAuth();
 const isDropdownOpen = ref(false);
 
 const { data: organizations, pending, refresh } = useLazyFetch('/ui-api/organization');
@@ -52,7 +54,7 @@ const items = computed<DropdownMenuItem[][]>(() => {
       if (store.organization?.id === org.id) {
         return;
       }
-      await setOrganization(org.id, `/${org.slug}`);
+      await auth.setOrganization(org.id, `/${org.slug}`);
     }
   }));
 

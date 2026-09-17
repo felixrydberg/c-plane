@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { Environment } from '@cplane/sdk'
-import { loadProjectEnvironments } from '~/utils/auth'
+import { useAuth } from '~/utils/auth'
 import { syncEnvironment } from '~/utils/environments'
 import { ICONS } from '~/utils/icons'
 
@@ -13,6 +13,7 @@ const store = useStore()
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
+const auth = useAuth()
 const isOwner = computed(() => store.organization?.member?.role === 'owner')
 
 const routeProjectId = computed(() => route.params.project_id as string | undefined)
@@ -113,7 +114,7 @@ async function selectProject(projectId: string | null) {
 
   if (!projectRoutesEnabled.value) {
     if (projectId) {
-      await loadProjectEnvironments(projectId)
+      await auth.loadProjectEnvironments(projectId)
     } else {
       store.$patch({ project: null, environment: null, environments: [], environments_project_id: null })
     }
@@ -163,7 +164,7 @@ async function onProjectDeleted() {
 }
 async function refreshEnvironments() {
   if (!store.project) return
-  await loadProjectEnvironments(store.project.id, routeEnvironmentId.value)
+  await auth.loadProjectEnvironments(store.project.id, routeEnvironmentId.value)
 }
 
 async function onEnvironmentCreated() { await refreshEnvironments() }

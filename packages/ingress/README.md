@@ -8,6 +8,7 @@ Pingora reverse proxy for C-Plane's public HTTP surface. It terminates no TLS an
 | --- | --- | --- |
 | Platform | `/api/**` | Rust API |
 | Platform | `/ui-api/**` | Nuxt/Nitro |
+| Platform/API | `/metrics` | Not publicly routed (use the internal service endpoints) |
 | Platform | everything else | Nuxt UI |
 | API | `/api/**`, `/health` | Rust API |
 | Storage | exact path | Storage API |

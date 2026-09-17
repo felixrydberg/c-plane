@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { loadProjectEnvironments } from '~/utils/auth'
+import { useAuth } from '~/utils/auth'
 import { ICONS } from '~/utils/icons'
 
 const store = useStore()
 const route = useRoute()
 const router = useRouter()
+const auth = useAuth()
 const selectingProjectId = ref<string>()
 const error = ref('')
 
@@ -15,7 +16,7 @@ async function selectProject(projectId: string) {
   error.value = ''
 
   try {
-    await loadProjectEnvironments(projectId)
+    await auth.loadProjectEnvironments(projectId)
 
     const organizationPath = `/${route.params.organization_slug}`
     const currentPath = route.path.replace(/\/+$/, '')

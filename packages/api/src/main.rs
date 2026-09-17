@@ -9,6 +9,7 @@ mod config;
 mod errors;
 mod handlers;
 mod middleware;
+mod metrics;
 mod models;
 mod openapi;
 mod routes;

@@ -12,6 +12,7 @@ use std::time::Duration;
 use uuid::Uuid;
 
 use crate::errors::AppError;
+use crate::metrics;
 use crate::middleware::scoped::{self, Role, RouteGuard};
 use crate::state::{AppDatabase, OrganizationContext, TenantDatabase, get_app_state};
 
@@ -97,10 +98,25 @@ where
         let (organization_context, request_auth) =
             if let Some(raw_api_key) = extract_api_key_from_parts(parts).map(str::to_owned) {
                 // Routes without a declared scope deny API keys (fail-closed).
-                let api_key: ApiKeyLookup = resolve_api_key(&identity_db, &raw_api_key, peer_ip)
-                    .await?
-                    .ok_or_else(|| AppError::Unauthorized("Invalid API key".to_string()))?;
-                scoped::check_api_key(guard, &api_key.scopes)?;
+                let api_key: ApiKeyLookup =
+                    match resolve_api_key(&identity_db, &raw_api_key, peer_ip)
+                        .await
+                        .map_err(|error| {
+                            metrics::auth("api_key", "failure");
+                            error
+                        })?
+                    {
+                        Some(key) => key,
+                        None => {
+                            metrics::auth("api_key", "failure");
+                            return Err(AppError::Unauthorized("Invalid API key".to_string()));
+                        }
+                    };
+                scoped::check_api_key(guard, &api_key.scopes).map_err(|error| {
+                    metrics::auth("api_key", "failure");
+                    error
+                })?;
+                metrics::auth("api_key", "success");
                 (
                     OrganizationContext {
                         allowed_organizations: vec![api_key.organization_id],
@@ -117,11 +133,25 @@ where
                     .headers
                     .get("cookie")
                     .and_then(|h| h.to_str().ok())
-                    .ok_or_else(|| AppError::Unauthorized("Missing session cookie".to_string()))?;
-                let actor_id = resolve_user_from_cookie(cookie_header).await?;
-                let memberships = resolve_user_memberships(&identity_db, actor_id).await?;
+                    .ok_or_else(|| {
+                        metrics::auth("session", "failure");
+                        AppError::Unauthorized("Missing session cookie".to_string())
+                    })?;
+                let actor_id = resolve_user_from_cookie(cookie_header)
+                    .await
+                    .map_err(|error| {
+                        metrics::auth("session", "failure");
+                        error
+                    })?;
+                let memberships = resolve_user_memberships(&identity_db, actor_id)
+                    .await
+                    .map_err(|error| {
+                        metrics::auth("session", "failure");
+                        error
+                    })?;
 
                 if memberships.is_empty() {
+                    metrics::auth("session", "failure");
                     return Err(AppError::Forbidden(
                         "User has no organization access".to_string(),
                     ));
@@ -134,9 +164,15 @@ where
                 let request_auth = RequestAuthContext { actor_id, roles };
 
                 if let Some(guard) = guard {
-                    scoped::check_role(guard, organization_id, &request_auth.roles)?;
+                    scoped::check_role(guard, organization_id, &request_auth.roles).map_err(
+                        |error| {
+                            metrics::auth("session", "failure");
+                            error
+                        },
+                    )?;
                 }
 
+                metrics::auth("session", "success");
                 (
                     OrganizationContext {
                         // Scope tenant queries to the organization in the

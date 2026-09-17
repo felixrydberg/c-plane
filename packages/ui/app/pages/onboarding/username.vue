@@ -2,11 +2,12 @@
 import * as z from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
 import useStore from '~/stores/store'
-import { getSession } from '~/utils/auth'
+import { useAuth } from '~/utils/auth'
 
 const store = useStore()
 const router = useRouter()
 const route = useRoute()
+const auth = useAuth()
 const loading = ref(false)
 const schema = z.object({ name: z.string().trim().min(1, 'Username is required') })
 type Schema = z.output<typeof schema>
@@ -17,7 +18,7 @@ const onSubmit = async (event: FormSubmitEvent<Schema>) => {
   try {
     const user = await $fetch<{ name: string }>('/ui-api/user/profile', { method: 'PATCH', body: { name: event.data.name } })
     if (store.user) store.user.name = user.name
-    const session = await getSession(false)
+    const session = await auth.getSession(false)
     if (!session || !store.session || !store.user?.name?.trim() || route.path !== '/onboarding/username') return
     await router.push(store.organization?.slug ? `/${store.organization.slug}` : '/organization/create')
   } finally {

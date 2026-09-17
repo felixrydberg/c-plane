@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 import useStore from '~/stores/store';
+import { useAuth } from '~/utils/auth'
 
 defineProps<{
   collapsed?: boolean
 }>();
 const store = useStore();
 const router = useRouter();
+const auth = useAuth();
 const colorMode = useColorMode();
 const isDark = computed(() => colorMode.value === 'dark');
 
@@ -38,7 +40,7 @@ const items = computed<DropdownMenuItem[][]>(() => ([[{
   label: 'Log out',
   icon: 'i-heroicons:arrow-right-start-on-rectangle',
   onSelect: () => {
-    signOut();
+    auth.signOut();
   }
 }]]))
 </script>

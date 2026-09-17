@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ContainerConfiguration, ResolvedTimeline } from '@cplane/sdk'
 import { ICONS } from '~/utils/icons'
-import { loadProjectEnvironments } from '~/utils/auth'
+import { useAuth } from '~/utils/auth'
 import { getErrorMessage } from '~/utils/errors'
 import { CPU_PRESETS, MEMORY_PRESETS_MIB, formatMemoryMib, nearestPreset } from '~/utils/compute-units'
 
@@ -11,6 +11,7 @@ const store = useStore()
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
+const auth = useAuth()
 
 const organizationSlug = computed(() => route.params.organization_slug?.toString() || '')
 const orgId = computed(() => store.organization?.id ?? '')
@@ -203,7 +204,7 @@ async function save() {
       body,
     })
     if (projectId.value && environmentId.value) {
-      await loadProjectEnvironments(projectId.value, environmentId.value)
+      await auth.loadProjectEnvironments(projectId.value, environmentId.value)
       await refreshEnvironmentList()
     }
     await router.replace({
@@ -228,7 +229,7 @@ async function restoreVersion() {
       `/api/organization/${orgId.value as ':organization_id'}/projects/${projectId.value as ':project_id'}/environments/${environment.value.id as ':environment_id'}` as const,
       { method: 'PATCH', body: { draft_timeline_id: selectedTimelineId.value } },
     )
-    await loadProjectEnvironments(projectId.value, environmentId.value)
+    await auth.loadProjectEnvironments(projectId.value, environmentId.value)
     await refreshEnvironmentList()
     await router.replace({
       query: Object.fromEntries(Object.entries(route.query).filter(([key]) => key !== 'revision')),
@@ -280,7 +281,7 @@ async function refreshLatest() {
       body: { image: image.value, auto_deploy: false },
     })
     if (projectId.value && environmentId.value) {
-      await loadProjectEnvironments(projectId.value, environmentId.value)
+      await auth.loadProjectEnvironments(projectId.value, environmentId.value)
       await refreshEnvironmentList()
     }
     await router.replace({

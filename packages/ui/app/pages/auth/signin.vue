@@ -2,7 +2,7 @@
 import * as z from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
 import useStore from '~/stores/store'
-import { createAuthError, createClient } from '~/utils/auth'
+import { createClient, useAuth } from '~/utils/auth'
 import { passwordSchema } from '~/utils/validation'
 import { getQueryValue, useAuthSwitchQuery } from '~/utils/query'
 import { ICONS } from '~/utils/icons'
@@ -19,6 +19,7 @@ const passkeyLoading = ref(false);
 const lastLoginMethod = ref<string | null>(null);
 
 const toast = useToast();
+const auth = useAuth();
 const schema = z.object({
   email: z.email('Invalid email'),
   password: passwordSchema
@@ -91,7 +92,7 @@ const onSubmit = async (payload: FormSubmitEvent<Schema>) => {
   if (error) {
     const creationError = error;
     if (creationError) {
-      createAuthError(creationError);
+      auth.createAuthError(creationError);
       loading.value = false
     }
   } else {
@@ -107,13 +108,13 @@ const onPasskeySignIn = async () => {
     const { error } = await createClient().signIn.passkey();
 
     if (error) {
-      createAuthError(error);
+      auth.createAuthError(error);
       return;
     }
 
     await onUserAuthenticated();
   } catch (error) {
-    createAuthError({
+    auth.createAuthError({
       message: error instanceof Error ? error.message : 'Unable to use this passkey.',
       status: 0,
       statusText: 'Passkey sign-in failed',
@@ -174,7 +175,7 @@ const onUserAuthenticated = async () => {
       if (error.code === "INVALID_PASSWORD") {
         passwordError.value = 'The password you entered is incorrect.';
       } else {
-        createAuthError(error);
+        auth.createAuthError(error);
       }
       loading.value = false
     }
@@ -185,7 +186,7 @@ const onUserAuthenticated = async () => {
       color: 'success',
     })
 
-    await getSession();
+    await auth.getSession();
     const redirectTo = getQueryValue(route.query.redirectTo);
     const redirect = getQueryValue(route.query.redirect);
     const fallbackPath = store.organization?.slug ? `/${store.organization.slug}` : '/organization/create';

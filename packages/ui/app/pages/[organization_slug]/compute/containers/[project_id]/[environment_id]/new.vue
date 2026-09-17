@@ -3,11 +3,12 @@ import type { Region } from '@cplane/sdk'
 import { ICONS } from '~/utils/icons'
 import { CPU_PRESETS, MEMORY_PRESETS_MIB, formatMemoryMib, nearestPreset } from '~/utils/compute-units'
 import { getErrorMessage } from '~/utils/errors'
-import { loadProjectEnvironments } from '~/utils/auth'
+import { useAuth } from '~/utils/auth'
 
 const store = useStore()
 const route = useRoute()
 const toast = useToast()
+const auth = useAuth()
 
 const orgId = computed(() => store.organization?.id ?? '')
 const projectId = computed(() => route.params.project_id?.toString() || null)
@@ -82,7 +83,7 @@ async function handleCreate() {
     if (Object.keys(envObj).length > 0) body.env = envObj
 
     await cplaneFetch(`/api/organization/${orgId.value as ':organization_id'}/containers` as const, { method: 'POST', body })
-    await loadProjectEnvironments(projectId.value, environmentId.value)
+    await auth.loadProjectEnvironments(projectId.value, environmentId.value)
     toast.add({ title: 'Container added', description: 'Review this environment to deploy it.', color: 'success' })
     const path = `/${route.params.organization_slug}/compute/containers/${projectId.value}/${environmentId.value}`
     navigateTo(path)

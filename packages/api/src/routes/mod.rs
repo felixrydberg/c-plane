@@ -22,6 +22,7 @@ use crate::handlers::registry_tags;
 use crate::handlers::storage_access_tokens;
 use crate::handlers::storage_buckets;
 use crate::handlers::storage_objects;
+use crate::metrics;
 use crate::middleware::internal_auth;
 use crate::middleware::scoped::{self, Role, ScopedRouter};
 use crate::openapi::ApiDoc;
@@ -51,6 +52,7 @@ pub fn create_routes() -> Router {
         .nest("/internal", internal)
         // Unauthenticated / non-AuthContext routes: no scope needed.
         .route("/health", get(health_check))
+        .route("/metrics", get(metrics::endpoint))
         .route("/api/registry/token", get(registry::issue_token))
         .scoped_route(
             "/api/organization/{organization_id}/regions",
@@ -300,6 +302,7 @@ pub fn create_routes() -> Router {
             ],
         )
         .merge(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()))
+        .layer(middleware::from_fn(metrics::http_metrics))
 }
 
 #[cfg(test)]

@@ -2,10 +2,12 @@
 import z from 'zod';
 import { useDebounceFn } from '@vueuse/core';
 import { ICONS } from '~/utils/icons'
+import { useAuth } from '~/utils/auth'
 
 const store = useStore();
 const toast = useToast();
 const router = useRouter();
+const auth = useAuth();
 const goBack = async () => {
   if (store.organization?.slug) {
     await router.push(`/${store.organization.slug}`);
@@ -239,7 +241,7 @@ const onInvitationUpdated = async () => {
         <UButton v-if="store.organizations.length > 0" type="button" color="neutral" variant="ghost" size="lg" class="w-full justify-center" @click="goBack">
           Back to Dashboard
         </UButton>
-        <UButton v-else type="button" color="neutral" variant="ghost" size="lg" class="w-full justify-center" @click="signOut">
+        <UButton v-else type="button" color="neutral" variant="ghost" size="lg" class="w-full justify-center" @click="auth.signOut">
           Sign Out
         </UButton>
       </UForm>
