@@ -1,8 +1,25 @@
 <script setup lang="ts">
 import type { Container, DatabaseWithBranches } from '@cplane/sdk'
+import { useAuth } from '~/utils/auth'
 import { ICONS } from '~/utils/icons'
 
 const store = useStore();
+const auth = useAuth()
+const savedSelection = useCookie<{ projectId: string, environmentId?: string } | null>(
+  `overview-selection-${store.user?.id}-${store.organization?.id}`,
+  { default: () => null, maxAge: 60 * 60 * 24 * 365, sameSite: 'lax' },
+)
+
+if (!store.project && savedSelection.value) {
+  const { projectId, environmentId } = savedSelection.value
+  if (store.projects.some(project => project.id === projectId)) {
+    await auth.loadProjectEnvironments(projectId, environmentId)
+  }
+}
+
+watch([() => store.project?.id, () => store.environment?.id], ([projectId, environmentId]) => {
+  savedSelection.value = projectId ? { projectId, environmentId } : null
+}, { immediate: true })
 
 const selectedProject = computed(() => store.project);
 const organizationId = computed(() => store.organization?.id ?? '')
