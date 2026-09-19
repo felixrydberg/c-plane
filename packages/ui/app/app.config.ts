@@ -40,11 +40,17 @@ export default defineAppConfig({
       },
     },
     select: {
+      slots: {
+        base: 'border border-default/60 !ring-0',
+      },
       defaultVariants: {
         variant: 'outline',
       }
     },
     input: {
+      slots: {
+        base: 'border border-default/60 !ring-0',
+      },
       defaultVariants: {
         variant: 'outline',
       }
@@ -55,11 +61,17 @@ export default defineAppConfig({
       }
     },
     selectMenu: {
+      slots: {
+        base: 'border border-default/60 !ring-0',
+      },
       defaultVariants: {
         variant: 'outline',
       }
     },
     textarea: {
+      slots: {
+        base: 'border border-default/60 !ring-0',
+      },
       defaultVariants: {
         variant: 'outline',
       }

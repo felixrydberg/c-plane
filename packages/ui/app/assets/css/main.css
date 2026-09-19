@@ -49,8 +49,8 @@
 
 :root {
   color-scheme: light;
-  --cp-canvas: #fafafa;
-  --cp-surface: #ffffff;
+  --cp-canvas: #fbfbfb;
+  --cp-surface: #fefefe;
   --cp-surface-subtle: #f3f3f3;
   --cp-surface-strong: #dfdfdf;
   --cp-ink: #111111;

@@ -2,7 +2,7 @@
 import * as z from 'zod'
 import useStore from '~/stores/store'
 import { createClient, useAuth } from '~/utils/auth';
-import { useQRCode } from '@vueuse/integrations/useQRCode'
+import * as QRCodeModule from 'qrcode'
 
 const store = useStore();
 const toast = useToast();
@@ -26,7 +26,30 @@ const twofaState = reactive<TwoFASchema>({
 
 const totpModalOpen = ref(false);
 const totpURI = ref<string>('');
-const qrcode = useQRCode(totpURI);
+const qrcode = ref('');
+const qrcodeApi = QRCodeModule as unknown as {
+  toDataURL?: (value: string) => Promise<string>
+  default?: {
+    toDataURL?: (value: string) => Promise<string>
+  }
+};
+
+watch(totpURI, async (value) => {
+  qrcode.value = '';
+
+  if (!value || !import.meta.client) {
+    return;
+  }
+
+  try {
+    const toDataURL = qrcodeApi.toDataURL ?? qrcodeApi.default?.toDataURL;
+    if (toDataURL) {
+      qrcode.value = await toDataURL(value);
+    }
+  } catch {
+    qrcode.value = '';
+  }
+}, { immediate: true });
 
 const totpForm = useTemplateRef("totpForm");
 const totpSchema = z.object({
@@ -272,7 +295,7 @@ const onDisable2FASubmit = async () => {
 
     <template v-if="store.user?.twoFactorEnabled">
       <USeparator />
-      <div class="flex items-center justify-between p-4 rounded-lg border border-dashed border-default">
+      <div class="flex items-center justify-between p-4 rounded-lg border border-default">
         <div class="flex items-center gap-3">
           <UIcon name="i-heroicons:key" class="w-5 h-5 text-muted" />
           <div>
@@ -293,7 +316,7 @@ const onDisable2FASubmit = async () => {
         </UModal>
       </div>
 
-      <div class="flex items-center justify-between p-4 rounded-lg border border-dashed border-error/30">
+      <div class="flex items-center justify-between p-4 rounded-lg border border-error/30">
         <div class="flex items-center gap-3">
           <UIcon name="i-heroicons:shield-exclamation" class="w-5 h-5 text-error" />
           <div>
