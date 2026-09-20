@@ -433,10 +433,7 @@ pub(crate) async fn registry_is_active(organization_id: Uuid) -> Result<bool, Ap
 }
 
 /// During maintenance only pull grants are issued; push/delete scopes are dropped.
-fn restrict_to_reads(
-    mut access: RegistryAccess,
-    reads_only: bool,
-) -> Option<RegistryAccess> {
+fn restrict_to_reads(mut access: RegistryAccess, reads_only: bool) -> Option<RegistryAccess> {
     if reads_only {
         access.actions.retain(|action| action == "pull");
         if access.actions.is_empty() {
@@ -480,8 +477,8 @@ fn registry_signing_secret() -> Result<Vec<u8>, AppError> {
 mod tests {
     use super::{
         RegistryAccess, RegistryClaims, access_for_scope, apply_repository_grant,
-        normalize_project_name, parse_registry_token_query, registry_token_exp,
-        restrict_to_reads, sign_registry_claims_with_secret,
+        normalize_project_name, parse_registry_token_query, registry_token_exp, restrict_to_reads,
+        sign_registry_claims_with_secret,
     };
     use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
     use serde_json::Value;

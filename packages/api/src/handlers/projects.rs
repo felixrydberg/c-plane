@@ -13,13 +13,14 @@ use super::databases::{verify_org_access, verify_org_owner};
 use crate::errors::AppError;
 use crate::middleware::auth::AuthContext;
 use crate::models::entities::{
-    credential, project, project_environment, project_timeline, secret, storage,
+    credential, postgres_database, project, project_environment, project_timeline, secret, storage,
     storage_access_token,
 };
 use crate::models::manifest::RevisionManifest;
 use crate::services::agent;
 use crate::services::buckets;
 use crate::services::events;
+use crate::services::postgres_databases as database_service;
 use crate::services::revisions;
 use crate::state::get_app_state;
 use crate::utils::pagination::{PaginatedResponse, PaginationQuery};
@@ -587,6 +588,22 @@ pub async fn delete_project(
         .filter(secret::Column::Id.is_in(secret_ids))
         .exec(tx)
         .await?;
+    let databases = postgres_database::Entity::find()
+        .filter(postgres_database::Column::ProjectId.eq(project_id))
+        .all(tx)
+        .await?;
+    let mut deleted_databases = Vec::with_capacity(databases.len());
+    for database in databases {
+        deleted_databases.push(
+            database_service::delete_database_in_transaction(
+                tx,
+                organization_id,
+                auth.actor_id,
+                database.id,
+            )
+            .await?,
+        );
+    }
     let storage_buckets = storage::Entity::find()
         .filter(storage::Column::ProjectId.eq(project_id))
         .all(tx)
@@ -616,6 +633,7 @@ pub async fn delete_project(
     {
         tracing::warn!(%error, %project_id, "project cache invalidation failed after deletion");
     }
+    database_service::finalize_deleted_databases(organization_id, &deleted_databases).await?;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }

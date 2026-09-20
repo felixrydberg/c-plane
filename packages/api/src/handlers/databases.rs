@@ -11,6 +11,7 @@ use crate::state::{OrganizationContext, TenantDatabase};
 pub struct CreateDatabaseRequest {
     pub name: String,
     pub project_id: Uuid,
+    pub region_id: Uuid,
     pub backup_retention_days: Option<i32>,
     pub cpu: Option<String>,
     pub ram: Option<String>,
@@ -74,6 +75,8 @@ pub struct DatabaseBranchResponse {
     pub autoscaling_enabled: bool,
     pub autoscaling_min_cpu: Option<String>,
     pub autoscaling_max_cpu: Option<String>,
+    pub organization_region_backup_bucket_id: Uuid,
+    pub backup_credential_id: Uuid,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -82,6 +85,7 @@ pub struct DatabaseResponse {
     pub project_id: Uuid,
     pub name: String,
     pub default_branch_id: Option<Uuid>,
+    pub region_id: Uuid,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -91,70 +95,11 @@ pub struct DatabaseWithBranchesResponse {
     pub branches: Vec<DatabaseBranchResponse>,
 }
 
-pub fn validate_backup_retention_days(retention_days: Option<i32>) -> Result<(), AppError> {
-    if retention_days.is_some_and(|days| days <= 0) {
-        return Err(AppError::BadRequest(
-            "Backup retention must be a positive number of days or disabled".into(),
-        ));
-    }
-    Ok(())
-}
-
-fn cpu_cores(value: &str) -> Result<f64, AppError> {
-    let cores: f64 = value
-        .trim()
-        .parse()
-        .map_err(|_| AppError::BadRequest("CPU must be a number of cores".into()))?;
-    if !cores.is_finite() || cores <= 0.0 || cores > 64.0 {
-        return Err(AppError::BadRequest(
-            "CPU must be between 0 and 64 cores".into(),
-        ));
-    }
-    Ok(cores)
-}
-
-pub fn validate_cpu(value: &str) -> Result<(), AppError> {
-    cpu_cores(value).map(|_| ())
-}
-
-pub fn validate_ram(value: &str) -> Result<(), AppError> {
-    let mib = value
-        .trim()
-        .strip_suffix("Mi")
-        .map(str::to_owned)
-        .unwrap_or_else(|| value.trim().to_owned());
-    let mib: i64 = mib
-        .parse()
-        .map_err(|_| AppError::BadRequest("RAM must be a number of mebibytes".into()))?;
-    if mib <= 0 || mib > 65536 {
-        return Err(AppError::BadRequest(
-            "RAM must be between 1 and 65536 MiB".into(),
-        ));
-    }
-    Ok(())
-}
-
-pub fn validate_read_replicas(read_replicas: i32) -> Result<(), AppError> {
-    if !(0..=64).contains(&read_replicas) {
-        return Err(AppError::BadRequest(
-            "Read replicas must be between 0 and 64".into(),
-        ));
-    }
-    Ok(())
-}
-
-pub fn validate_autoscaling(min_cpu: Option<&str>, max_cpu: Option<&str>) -> Result<(), AppError> {
-    let min_cpu = min_cpu.map(cpu_cores).transpose()?;
-    let max_cpu = max_cpu.map(cpu_cores).transpose()?;
-    if let (Some(min), Some(max)) = (min_cpu, max_cpu)
-        && min > max
-    {
-        return Err(AppError::BadRequest(
-            "autoscaling_min_cpu must not exceed autoscaling_max_cpu".into(),
-        ));
-    }
-    Ok(())
-}
+#[allow(unused_imports)]
+pub use crate::services::postgres_databases::{
+    validate_autoscaling, validate_backup_retention_days, validate_cpu, validate_ram,
+    validate_read_replicas,
+};
 
 pub fn verify_org_access(tenant_db: &TenantDatabase, org_id: Uuid) -> Result<(), AppError> {
     if !tenant_db.context.allowed_organizations.contains(&org_id) {

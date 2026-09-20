@@ -9,6 +9,8 @@ pub struct Model {
     pub database_id: Uuid,
     pub branch_id: Uuid,
     pub organization_id: Uuid,
+    pub organization_region_backup_bucket_id: Uuid,
+    pub backup_credential_id: Uuid,
     pub backup_retention_days: Option<i32>,
     pub cpu: Option<String>,
     pub ram: Option<String>,
@@ -37,11 +39,37 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Branch,
+    #[sea_orm(
+        belongs_to = "super::organization_region_backup_bucket::Entity",
+        from = "Column::OrganizationRegionBackupBucketId",
+        to = "super::organization_region_backup_bucket::Column::Id",
+        on_delete = "Restrict"
+    )]
+    BackupBucket,
+    #[sea_orm(
+        belongs_to = "super::credential::Entity",
+        from = "Column::BackupCredentialId",
+        to = "super::credential::Column::Id",
+        on_delete = "Restrict"
+    )]
+    BackupCredential,
 }
 
 impl Related<super::postgres_database::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Database.def()
+    }
+}
+
+impl Related<super::organization_region_backup_bucket::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::BackupBucket.def()
+    }
+}
+
+impl Related<super::credential::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::BackupCredential.def()
     }
 }
 

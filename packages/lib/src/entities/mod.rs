@@ -8,6 +8,7 @@ pub mod managed_registry;
 pub mod managed_registry_gc_run;
 pub mod organisation;
 pub mod organisation_member;
+pub mod organization_region_backup_bucket;
 pub mod postgres_database;
 pub mod postgres_database_branch;
 pub mod project;

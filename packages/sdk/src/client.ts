@@ -49,6 +49,9 @@ export type Sdk = {
     resolve_access_token: Operation<"/internal/s3-access-tokens/resolve/{access_key}", 'get'>
     resolve_registry: Operation<"/internal/organizations/{organization_id}/registry", 'get'>
   }
+  metrics: {
+    endpoint: Operation<"/metrics", 'get'>
+  }
   projects: {
     create_project: Operation<"/api/organization/{organization_id}/projects", 'post'>
     delete_project: Operation<"/api/organization/{organization_id}/projects/{project_id}", 'delete'>
@@ -140,6 +143,9 @@ export const createSdk = (options: SdkOptions = {}): Sdk => {
       provision_tenant_key: (...args: Parameters<Operation<"/internal/organizations/{organization_id}/transit-key", 'post'>>) => client.POST("/internal/organizations/{organization_id}/transit-key", ...args),
       resolve_access_token: (...args: Parameters<Operation<"/internal/s3-access-tokens/resolve/{access_key}", 'get'>>) => client.GET("/internal/s3-access-tokens/resolve/{access_key}", ...args),
       resolve_registry: (...args: Parameters<Operation<"/internal/organizations/{organization_id}/registry", 'get'>>) => client.GET("/internal/organizations/{organization_id}/registry", ...args)
+    },
+    metrics: {
+      endpoint: (...args: Parameters<Operation<"/metrics", 'get'>>) => client.GET("/metrics", ...args)
     },
     projects: {
       create_project: (...args: Parameters<Operation<"/api/organization/{organization_id}/projects", 'post'>>) => client.POST("/api/organization/{organization_id}/projects", ...args),

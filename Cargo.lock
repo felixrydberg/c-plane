@@ -999,6 +999,7 @@ dependencies = [
  "aws-sdk-s3",
  "axum",
  "base64",
+ "lib",
  "md-5 0.10.6",
  "reqwest 0.12.28",
  "s3s",

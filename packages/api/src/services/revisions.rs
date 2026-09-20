@@ -204,7 +204,10 @@ mod tests {
             .unwrap();
         assert_eq!(revision.timeline, 2);
         let updated = project_environment::Entity::find_by_id(first.id)
-            .one(&tx).await.unwrap().unwrap();
+            .one(&tx)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(updated.draft_timeline, revision.id);
         assert_eq!(updated.deployed_timeline, original.id);
         assert_eq!(

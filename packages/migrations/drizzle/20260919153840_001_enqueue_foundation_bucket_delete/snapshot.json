@@ -1,7 +1,7 @@
 {
-  "id": "bb69f5e4-3ab4-4d07-bf32-c869927e23ea",
+  "id": "5375ff2c-d99a-44e6-861b-a51cfa4b955e",
   "prevIds": [
-    "5382cfd8-fa60-41d0-871b-fd133f5278a6"
+    "85627e41-d507-4b46-840f-e64e882ea04d"
   ],
   "version": "8",
   "dialect": "postgres",
@@ -257,6 +257,12 @@
       "schema": "public"
     },
     {
+      "isRlsEnabled": true,
+      "name": "organization_region_backup_bucket",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
       "isRlsEnabled": false,
       "name": "passkey",
       "entityType": "tables",
@@ -355,12 +361,6 @@
     {
       "isRlsEnabled": false,
       "name": "user",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": false,
-      "name": "verification",
       "entityType": "tables",
       "schema": "public"
     },
@@ -2286,6 +2286,58 @@
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "organization_region_backup_bucket"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "organization_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "organization_region_backup_bucket"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "region_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "organization_region_backup_bucket"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "bucket_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "organization_region_backup_bucket"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
       "default": "pg_catalog.gen_random_uuid()",
       "generated": null,
       "identity": null,
@@ -2401,9 +2453,9 @@
     {
       "type": "timestamp",
       "typeSchema": null,
-      "notNull": true,
+      "notNull": false,
       "dimensions": 0,
-      "default": "now()",
+      "default": null,
       "generated": null,
       "identity": null,
       "name": "created_at",
@@ -2459,6 +2511,19 @@
       "generated": null,
       "identity": null,
       "name": "organization_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "postgres_database"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "region_id",
       "entityType": "columns",
       "schema": "public",
       "table": "postgres_database"
@@ -2537,6 +2602,32 @@
       "generated": null,
       "identity": null,
       "name": "organization_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "postgres_database_branch"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "organization_region_backup_bucket_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "postgres_database_branch"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "backup_credential_id",
       "entityType": "columns",
       "schema": "public",
       "table": "postgres_database_branch"
@@ -3777,6 +3868,45 @@
       "table": "two_factor"
     },
     {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": "true",
+      "generated": null,
+      "identity": null,
+      "name": "verified",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "two_factor"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "name": "failed_verification_count",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "two_factor"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "locked_until",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "two_factor"
+    },
+    {
       "type": "uuid",
       "typeSchema": null,
       "notNull": true,
@@ -3931,84 +4061,6 @@
       "entityType": "columns",
       "schema": "public",
       "table": "user"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "pg_catalog.gen_random_uuid()",
-      "generated": null,
-      "identity": null,
-      "name": "id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "verification"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "identifier",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "verification"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "value",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "verification"
-    },
-    {
-      "type": "timestamp",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "expires_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "verification"
-    },
-    {
-      "type": "timestamp",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "verification"
-    },
-    {
-      "type": "timestamp",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "updated_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "verification"
     },
     {
       "type": "uuid",
@@ -5404,6 +5456,27 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "region_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "organization_region_backup_bucket_region_id_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "organization_region_backup_bucket"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "user_id",
           "isExpression": false,
           "asc": true,
@@ -5543,6 +5616,27 @@
       "method": "btree",
       "concurrently": false,
       "name": "postgres_database_branch_organization_id_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "postgres_database_branch"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "organization_region_backup_bucket_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "postgres_database_branch_backup_bucket_id_idx",
       "entityType": "indexes",
       "schema": "public",
       "table": "postgres_database_branch"
@@ -6636,27 +6730,6 @@
       "nameExplicit": true,
       "columns": [
         {
-          "value": "identifier",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "verification_identifier_idx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "verification"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
           "value": "organization_id",
           "isExpression": false,
           "asc": true,
@@ -7310,6 +7383,57 @@
     {
       "nameExplicit": false,
       "columns": [
+        "organization_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "organization",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "organization_region_backup_bucket_mkETu8268556_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "organization_region_backup_bucket"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "region_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "regions",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "organization_region_backup_bucket_region_id_regions_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "organization_region_backup_bucket"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "bucket_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "bucket",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "organization_region_backup_bucket_bucket_id_bucket_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "organization_region_backup_bucket"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
         "user_id"
       ],
       "schemaTo": "public",
@@ -7354,6 +7478,23 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "postgres_database_organization_id_organization_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "postgres_database"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "region_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "regions",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "postgres_database_region_id_regions_id_fkey",
       "entityType": "fks",
       "schema": "public",
       "table": "postgres_database"
@@ -7422,6 +7563,61 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "postgres_database_branch_organization_id_organization_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "postgres_database_branch"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "organization_region_backup_bucket_id",
+        "organization_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "organization_region_backup_bucket",
+      "columnsTo": [
+        "id",
+        "organization_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "postgres_database_branch_backup_bucket_scope_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "postgres_database_branch"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "backup_credential_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "credential",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "postgres_database_branch_backup_credential_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "postgres_database_branch"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "backup_credential_id",
+        "organization_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "credential",
+      "columnsTo": [
+        "id",
+        "organization_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "postgres_database_branch_backup_credential_scope_fk",
       "entityType": "fks",
       "schema": "public",
       "table": "postgres_database_branch"
@@ -8197,6 +8393,16 @@
         "id"
       ],
       "nameExplicit": false,
+      "name": "organization_region_backup_bucket_pkey",
+      "schema": "public",
+      "table": "organization_region_backup_bucket",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
       "name": "passkey_pkey",
       "schema": "public",
       "table": "passkey",
@@ -8367,16 +8573,6 @@
         "id"
       ],
       "nameExplicit": false,
-      "name": "verification_pkey",
-      "schema": "public",
-      "table": "verification",
-      "entityType": "pks"
-    },
-    {
-      "columns": [
-        "id"
-      ],
-      "nameExplicit": false,
       "name": "worker_queue_pkey",
       "schema": "public",
       "table": "worker_queue",
@@ -8417,6 +8613,52 @@
       "entityType": "uniques",
       "schema": "public",
       "table": "external_registry"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "organization_id",
+        "region_id"
+      ],
+      "nullsNotDistinct": false,
+      "name": "organization_region_backup_bucket_organization_region_uidx",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "organization_region_backup_bucket"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "bucket_id"
+      ],
+      "nullsNotDistinct": false,
+      "name": "organization_region_backup_bucket_bucket_uidx",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "organization_region_backup_bucket"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "id",
+        "organization_id"
+      ],
+      "nullsNotDistinct": false,
+      "name": "organization_region_backup_bucket_id_organization_uidx",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "organization_region_backup_bucket"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "backup_credential_id"
+      ],
+      "nullsNotDistinct": false,
+      "name": "postgres_database_branch_backup_credential_id_uidx",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "postgres_database_branch"
     },
     {
       "nameExplicit": true,
@@ -8889,6 +9131,19 @@
       "entityType": "policies",
       "schema": "public",
       "table": "organization_member"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "ALL",
+      "roles": [
+        "app_tenant"
+      ],
+      "using": "\"organization_region_backup_bucket\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+      "withCheck": "\"organization_region_backup_bucket\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+      "name": "organization_region_backup_bucket_tenant_rls",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "organization_region_backup_bucket"
     },
     {
       "as": "PERMISSIVE",

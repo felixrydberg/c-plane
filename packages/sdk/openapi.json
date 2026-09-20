@@ -3903,6 +3903,19 @@
           }
         ]
       }
+    },
+    "/metrics": {
+      "get": {
+        "tags": [
+          "metrics"
+        ],
+        "operationId": "endpoint",
+        "responses": {
+          "200": {
+            "description": "Prometheus metrics"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4471,7 +4484,8 @@
         "type": "object",
         "required": [
           "name",
-          "project_id"
+          "project_id",
+          "region_id"
         ],
         "properties": {
           "autoscaling_enabled": {
@@ -4524,6 +4538,10 @@
               "null"
             ],
             "format": "int32"
+          },
+          "region_id": {
+            "type": "string",
+            "format": "uuid"
           }
         }
       },
@@ -4665,7 +4683,10 @@
           "branch_id",
           "organization_id",
           "high_availability",
-          "autoscaling_enabled"
+          "autoscaling_enabled",
+          "organization_region_backup_bucket_id",
+          "backup_credential_id",
+          "backup_prefix"
         ],
         "properties": {
           "autoscaling_enabled": {
@@ -4682,6 +4703,13 @@
               "string",
               "null"
             ]
+          },
+          "backup_credential_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "backup_prefix": {
+            "type": "string"
           },
           "backup_retention_days": {
             "type": [
@@ -4715,6 +4743,10 @@
             "type": "string",
             "format": "uuid"
           },
+          "organization_region_backup_bucket_id": {
+            "type": "string",
+            "format": "uuid"
+          },
           "ram": {
             "type": [
               "string",
@@ -4735,7 +4767,8 @@
         "required": [
           "id",
           "project_id",
-          "name"
+          "name",
+          "region_id"
         ],
         "properties": {
           "default_branch_id": {
@@ -4753,6 +4786,10 @@
             "type": "string"
           },
           "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "region_id": {
             "type": "string",
             "format": "uuid"
           }
@@ -5789,8 +5826,7 @@
             ],
             "items": {
               "$ref": "#/components/schemas/TimelineGraphNode"
-            },
-            "description": "Whole-book topology, loaded once by the modal. Revision details remain paginated."
+            }
           },
           "has_newer": {
             "type": [
@@ -5816,7 +5852,6 @@
               "null"
             ],
             "format": "int64",
-            "description": "Book page (0 = newest). Present in graph mode.",
             "minimum": 0
           },
           "total_pages": {

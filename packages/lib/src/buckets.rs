@@ -1,9 +1,15 @@
+use base64::{Engine as _, engine::general_purpose::STANDARD};
+
+use crate::entities::{bucket, bucket_grant, secret};
 use crate::secrets;
 use aws_sdk_s3::{
     error::ProvideErrorMetadata,
     types::{BucketLocationConstraint, CreateBucketConfiguration, Delete, ObjectIdentifier},
 };
-use sea_orm::{ConnectionTrait, DatabaseBackend, Statement, Value};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction,
+    EntityTrait, QueryFilter, Set, Statement, Value,
+};
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -12,6 +18,12 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 const BUCKET_PREFIX: &str = "cp-";
 const DELETE_BATCH_SIZE: i32 = 1_000;
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct PrefixDeletion {
+    pub deleted: usize,
+    pub next_continuation_token: Option<String>,
+}
 
 #[derive(Debug)]
 struct S3ProviderError {
@@ -88,6 +100,44 @@ pub async fn create(
     } else {
         request.send().await.map_err(s3_provider_error)?;
     }
+    Ok(())
+}
+
+pub async fn create_foundation(
+    connection: &DatabaseTransaction,
+    secrets_client: &secrets::Client,
+    organization_id: Uuid,
+    region_id: Uuid,
+    bucket_id: Uuid,
+) -> Result<()> {
+    let secret_id = Uuid::new_v4();
+    let first = Uuid::new_v4();
+    let second = Uuid::new_v4();
+    let mut key = [0_u8; 32];
+    key[..16].copy_from_slice(first.as_bytes());
+    key[16..].copy_from_slice(second.as_bytes());
+    let tenant_key = format!("tenant-{}", organization_id.simple());
+    let ciphertext =
+        secrets::encrypt(secrets_client, &tenant_key, STANDARD.encode(key).as_bytes()).await?;
+
+    secret::ActiveModel {
+        id: Set(secret_id),
+        scope: Set(secret::SecretScope::Tenant),
+        organization_id: Set(Some(organization_id)),
+        ciphertext: Set(ciphertext),
+        ..Default::default()
+    }
+    .insert(connection)
+    .await?;
+    bucket::ActiveModel {
+        id: Set(bucket_id),
+        region_id: Set(region_id),
+        sse_secret_id: Set(secret_id),
+        status: Set(bucket::BucketStatus::Active),
+        ..Default::default()
+    }
+    .insert(connection)
+    .await?;
     Ok(())
 }
 
@@ -171,6 +221,113 @@ pub async fn empty(client: &aws_sdk_s3::Client, bucket_id: Uuid) -> Result<()> {
     }
 }
 
+pub fn normalize_prefix(prefix: &str) -> String {
+    if prefix.ends_with('/') {
+        prefix.to_owned()
+    } else {
+        format!("{prefix}/")
+    }
+}
+
+pub async fn delete_prefix(
+    client: &aws_sdk_s3::Client,
+    bucket: &str,
+    prefix: &str,
+    continuation_token: Option<String>,
+    max_pages: usize,
+) -> Result<PrefixDeletion> {
+    let prefix = normalize_prefix(prefix);
+    let mut continuation_token = continuation_token;
+    let mut deleted = 0;
+
+    for _ in 0..max_pages {
+        let output = match client
+            .list_objects_v2()
+            .bucket(bucket)
+            .prefix(&prefix)
+            .set_continuation_token(continuation_token)
+            .send()
+            .await
+        {
+            Ok(output) => output,
+            Err(error)
+                if error.as_service_error().and_then(|error| error.code())
+                    == Some("NoSuchBucket") =>
+            {
+                return Ok(PrefixDeletion {
+                    deleted,
+                    next_continuation_token: None,
+                });
+            }
+            Err(error) => return Err(Box::new(error)),
+        };
+        let identifiers = output
+            .contents()
+            .iter()
+            .filter_map(|object| object.key())
+            .map(|key| ObjectIdentifier::builder().key(key).build())
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        if !identifiers.is_empty() {
+            let batch_size = identifiers.len();
+            let delete = Delete::builder()
+                .set_objects(Some(identifiers))
+                .quiet(true)
+                .build()?;
+            let response = client
+                .delete_objects()
+                .bucket(bucket)
+                .delete(delete)
+                .send()
+                .await?;
+            if !response.errors().is_empty() {
+                return Err(Box::new(std::io::Error::other(format!(
+                    "S3 provider returned {} object deletion errors",
+                    response.errors().len()
+                ))));
+            }
+            deleted += batch_size;
+        }
+
+        continuation_token = output.next_continuation_token().map(str::to_owned);
+        if continuation_token.is_none() {
+            return Ok(PrefixDeletion {
+                deleted,
+                next_continuation_token: None,
+            });
+        }
+    }
+
+    Ok(PrefixDeletion {
+        deleted,
+        next_continuation_token: continuation_token,
+    })
+}
+
+pub async fn delete_foundation(
+    connection: &DatabaseTransaction,
+    bucket_id: Uuid,
+) -> std::result::Result<bool, sea_orm::DbErr> {
+    let Some(foundation) = bucket::Entity::find_by_id(bucket_id)
+        .one(connection)
+        .await?
+    else {
+        return Ok(false);
+    };
+
+    bucket_grant::Entity::delete_many()
+        .filter(bucket_grant::Column::BucketId.eq(bucket_id))
+        .exec(connection)
+        .await?;
+    bucket::Entity::delete_by_id(bucket_id)
+        .exec(connection)
+        .await?;
+    secret::Entity::delete_by_id(foundation.sse_secret_id)
+        .exec(connection)
+        .await?;
+    Ok(true)
+}
+
 pub async fn delete(client: &aws_sdk_s3::Client, bucket_id: Uuid) -> Result<()> {
     if let Err(error) = client
         .delete_bucket()
@@ -186,8 +343,14 @@ pub async fn delete(client: &aws_sdk_s3::Client, bucket_id: Uuid) -> Result<()> 
 
 #[cfg(test)]
 mod tests {
-    use super::{is_credentials_error_code, physical_bucket_name};
+    use super::{is_credentials_error_code, normalize_prefix, physical_bucket_name};
     use uuid::Uuid;
+
+    #[test]
+    fn normalizes_folder_prefixes() {
+        assert_eq!(normalize_prefix("folder"), "folder/");
+        assert_eq!(normalize_prefix("folder/"), "folder/");
+    }
 
     #[test]
     fn physical_bucket_names_use_prefixed_hyphenless_ids() {
@@ -216,6 +379,7 @@ pub mod credentials {
         pub secret_id: Uuid,
         pub organization_id: Option<Uuid>,
         pub name: String,
+        pub prefix: String,
         pub ciphertext: String,
     }
 
@@ -223,6 +387,7 @@ pub mod credentials {
         client: &secrets::Client,
         organization_id: Option<Uuid>,
         name: impl Into<String>,
+        prefix: impl Into<String>,
         value: &T,
     ) -> Result<Credential> {
         let plaintext = serde_json::to_vec(value)?;
@@ -233,6 +398,7 @@ pub mod credentials {
             secret_id: Uuid::new_v4(),
             organization_id,
             name: name.into(),
+            prefix: prefix.into(),
             ciphertext,
         })
     }
@@ -245,7 +411,7 @@ pub mod credentials {
         };
         connection
             .execute(statement(
-                "WITH inserted_secret AS (INSERT INTO secret (id, scope, organization_id, ciphertext) VALUES ($1, $2::secret_scope, $3, $4)) INSERT INTO credential (id, organization_id, access_key_id, secret_id) VALUES ($5, $3, $6, $1)",
+                "WITH inserted_secret AS (INSERT INTO secret (id, scope, organization_id, ciphertext) VALUES ($1, $2::secret_scope, $3, $4)) INSERT INTO credential (id, organization_id, access_key_id, secret_id, prefix) VALUES ($5, $3, $6, $1, $7)",
                 vec![
                     credential.secret_id.into(),
                     scope.into(),
@@ -253,6 +419,7 @@ pub mod credentials {
                     credential.ciphertext.clone().into(),
                     credential.id.into(),
                     credential.name.clone().into(),
+                    credential.prefix.clone().into(),
                 ],
             ))
             .await?;

@@ -13,7 +13,7 @@ use s3s_aws::Proxy;
 use crate::{
     auth::{BucketPermission, CredentialIdentity, CredentialResolver},
     config::Config,
-    crypto::select_sse_key,
+    crypto::{SseKey, select_sse_key},
     internal::{self, InternalStorage},
 };
 
@@ -231,12 +231,15 @@ impl S3 for ProviderProxy {
     ) -> S3Result<S3Response<GetObjectOutput>> {
         let target = self.target(&request, &request.input.bucket)?;
         ensure_key_allowed(&identity(&request)?.prefix, &request.input.key)?;
-        fill_sse(
-            &mut request.input.sse_customer_algorithm,
-            &mut request.input.sse_customer_key,
-            &mut request.input.sse_customer_key_md5,
+        let selected = select_sse(
+            request.input.sse_customer_algorithm.as_deref(),
+            request.input.sse_customer_key.as_deref(),
+            request.input.sse_customer_key_md5.as_deref(),
             &target.platform_sse_key,
         )?;
+        request.input.sse_customer_algorithm = Some(selected.algorithm);
+        request.input.sse_customer_key = Some(selected.key);
+        request.input.sse_customer_key_md5 = Some(selected.key_md5);
         request.input.bucket = target.physical_bucket_name.clone();
         self.provider(&target)
             .await?
@@ -251,12 +254,15 @@ impl S3 for ProviderProxy {
     ) -> S3Result<S3Response<HeadObjectOutput>> {
         let target = self.target(&request, &request.input.bucket)?;
         ensure_key_allowed(&identity(&request)?.prefix, &request.input.key)?;
-        fill_sse(
-            &mut request.input.sse_customer_algorithm,
-            &mut request.input.sse_customer_key,
-            &mut request.input.sse_customer_key_md5,
+        let selected = select_sse(
+            request.input.sse_customer_algorithm.as_deref(),
+            request.input.sse_customer_key.as_deref(),
+            request.input.sse_customer_key_md5.as_deref(),
             &target.platform_sse_key,
         )?;
+        request.input.sse_customer_algorithm = Some(selected.algorithm);
+        request.input.sse_customer_key = Some(selected.key);
+        request.input.sse_customer_key_md5 = Some(selected.key_md5);
         request.input.bucket = target.physical_bucket_name.clone();
         self.provider(&target)
             .await?
@@ -271,12 +277,15 @@ impl S3 for ProviderProxy {
     ) -> S3Result<S3Response<PutObjectOutput>> {
         let target = self.target(&request, &request.input.bucket)?;
         ensure_key_allowed(&identity(&request)?.prefix, &request.input.key)?;
-        fill_sse(
-            &mut request.input.sse_customer_algorithm,
-            &mut request.input.sse_customer_key,
-            &mut request.input.sse_customer_key_md5,
+        let selected = select_sse(
+            request.input.sse_customer_algorithm.as_deref(),
+            request.input.sse_customer_key.as_deref(),
+            request.input.sse_customer_key_md5.as_deref(),
             &target.platform_sse_key,
         )?;
+        request.input.sse_customer_algorithm = Some(selected.algorithm);
+        request.input.sse_customer_key = Some(selected.key);
+        request.input.sse_customer_key_md5 = Some(selected.key_md5);
         request.input.bucket = target.physical_bucket_name.clone();
         self.provider(&target)
             .await?
@@ -292,12 +301,15 @@ impl S3 for ProviderProxy {
         let logical_bucket = request.input.bucket.clone();
         let target = self.target(&request, &request.input.bucket)?;
         ensure_key_allowed(&identity(&request)?.prefix, &request.input.key)?;
-        fill_sse(
-            &mut request.input.sse_customer_algorithm,
-            &mut request.input.sse_customer_key,
-            &mut request.input.sse_customer_key_md5,
+        let selected = select_sse(
+            request.input.sse_customer_algorithm.as_deref(),
+            request.input.sse_customer_key.as_deref(),
+            request.input.sse_customer_key_md5.as_deref(),
             &target.platform_sse_key,
         )?;
+        request.input.sse_customer_algorithm = Some(selected.algorithm);
+        request.input.sse_customer_key = Some(selected.key);
+        request.input.sse_customer_key_md5 = Some(selected.key_md5);
         request.input.bucket = target.physical_bucket_name.clone();
         let mut response = self
             .provider(&target)
@@ -315,12 +327,15 @@ impl S3 for ProviderProxy {
     ) -> S3Result<S3Response<UploadPartOutput>> {
         let target = self.target(&request, &request.input.bucket)?;
         ensure_key_allowed(&identity(&request)?.prefix, &request.input.key)?;
-        fill_sse(
-            &mut request.input.sse_customer_algorithm,
-            &mut request.input.sse_customer_key,
-            &mut request.input.sse_customer_key_md5,
+        let selected = select_sse(
+            request.input.sse_customer_algorithm.as_deref(),
+            request.input.sse_customer_key.as_deref(),
+            request.input.sse_customer_key_md5.as_deref(),
             &target.platform_sse_key,
         )?;
+        request.input.sse_customer_algorithm = Some(selected.algorithm);
+        request.input.sse_customer_key = Some(selected.key);
+        request.input.sse_customer_key_md5 = Some(selected.key_md5);
         request.input.bucket = target.physical_bucket_name.clone();
         self.provider(&target)
             .await?
@@ -336,12 +351,15 @@ impl S3 for ProviderProxy {
         let logical_bucket = request.input.bucket.clone();
         let target = self.target(&request, &request.input.bucket)?;
         ensure_key_allowed(&identity(&request)?.prefix, &request.input.key)?;
-        fill_sse(
-            &mut request.input.sse_customer_algorithm,
-            &mut request.input.sse_customer_key,
-            &mut request.input.sse_customer_key_md5,
+        let selected = select_sse(
+            request.input.sse_customer_algorithm.as_deref(),
+            request.input.sse_customer_key.as_deref(),
+            request.input.sse_customer_key_md5.as_deref(),
             &target.platform_sse_key,
         )?;
+        request.input.sse_customer_algorithm = Some(selected.algorithm);
+        request.input.sse_customer_key = Some(selected.key);
+        request.input.sse_customer_key_md5 = Some(selected.key_md5);
         request.input.bucket = target.physical_bucket_name.clone();
         let mut response = self
             .provider(&target)
@@ -361,20 +379,27 @@ impl S3 for ProviderProxy {
         let destination = self.target(&request, &request.input.bucket)?;
         ensure_key_allowed(&identity(&request)?.prefix, &request.input.key)?;
         let source = self.copy_source_target(&request, &request.input.copy_source)?;
-        rewrite_copy_source(&mut request.input.copy_source, &source.physical_bucket_name)?;
+        request.input.copy_source =
+            rewrite_copy_source(&request.input.copy_source, &source.physical_bucket_name)?;
         same_provider(&source, &destination)?;
-        fill_sse(
-            &mut request.input.sse_customer_algorithm,
-            &mut request.input.sse_customer_key,
-            &mut request.input.sse_customer_key_md5,
+        let selected = select_sse(
+            request.input.sse_customer_algorithm.as_deref(),
+            request.input.sse_customer_key.as_deref(),
+            request.input.sse_customer_key_md5.as_deref(),
             &destination.platform_sse_key,
         )?;
-        fill_sse(
-            &mut request.input.copy_source_sse_customer_algorithm,
-            &mut request.input.copy_source_sse_customer_key,
-            &mut request.input.copy_source_sse_customer_key_md5,
+        request.input.sse_customer_algorithm = Some(selected.algorithm);
+        request.input.sse_customer_key = Some(selected.key);
+        request.input.sse_customer_key_md5 = Some(selected.key_md5);
+        let selected = select_sse(
+            request.input.copy_source_sse_customer_algorithm.as_deref(),
+            request.input.copy_source_sse_customer_key.as_deref(),
+            request.input.copy_source_sse_customer_key_md5.as_deref(),
             &source.platform_sse_key,
         )?;
+        request.input.copy_source_sse_customer_algorithm = Some(selected.algorithm);
+        request.input.copy_source_sse_customer_key = Some(selected.key);
+        request.input.copy_source_sse_customer_key_md5 = Some(selected.key_md5);
         request.input.bucket = destination.physical_bucket_name.clone();
         self.provider(&destination)
             .await?
@@ -390,20 +415,27 @@ impl S3 for ProviderProxy {
         let destination = self.target(&request, &request.input.bucket)?;
         ensure_key_allowed(&identity(&request)?.prefix, &request.input.key)?;
         let source = self.copy_source_target(&request, &request.input.copy_source)?;
-        rewrite_copy_source(&mut request.input.copy_source, &source.physical_bucket_name)?;
+        request.input.copy_source =
+            rewrite_copy_source(&request.input.copy_source, &source.physical_bucket_name)?;
         same_provider(&source, &destination)?;
-        fill_sse(
-            &mut request.input.sse_customer_algorithm,
-            &mut request.input.sse_customer_key,
-            &mut request.input.sse_customer_key_md5,
+        let selected = select_sse(
+            request.input.sse_customer_algorithm.as_deref(),
+            request.input.sse_customer_key.as_deref(),
+            request.input.sse_customer_key_md5.as_deref(),
             &destination.platform_sse_key,
         )?;
-        fill_sse(
-            &mut request.input.copy_source_sse_customer_algorithm,
-            &mut request.input.copy_source_sse_customer_key,
-            &mut request.input.copy_source_sse_customer_key_md5,
+        request.input.sse_customer_algorithm = Some(selected.algorithm);
+        request.input.sse_customer_key = Some(selected.key);
+        request.input.sse_customer_key_md5 = Some(selected.key_md5);
+        let selected = select_sse(
+            request.input.copy_source_sse_customer_algorithm.as_deref(),
+            request.input.copy_source_sse_customer_key.as_deref(),
+            request.input.copy_source_sse_customer_key_md5.as_deref(),
             &source.platform_sse_key,
         )?;
+        request.input.copy_source_sse_customer_algorithm = Some(selected.algorithm);
+        request.input.copy_source_sse_customer_key = Some(selected.key);
+        request.input.copy_source_sse_customer_key_md5 = Some(selected.key_md5);
         request.input.bucket = destination.physical_bucket_name.clone();
         self.provider(&destination)
             .await?
@@ -528,33 +560,24 @@ fn sanitize_provider_error(error: s3s::S3Error) -> s3s::S3Error {
     sanitized
 }
 
-fn fill_sse(
-    algorithm: &mut Option<String>,
-    key: &mut Option<String>,
-    key_md5: &mut Option<String>,
+fn select_sse(
+    algorithm: Option<&str>,
+    key: Option<&str>,
+    key_md5: Option<&str>,
     platform_key: &str,
-) -> S3Result<()> {
-    let selected = select_sse_key(
-        algorithm.as_deref(),
-        key.as_deref(),
-        key_md5.as_deref(),
-        platform_key,
-    )
-    .map_err(|error| s3s::s3_error!(InvalidRequest, "{error}"))?;
-    *algorithm = Some(selected.algorithm);
-    *key = Some(selected.key);
-    *key_md5 = Some(selected.key_md5);
-    Ok(())
+) -> S3Result<SseKey> {
+    let selected = select_sse_key(algorithm, key, key_md5, platform_key)
+        .map_err(|error| s3s::s3_error!(InvalidRequest, "{error}"))?;
+    Ok(selected)
 }
 
-fn rewrite_copy_source(copy_source: &mut CopySource, physical_bucket: &str) -> S3Result<()> {
+fn rewrite_copy_source(copy_source: &CopySource, physical_bucket: &str) -> S3Result<CopySource> {
     let source = copy_source.format_to_string();
     let (_, key) = source
         .split_once('/')
         .ok_or_else(|| s3s::s3_error!(InvalidRequest, "Invalid copy source"))?;
-    *copy_source = CopySource::parse(&format!("{physical_bucket}/{key}"))
-        .map_err(|_| s3s::s3_error!(InvalidRequest, "Invalid copy source"))?;
-    Ok(())
+    CopySource::parse(&format!("{physical_bucket}/{key}"))
+        .map_err(|_| s3s::s3_error!(InvalidRequest, "Invalid copy source"))
 }
 
 fn same_provider(source: &BucketPermission, destination: &BucketPermission) -> S3Result<()> {
@@ -625,8 +648,8 @@ mod tests {
 
     #[test]
     fn rewrites_copy_source_bucket_without_touching_the_key() {
-        let mut rewritten = CopySource::parse("uploads/path/to/file.txt?versionId=1").unwrap();
-        rewrite_copy_source(&mut rewritten, "cp-123").unwrap();
+        let original = CopySource::parse("uploads/path/to/file.txt?versionId=1").unwrap();
+        let rewritten = rewrite_copy_source(&original, "cp-123").unwrap();
         assert_eq!(
             rewritten.format_to_string(),
             "cp-123/path/to/file.txt?versionId=1"

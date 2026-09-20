@@ -639,6 +639,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["endpoint"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -807,6 +823,8 @@ export interface components {
             ram?: string | null;
             /** Format: int32 */
             read_replicas?: number | null;
+            /** Format: uuid */
+            region_id: string;
         };
         CreateEnvironmentRequest: {
             is_preview?: boolean;
@@ -842,6 +860,9 @@ export interface components {
             autoscaling_enabled: boolean;
             autoscaling_max_cpu?: string | null;
             autoscaling_min_cpu?: string | null;
+            /** Format: uuid */
+            backup_credential_id: string;
+            backup_prefix: string;
             /** Format: int32 */
             backup_retention_days?: number | null;
             /** Format: uuid */
@@ -854,6 +875,8 @@ export interface components {
             id: string;
             /** Format: uuid */
             organization_id: string;
+            /** Format: uuid */
+            organization_region_backup_bucket_id: string;
             ram?: string | null;
             /** Format: int32 */
             read_replicas?: number | null;
@@ -866,6 +889,8 @@ export interface components {
             name: string;
             /** Format: uuid */
             project_id: string;
+            /** Format: uuid */
+            region_id: string;
         };
         DatabaseWithBranchesResponse: components["schemas"]["DatabaseResponse"] & {
             branches: components["schemas"]["DatabaseBranchResponse"][];
@@ -1144,15 +1169,11 @@ export interface components {
         };
         TimelinePageResponse: {
             data: components["schemas"]["TimelineResponse"][];
-            /** @description Whole-book topology, loaded once by the modal. Revision details remain paginated. */
             graph_nodes?: components["schemas"]["TimelineGraphNode"][] | null;
             has_newer?: boolean | null;
             has_older?: boolean | null;
             next_cursor?: string | null;
-            /**
-             * Format: int64
-             * @description Book page (0 = newest). Present in graph mode.
-             */
+            /** Format: int64 */
             page?: number | null;
             /** Format: int64 */
             total_pages?: number | null;
@@ -3415,7 +3436,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/octet-stream": string;
+                    "application/octet-stream": Blob;
                 };
             };
             /** @description Object key is required */
@@ -3638,6 +3659,24 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
+            };
+        };
+    };
+    endpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Prometheus metrics */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

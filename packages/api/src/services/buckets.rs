@@ -1,10 +1,7 @@
-use base64::{Engine as _, engine::general_purpose::STANDARD};
-use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, Set};
+use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use uuid::Uuid;
 
 use crate::{errors::AppError, services::s3_providers::S3ProviderClient};
-use lib::entities::bucket::BucketStatus;
-use lib::entities::secret::SecretScope;
 use lib::entities::{bucket, bucket_grant, secret, storage};
 
 pub async fn create(
@@ -15,41 +12,20 @@ pub async fn create(
     provider_id: Uuid,
 ) -> Result<Uuid, AppError> {
     let bucket_id = Uuid::new_v4();
-    let secret_id = Uuid::new_v4();
-    let first = Uuid::new_v4();
-    let second = Uuid::new_v4();
-    let mut key = [0_u8; 32];
-    key[..16].copy_from_slice(first.as_bytes());
-    key[16..].copy_from_slice(second.as_bytes());
-    let ciphertext = lib::secrets::encrypt(
+    providers.create_bucket(provider_id, bucket_id).await?;
+    if let Err(error) = lib::buckets::create_foundation(
+        tx,
         &crate::state::get_app_state().secrets,
-        &tenant_key(organization_id),
-        STANDARD.encode(key).as_bytes(),
+        organization_id,
+        region_id,
+        bucket_id,
     )
-    .await?;
-
-    secret::ActiveModel {
-        id: Set(secret_id),
-        scope: Set(SecretScope::Tenant),
-        organization_id: Set(Some(organization_id)),
-        ciphertext: Set(ciphertext),
-        ..Default::default()
-    }
-    .insert(tx)
-    .await?;
-    bucket::ActiveModel {
-        id: Set(bucket_id),
-        region_id: Set(region_id),
-        sse_secret_id: Set(secret_id),
-        status: Set(BucketStatus::Active),
-        ..Default::default()
-    }
-    .insert(tx)
-    .await?;
-
-    if let Err(error) = providers.create_bucket(provider_id, bucket_id).await {
-        let _ = providers.delete_bucket(provider_id, bucket_id).await;
-        return Err(error);
+    .await
+    {
+        if let Err(delete_error) = providers.delete_bucket(provider_id, bucket_id).await {
+            tracing::warn!(%provider_id, %bucket_id, %delete_error, "failed to compensate bucket after foundation error");
+        }
+        return Err(AppError::Internal(error.to_string()));
     }
     Ok(bucket_id)
 }

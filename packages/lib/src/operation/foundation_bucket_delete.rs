@@ -33,29 +33,36 @@ impl Operation<FoundationBucketDelete> {
 
     pub async fn run(&self, context: &Context<'_>) -> Result<()> {
         let job = self;
-        let credentials = provider_credentials(context, job.input.provider_id).await?;
-        let region = credentials
-            .provider_region
-            .clone()
-            .unwrap_or_else(|| "us-east-1".into());
-        let client = aws_sdk_s3::Client::from_conf(
-            aws_sdk_s3::Config::builder()
-                .behavior_version(BehaviorVersion::latest())
-                .endpoint_url(credentials.endpoint_url)
-                .region(aws_sdk_s3::config::Region::new(region))
-                .credentials_provider(aws_sdk_s3::config::Credentials::new(
-                    credentials.access_key_id,
-                    credentials.secret_access_key,
-                    credentials.session_token,
-                    None,
-                    "c-plane-worker",
-                ))
-                .force_path_style(true)
-                .build(),
-        );
+        let client = provider_client(context, job.input.provider_id).await?;
         crate::buckets::empty(&client, job.input.bucket_id).await?;
         crate::buckets::delete(&client, job.input.bucket_id).await
     }
+}
+
+pub async fn provider_client(
+    context: &Context<'_>,
+    provider_id: Uuid,
+) -> Result<aws_sdk_s3::Client> {
+    let credentials = provider_credentials(context, provider_id).await?;
+    let region = credentials
+        .provider_region
+        .clone()
+        .unwrap_or_else(|| "us-east-1".into());
+    Ok(aws_sdk_s3::Client::from_conf(
+        aws_sdk_s3::Config::builder()
+            .behavior_version(BehaviorVersion::latest())
+            .endpoint_url(credentials.endpoint_url)
+            .region(aws_sdk_s3::config::Region::new(region))
+            .credentials_provider(aws_sdk_s3::config::Credentials::new(
+                credentials.access_key_id,
+                credentials.secret_access_key,
+                credentials.session_token,
+                None,
+                "c-plane-worker",
+            ))
+            .force_path_style(true)
+            .build(),
+    ))
 }
 
 async fn provider_credentials(

@@ -4,6 +4,7 @@ import {
   text,
   timestamp,
   index,
+  unique,
   uniqueIndex,
   pgEnum,
   uuid,
@@ -11,6 +12,8 @@ import {
 import { sql } from "drizzle-orm";
 import { user } from "./auth.ts";
 import { app_tenant, orgAllowed } from "../rls.ts";
+import { bucket } from "../infrastructure/buckets.ts";
+import { region } from "../infrastructure/regions.ts";
 
 export const organization = pgTable.withRLS(
   "organization",
@@ -52,6 +55,31 @@ export const organization = pgTable.withRLS(
     }),
   ],
 );
+
+export const organization_region_backup_bucket = pgTable.withRLS('organization_region_backup_bucket', {
+  id: uuid("id").primaryKey(),
+  organization_id: uuid("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "restrict" }),
+  region_id: uuid("region_id")
+    .notNull()
+    .references(() => region.id, { onDelete: "restrict" }),
+  bucket_id: uuid("bucket_id")
+    .notNull()
+    .references(() => bucket.id, { onDelete: "restrict" }),
+}, (table) => [
+  unique("organization_region_backup_bucket_organization_region_uidx").on(table.organization_id, table.region_id),
+  unique("organization_region_backup_bucket_bucket_uidx").on(table.bucket_id),
+  unique("organization_region_backup_bucket_id_organization_uidx").on(table.id, table.organization_id),
+  index("organization_region_backup_bucket_region_id_idx").on(table.region_id),
+  pgPolicy("organization_region_backup_bucket_tenant_rls", {
+    as: "permissive",
+    for: "all",
+    to: app_tenant,
+    using: orgAllowed(table.organization_id),
+    withCheck: orgAllowed(table.organization_id),
+  }),
+]);
 
 export const organization_member = pgTable.withRLS(
   "organization_member",

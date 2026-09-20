@@ -1,7 +1,9 @@
-import { boolean, integer, pgTable, text, uuid, index, pgPolicy, AnyPgColumn } from "drizzle-orm/pg-core"
+import { boolean, foreignKey, integer, pgTable, text, uuid, index, pgPolicy, AnyPgColumn, unique } from "drizzle-orm/pg-core"
 import { project, project_environment } from "./index.ts"
-import { organization } from "../tenants/organization.ts";
+import { organization, organization_region_backup_bucket } from "../tenants/organization.ts";
 import { app_tenant, orgAllowed } from "../rls.ts";
+import { credential } from "../infrastructure/secrets.ts";
+import { region } from "../infrastructure/regions.ts";
 
 export const postgres_database = pgTable.withRLS('postgres_database', {
   id: uuid("id").primaryKey(),
@@ -11,6 +13,9 @@ export const postgres_database = pgTable.withRLS('postgres_database', {
   organization_id: uuid("organization_id")
     .notNull()
     .references(() => organization.id, { onDelete: "cascade" }),
+  region_id: uuid("region_id")
+    .notNull()
+    .references(() => region.id, { onDelete: "restrict" }),
   default_branch_id: uuid("default_branch_id")
     .references((): AnyPgColumn => postgres_database_branch.id, { onDelete: "set null" }),
   name: text("name").notNull(),
@@ -37,6 +42,10 @@ export const postgres_database_branch = pgTable.withRLS('postgres_database_branc
   organization_id: uuid("organization_id")
     .notNull()
     .references(() => organization.id, { onDelete: "cascade" }),
+  organization_region_backup_bucket_id: uuid("organization_region_backup_bucket_id")
+    .notNull(),
+  backup_credential_id: uuid("backup_credential_id")
+    .notNull(),
   backup_retention_days: integer("backup_retention_days").default(30),
   cpu: text("cpu"),
   ram: text("ram"),
@@ -50,6 +59,23 @@ export const postgres_database_branch = pgTable.withRLS('postgres_database_branc
   index("postgres_database_branch_database_id_idx").on(table.database_id),
   index("postgres_database_branch_branch_id_idx").on(table.branch_id),
   index("postgres_database_branch_organization_id_idx").on(table.organization_id),
+  index("postgres_database_branch_backup_bucket_id_idx").on(table.organization_region_backup_bucket_id),
+  unique("postgres_database_branch_backup_credential_id_uidx").on(table.backup_credential_id),
+  foreignKey({
+    columns: [table.organization_region_backup_bucket_id, table.organization_id],
+    foreignColumns: [organization_region_backup_bucket.id, organization_region_backup_bucket.organization_id],
+    name: "postgres_database_branch_backup_bucket_scope_fk",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.backup_credential_id],
+    foreignColumns: [credential.id],
+    name: "postgres_database_branch_backup_credential_id_fkey",
+  }).onDelete("restrict"),
+  foreignKey({
+    columns: [table.backup_credential_id, table.organization_id],
+    foreignColumns: [credential.id, credential.organization_id],
+    name: "postgres_database_branch_backup_credential_scope_fk",
+  }).onDelete("restrict"),
   pgPolicy("postgres_database_branch_tenant_rls", {
     as: "permissive",
     for: "all",

@@ -16,9 +16,26 @@ Before writing any UI code, read these:
 ## Patterns
 
 - Error handling: prefer `AppError::NotFound` / `AppError::Conflict` over custom error variants. Add new variants only when existing ones don't cover the case.
-- API: every handler takes `AuthContext` (tenant_db resolves org access). Verify org access first, then project-in-org, then operate.
+- API: every handler takes `AuthContext` and acts as a thin transport adapter. Pass the authenticated context and request data to the domain service; the service owns authorization checks, transactions, validation, and the operation itself.
 - OpenAPI: every Rust route must have a matching `utoipa::path` entry and all request/response types exposed by that route must be registered in `packages/api/src/openapi.rs`.
 - Frontend: use `useFetch` / `await useFetch` during SSR to avoid hydration mismatches. Store projects in `store.projects` — they're loaded by the auth plugin before any page renders.
+
+### Service-first CRUD
+
+Each domain service owns the complete CRUD surface for the resources in that domain. Establish reusable service methods for create, read, list, update, and delete, then use those methods from every entry point in the domain, including HTTP handlers, parent-resource operations, and background commands.
+
+- Services own authorization checks, transaction boundaries, validation, database mutations, domain events, credentials/secrets, durable jobs, and required external side effects.
+- A parent service calls the child service's CRUD method for each child. Do not duplicate child cleanup or bypass it through a foreign-key cascade when the child has application behavior.
+- Public service methods may own the transaction; transaction-scoped internal variants may be used when a parent operation must compose several child operations atomically.
+- HTTP handlers only extract transport data, call the service, and map the service result to the HTTP response. Do not call one handler from another.
+- Keep genuinely generic infrastructure as a separate reusable operation when it has no domain ownership, such as `bucket_prefix_delete`.
+- Never insert directly into `worker_queue` from an API or domain service. Enqueue durable jobs through the corresponding typed library operation so queue names, payloads, dedupe keys, and tenant context stay centralized.
+- Set `worker_queue.organization_id` on tenant-enqueued jobs so row-level security permits the insert. Put any additional organization context required by the worker in the payload too.
+- A transaction provides atomicity, not query batching: each awaited SeaORM query is still a database roundtrip. Parent CRUD operations must avoid per-child N+1 cleanup by loading shared context once, acquiring shared locks once, using `delete_many`/bulk inserts, and batching durable jobs.
+- Do not solve query volume by firing database requests concurrently inside one domain operation. Use one bounded bulk statement per table or a reviewed raw SQL statement when multiple tables must be changed together. A large cross-table CTE is allowed only when it materially reduces roundtrips without hiding authorization, RLS, foreign-key, or cleanup behavior.
+- Prefer transformation helpers that accept immutable inputs and return the updated value. Avoid passing caller-owned models through `&mut` parameters when the helper can construct and return the result; keeping the state transition at the call site makes the code easier to read.
+
+Foreign-key cascades remain appropriate for purely relational cleanup with no domain behavior attached. If a child has meaningful CRUD behavior, all parent and direct paths must use its service method.
 
 ## Purpose
 Complete the current task with the minimal sufficient solution.

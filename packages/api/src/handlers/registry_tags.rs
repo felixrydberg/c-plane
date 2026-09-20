@@ -60,11 +60,14 @@ pub async fn list_tags(
     let repository = find_repository(tx, organization_id, project_id, repository_id).await?;
     scoped.commit().await?;
 
-    let access =
-        sign_repository_access(organization_id, project_id, repository.id, &repository.name, &[
-            "pull",
-        ])
-        .await?;
+    let access = sign_repository_access(
+        organization_id,
+        project_id,
+        repository.id,
+        &repository.name,
+        &["pull"],
+    )
+    .await?;
     let base = registry_base_url()?;
     let client = &get_app_state().storage_client;
     let mut names = Vec::new();
@@ -203,10 +206,7 @@ async fn find_repository(
 }
 
 fn link_next(headers: &reqwest::header::HeaderMap, base: &str) -> Option<String> {
-    let link = headers
-        .get(reqwest::header::LINK)?
-        .to_str()
-        .ok()?;
+    let link = headers.get(reqwest::header::LINK)?.to_str().ok()?;
     for part in link.split(',') {
         let mut segments = part.trim().split(';');
         let target = segments.next()?.trim();
@@ -222,8 +222,7 @@ fn link_next(headers: &reqwest::header::HeaderMap, base: &str) -> Option<String>
 }
 
 fn registry_base_url() -> Result<String, AppError> {
-    let value =
-        env::var("REGISTRY_INTERNAL_URL").unwrap_or_else(|_| "http://registry:5000".into());
+    let value = env::var("REGISTRY_INTERNAL_URL").unwrap_or_else(|_| "http://registry:5000".into());
     reqwest::Url::parse(&value)
         .map_err(|_| AppError::Internal("REGISTRY_INTERNAL_URL is invalid".into()))?;
     Ok(value.trim_end_matches('/').to_string())
