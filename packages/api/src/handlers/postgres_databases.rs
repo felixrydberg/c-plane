@@ -9,7 +9,8 @@ use super::databases::{
 use crate::errors::AppError;
 use crate::middleware::auth::AuthContext;
 use crate::models::entities::{postgres_database, postgres_database_branch};
-use crate::services::postgres_databases as database_service;
+use crate::state::get_app_state;
+use lib::services::postgres_databases as database_service;
 
 fn db_to_response(db: &postgres_database::Model) -> DatabaseResponse {
     DatabaseResponse {
@@ -56,10 +57,16 @@ pub async fn create_database(
     Path(organization_id): Path<Uuid>,
     Json(body): Json<CreateDatabaseRequest>,
 ) -> Result<(StatusCode, Json<DatabaseResponse>), AppError> {
+    let state = get_app_state();
+    let context = database_service::ServiceContext {
+        providers: &state.s3_providers,
+        secrets: &state.secrets,
+    };
     let database = database_service::create_database(
         &tenant_db,
         organization_id,
         auth.actor_id,
+        &context,
         database_service::CreateDatabaseInput {
             name: body.name,
             project_id: body.project_id,
@@ -174,8 +181,19 @@ pub async fn delete_database(
     AuthContext { tenant_db, auth }: AuthContext,
     Path((organization_id, database_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    database_service::delete_database(&tenant_db, organization_id, auth.actor_id, database_id)
-        .await?;
+    let state = get_app_state();
+    let context = database_service::ServiceContext {
+        providers: &state.s3_providers,
+        secrets: &state.secrets,
+    };
+    database_service::delete_database(
+        &tenant_db,
+        organization_id,
+        auth.actor_id,
+        &context,
+        database_id,
+    )
+    .await?;
     Ok(Json(serde_json::json!({ "success": true })))
 }
 
@@ -262,10 +280,16 @@ pub async fn create_database_branch(
     Path((organization_id, database_id)): Path<(Uuid, Uuid)>,
     Json(body): Json<CreateDatabaseBranchRequest>,
 ) -> Result<(StatusCode, Json<DatabaseBranchResponse>), AppError> {
+    let state = get_app_state();
+    let context = database_service::ServiceContext {
+        providers: &state.s3_providers,
+        secrets: &state.secrets,
+    };
     let result = database_service::create_database_branch(
         &tenant_db,
         organization_id,
         auth.actor_id,
+        &context,
         database_id,
         database_service::CreateDatabaseBranchInput {
             branch_id: body.branch_id,
@@ -306,10 +330,16 @@ pub async fn delete_database_branch(
     AuthContext { tenant_db, auth }: AuthContext,
     Path((organization_id, database_id, branch_id)): Path<(Uuid, Uuid, Uuid)>,
 ) -> Result<Json<serde_json::Value>, AppError> {
+    let state = get_app_state();
+    let context = database_service::ServiceContext {
+        providers: &state.s3_providers,
+        secrets: &state.secrets,
+    };
     database_service::delete_branch(
         &tenant_db,
         organization_id,
         auth.actor_id,
+        &context,
         database_id,
         branch_id,
     )

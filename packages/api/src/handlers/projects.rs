@@ -17,14 +17,10 @@ use crate::models::entities::{
     storage_access_token,
 };
 use crate::models::manifest::RevisionManifest;
-use crate::services::agent;
-use crate::services::buckets;
-use crate::services::events;
-use crate::services::postgres_databases as database_service;
-use crate::services::revisions;
 use crate::state::get_app_state;
 use crate::utils::pagination::{PaginatedResponse, PaginationQuery};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use lib::services::{agent, buckets, events, postgres_databases as database_service, revisions};
 
 #[derive(Deserialize, ToSchema)]
 pub struct CreateProjectRequest {
@@ -556,6 +552,11 @@ pub async fn delete_project(
 ) -> Result<Json<serde_json::Value>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
     verify_org_owner(&tenant_db, organization_id)?;
+    let state = get_app_state();
+    let context = database_service::ServiceContext {
+        providers: &state.s3_providers,
+        secrets: &state.secrets,
+    };
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
@@ -599,6 +600,7 @@ pub async fn delete_project(
                 tx,
                 organization_id,
                 auth.actor_id,
+                &context,
                 database.id,
             )
             .await?,
@@ -626,14 +628,15 @@ pub async fn delete_project(
     )
     .await?;
     scoped.commit().await?;
-    if let Err(error) = get_app_state()
-        .s3_providers
+    if let Err(error) = context
+        .providers
         .invalidate_access_token_caches(&access_keys)
         .await
     {
         tracing::warn!(%error, %project_id, "project cache invalidation failed after deletion");
     }
-    database_service::finalize_deleted_databases(organization_id, &deleted_databases).await?;
+    database_service::finalize_deleted_databases(&context, organization_id, &deleted_databases)
+        .await?;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }

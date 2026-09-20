@@ -1,26 +1,25 @@
 use sea_orm::{ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter};
 use uuid::Uuid;
 
-use crate::{errors::AppError, services::s3_providers::S3ProviderClient};
-use lib::entities::{bucket, bucket_grant, secret, storage};
+use crate::{
+    entities::{bucket, bucket_grant, secret, storage},
+    error::AppError,
+    secrets::Client,
+    services::s3_providers::S3ProviderClient,
+};
 
 pub async fn create(
     tx: &DatabaseTransaction,
     providers: &S3ProviderClient,
+    secrets: &Client,
     organization_id: Uuid,
     region_id: Uuid,
     provider_id: Uuid,
 ) -> Result<Uuid, AppError> {
     let bucket_id = Uuid::new_v4();
     providers.create_bucket(provider_id, bucket_id).await?;
-    if let Err(error) = lib::buckets::create_foundation(
-        tx,
-        &crate::state::get_app_state().secrets,
-        organization_id,
-        region_id,
-        bucket_id,
-    )
-    .await
+    if let Err(error) =
+        crate::buckets::create_foundation(tx, secrets, organization_id, region_id, bucket_id).await
     {
         if let Err(delete_error) = providers.delete_bucket(provider_id, bucket_id).await {
             tracing::warn!(%provider_id, %bucket_id, %delete_error, "failed to compensate bucket after foundation error");

@@ -18,8 +18,8 @@ use crate::errors::AppError;
 use crate::middleware::auth::{AuthContext, RequestAuthContext};
 use crate::models::entities::{container, project, project_environment, project_timeline};
 use crate::models::manifest::{ContainerConfig, RevisionManifest};
-use crate::services::{agent, events, images, revisions};
-use crate::state::TenantDatabase;
+use crate::state::{TenantDatabase, get_app_state};
+use lib::services::{agent, events, images, revisions};
 
 #[derive(Deserialize, ToSchema)]
 pub struct CreateContainerRequest {
@@ -334,6 +334,12 @@ pub async fn create_container(
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
+    let state = get_app_state();
+    let image_context = images::ImageContext {
+        identity_db: state.identity_db.connection(),
+        secrets: &state.secrets,
+        registry_token_ttl_seconds: state.config.registry_token_ttl_seconds,
+    };
 
     let environment = get_environment(
         tx,
@@ -344,7 +350,13 @@ pub async fn create_container(
     .await?;
     let registry =
         selected_external_registry(tx, organization_id, body.external_registry_id).await?;
-    let resolved_image = images::resolve_image(&image, organization_id, registry.as_ref()).await?;
+    let resolved_image = images::resolve_image(
+        &image,
+        organization_id,
+        registry.as_ref(),
+        Some(&image_context),
+    )
+    .await?;
     let external_registry_id = registry.as_ref().map(|registry| registry.id);
 
     let created_container: container::Model = container::ActiveModel {
@@ -678,6 +690,12 @@ async fn update_container_with_options(
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
+    let state = get_app_state();
+    let image_context = images::ImageContext {
+        identity_db: state.identity_db.connection(),
+        secrets: &state.secrets,
+        registry_token_ttl_seconds: state.config.registry_token_ttl_seconds,
+    };
 
     let c = container::Entity::find()
         .filter(container::Column::Id.eq(container_id))
@@ -751,7 +769,13 @@ async fn update_container_with_options(
             let registry =
                 selected_external_registry(tx, organization_id, next_registry_id).await?;
             (
-                images::resolve_image(&next_image, organization_id, registry.as_ref()).await?,
+                images::resolve_image(
+                    &next_image,
+                    organization_id,
+                    registry.as_ref(),
+                    Some(&image_context),
+                )
+                .await?,
                 registry.as_ref().map(|registry| registry.id),
             )
         } else {

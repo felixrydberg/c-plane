@@ -1,6 +1,6 @@
 use uuid::Uuid;
 
-use crate::errors::AppError;
+use crate::error::AppError;
 
 pub async fn emit_compute(
     project_id: Uuid,

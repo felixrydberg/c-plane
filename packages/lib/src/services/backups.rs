@@ -4,14 +4,15 @@ use sea_orm::{
 };
 use uuid::Uuid;
 
-use crate::errors::AppError;
-use crate::models::entities::{
+use crate::entities::{
     bucket, bucket_grant, organization_region_backup_bucket,
     region::{self, RegionRoutingMode, RegionStatus},
     s3_provider,
 };
-use crate::services::buckets;
-use crate::state::{TenantDatabase, get_app_state};
+use crate::error::AppError;
+use crate::secrets::Client;
+use crate::services::{buckets, s3_providers::S3ProviderClient};
+use crate::tenant::TenantDatabase;
 
 pub struct BackupBucket {
     pub mapping_id: Uuid,
@@ -22,6 +23,8 @@ pub async fn ensure_backup_bucket(
     tenant_db: &TenantDatabase,
     organization_id: Uuid,
     region_id: Uuid,
+    providers: &S3ProviderClient,
+    secrets: &Client,
 ) -> Result<BackupBucket, AppError> {
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
@@ -45,7 +48,6 @@ pub async fn ensure_backup_bucket(
         return Err(AppError::Conflict("S3 provider is not active".into()));
     }
 
-    let state = get_app_state();
     let mapping = organization_region_backup_bucket::Entity::find()
         .filter(organization_region_backup_bucket::Column::OrganizationId.eq(organization_id))
         .filter(organization_region_backup_bucket::Column::RegionId.eq(region_id))
@@ -70,7 +72,8 @@ pub async fn ensure_backup_bucket(
 
     let bucket_id = buckets::create(
         tx,
-        &state.s3_providers,
+        providers,
+        secrets,
         organization_id,
         region_id,
         provider_id,
@@ -87,7 +90,7 @@ pub async fn ensure_backup_bucket(
     {
         Ok(mapping) => mapping,
         Err(error) => {
-            compensate_created_bucket(provider_id, bucket_id).await;
+            compensate_created_bucket(providers, provider_id, bucket_id).await;
             return Err(error.into());
         }
     };
@@ -103,6 +106,7 @@ pub async fn ensure_backup_bucket(
             region_id,
             provider_id,
             bucket_id,
+            providers,
         )
         .await;
         return Err(error);
@@ -116,6 +120,7 @@ async fn compensate_after_commit_error(
     region_id: Uuid,
     provider_id: Uuid,
     bucket_id: Uuid,
+    providers: &S3ProviderClient,
 ) {
     let verification = async {
         let scoped = tenant_db.begin_scoped_transaction().await?;
@@ -129,33 +134,33 @@ async fn compensate_after_commit_error(
 
     match verification {
         Ok(true) => {}
-        Ok(false) => compensate_created_bucket(provider_id, bucket_id).await,
+        Ok(false) => compensate_created_bucket(providers, provider_id, bucket_id).await,
         Err(error) => {
             tracing::warn!(%organization_id, %region_id, %bucket_id, %error, "failed to verify bucket after commit error; preserving bucket");
         }
     }
 }
 
-async fn compensate_created_bucket(provider_id: Uuid, bucket_id: Uuid) {
-    if let Err(error) = get_app_state()
-        .s3_providers
-        .delete_bucket(provider_id, bucket_id)
-        .await
-    {
+async fn compensate_created_bucket(
+    providers: &S3ProviderClient,
+    provider_id: Uuid,
+    bucket_id: Uuid,
+) {
+    if let Err(error) = providers.delete_bucket(provider_id, bucket_id).await {
         tracing::warn!(%provider_id, %bucket_id, %error, "failed to compensate bucket");
     }
 }
 
 pub async fn provision_access(
     tx: &DatabaseTransaction,
+    secrets: &Client,
     organization_id: Uuid,
     bucket_id: Uuid,
     credential_name_prefix: &str,
     object_prefix: &str,
 ) -> Result<Uuid, AppError> {
-    let state = get_app_state();
-    let credential = lib::buckets::credentials::create(
-        &state.secrets,
+    let credential = crate::buckets::credentials::create(
+        secrets,
         Some(organization_id),
         format!("{}{}", credential_name_prefix, Uuid::new_v4().simple()).to_uppercase(),
         object_prefix.to_owned(),
@@ -163,7 +168,7 @@ pub async fn provision_access(
     )
     .await
     .map_err(|error| AppError::Internal(error.to_string()))?;
-    lib::buckets::credentials::insert(tx, &credential)
+    crate::buckets::credentials::insert(tx, &credential)
         .await
         .map_err(|error| AppError::Internal(error.to_string()))?;
     (bucket_grant::ActiveModel {

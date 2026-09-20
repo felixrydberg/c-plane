@@ -16,9 +16,9 @@ use crate::{
         region::{self, RegionRoutingMode, RegionStatus},
         storage,
     },
-    services::buckets,
     state::get_app_state,
 };
+use lib::services::buckets;
 
 use super::databases::{verify_org_access, verify_org_owner, verify_project_in_org};
 
@@ -64,7 +64,8 @@ pub async fn create_bucket(
         return Err(AppError::BadRequest("Invalid bucket name".into()));
     }
 
-    let providers = get_app_state().s3_providers;
+    let state = get_app_state();
+    let providers = state.s3_providers;
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
     verify_project_in_org(tx, body.project_id, organization_id).await?;
@@ -88,8 +89,15 @@ pub async fn create_bucket(
     let provider_id = region
         .s3_provider_id
         .ok_or_else(|| AppError::Conflict("Region has no S3 provider".into()))?;
-    let foundation_bucket_id =
-        buckets::create(tx, &providers, organization_id, region.id, provider_id).await?;
+    let foundation_bucket_id = buckets::create(
+        tx,
+        &providers,
+        &state.secrets,
+        organization_id,
+        region.id,
+        provider_id,
+    )
+    .await?;
     let created = storage::ActiveModel {
         id: Set(Uuid::new_v4()),
         project_id: Set(body.project_id),
@@ -99,7 +107,7 @@ pub async fn create_bucket(
     }
     .insert(tx)
     .await?;
-    crate::services::events::record(
+    lib::services::events::record(
         tx,
         organization_id,
         body.project_id,
@@ -112,7 +120,7 @@ pub async fn create_bucket(
         let _ = providers
             .delete_bucket(provider_id, foundation_bucket_id)
             .await;
-        return Err(error);
+        return Err(error.into());
     }
     Ok((
         axum::http::StatusCode::CREATED,
@@ -232,7 +240,7 @@ pub async fn delete_bucket(
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
     buckets::delete(tx, bucket.bucket_id).await?;
-    crate::services::events::record(
+    lib::services::events::record(
         tx,
         organization_id,
         bucket.project_id,

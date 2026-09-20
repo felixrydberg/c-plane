@@ -77,7 +77,7 @@ pub async fn create_repository(
     }
     .insert(tx)
     .await?;
-    crate::services::events::record(
+    lib::services::events::record(
         tx,
         organization_id,
         project_id,
@@ -159,7 +159,7 @@ pub async fn delete_repository(
         repository.id,
     )
     .await?;
-    crate::services::events::record(
+    lib::services::events::record(
         tx,
         organization_id,
         project_id,

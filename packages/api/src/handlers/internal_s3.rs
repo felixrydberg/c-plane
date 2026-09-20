@@ -12,11 +12,11 @@ use uuid::Uuid;
 use crate::{
     errors::AppError,
     models::entities::{bucket, bucket_grant, credential, secret},
-    services::s3_providers::S3ProviderCredentials,
     state::get_app_state,
 };
 use lib::{
     cache::S3_ACCESS_TOKEN_CACHE_PREFIX, entities::secret::SecretScope, secrets::PLATFORM_KEY,
+    services::s3_providers::S3ProviderCredentials,
 };
 
 const CACHE_TTL_SECONDS: u64 = 86_400;

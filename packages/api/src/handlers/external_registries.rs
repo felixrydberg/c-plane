@@ -13,10 +13,10 @@ use crate::{
     errors::AppError,
     middleware::auth::AuthContext,
     models::entities::{external_registry, project_revision_manifest, secret},
-    services::buckets::tenant_key,
     state::get_app_state,
 };
 use lib::entities::secret::SecretScope;
+use lib::services::buckets::tenant_key;
 
 use super::{
     databases::{verify_org_access, verify_org_owner},
@@ -379,27 +379,6 @@ async fn store_secret(
         .await?;
     }
     Ok(())
-}
-
-pub async fn load_secret(organization_id: Uuid, registry_id: Uuid) -> Result<String, AppError> {
-    let row = secret::Entity::find_by_id(registry_id)
-        .filter(secret::Column::OrganizationId.eq(organization_id))
-        .one(get_app_state().identity_db.connection())
-        .await?
-        .filter(|row| row.scope == SecretScope::Tenant)
-        .filter(|row| row.organization_id == Some(organization_id))
-        .ok_or_else(|| {
-            AppError::Conflict("External registry credentials are unavailable".into())
-        })?;
-    let plaintext = lib::secrets::decrypt(
-        &get_app_state().secrets,
-        &tenant_key(organization_id),
-        &row.ciphertext,
-    )
-    .await?;
-    let secret: ExternalRegistrySecret = serde_json::from_slice(&plaintext)
-        .map_err(|error| AppError::Internal(error.to_string()))?;
-    Ok(secret.token)
 }
 
 fn required(value: String, name: &str) -> Result<String, AppError> {

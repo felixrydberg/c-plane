@@ -2,7 +2,7 @@ use chrono::Utc;
 use sea_orm::{ActiveModelTrait, DatabaseTransaction, Set};
 use uuid::Uuid;
 
-use crate::{errors::AppError, models::entities::event};
+use crate::{entities::event, error::AppError};
 
 pub async fn record(
     tx: &DatabaseTransaction,

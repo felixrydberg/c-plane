@@ -37,6 +37,22 @@ impl From<lib::secrets::SecretError> for AppError {
     }
 }
 
+impl From<lib::error::AppError> for AppError {
+    fn from(error: lib::error::AppError) -> Self {
+        match error {
+            lib::error::AppError::BadRequest(message) => AppError::BadRequest(message),
+            lib::error::AppError::Unauthorized(message) => AppError::Unauthorized(message),
+            lib::error::AppError::Forbidden(message) => AppError::Forbidden(message),
+            lib::error::AppError::NotFound(message) => AppError::NotFound(message),
+            lib::error::AppError::Conflict(message) => AppError::Conflict(message),
+            lib::error::AppError::ServiceUnavailable(message) => {
+                AppError::ServiceUnavailable(message)
+            }
+            lib::error::AppError::Internal(message) => AppError::Internal(message),
+        }
+    }
+}
+
 impl fmt::Display for AppError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

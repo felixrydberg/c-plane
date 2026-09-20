@@ -15,9 +15,9 @@ use crate::{
     middleware::auth::AuthContext,
     models::entities::secret::SecretScope,
     models::entities::{bucket_grant, credential, secret, storage, storage_access_token},
-    services::buckets::tenant_key,
     state::get_app_state,
 };
+use lib::services::buckets::tenant_key;
 
 const ACCESS_KEY_PREFIX: &str = "CP";
 const MAX_CREDENTIAL_PREFIX_BYTES: usize = 1024;
@@ -155,7 +155,7 @@ pub async fn create_access_token(
     )
     .await?;
     let token = token_by_id(tx, organization_id, project_id, credential_id).await?;
-    crate::services::events::record(tx, organization_id, project_id, "storage-access-token:created", serde_json::json!({
+    lib::services::events::record(tx, organization_id, project_id, "storage-access-token:created", serde_json::json!({
         "summary": format!("Created storage access token '{name}'"), "target_id": credential_id.to_string(),
         "bucket_ids": body.bucket_permissions.iter().map(|permission| permission.bucket_id).collect::<Vec<_>>(),
     }), auth.actor_id).await?;
@@ -292,7 +292,7 @@ pub async fn update_access_token(
         .iter()
         .map(|permission| permission.bucket_id)
         .collect::<Vec<_>>();
-    crate::services::events::record(tx, organization_id, project_id, "storage-access-token:updated", serde_json::json!({ "summary": "Updated storage access token permissions", "target_id": token_id.to_string(), "bucket_ids": bucket_ids }), auth.actor_id).await?;
+    lib::services::events::record(tx, organization_id, project_id, "storage-access-token:updated", serde_json::json!({ "summary": "Updated storage access token permissions", "target_id": token_id.to_string(), "bucket_ids": bucket_ids }), auth.actor_id).await?;
     scoped.commit().await?;
     if let Err(error) = get_app_state()
         .s3_providers
@@ -325,7 +325,7 @@ pub async fn revoke_access_token(
     }
     .update(tx)
     .await?;
-    crate::services::events::record(tx, organization_id, project_id, "storage-access-token:revoked", serde_json::json!({ "summary": format!("Revoked storage access token '{}'", token.name), "target_id": token_id.to_string() }), auth.actor_id).await?;
+    lib::services::events::record(tx, organization_id, project_id, "storage-access-token:revoked", serde_json::json!({ "summary": format!("Revoked storage access token '{}'", token.name), "target_id": token_id.to_string() }), auth.actor_id).await?;
     scoped.commit().await?;
     if let Err(error) = get_app_state()
         .s3_providers

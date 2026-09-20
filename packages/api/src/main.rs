@@ -13,7 +13,6 @@ mod middleware;
 mod models;
 mod openapi;
 mod routes;
-mod services;
 mod state;
 mod utils;
 

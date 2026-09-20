@@ -7,26 +7,30 @@ use oci_client::{
     secrets::RegistryAuth,
 };
 use reqwest::Url;
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use uuid::Uuid;
 
 use crate::{
-    errors::AppError,
-    handlers::{
-        external_registries::load_secret,
-        registry::{organization_slug, resolve_registry_project_id, sign_repository_access},
-    },
-    models::entities::{external_registry, managed_registry, registry_repository},
-    state::get_app_state,
+    entities::{external_registry, managed_registry, registry_repository},
+    error::AppError,
+    secrets::Client as SecretsClient,
+    services::registry,
 };
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 
+pub struct ImageContext<'a> {
+    pub identity_db: &'a DatabaseConnection,
+    pub secrets: &'a SecretsClient,
+    pub registry_token_ttl_seconds: u64,
+}
+
 pub async fn resolve_image(
     configured: &str,
     organization_id: Uuid,
     registry: Option<&external_registry::Model>,
+    context: Option<&ImageContext<'_>>,
 ) -> Result<String, AppError> {
     let configured = configured.trim();
     let reference: Reference = configured
@@ -41,9 +45,16 @@ pub async fn resolve_image(
                     "Internal images cannot use an external registry credential".into(),
                 ));
             }
-            internal_registry(&reference, organization_id).await?
+            internal_registry(
+                &reference,
+                organization_id,
+                context.ok_or_else(|| {
+                    AppError::Internal("Image resolver context is required".into())
+                })?,
+            )
+            .await?
         } else {
-            external_registry(&reference, organization_id, registry).await?
+            external_registry(&reference, organization_id, registry, context).await?
         };
 
     if let Some(digest) = reference.digest() {
@@ -61,27 +72,32 @@ pub async fn resolve_image(
 async fn internal_registry(
     reference: &Reference,
     organization_id: Uuid,
+    context: &ImageContext<'_>,
 ) -> Result<(Reference, RegistryAuth, Client), AppError> {
     managed_registry::Entity::find_by_id(organization_id)
-        .one(get_app_state().identity_db.connection())
+        .one(context.identity_db)
         .await?
         .ok_or_else(|| AppError::Conflict("Activate Managed Registry first".into()))?;
-    let slug = organization_slug(organization_id).await?;
+    let slug = registry::organization_slug(context.identity_db, organization_id).await?;
     let (project_name, repository_name) = internal_repository_name(reference.repository(), &slug)?;
-    let project_id = resolve_registry_project_id(organization_id, project_name).await?;
+    let project_id =
+        registry::resolve_registry_project_id(context.identity_db, organization_id, project_name)
+            .await?;
     let repository = registry_repository::Entity::find()
         .filter(registry_repository::Column::OrganizationId.eq(organization_id))
         .filter(registry_repository::Column::ProjectId.eq(project_id))
         .filter(registry_repository::Column::Name.eq(repository_name))
-        .one(get_app_state().identity_db.connection())
+        .one(context.identity_db)
         .await?
         .ok_or_else(|| AppError::BadRequest("Internal registry repository was not found".into()))?;
-    let access = sign_repository_access(
+    let access = registry::sign_repository_access(
+        context.identity_db,
         organization_id,
         project_id,
         repository.id,
         repository_name,
         &["pull"],
+        context.registry_token_ttl_seconds,
     )
     .await?;
     let internal_url =
@@ -110,12 +126,23 @@ async fn external_registry(
     reference: &Reference,
     organization_id: Uuid,
     registry: Option<&external_registry::Model>,
+    context: Option<&ImageContext<'_>>,
 ) -> Result<(Reference, RegistryAuth, Client), AppError> {
     validate_external_registry_host(reference, registry)?;
     let auth = match registry {
         Some(registry) => RegistryAuth::Basic(
             registry.username.clone(),
-            load_secret(organization_id, registry.id).await?,
+            registry::load_secret(
+                context
+                    .ok_or_else(|| AppError::Internal("Image resolver context is required".into()))?
+                    .identity_db,
+                context
+                    .ok_or_else(|| AppError::Internal("Image resolver context is required".into()))?
+                    .secrets,
+                organization_id,
+                registry.id,
+            )
+            .await?,
         ),
         None => RegistryAuth::Anonymous,
     };
@@ -235,7 +262,7 @@ mod tests {
     #[tokio::test]
     async fn accepts_an_existing_digest_without_network_access() {
         let digest = format!("sha256:{}", "a".repeat(64));
-        let result = resolve_image(&format!("nginx@{digest}"), Uuid::nil(), None)
+        let result = resolve_image(&format!("nginx@{digest}"), Uuid::nil(), None, None)
             .await
             .unwrap();
         assert_eq!(result, format!("docker.io/library/nginx@{digest}"));
@@ -273,6 +300,7 @@ mod tests {
             &format!("other.example.com/team/image@{digest}"),
             Uuid::nil(),
             Some(&registry),
+            None,
         )
         .await;
 

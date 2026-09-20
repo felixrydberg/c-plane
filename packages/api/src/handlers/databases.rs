@@ -96,7 +96,7 @@ pub struct DatabaseWithBranchesResponse {
 }
 
 #[allow(unused_imports)]
-pub use crate::services::postgres_databases::{
+pub use lib::services::postgres_databases::{
     validate_autoscaling, validate_backup_retention_days, validate_cpu, validate_ram,
     validate_read_replicas,
 };

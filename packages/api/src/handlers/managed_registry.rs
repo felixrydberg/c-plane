@@ -20,7 +20,6 @@ use crate::{
         bucket, bucket_grant, credential, managed_registry, managed_registry_gc_run, project,
         region, registry_repository, secret,
     },
-    services::buckets,
     state::get_app_state,
     utils::pagination::{PaginatedResponse, PaginationQuery},
 };
@@ -30,6 +29,7 @@ use lib::entities::{
     secret::SecretScope,
 };
 use lib::operation::{Operation, registry_gc::RegistryGc};
+use lib::services::buckets;
 
 use super::{
     databases::verify_org_access, registry::normalize_project_name,
@@ -226,8 +226,15 @@ pub async fn activate_registry(
     let provider_id = region
         .s3_provider_id
         .ok_or_else(|| AppError::Conflict("Region has no S3 provider".into()))?;
-    let foundation_bucket_id =
-        buckets::create(tx, &providers, organization_id, region.id, provider_id).await?;
+    let foundation_bucket_id = buckets::create(
+        tx,
+        &providers,
+        &state.secrets,
+        organization_id,
+        region.id,
+        provider_id,
+    )
+    .await?;
     let provisioned = provision_metadata(tx, organization_id, foundation_bucket_id).await;
     let registry = match provisioned {
         Ok(registry) => registry,
@@ -235,7 +242,7 @@ pub async fn activate_registry(
             let _ = providers
                 .delete_bucket(provider_id, foundation_bucket_id)
                 .await;
-            return Err(error);
+            return Err(error.into());
         }
     };
     if let Err(error) = record_event(
@@ -250,14 +257,14 @@ pub async fn activate_registry(
         let _ = providers
             .delete_bucket(provider_id, foundation_bucket_id)
             .await;
-        return Err(error);
+        return Err(error.into());
     }
     let response = response(&registry, region.id);
     if let Err(error) = scoped.commit().await {
         let _ = providers
             .delete_bucket(provider_id, foundation_bucket_id)
             .await;
-        return Err(error);
+        return Err(error.into());
     }
     Ok((StatusCode::CREATED, Json(response)))
 }

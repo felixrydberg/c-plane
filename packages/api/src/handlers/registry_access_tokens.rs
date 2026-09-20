@@ -143,7 +143,7 @@ pub async fn create_access_token(
         &body.repository_permissions,
     )
     .await?;
-    crate::services::events::record(
+    lib::services::events::record(
         tx,
         organization_id,
         project_id,
@@ -294,7 +294,7 @@ pub async fn update_access_token(
         &body.repository_permissions,
     )
     .await?;
-    crate::services::events::record(
+    lib::services::events::record(
         tx,
         organization_id,
         project_id,
@@ -341,7 +341,7 @@ pub async fn revoke_access_token(
     let mut token = token.into_active_model();
     token.revoked_at = Set(Some(Utc::now().fixed_offset()));
     token.update(tx).await?;
-    crate::services::events::record(
+    lib::services::events::record(
         tx,
         organization_id,
         project_id,

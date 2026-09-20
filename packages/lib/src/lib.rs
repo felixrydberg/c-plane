@@ -1,6 +1,10 @@
 pub mod buckets;
 pub mod cache;
 pub mod entities;
+pub mod error;
+pub mod manifest;
 pub mod operation;
 pub mod retry;
 pub mod secrets;
+pub mod services;
+pub mod tenant;

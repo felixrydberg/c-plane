@@ -5,11 +5,11 @@ use sea_orm::{
 };
 use uuid::Uuid;
 
-use crate::errors::AppError;
-use crate::models::entities::{
+use crate::entities::{
     external_registry, project, project_environment, project_revision_manifest, project_timeline,
 };
-use crate::models::manifest::RevisionManifest;
+use crate::error::AppError;
+use crate::manifest::RevisionManifest;
 
 pub async fn insert_revision(
     tx: &DatabaseTransaction,

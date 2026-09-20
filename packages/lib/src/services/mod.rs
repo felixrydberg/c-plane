@@ -4,5 +4,6 @@ pub mod buckets;
 pub mod events;
 pub mod images;
 pub mod postgres_databases;
+pub mod registry;
 pub mod revisions;
 pub mod s3_providers;

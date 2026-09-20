@@ -236,7 +236,7 @@ fn document_scope(method: &str, path: &str, operation: Option<&mut Operation>) {
             crate::handlers::external_registries::ExternalRegistryResponse,
             crate::handlers::internal_s3::ResolvedS3AccessToken,
             crate::handlers::internal_s3::ResolvedS3BucketPermission,
-            crate::services::s3_providers::S3ProviderCredentials,
+            lib::services::s3_providers::S3ProviderCredentials,
         ),
     ),
     tags(
