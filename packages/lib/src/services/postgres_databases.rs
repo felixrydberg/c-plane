@@ -6,7 +6,10 @@ use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
-use crate::operation::{Operation, bucket_prefix_delete::BucketPrefixDelete};
+use crate::operation::{
+    Operation, bucket_prefix_delete::BucketPrefixDelete,
+    foundation_bucket_delete::FoundationBucketDelete,
+};
 
 use crate::entities::{
     credential, organization_region_backup_bucket, postgres_database, postgres_database_branch,
@@ -157,6 +160,56 @@ pub async fn create_database(
 
     let database_id = Uuid::new_v4();
     let branch_link_id = Uuid::new_v4();
+    let mut created_backup_bucket = None;
+    let (database, main_environment_id) = match create_database_in_transaction(
+        tenant_db,
+        organization_id,
+        actor_id,
+        context,
+        &input,
+        database_id,
+        branch_link_id,
+        &mut created_backup_bucket,
+    )
+    .await
+    {
+        Ok(created) => created,
+        Err(error) => {
+            if let Some((backup_bucket, region_id)) = created_backup_bucket
+                && let Err(cleanup_error) = backups::rollback_created_backup_bucket(
+                    tenant_db,
+                    organization_id,
+                    region_id,
+                    backup_bucket,
+                )
+                .await
+            {
+                tracing::warn!(%organization_id, %database_id, %cleanup_error, "failed to compensate postgres backup bucket after database creation failed");
+            }
+            return Err(error);
+        }
+    };
+    agent::emit_postgres_branch(
+        database.id,
+        organization_id,
+        main_environment_id,
+        branch_link_id,
+    )
+    .await?;
+
+    Ok(database)
+}
+
+async fn create_database_in_transaction(
+    tenant_db: &TenantDatabase,
+    organization_id: Uuid,
+    actor_id: Uuid,
+    context: &ServiceContext<'_>,
+    input: &CreateDatabaseInput,
+    database_id: Uuid,
+    branch_link_id: Uuid,
+    created_backup_bucket: &mut Option<(backups::BackupBucket, Uuid)>,
+) -> Result<(postgres_database::Model, Uuid), AppError> {
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
 
@@ -176,6 +229,10 @@ pub async fn create_database(
         context.secrets,
     )
     .await?;
+    if backup_bucket.created {
+        *created_backup_bucket = Some((backup_bucket, input.region_id));
+    }
+    backups::lock_region(tx, organization_id, input.region_id).await?;
     let backup_credential_id = backups::provision_access(
         tx,
         context.secrets,
@@ -233,15 +290,7 @@ pub async fn create_database(
     )
     .await?;
     scoped.commit().await?;
-    agent::emit_postgres_branch(
-        database.id,
-        organization_id,
-        main_environment.id,
-        branch_link_id,
-    )
-    .await?;
-
-    Ok(database)
+    Ok((database, main_environment.id))
 }
 
 pub async fn list_databases(
@@ -378,7 +427,7 @@ pub async fn delete_database_in_transaction(
     context: &ServiceContext<'_>,
     database_id: Uuid,
 ) -> Result<DeletedPostgresDatabase, AppError> {
-    let database = find_database(tx, organization_id, database_id).await?;
+    let database = find_database_for_update(tx, organization_id, database_id).await?;
     let branches = postgres_database_branch::Entity::find()
         .filter(postgres_database_branch::Column::DatabaseId.eq(database_id))
         .filter(postgres_database_branch::Column::OrganizationId.eq(organization_id))
@@ -408,6 +457,61 @@ pub async fn delete_database_in_transaction(
         id: database.id,
         branches: deleted_branches,
     })
+}
+
+pub async fn delete_environment_branches_in_transaction(
+    tx: &DatabaseTransaction,
+    organization_id: Uuid,
+    project_id: Uuid,
+    environment_id: Uuid,
+    context: &ServiceContext<'_>,
+) -> Result<Vec<DeletedPostgresDatabase>, AppError> {
+    let databases = postgres_database::Entity::find()
+        .filter(postgres_database::Column::ProjectId.eq(project_id))
+        .filter(postgres_database::Column::OrganizationId.eq(organization_id))
+        .order_by_asc(postgres_database::Column::Id)
+        .lock_exclusive()
+        .all(tx)
+        .await?;
+    let database_ids = databases
+        .iter()
+        .map(|database| database.id)
+        .collect::<Vec<_>>();
+    if database_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let branches = postgres_database_branch::Entity::find()
+        .filter(postgres_database_branch::Column::BranchId.eq(environment_id))
+        .filter(postgres_database_branch::Column::OrganizationId.eq(organization_id))
+        .filter(postgres_database_branch::Column::DatabaseId.is_in(database_ids))
+        .find_also_related(credential::Entity)
+        .all(tx)
+        .await?;
+    if branches.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let database_by_branch = branches
+        .iter()
+        .map(|(branch, _)| (branch.id, branch.database_id))
+        .collect::<HashMap<_, _>>();
+    let deleted =
+        delete_database_branches_in_transaction(tx, organization_id, context, &branches).await?;
+    let mut deleted_by_database = HashMap::<Uuid, Vec<DeletedPostgresBranch>>::new();
+    for branch in deleted {
+        if let Some(database_id) = database_by_branch.get(&branch.id) {
+            deleted_by_database
+                .entry(*database_id)
+                .or_default()
+                .push(branch);
+        }
+    }
+
+    Ok(deleted_by_database
+        .into_iter()
+        .map(|(id, branches)| DeletedPostgresDatabase { id, branches })
+        .collect())
 }
 
 pub async fn list_database_branches(
@@ -472,6 +576,55 @@ pub async fn create_database_branch(
     verify_org_access(tenant_db, organization_id)?;
     validate_backup_retention_days(input.backup_retention_days)?;
 
+    let mut created_backup_bucket = None;
+    let created = match create_database_branch_in_transaction(
+        tenant_db,
+        organization_id,
+        actor_id,
+        context,
+        database_id,
+        input,
+        &mut created_backup_bucket,
+    )
+    .await
+    {
+        Ok(created) => created,
+        Err(error) => {
+            if let Some((backup_bucket, region_id)) = created_backup_bucket
+                && let Err(cleanup_error) = backups::rollback_created_backup_bucket(
+                    tenant_db,
+                    organization_id,
+                    region_id,
+                    backup_bucket,
+                )
+                .await
+            {
+                tracing::warn!(%organization_id, %database_id, %cleanup_error, "failed to compensate postgres backup bucket after branch creation failed");
+            }
+            return Err(error);
+        }
+    };
+    if created.created {
+        agent::emit_postgres_branch(
+            database_id,
+            organization_id,
+            created.row.branch_id,
+            created.row.id,
+        )
+        .await?;
+    }
+    Ok(created)
+}
+
+async fn create_database_branch_in_transaction(
+    tenant_db: &TenantDatabase,
+    organization_id: Uuid,
+    actor_id: Uuid,
+    context: &ServiceContext<'_>,
+    database_id: Uuid,
+    input: CreateDatabaseBranchInput,
+    created_backup_bucket: &mut Option<(backups::BackupBucket, Uuid)>,
+) -> Result<CreatedPostgresBranch, AppError> {
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
     let database = find_database_for_update(tx, organization_id, database_id).await?;
@@ -543,6 +696,10 @@ pub async fn create_database_branch(
         context.secrets,
     )
     .await?;
+    if backup_bucket.created {
+        *created_backup_bucket = Some((backup_bucket, database.region_id));
+    }
+    backups::lock_region(tx, organization_id, database.region_id).await?;
     let backup_credential_id = backups::provision_access(
         tx,
         context.secrets,
@@ -584,7 +741,6 @@ pub async fn create_database_branch(
     )
     .await?;
     scoped.commit().await?;
-    agent::emit_postgres_branch(database_id, organization_id, environment.id, row.id).await?;
     Ok(CreatedPostgresBranch { row, created: true })
 }
 
@@ -717,6 +873,7 @@ async fn delete_database_branches_in_transaction(
 
     let mut locked_regions = HashSet::new();
     let mut jobs = Vec::with_capacity(branches.len());
+    let mut provider_ids_by_mapping = HashMap::new();
     let mut credential_ids = Vec::with_capacity(branches.len());
     let mut secret_ids = Vec::with_capacity(branches.len());
     let mut deleted = Vec::with_capacity(branches.len());
@@ -741,6 +898,7 @@ async fn delete_database_branches_in_transaction(
         if locked_regions.insert(mapping.region_id) {
             backups::lock_region(tx, organization_id, mapping.region_id).await?;
         }
+        provider_ids_by_mapping.insert(mapping.id, provider_id);
         jobs.push((branch.id, mapping.bucket_id, provider_id));
         credential_ids.push(backup_credential.id);
         secret_ids.push(backup_credential.secret_id);
@@ -800,6 +958,18 @@ async fn delete_database_branches_in_transaction(
                 .exec(tx)
                 .await?;
             crate::buckets::delete_foundation(tx, mapping.bucket_id).await?;
+            Operation::<FoundationBucketDelete>::new(
+                tx,
+                organization_id,
+                mapping.bucket_id.to_string(),
+                FoundationBucketDelete {
+                    bucket_id: mapping.bucket_id,
+                    provider_id: *provider_ids_by_mapping.get(&mapping.id).ok_or_else(|| {
+                        AppError::Internal("Postgres backup provider not found".into())
+                    })?,
+                },
+            )
+            .await?;
         }
     }
 
@@ -879,6 +1049,16 @@ async fn delete_branch_in_transaction(
             .exec(tx)
             .await?;
         crate::buckets::delete_foundation(tx, mapping.bucket_id).await?;
+        Operation::<FoundationBucketDelete>::new(
+            tx,
+            organization_id,
+            mapping.bucket_id.to_string(),
+            FoundationBucketDelete {
+                bucket_id: mapping.bucket_id,
+                provider_id,
+            },
+        )
+        .await?;
     }
     Ok(DeletedPostgresBranch {
         id: branch.id,

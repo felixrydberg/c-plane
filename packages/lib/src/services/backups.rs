@@ -5,20 +5,24 @@ use sea_orm::{
 use uuid::Uuid;
 
 use crate::entities::{
-    bucket, bucket_grant, organization_region_backup_bucket,
+    bucket, bucket_grant, organization_region_backup_bucket, postgres_database_branch,
     region::{self, RegionRoutingMode, RegionStatus},
     s3_provider,
 };
 use crate::error::AppError;
+use crate::operation::{Operation, foundation_bucket_delete::FoundationBucketDelete};
 use crate::retry::{Retry, RetryError};
 use crate::secrets::Client;
 use crate::services::{buckets, s3_providers::S3ProviderClient};
 use crate::tenant::TenantDatabase;
 use std::time::Duration;
 
+#[derive(Clone, Copy)]
 pub struct BackupBucket {
     pub mapping_id: Uuid,
     pub bucket_id: Uuid,
+    pub provider_id: Uuid,
+    pub created: bool,
 }
 
 pub async fn ensure_backup_bucket(
@@ -68,6 +72,8 @@ pub async fn ensure_backup_bucket(
         let backup_bucket = BackupBucket {
             mapping_id: mapping.id,
             bucket_id: mapping.bucket_id,
+            provider_id,
+            created: false,
         };
         scoped.commit().await?;
         return Ok(backup_bucket);
@@ -110,6 +116,8 @@ pub async fn ensure_backup_bucket(
         let backup_bucket = BackupBucket {
             mapping_id: mapping.id,
             bucket_id: mapping.bucket_id,
+            provider_id,
+            created: false,
         };
         drop(scoped);
         compensate_created_bucket(providers, provider_id, bucket_id).await;
@@ -137,6 +145,8 @@ pub async fn ensure_backup_bucket(
     let backup_bucket = BackupBucket {
         mapping_id: mapping.id,
         bucket_id,
+        provider_id,
+        created: true,
     };
     if let Err(error) = scoped.commit().await {
         compensate_after_commit_error(
@@ -151,6 +161,60 @@ pub async fn ensure_backup_bucket(
         return Err(error);
     }
     Ok(backup_bucket)
+}
+
+pub async fn rollback_created_backup_bucket(
+    tenant_db: &TenantDatabase,
+    organization_id: Uuid,
+    region_id: Uuid,
+    backup_bucket: BackupBucket,
+) -> Result<(), AppError> {
+    if !backup_bucket.created {
+        return Ok(());
+    }
+
+    let scoped = tenant_db.begin_scoped_transaction().await?;
+    let tx = scoped.connection();
+    lock_region(tx, organization_id, region_id).await?;
+
+    let has_branches = postgres_database_branch::Entity::find()
+        .filter(
+            postgres_database_branch::Column::OrganizationRegionBackupBucketId
+                .eq(backup_bucket.mapping_id),
+        )
+        .filter(postgres_database_branch::Column::OrganizationId.eq(organization_id))
+        .one(tx)
+        .await?
+        .is_some();
+    if has_branches {
+        scoped.commit().await?;
+        return Ok(());
+    }
+
+    let mapping = organization_region_backup_bucket::Entity::find_by_id(backup_bucket.mapping_id)
+        .filter(organization_region_backup_bucket::Column::OrganizationId.eq(organization_id))
+        .filter(organization_region_backup_bucket::Column::RegionId.eq(region_id))
+        .one(tx)
+        .await?;
+    if let Some(mapping) = mapping.filter(|mapping| mapping.bucket_id == backup_bucket.bucket_id) {
+        organization_region_backup_bucket::Entity::delete_by_id(mapping.id)
+            .exec(tx)
+            .await?;
+        crate::buckets::delete_foundation(tx, mapping.bucket_id).await?;
+        Operation::<FoundationBucketDelete>::new(
+            tx,
+            organization_id,
+            mapping.bucket_id.to_string(),
+            FoundationBucketDelete {
+                bucket_id: mapping.bucket_id,
+                provider_id: backup_bucket.provider_id,
+            },
+        )
+        .await?;
+    }
+
+    scoped.commit().await?;
+    Ok(())
 }
 
 async fn compensate_after_commit_error(

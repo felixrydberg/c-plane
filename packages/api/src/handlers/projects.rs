@@ -591,6 +591,7 @@ pub async fn delete_project(
         .await?;
     let databases = postgres_database::Entity::find()
         .filter(postgres_database::Column::ProjectId.eq(project_id))
+        .order_by_asc(postgres_database::Column::Id)
         .all(tx)
         .await?;
     let mut deleted_databases = Vec::with_capacity(databases.len());
@@ -1113,6 +1114,12 @@ pub async fn delete_environment(
     verify_org_access(&tenant_db, organization_id)?;
     verify_org_owner(&tenant_db, organization_id)?;
 
+    let state = get_app_state();
+    let context = database_service::ServiceContext {
+        providers: &state.s3_providers,
+        secrets: &state.secrets,
+    };
+
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
 
@@ -1136,6 +1143,14 @@ pub async fn delete_environment(
         .ok_or_else(|| AppError::NotFound("Environment not found".into()))?;
 
     revisions::lock_project(tx, project_id).await?;
+    let deleted_databases = database_service::delete_environment_branches_in_transaction(
+        tx,
+        organization_id,
+        project_id,
+        environment_id,
+        &context,
+    )
+    .await?;
     project_timeline::Entity::update_many()
         .col_expr(
             project_timeline::Column::EnvironmentId,
@@ -1164,6 +1179,8 @@ pub async fn delete_environment(
     .await?;
 
     scoped.commit().await?;
+    database_service::finalize_deleted_databases(&context, organization_id, &deleted_databases)
+        .await?;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }

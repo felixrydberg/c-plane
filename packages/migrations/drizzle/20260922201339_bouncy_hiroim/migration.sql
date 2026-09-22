@@ -191,6 +191,15 @@ CREATE TABLE "managed_registry" (
 );
 --> statement-breakpoint
 ALTER TABLE "managed_registry" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE TABLE "managed_registry_activation_reservation" (
+	"organization_id" uuid PRIMARY KEY,
+	"bucket_id" uuid NOT NULL,
+	"region_id" uuid NOT NULL,
+	"provider_id" uuid NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+ALTER TABLE "managed_registry_activation_reservation" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "managed_registry_gc_runs" (
 	"id" uuid PRIMARY KEY,
 	"organization_id" uuid NOT NULL,
@@ -431,6 +440,18 @@ CREATE TABLE "storage_bucket" (
 );
 --> statement-breakpoint
 ALTER TABLE "storage_bucket" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE TABLE "storage_bucket_name_reservation" (
+	"organization_id" uuid NOT NULL,
+	"project_id" uuid,
+	"name" text,
+	"bucket_id" uuid NOT NULL,
+	"region_id" uuid NOT NULL,
+	"provider_id" uuid NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "storage_bucket_name_reservation_pk" PRIMARY KEY("project_id","name")
+);
+--> statement-breakpoint
+ALTER TABLE "storage_bucket_name_reservation" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "two_factor" (
 	"id" uuid PRIMARY KEY DEFAULT pg_catalog.gen_random_uuid(),
 	"secret" text NOT NULL,
@@ -454,6 +475,15 @@ CREATE TABLE "user" (
 	"ban_reason" text,
 	"ban_expires" timestamp,
 	"two_factor_enabled" boolean DEFAULT false
+);
+--> statement-breakpoint
+CREATE TABLE "verification" (
+	"id" uuid PRIMARY KEY DEFAULT pg_catalog.gen_random_uuid(),
+	"identifier" text NOT NULL,
+	"value" text NOT NULL,
+	"expires_at" timestamp NOT NULL,
+	"created_at" timestamp DEFAULT now(),
+	"updated_at" timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE TABLE "worker_queue" (
@@ -587,8 +617,10 @@ CREATE UNIQUE INDEX "storage_bucket_project_name_uidx" ON "storage_bucket" ("pro
 CREATE UNIQUE INDEX "storage_bucket_foundation_bucket_uidx" ON "storage_bucket" ("bucket_id");--> statement-breakpoint
 CREATE INDEX "storage_bucket_project_id_idx" ON "storage_bucket" ("project_id");--> statement-breakpoint
 CREATE INDEX "storage_bucket_organization_id_idx" ON "storage_bucket" ("organization_id");--> statement-breakpoint
+CREATE INDEX "storage_bucket_name_reservation_organization_id_idx" ON "storage_bucket_name_reservation" ("organization_id");--> statement-breakpoint
 CREATE INDEX "twoFactor_secret_idx" ON "two_factor" ("secret");--> statement-breakpoint
 CREATE INDEX "twoFactor_userId_idx" ON "two_factor" ("user_id");--> statement-breakpoint
+CREATE INDEX "verification_identifier_idx" ON "verification" ("identifier");--> statement-breakpoint
 CREATE INDEX "worker_queue_organization_id_idx" ON "worker_queue" ("organization_id");--> statement-breakpoint
 CREATE INDEX "worker_queue_claim_idx" ON "worker_queue" ("queue_name","status","available_at","created_at");--> statement-breakpoint
 CREATE INDEX "worker_queue_lease_idx" ON "worker_queue" ("status","lease_expires_at");--> statement-breakpoint
@@ -619,6 +651,9 @@ ALTER TABLE "managed_registry" ADD CONSTRAINT "managed_registry_organization_id_
 ALTER TABLE "managed_registry" ADD CONSTRAINT "managed_registry_bucket_id_bucket_id_fkey" FOREIGN KEY ("bucket_id") REFERENCES "bucket"("id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "managed_registry" ADD CONSTRAINT "managed_registry_gc_active_job_id_worker_queue_id_fkey" FOREIGN KEY ("gc_active_job_id") REFERENCES "worker_queue"("id") ON DELETE SET NULL;--> statement-breakpoint
 ALTER TABLE "managed_registry" ADD CONSTRAINT "managed_registry_credential_scope_fk" FOREIGN KEY ("credential_id","organization_id") REFERENCES "credential"("id","organization_id") ON DELETE CASCADE;--> statement-breakpoint
+ALTER TABLE "managed_registry_activation_reservation" ADD CONSTRAINT "managed_registry_activation_reservation_qenxvUQcAFkp_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
+ALTER TABLE "managed_registry_activation_reservation" ADD CONSTRAINT "managed_registry_activation_reservation_Muq4RXTrygPs_fkey" FOREIGN KEY ("region_id") REFERENCES "regions"("id") ON DELETE RESTRICT;--> statement-breakpoint
+ALTER TABLE "managed_registry_activation_reservation" ADD CONSTRAINT "managed_registry_activation_reservation_AZN5cFkvc4Zf_fkey" FOREIGN KEY ("provider_id") REFERENCES "s3_providers"("id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "managed_registry_gc_runs" ADD CONSTRAINT "managed_registry_gc_runs_HPcX8IPUKZjV_fkey" FOREIGN KEY ("organization_id") REFERENCES "managed_registry"("organization_id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "organization_invitation" ADD CONSTRAINT "organization_invitation_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "organization_invitation" ADD CONSTRAINT "organization_invitation_inviter_id_user_id_fkey" FOREIGN KEY ("inviter_id") REFERENCES "user"("id") ON DELETE CASCADE;--> statement-breakpoint
@@ -668,6 +703,10 @@ ALTER TABLE "storage_access_token" ADD CONSTRAINT "storage_access_token_credenti
 ALTER TABLE "storage_bucket" ADD CONSTRAINT "storage_bucket_project_id_project_id_fkey" FOREIGN KEY ("project_id") REFERENCES "project"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "storage_bucket" ADD CONSTRAINT "storage_bucket_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "storage_bucket" ADD CONSTRAINT "storage_bucket_bucket_id_bucket_id_fkey" FOREIGN KEY ("bucket_id") REFERENCES "bucket"("id") ON DELETE RESTRICT;--> statement-breakpoint
+ALTER TABLE "storage_bucket_name_reservation" ADD CONSTRAINT "storage_bucket_name_reservation_xjbMjRAMpV29_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
+ALTER TABLE "storage_bucket_name_reservation" ADD CONSTRAINT "storage_bucket_name_reservation_project_id_project_id_fkey" FOREIGN KEY ("project_id") REFERENCES "project"("id") ON DELETE CASCADE;--> statement-breakpoint
+ALTER TABLE "storage_bucket_name_reservation" ADD CONSTRAINT "storage_bucket_name_reservation_region_id_regions_id_fkey" FOREIGN KEY ("region_id") REFERENCES "regions"("id") ON DELETE RESTRICT;--> statement-breakpoint
+ALTER TABLE "storage_bucket_name_reservation" ADD CONSTRAINT "storage_bucket_name_reservation_OTS6XASGpAQx_fkey" FOREIGN KEY ("provider_id") REFERENCES "s3_providers"("id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "two_factor" ADD CONSTRAINT "two_factor_user_id_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "worker_queue" ADD CONSTRAINT "worker_queue_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
 CREATE POLICY "active_organization_tenant_rls" ON "active_organization" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("active_organization"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("active_organization"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
@@ -682,6 +721,7 @@ CREATE POLICY "event_org_rls" ON "event" AS PERMISSIVE FOR ALL TO "app_tenant" U
 CREATE POLICY "external_registry_tenant_rls" ON "external_registry" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("external_registry"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("external_registry"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "infrastructure_audit_log_reader" ON "infrastructure_audit_log" AS PERMISSIVE FOR SELECT TO "app_audit_reader" USING (true);--> statement-breakpoint
 CREATE POLICY "managed_registry_tenant_rls" ON "managed_registry" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("managed_registry"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("managed_registry"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
+CREATE POLICY "managed_registry_activation_reservation_tenant_rls" ON "managed_registry_activation_reservation" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("managed_registry_activation_reservation"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("managed_registry_activation_reservation"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "managed_registry_gc_runs_tenant_rls" ON "managed_registry_gc_runs" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("managed_registry_gc_runs"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("managed_registry_gc_runs"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "organization_tenant_rls_select" ON "organization" AS PERMISSIVE FOR SELECT TO "app_tenant" USING ("organization"."id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "organization_tenant_rls_update" ON "organization" AS PERMISSIVE FOR UPDATE TO "app_tenant" USING ("organization"."id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("organization"."id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
@@ -707,4 +747,5 @@ CREATE POLICY "secret_platform_select_rls" ON "secret" AS PERMISSIVE FOR SELECT 
 CREATE POLICY "secret_tenant_rls" ON "secret" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("secret"."scope" = 'tenant' and "secret"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("secret"."scope" = 'tenant' and "secret"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "storage_access_token_tenant_rls" ON "storage_access_token" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("storage_access_token"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("storage_access_token"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "storage_bucket_tenant_rls" ON "storage_bucket" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("storage_bucket"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("storage_bucket"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
+CREATE POLICY "storage_bucket_name_reservation_tenant_rls" ON "storage_bucket_name_reservation" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("storage_bucket_name_reservation"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("storage_bucket_name_reservation"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "worker_queue_tenant_rls" ON "worker_queue" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("worker_queue"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("worker_queue"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));

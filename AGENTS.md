@@ -13,6 +13,12 @@ Before writing any UI code, read these:
 - `packages/migrations` — Drizzle schemas, migrations, and database types
 - `packages/lib` — reusable Rust services, currently OpenBao secrets
 
+## Database migrations
+
+- `packages/migrations/schema` is the source of truth for database structure. Use Drizzle Kit to generate ordinary migrations with `deno task --cwd packages/migrations migrate:generate`.
+- Do not hand-write tables, columns, indexes, constraints, enums, or Drizzle-supported RLS policies in custom SQL migrations.
+- Reserve `packages/migrations/custom-migrations` for PostgreSQL functions and triggers that Drizzle Kit cannot represent, including their updates and removals.
+
 ## Patterns
 
 - Error handling: prefer `AppError::NotFound` / `AppError::Conflict` over custom error variants. Add new variants only when existing ones don't cover the case.
