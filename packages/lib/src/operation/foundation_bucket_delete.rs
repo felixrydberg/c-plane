@@ -1,5 +1,5 @@
 use aws_sdk_s3::config::BehaviorVersion;
-use sea_orm::{ConnectionTrait, DatabaseBackend, Statement};
+use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseTransaction, DbErr, Statement};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -30,6 +30,42 @@ struct ProviderCredentials {
 impl Operation<FoundationBucketDelete> {
     pub const QUEUE: &'static str = "foundation";
     pub const NAME: &'static str = "foundation_bucket_delete";
+
+    pub async fn new(
+        transaction: &DatabaseTransaction,
+        organization_id: Uuid,
+        dedupe_key: String,
+        input: FoundationBucketDelete,
+    ) -> std::result::Result<Self, DbErr> {
+        Self::insert(
+            transaction,
+            Some(organization_id),
+            Self::QUEUE,
+            Self::NAME,
+            Some(dedupe_key),
+            input,
+        )
+        .await
+    }
+
+    pub async fn new_many<I>(
+        transaction: &DatabaseTransaction,
+        organization_id: Uuid,
+        jobs: I,
+    ) -> std::result::Result<(), DbErr>
+    where
+        I: IntoIterator<Item = (String, FoundationBucketDelete)>,
+    {
+        Self::insert_many(
+            transaction,
+            Some(organization_id),
+            Self::QUEUE,
+            Self::NAME,
+            jobs.into_iter()
+                .map(|(dedupe_key, input)| (Some(dedupe_key), input)),
+        )
+        .await
+    }
 
     pub async fn run(&self, context: &Context<'_>) -> Result<()> {
         let job = self;

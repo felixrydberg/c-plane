@@ -21,7 +21,10 @@ const backupRetentionDays = ref<number | null>(30)
 const highAvailability = ref(false)
 const readReplicas = ref(2)
 const regionsUrl = computed(() => orgId.value ? `/api/organization/${orgId.value as ':organization_id'}/regions` as const : '')
-const { data: regions } = await useCplaneFetch(regionsUrl, { default: () => [] })
+const { data: regions } = await useCplaneFetch(regionsUrl, {
+  default: () => [],
+  immediate: computed(() => !!orgId.value),
+})
 
 async function handleCreate() {
   if (!orgId.value || !projectId.value || !name.value.trim() || !regionId.value) return

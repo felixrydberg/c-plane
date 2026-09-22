@@ -2,8 +2,9 @@ use sea_orm::{ColumnTrait, Condition, DatabaseTransaction, EntityTrait, QueryFil
 use uuid::Uuid;
 
 use crate::{
-    entities::{bucket, bucket_grant, secret, storage},
+    entities::{bucket, bucket_grant, region, secret, storage},
     error::AppError,
+    operation::{Operation, foundation_bucket_delete::FoundationBucketDelete},
     secrets::Client,
     services::s3_providers::S3ProviderClient,
     tenant::{ScopedTenantTransaction, TenantDatabase},
@@ -81,6 +82,7 @@ pub async fn delete(tx: &DatabaseTransaction, bucket_id: Uuid) -> Result<(), App
 /// Deleting foundations preserves the database trigger that enqueues provider cleanup.
 pub async fn delete_for_project(
     tx: &DatabaseTransaction,
+    organization_id: Uuid,
     project_id: Uuid,
 ) -> Result<(), AppError> {
     let storage_bucket_ids = storage::Entity::find()
@@ -94,8 +96,31 @@ pub async fn delete_for_project(
     if !storage_bucket_ids.is_empty() {
         owned = owned.add(bucket::Column::Id.is_in(storage_bucket_ids));
     }
-    let foundations = bucket::Entity::find().filter(owned).all(tx).await?;
-    let foundation_ids = foundations.iter().map(|row| row.id).collect::<Vec<_>>();
+    let foundations = bucket::Entity::find()
+        .filter(owned)
+        .find_also_related(region::Entity)
+        .all(tx)
+        .await?;
+    let foundation_ids = foundations
+        .iter()
+        .map(|(row, _)| row.id)
+        .collect::<Vec<_>>();
+    let jobs = foundations
+        .iter()
+        .map(|(bucket, region)| {
+            let provider_id = region
+                .as_ref()
+                .and_then(|region| region.s3_provider_id)
+                .ok_or_else(|| AppError::Conflict("Region has no S3 provider".into()))?;
+            Ok((
+                bucket.id.to_string(),
+                FoundationBucketDelete {
+                    bucket_id: bucket.id,
+                    provider_id,
+                },
+            ))
+        })
+        .collect::<Result<Vec<_>, AppError>>()?;
     if !foundation_ids.is_empty() {
         bucket_grant::Entity::delete_many()
             .filter(bucket_grant::Column::BucketId.is_in(foundation_ids.clone()))
@@ -114,7 +139,7 @@ pub async fn delete_for_project(
     }
     let secret_ids = foundations
         .into_iter()
-        .map(|foundation| foundation.sse_secret_id)
+        .map(|(foundation, _)| foundation.sse_secret_id)
         .collect::<Vec<_>>();
     if !secret_ids.is_empty() {
         secret::Entity::delete_many()
@@ -122,6 +147,7 @@ pub async fn delete_for_project(
             .exec(tx)
             .await?;
     }
+    Operation::<FoundationBucketDelete>::new_many(tx, organization_id, jobs).await?;
     Ok(())
 }
 

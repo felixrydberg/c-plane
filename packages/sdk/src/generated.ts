@@ -862,7 +862,6 @@ export interface components {
             autoscaling_min_cpu?: string | null;
             /** Format: uuid */
             backup_credential_id: string;
-            backup_prefix: string;
             /** Format: int32 */
             backup_retention_days?: number | null;
             /** Format: uuid */

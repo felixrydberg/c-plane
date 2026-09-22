@@ -50,7 +50,7 @@ pub async fn delete_project_in_transaction(
         .filter(storage::Column::ProjectId.eq(project_id))
         .all(tx)
         .await?;
-    buckets::delete_for_project(tx, project_id).await?;
+    buckets::delete_for_project(tx, organization_id, project_id).await?;
     if !rows.is_empty() {
         let events = rows.into_iter().map(|row| crate::entities::event::ActiveModel {
             id: Set(Uuid::new_v4()),
@@ -130,6 +130,9 @@ pub async fn delete(
             "Bucket must be empty before it can be deleted".into(),
         ));
     }
+    providers
+        .delete_bucket(provider_id, bucket_row.bucket_id)
+        .await?;
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
     crate::services::buckets::delete(tx, bucket_row.bucket_id).await?;

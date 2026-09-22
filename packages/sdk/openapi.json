@@ -4685,8 +4685,7 @@
           "high_availability",
           "autoscaling_enabled",
           "organization_region_backup_bucket_id",
-          "backup_credential_id",
-          "backup_prefix"
+          "backup_credential_id"
         ],
         "properties": {
           "autoscaling_enabled": {
@@ -4707,9 +4706,6 @@
           "backup_credential_id": {
             "type": "string",
             "format": "uuid"
-          },
-          "backup_prefix": {
-            "type": "string"
           },
           "backup_retention_days": {
             "type": [
