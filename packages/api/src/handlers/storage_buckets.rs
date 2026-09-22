@@ -2,24 +2,17 @@ use axum::{
     Json,
     extract::{Path, Query},
 };
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
     errors::AppError,
     middleware::auth::AuthContext,
-    models::entities::{bucket, bucket_grant, credential, region, storage},
+    models::entities::{region, storage},
     state::get_app_state,
 };
-use lib::services::{
-    buckets,
-    storage_buckets::{self, CreateStorageBucketInput},
-};
-
-use super::databases::{verify_org_access, verify_org_owner, verify_project_in_org};
+use lib::services::storage_buckets::{self, CreateStorageBucketInput};
 
 #[derive(Deserialize)]
 pub struct ListBucketsQuery {
@@ -87,27 +80,11 @@ pub async fn list_buckets(
     Path(organization_id): Path<Uuid>,
     Query(query): Query<ListBucketsQuery>,
 ) -> Result<Json<Vec<BucketResponse>>, AppError> {
-    verify_org_access(&tenant_db, organization_id)?;
-    let scoped = tenant_db.begin_scoped_transaction().await?;
-    let tx = scoped.connection();
-    verify_project_in_org(tx, query.project_id, organization_id).await?;
-    let bucket_rows = storage::Entity::find()
-        .filter(storage::Column::ProjectId.eq(query.project_id))
-        .order_by_asc(storage::Column::Name)
-        .find_also_related(bucket::Entity)
-        .and_also_related(region::Entity)
-        .all(tx)
-        .await?;
-    let buckets = bucket_rows
+    let buckets = storage_buckets::list(&tenant_db, organization_id, query.project_id)
+        .await?
         .into_iter()
-        .map(|(storage, bucket, region)| {
-            bucket.ok_or_else(|| AppError::NotFound("Bucket foundation not found".into()))?;
-            let region =
-                region.ok_or_else(|| AppError::NotFound("Bucket region not found".into()))?;
-            Ok(response(&storage, &region))
-        })
-        .collect::<Result<Vec<_>, AppError>>()?;
-    scoped.commit().await?;
+        .map(|item| response(&item.bucket, &item.region))
+        .collect();
     Ok(Json(buckets))
 }
 
@@ -120,85 +97,15 @@ pub async fn delete_bucket(
     AuthContext { tenant_db, auth }: AuthContext,
     Path((organization_id, bucket_id)): Path<(Uuid, Uuid)>,
 ) -> Result<axum::http::StatusCode, AppError> {
-    verify_org_access(&tenant_db, organization_id)?;
-    verify_org_owner(&tenant_db, organization_id)?;
-    let scoped = tenant_db.begin_scoped_transaction().await?;
-    let tx = scoped.connection();
-    let (bucket, foundation, region) = storage::Entity::find_by_id(bucket_id)
-        .filter(storage::Column::OrganizationId.eq(organization_id))
-        .find_also_related(bucket::Entity)
-        .and_also_related(region::Entity)
-        .one(tx)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Bucket not found".into()))?;
-    verify_project_in_org(tx, bucket.project_id, organization_id).await?;
-    foundation.ok_or_else(|| AppError::NotFound("Bucket foundation not found".into()))?;
-    let region = region.ok_or_else(|| AppError::NotFound("Bucket region not found".into()))?;
-    let provider_id = region
-        .s3_provider_id
-        .ok_or_else(|| AppError::Conflict("Region has no S3 provider".into()))?;
-    let access_keys = bucket_grant::Entity::find()
-        .filter(bucket_grant::Column::BucketId.eq(bucket.bucket_id))
-        .find_also_related(credential::Entity)
-        .all(tx)
-        .await?
-        .into_iter()
-        .filter_map(|(_, credential)| credential.map(|credential| credential.access_key_id))
-        .collect::<Vec<_>>();
-
-    bucket::ActiveModel {
-        id: Set(bucket.bucket_id),
-        status: Set(bucket::BucketStatus::Deleting),
-        ..Default::default()
-    }
-    .update(tx)
-    .await?;
-    scoped.commit().await?;
-    get_app_state()
-        .s3_providers
-        .invalidate_access_token_caches(&access_keys)
-        .await?;
-
-    if !get_app_state()
-        .s3_providers
-        .bucket_is_empty(provider_id, bucket.bucket_id)
-        .await?
-    {
-        let scoped = tenant_db.begin_scoped_transaction().await?;
-        let tx = scoped.connection();
-        bucket::ActiveModel {
-            id: Set(bucket.bucket_id),
-            status: Set(bucket::BucketStatus::Active),
-            ..Default::default()
-        }
-        .update(tx)
-        .await?;
-        scoped.commit().await?;
-        if let Err(error) = get_app_state()
-            .s3_providers
-            .invalidate_access_token_caches(&access_keys)
-            .await
-        {
-            tracing::warn!(%error, %bucket_id, "bucket cache invalidation failed after deletion conflict");
-        }
-        return Err(AppError::Conflict(
-            "Bucket must be empty before it can be deleted".into(),
-        ));
-    }
-
-    let scoped = tenant_db.begin_scoped_transaction().await?;
-    let tx = scoped.connection();
-    buckets::delete(tx, bucket.bucket_id).await?;
-    lib::services::events::record(
-        tx,
+    let deleted = storage_buckets::delete(
+        &tenant_db,
+        &get_app_state().s3_providers,
         organization_id,
-        bucket.project_id,
-        "bucket:deleted",
-        json!({ "summary": format!("Deleted bucket '{}'", bucket.name), "target_id": bucket.id }),
+        bucket_id,
         auth.actor_id,
     )
     .await?;
-    scoped.commit().await?;
+    let _ = deleted;
     Ok(axum::http::StatusCode::NO_CONTENT)
 }
 

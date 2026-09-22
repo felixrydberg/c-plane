@@ -8,6 +8,7 @@ pub struct Model {
     pub id: Uuid,
     pub scope: SecretScope,
     pub organization_id: Option<Uuid>,
+    pub project_id: Option<Uuid>,
     pub ciphertext: String,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,

@@ -9,8 +9,8 @@ use uuid::Uuid;
 use crate::operation::{Operation, bucket_prefix_delete::BucketPrefixDelete};
 
 use crate::entities::{
-    credential, organization_region_backup_bucket, postgres_database, postgres_database_branch,
-    project, project_environment, region, secret,
+    credential, event, organization_region_backup_bucket, postgres_database,
+    postgres_database_branch, project, project_environment, region, secret,
 };
 use crate::error::AppError;
 use crate::secrets::Client;
@@ -71,6 +71,7 @@ pub struct CreatedPostgresBranch {
 pub struct DeletedPostgresBranch {
     pub id: Uuid,
     pub branch_id: Uuid,
+    pub database_id: Uuid,
     pub access_key_id: String,
 }
 
@@ -410,6 +411,79 @@ pub async fn delete_database_in_transaction(
     })
 }
 
+pub async fn delete_project_in_transaction(
+    tx: &DatabaseTransaction,
+    organization_id: Uuid,
+    actor_id: Uuid,
+    context: &ServiceContext<'_>,
+    project_id: Uuid,
+) -> Result<Vec<DeletedPostgresDatabase>, AppError> {
+    let databases = postgres_database::Entity::find()
+        .filter(postgres_database::Column::OrganizationId.eq(organization_id))
+        .filter(postgres_database::Column::ProjectId.eq(project_id))
+        .all(tx)
+        .await?;
+    if databases.is_empty() {
+        return Ok(Vec::new());
+    }
+    let database_ids = databases
+        .iter()
+        .map(|database| database.id)
+        .collect::<Vec<_>>();
+    let branches = postgres_database_branch::Entity::find()
+        .filter(postgres_database_branch::Column::OrganizationId.eq(organization_id))
+        .filter(postgres_database_branch::Column::DatabaseId.is_in(database_ids.clone()))
+        .find_also_related(credential::Entity)
+        .all(tx)
+        .await?;
+    let deleted_branches =
+        delete_database_branches_in_transaction(tx, organization_id, context, &branches).await?;
+    let mut branches_by_database = HashMap::<Uuid, Vec<DeletedPostgresBranch>>::new();
+    for branch in deleted_branches {
+        branches_by_database
+            .entry(branch.database_id)
+            .or_default()
+            .push(branch);
+    }
+    postgres_database::Entity::delete_many()
+        .filter(postgres_database::Column::OrganizationId.eq(organization_id))
+        .filter(postgres_database::Column::Id.is_in(database_ids))
+        .exec(tx)
+        .await?;
+    let deleted_events = databases
+        .iter()
+        .filter_map(|database| {
+            database
+                .default_branch_id
+                .map(|target_id| event::ActiveModel {
+                    id: Set(Uuid::new_v4()),
+                    organization_id: Set(organization_id),
+                    project_id: Set(Some(project_id)),
+                    event_type: Set("database:deleted".into()),
+                    payload: Set(json!({
+                        "summary": format!("Deleted database '{}'", database.name),
+                        "target_id": target_id.to_string(),
+                    })),
+                    system: Set(false),
+                    actor_id: Set(Some(actor_id)),
+                    created_at: Set(chrono::Utc::now().fixed_offset()),
+                })
+        })
+        .collect::<Vec<_>>();
+    if !deleted_events.is_empty() {
+        event::Entity::insert_many(deleted_events).exec(tx).await?;
+    }
+    Ok(databases
+        .into_iter()
+        .map(|database| DeletedPostgresDatabase {
+            id: database.id,
+            branches: branches_by_database
+                .remove(&database.id)
+                .unwrap_or_default(),
+        })
+        .collect())
+}
+
 pub async fn list_database_branches(
     tenant_db: &TenantDatabase,
     organization_id: Uuid,
@@ -747,6 +821,7 @@ async fn delete_database_branches_in_transaction(
         deleted.push(DeletedPostgresBranch {
             id: branch.id,
             branch_id: branch.branch_id,
+            database_id: branch.database_id,
             access_key_id: backup_credential.access_key_id.clone(),
         });
     }
@@ -787,20 +862,38 @@ async fn delete_database_branches_in_transaction(
     )
     .await?;
 
-    for mapping in mappings_by_id.values() {
-        let remaining_branch = postgres_database_branch::Entity::find()
-            .filter(
-                postgres_database_branch::Column::OrganizationRegionBackupBucketId.eq(mapping.id),
-            )
-            .filter(postgres_database_branch::Column::OrganizationId.eq(organization_id))
-            .one(tx)
+    let remaining_mapping_ids = postgres_database_branch::Entity::find()
+        .filter(
+            postgres_database_branch::Column::OrganizationRegionBackupBucketId
+                .is_in(mapping_ids.iter().copied()),
+        )
+        .filter(postgres_database_branch::Column::OrganizationId.eq(organization_id))
+        .select_only()
+        .column(postgres_database_branch::Column::OrganizationRegionBackupBucketId)
+        .into_tuple::<Uuid>()
+        .all(tx)
+        .await?
+        .into_iter()
+        .collect::<HashSet<_>>();
+    let unused_mappings = mappings_by_id
+        .values()
+        .filter(|mapping| !remaining_mapping_ids.contains(&mapping.id))
+        .collect::<Vec<_>>();
+    if !unused_mappings.is_empty() {
+        let unused_ids = unused_mappings
+            .iter()
+            .map(|mapping| mapping.id)
+            .collect::<Vec<_>>();
+        organization_region_backup_bucket::Entity::delete_many()
+            .filter(organization_region_backup_bucket::Column::OrganizationId.eq(organization_id))
+            .filter(organization_region_backup_bucket::Column::Id.is_in(unused_ids))
+            .exec(tx)
             .await?;
-        if remaining_branch.is_none() {
-            organization_region_backup_bucket::Entity::delete_by_id(mapping.id)
-                .exec(tx)
-                .await?;
-            crate::buckets::delete_foundation(tx, mapping.bucket_id).await?;
-        }
+        let bucket_ids = unused_mappings
+            .into_iter()
+            .map(|mapping| mapping.bucket_id)
+            .collect::<Vec<_>>();
+        crate::buckets::delete_foundations(tx, &bucket_ids).await?;
     }
 
     Ok(deleted)
@@ -883,6 +976,7 @@ async fn delete_branch_in_transaction(
     Ok(DeletedPostgresBranch {
         id: branch.id,
         branch_id: branch.branch_id,
+        database_id: database.id,
         access_key_id: backup_credential.access_key_id,
     })
 }

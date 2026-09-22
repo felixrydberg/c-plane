@@ -15,6 +15,7 @@ import {
 import { app_tenant, orgAllowed } from "../rls.ts";
 import { region } from "./regions.ts";
 import { credential, secret } from "./secrets.ts";
+import { project } from "../projects/index.ts";
 
 export const FOUNDATION_BUCKET_STATUSES = ["active", "deleting"] as const;
 export const foundation_bucket_status = pgEnum("foundation_bucket_status", FOUNDATION_BUCKET_STATUSES);
@@ -23,6 +24,7 @@ export const foundation_bucket_status = pgEnum("foundation_bucket_status", FOUND
 // Tenant scoping happens on storage_bucket / bucket_grant / storage_access_token.
 export const bucket = pgTable("bucket", {
   id: uuid("id").primaryKey(),
+  project_id: uuid("project_id").references(() => project.id, { onDelete: "cascade" }),
   region_id: uuid("region_id").notNull().references(() => region.id, { onDelete: "restrict" }),
   sse_secret_id: uuid("sse_secret_id").notNull().references(() => secret.id, { onDelete: "restrict" }),
   status: foundation_bucket_status("status").notNull().default("active"),
@@ -31,6 +33,7 @@ export const bucket = pgTable("bucket", {
 }, (table) => [
   uniqueIndex("bucket_sse_secret_id_uidx").on(table.sse_secret_id),
   index("bucket_region_id_idx").on(table.region_id),
+  index("bucket_project_id_idx").on(table.project_id),
   index("bucket_status_idx").on(table.status),
 ]);
 

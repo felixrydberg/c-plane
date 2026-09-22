@@ -3,34 +3,19 @@ use axum::{
     extract::{Path, Query},
     http::StatusCode,
 };
-use chrono::{DateTime, FixedOffset};
-use sea_orm::{
-    ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction, EntityTrait,
-    PaginatorTrait, QueryFilter, QueryOrder, Statement,
-};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
     errors::AppError,
     middleware::auth::AuthContext,
-    models::entities::{
-        bucket, bucket_grant, credential, managed_registry, managed_registry_gc_run, project,
-        registry_repository, secret,
-    },
+    models::entities::managed_registry,
     state::get_app_state,
     utils::pagination::{PaginatedResponse, PaginationQuery},
 };
-use lib::entities::{managed_registry::ManagedRegistryStatus, secret::SecretScope};
-use lib::operation::{Operation, registry_gc::RegistryGc};
-use lib::services::{buckets, managed_registry as managed_registry_service};
-
-use super::{
-    databases::verify_org_access, registry::normalize_project_name,
-    registry_access_tokens::record_event,
-};
+use lib::entities::managed_registry::ManagedRegistryStatus;
+use lib::services::managed_registry as managed_registry_service;
 
 const REGISTRY_BUCKET_NAME: &str = "registry";
 
@@ -101,18 +86,6 @@ pub struct ResolveManagedRegistryQuery {
     pub repository_id: Option<Uuid>,
 }
 
-#[derive(Deserialize, Serialize)]
-struct S3SecretKey {
-    secret_access_key: String,
-}
-
-struct ActiveGcJob {
-    id: Uuid,
-    status: String,
-    trigger: String,
-    available_at: DateTime<FixedOffset>,
-}
-
 #[utoipa::path(
     get,
     path = "/api/organization/{organization_id}/registry",
@@ -127,18 +100,8 @@ pub async fn get_registry(
     AuthContext { tenant_db, .. }: AuthContext,
     Path(organization_id): Path<Uuid>,
 ) -> Result<Json<ManagedRegistryResponse>, AppError> {
-    verify_org_access(&tenant_db, organization_id)?;
-    let scoped = tenant_db.begin_scoped_transaction().await?;
-    let (registry, foundation) = managed_registry::Entity::find_by_id(organization_id)
-        .find_also_related(bucket::Entity)
-        .one(scoped.connection())
-        .await?
-        .ok_or_else(|| AppError::NotFound("Managed Registry is not activated".into()))?;
-    let foundation =
-        foundation.ok_or_else(|| AppError::NotFound("Managed Registry bucket not found".into()))?;
-    let response = response(&registry, foundation.region_id);
-    scoped.commit().await?;
-    Ok(Json(response))
+    let view = managed_registry_service::get(&tenant_db, organization_id).await?;
+    Ok(Json(response(&view.registry, view.region_id)))
 }
 
 #[utoipa::path(
@@ -160,19 +123,18 @@ pub async fn get_garbage_collection(
     Path(organization_id): Path<Uuid>,
     Query(query): Query<ListRegistryGarbageCollectionQuery>,
 ) -> Result<Json<RegistryGarbageCollectionResponse>, AppError> {
-    verify_org_access(&tenant_db, organization_id)?;
     let pagination = PaginationQuery {
         page: query.page,
         per_page: query.per_page,
     };
-    let page = pagination.page();
-    let per_page = pagination.per_page();
-    let scoped = tenant_db.begin_scoped_transaction().await?;
-    let registry = find_registry(scoped.connection(), organization_id).await?;
-    let response =
-        garbage_collection_response(scoped.connection(), &registry, page, per_page).await?;
-    scoped.commit().await?;
-    Ok(Json(response))
+    let view = managed_registry_service::garbage_collection(
+        &tenant_db,
+        organization_id,
+        pagination.page(),
+        pagination.per_page(),
+    )
+    .await?;
+    return Ok(Json(gc_view_response(view)));
 }
 
 #[utoipa::path(
@@ -229,47 +191,13 @@ pub async fn run_garbage_collection(
     AuthContext { tenant_db, auth }: AuthContext,
     Path(organization_id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<RegistryGarbageCollectionResponse>), AppError> {
-    verify_org_access(&tenant_db, organization_id)?;
-    let scoped = tenant_db.begin_scoped_transaction().await?;
-    let tx = scoped.connection();
-    lock_organization(tx, organization_id).await?;
-    let mut registry = find_registry(tx, organization_id).await?;
-
-    match active_gc_job(tx, &registry).await? {
-        Some(job) if job.status == "running" => {
-            return Err(AppError::Conflict(
-                "Registry garbage collection is already running".into(),
-            ));
-        }
-        Some(job) => {
-            tx.execute(Statement::from_sql_and_values(
-                DatabaseBackend::Postgres,
-                "UPDATE worker_queue SET available_at=NOW(), payload=jsonb_build_object('trigger', 'manual'), updated_at=NOW() WHERE id=$1 AND organization_id=$2 AND queue_name=$3 AND job_type=$4 AND status='queued'",
-                vec![
-                    job.id.into(),
-                    organization_id.into(),
-                    Operation::<RegistryGc>::QUEUE.into(),
-                    Operation::<RegistryGc>::NAME.into(),
-                ],
-            ))
-            .await?;
-        }
-        None => {
-            Operation::<RegistryGc>::new(tx, organization_id, "manual").await?;
-        }
-    }
-    record_event(
-        tx,
+    let view = managed_registry_service::queue_garbage_collection(
+        &tenant_db,
         organization_id,
         auth.actor_id,
-        "registry-garbage-collection:queued",
-        json!({ "summary": "Queued managed Registry garbage collection" }),
     )
     .await?;
-    registry = find_registry(tx, organization_id).await?;
-    let response = garbage_collection_response(tx, &registry, 1, 10).await?;
-    scoped.commit().await?;
-    Ok((StatusCode::ACCEPTED, Json(response)))
+    return Ok((StatusCode::ACCEPTED, Json(gc_view_response(view))));
 }
 
 #[utoipa::path(
@@ -288,119 +216,26 @@ pub async fn resolve_registry(
     Query(query): Query<ResolveManagedRegistryQuery>,
 ) -> Result<Json<ResolvedManagedRegistry>, AppError> {
     let state = get_app_state();
-    let (registry, credential, credential_secret) =
-        managed_registry::Entity::find_by_id(organization_id)
-            .find_also_related(credential::Entity)
-            .and_also_related(secret::Entity)
-            .one(state.identity_db.connection())
-            .await?
-            .ok_or_else(|| AppError::NotFound("Managed Registry is not activated".into()))?;
-    let credential = credential
-        .filter(|credential| credential.organization_id == Some(organization_id))
-        .filter(|credential| credential.revoked_at.is_none())
-        .ok_or_else(|| AppError::NotFound("Managed Registry credential not found".into()))?;
-    let credential_secret = credential_secret
-        .filter(|secret| secret.scope == SecretScope::Tenant)
-        .filter(|secret| secret.organization_id == Some(organization_id))
-        .ok_or_else(|| AppError::NotFound("Managed Registry secret not found".into()))?;
-    let grant = bucket_grant::Entity::find()
-        .filter(bucket_grant::Column::CredentialId.eq(credential.id))
-        .filter(bucket_grant::Column::OrganizationId.eq(organization_id))
-        .filter(bucket_grant::Column::BucketId.eq(registry.bucket_id))
-        .one(state.identity_db.connection())
-        .await?
-        .ok_or_else(|| AppError::NotFound("Managed Registry grant not found".into()))?;
-    if !grant.can_read || !grant.can_write {
-        return Err(AppError::Conflict(
-            "Managed Registry grant must allow reads and writes".into(),
-        ));
-    }
-    let plaintext = lib::secrets::decrypt(
+    let resolved = managed_registry_service::resolve(
+        state.identity_db.connection(),
         &state.secrets,
-        &buckets::tenant_key(organization_id),
-        &credential_secret.ciphertext,
+        organization_id,
+        query.repository_name,
+        query.repository_id,
     )
     .await?;
-    let s3_secret: S3SecretKey = serde_json::from_slice(&plaintext)
-        .map_err(|error| AppError::Internal(error.to_string()))?;
-    let organization = state
-        .identity_db
-        .connection()
-        .query_one(Statement::from_sql_and_values(
-            DatabaseBackend::Postgres,
-            "SELECT slug FROM organization WHERE id=$1 LIMIT 1",
-            vec![organization_id.into()],
-        ))
-        .await?
-        .ok_or_else(|| AppError::NotFound("Organization not found".into()))?;
-    let organization_slug: String = organization.try_get("", "slug")?;
-    let repository = match (query.repository_name, query.repository_id) {
-        (None, None) => None,
-        (Some(logical_name), Some(repository_id)) => {
-            let repository = registry_repository::Entity::find_by_id(repository_id)
-                .filter(registry_repository::Column::OrganizationId.eq(organization_id))
-                .one(state.identity_db.connection())
-                .await?
-                .ok_or_else(|| AppError::NotFound("Registry repository not found".into()))?;
-            let project = project::Entity::find_by_id(repository.project_id)
-                .filter(project::Column::OrganizationId.eq(organization_id))
-                .one(state.identity_db.connection())
-                .await?
-                .ok_or_else(|| AppError::NotFound("Project not found".into()))?;
-            let expected_name = format!(
-                "{organization_slug}/{}/{}",
-                normalize_project_name(&project.name),
-                repository.name
-            );
-            if logical_name != expected_name {
-                return Err(AppError::NotFound("Registry repository not found".into()));
-            }
-            Some((logical_name, repository.id))
-        }
-        _ => {
-            return Err(AppError::BadRequest(
-                "Repository name and ID are both required".into(),
-            ));
-        }
-    };
     Ok(Json(ResolvedManagedRegistry {
-        organization_id,
-        organization_slug,
-        storage_revision: registry.storage_revision,
-        status: status_name(&registry.status).into(),
-        access_key_id: credential.access_key_id,
-        secret_access_key: s3_secret.secret_access_key,
+        organization_id: resolved.organization_id,
+        organization_slug: resolved.organization_slug,
+        storage_revision: resolved.storage_revision,
+        status: resolved.status,
+        access_key_id: resolved.access_key_id,
+        secret_access_key: resolved.secret_access_key,
         bucket_name: REGISTRY_BUCKET_NAME.into(),
         storage_endpoint_url: state.config.storage_internal_url,
-        repository_name: repository.as_ref().map(|(name, _)| name.clone()),
-        repository_id: repository.map(|(_, id)| id),
+        repository_name: resolved.repository_name,
+        repository_id: resolved.repository_id,
     }))
-}
-
-pub async fn require_active(
-    tx: &DatabaseTransaction,
-    organization_id: Uuid,
-) -> Result<managed_registry::Model, AppError> {
-    let registry = managed_registry::Entity::find_by_id(organization_id)
-        .one(tx)
-        .await?
-        .ok_or_else(|| AppError::Conflict("Activate Managed Registry first".into()))?;
-    if registry.status != ManagedRegistryStatus::Active {
-        return Err(AppError::ServiceUnavailable(
-            "Managed Registry is unavailable during maintenance".into(),
-        ));
-    }
-    Ok(registry)
-}
-
-async fn find_registry(
-    tx: &DatabaseTransaction,
-    organization_id: Uuid,
-) -> Result<managed_registry::Model, AppError> {
-    managed_registry::Entity::find_by_id(organization_id)
-        .one(tx)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Managed Registry is not activated".into()))
 }
 
 fn response(registry: &managed_registry::Model, region_id: Uuid) -> ManagedRegistryResponse {
@@ -413,28 +248,17 @@ fn response(registry: &managed_registry::Model, region_id: Uuid) -> ManagedRegis
     }
 }
 
-async fn garbage_collection_response(
-    tx: &DatabaseTransaction,
-    registry: &managed_registry::Model,
-    page: u64,
-    per_page: u64,
-) -> Result<RegistryGarbageCollectionResponse, AppError> {
-    let active_job = active_gc_job(tx, registry)
-        .await?
-        .map(|job| RegistryGcJobResponse {
-            id: job.id,
-            status: job.status,
-            trigger: job.trigger,
-            available_at: job.available_at.to_rfc3339(),
-        });
-    let gc_runs = managed_registry_gc_run::Entity::find()
-        .filter(managed_registry_gc_run::Column::OrganizationId.eq(registry.organization_id));
-    let total = gc_runs.clone().count(tx).await?;
-    let gc_runs = gc_runs
-        .order_by_desc(managed_registry_gc_run::Column::StartedAt)
-        .paginate(tx, per_page)
-        .fetch_page(page - 1)
-        .await?
+fn gc_view_response(
+    view: managed_registry_service::GarbageCollectionView,
+) -> RegistryGarbageCollectionResponse {
+    let active_job = view.active_job.map(|job| RegistryGcJobResponse {
+        id: job.id,
+        status: job.status,
+        trigger: job.trigger,
+        available_at: job.available_at.to_rfc3339(),
+    });
+    let runs = view
+        .runs
         .into_iter()
         .map(|run| RegistryGcRunResponse {
             started_at: run.started_at.to_rfc3339(),
@@ -445,40 +269,10 @@ async fn garbage_collection_response(
             error: run.error,
         })
         .collect();
-    Ok(RegistryGarbageCollectionResponse {
+    RegistryGarbageCollectionResponse {
         active_job,
-        gc_runs: PaginatedResponse::new(gc_runs, total, page, per_page),
-    })
-}
-
-async fn active_gc_job(
-    tx: &DatabaseTransaction,
-    registry: &managed_registry::Model,
-) -> Result<Option<ActiveGcJob>, AppError> {
-    let Some(job_id) = registry.gc_active_job_id else {
-        return Ok(None);
-    };
-    let row = tx
-        .query_one(Statement::from_sql_and_values(
-            DatabaseBackend::Postgres,
-            "SELECT id, status, COALESCE(payload->>'trigger', 'manual') AS trigger, available_at FROM worker_queue WHERE id=$1 AND organization_id=$2 AND queue_name=$3 AND job_type=$4 AND status IN ('queued', 'running') LIMIT 1",
-            vec![
-                job_id.into(),
-                registry.organization_id.into(),
-                Operation::<RegistryGc>::QUEUE.into(),
-                Operation::<RegistryGc>::NAME.into(),
-            ],
-        ))
-        .await?;
-    row.map(|row| {
-        Ok(ActiveGcJob {
-            id: row.try_get("", "id")?,
-            status: row.try_get("", "status")?,
-            trigger: row.try_get("", "trigger")?,
-            available_at: row.try_get("", "available_at")?,
-        })
-    })
-    .transpose()
+        gc_runs: PaginatedResponse::new(runs, view.total, view.page, view.per_page),
+    }
 }
 
 fn status_name(status: &ManagedRegistryStatus) -> &'static str {
@@ -486,18 +280,4 @@ fn status_name(status: &ManagedRegistryStatus) -> &'static str {
         ManagedRegistryStatus::Active => "active",
         ManagedRegistryStatus::Maintenance => "maintenance",
     }
-}
-
-async fn lock_organization(
-    tx: &DatabaseTransaction,
-    organization_id: Uuid,
-) -> Result<(), AppError> {
-    tx.query_one(Statement::from_sql_and_values(
-        DatabaseBackend::Postgres,
-        "SELECT id FROM organization WHERE id=$1 FOR UPDATE",
-        vec![organization_id.into()],
-    ))
-    .await?
-    .ok_or_else(|| AppError::NotFound("Organization not found".into()))?;
-    Ok(())
 }

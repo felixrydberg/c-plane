@@ -1,5 +1,5 @@
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, Set,
+    ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, QueryOrder, Set,
     TryInsertResult,
 };
 use serde_json::json;
@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::{
     entities::{
-        project,
+        bucket, bucket_grant, project,
         region::{self, RegionRoutingMode, RegionStatus},
         storage, storage_bucket_name_reservation,
     },
@@ -28,6 +28,152 @@ pub struct CreateStorageBucketInput {
 pub struct CreatedStorageBucket {
     pub bucket: storage::Model,
     pub region: region::Model,
+}
+
+pub struct ListedStorageBucket {
+    pub bucket: storage::Model,
+    pub region: region::Model,
+}
+
+pub struct DeletedStorageBucket {
+    pub bucket: storage::Model,
+}
+
+pub async fn delete_project_in_transaction(
+    tx: &DatabaseTransaction,
+    organization_id: Uuid,
+    project_id: Uuid,
+    actor_id: Uuid,
+) -> Result<(), AppError> {
+    let rows = storage::Entity::find()
+        .filter(storage::Column::OrganizationId.eq(organization_id))
+        .filter(storage::Column::ProjectId.eq(project_id))
+        .all(tx)
+        .await?;
+    buckets::delete_for_project(tx, project_id).await?;
+    if !rows.is_empty() {
+        let events = rows.into_iter().map(|row| crate::entities::event::ActiveModel {
+            id: Set(Uuid::new_v4()),
+            organization_id: Set(organization_id),
+            project_id: Set(Some(project_id)),
+            event_type: Set("bucket:deleted".into()),
+            payload: Set(json!({"summary": format!("Deleted bucket '{}'", row.name), "target_id": row.id})),
+            system: Set(false),
+            actor_id: Set(Some(actor_id)),
+            created_at: Set(chrono::Utc::now().fixed_offset()),
+        }).collect::<Vec<_>>();
+        crate::entities::event::Entity::insert_many(events)
+            .exec(tx)
+            .await?;
+    }
+    Ok(())
+}
+
+pub async fn delete(
+    tenant_db: &TenantDatabase,
+    providers: &S3ProviderClient,
+    organization_id: Uuid,
+    bucket_id: Uuid,
+    actor_id: Uuid,
+) -> Result<DeletedStorageBucket, AppError> {
+    verify_org_owner(tenant_db, organization_id)?;
+    let scoped = tenant_db.begin_scoped_transaction().await?;
+    let tx = scoped.connection();
+    let (bucket_row, foundation, region) = storage::Entity::find_by_id(bucket_id)
+        .filter(storage::Column::OrganizationId.eq(organization_id))
+        .find_also_related(bucket::Entity)
+        .and_also_related(region::Entity)
+        .one(tx)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Bucket not found".into()))?;
+    verify_project_in_org(tx, bucket_row.project_id, organization_id).await?;
+    let _foundation =
+        foundation.ok_or_else(|| AppError::NotFound("Bucket foundation not found".into()))?;
+    let region = region.ok_or_else(|| AppError::NotFound("Bucket region not found".into()))?;
+    let provider_id = region
+        .s3_provider_id
+        .ok_or_else(|| AppError::Conflict("Region has no S3 provider".into()))?;
+    let access_keys = bucket_grant::Entity::find()
+        .filter(bucket_grant::Column::BucketId.eq(bucket_row.bucket_id))
+        .find_also_related(crate::entities::credential::Entity)
+        .all(tx)
+        .await?
+        .into_iter()
+        .filter_map(|(_, credential)| credential.map(|credential| credential.access_key_id))
+        .collect::<Vec<_>>();
+    bucket::ActiveModel {
+        id: Set(bucket_row.bucket_id),
+        status: Set(bucket::BucketStatus::Deleting),
+        ..Default::default()
+    }
+    .update(tx)
+    .await?;
+    scoped.commit().await?;
+    providers
+        .invalidate_access_token_caches(&access_keys)
+        .await?;
+    if !providers
+        .bucket_is_empty(provider_id, bucket_row.bucket_id)
+        .await?
+    {
+        let scoped = tenant_db.begin_scoped_transaction().await?;
+        bucket::ActiveModel {
+            id: Set(bucket_row.bucket_id),
+            status: Set(bucket::BucketStatus::Active),
+            ..Default::default()
+        }
+        .update(scoped.connection())
+        .await?;
+        scoped.commit().await?;
+        let _ = providers.invalidate_access_token_caches(&access_keys).await;
+        return Err(AppError::Conflict(
+            "Bucket must be empty before it can be deleted".into(),
+        ));
+    }
+    let scoped = tenant_db.begin_scoped_transaction().await?;
+    let tx = scoped.connection();
+    crate::services::buckets::delete(tx, bucket_row.bucket_id).await?;
+    events::record(
+        tx,
+        organization_id,
+        bucket_row.project_id,
+        "bucket:deleted",
+        json!({ "summary": format!("Deleted bucket '{}'", bucket_row.name), "target_id": bucket_row.id }),
+        actor_id,
+    ).await?;
+    scoped.commit().await?;
+    Ok(DeletedStorageBucket { bucket: bucket_row })
+}
+
+pub async fn list(
+    tenant_db: &TenantDatabase,
+    organization_id: Uuid,
+    project_id: Uuid,
+) -> Result<Vec<ListedStorageBucket>, AppError> {
+    verify_org_access(tenant_db, organization_id)?;
+    let scoped = tenant_db.begin_scoped_transaction().await?;
+    let tx = scoped.connection();
+    verify_project_in_org(tx, project_id, organization_id).await?;
+    let rows = storage::Entity::find()
+        .filter(storage::Column::ProjectId.eq(project_id))
+        .order_by_asc(storage::Column::Name)
+        .find_also_related(bucket::Entity)
+        .and_also_related(region::Entity)
+        .all(tx)
+        .await?;
+    let result = rows
+        .into_iter()
+        .map(|(bucket, foundation, region)| {
+            foundation.ok_or_else(|| AppError::NotFound("Bucket foundation not found".into()))?;
+            Ok(ListedStorageBucket {
+                bucket,
+                region: region
+                    .ok_or_else(|| AppError::NotFound("Bucket region not found".into()))?,
+            })
+        })
+        .collect::<Result<Vec<_>, AppError>>()?;
+    scoped.commit().await?;
+    Ok(result)
 }
 
 pub async fn create(
@@ -83,11 +229,12 @@ pub async fn create(
     let scoped = Retry::new(3, Duration::from_secs(10), Duration::from_millis(250))
         .run(
             || {
-                buckets::create(
+                buckets::create_for_project(
                     tenant_db,
                     providers,
                     secrets,
                     organization_id,
+                    Some(input.project_id),
                     region.id,
                     provider_id,
                     foundation_bucket_id,
@@ -223,6 +370,24 @@ fn verify_org_access(tenant_db: &TenantDatabase, organization_id: Uuid) -> Resul
     } else {
         Err(AppError::Forbidden(
             "You do not have access to this organization".into(),
+        ))
+    }
+}
+
+fn verify_org_owner(tenant_db: &TenantDatabase, organization_id: Uuid) -> Result<(), AppError> {
+    verify_org_access(tenant_db, organization_id)?;
+    if tenant_db.context.api_key_organization_id == Some(organization_id)
+        || tenant_db
+            .context
+            .organization_roles
+            .get(&organization_id)
+            .map(String::as_str)
+            == Some("owner")
+    {
+        Ok(())
+    } else {
+        Err(AppError::Forbidden(
+            "Organization owner role required".into(),
         ))
     }
 }
