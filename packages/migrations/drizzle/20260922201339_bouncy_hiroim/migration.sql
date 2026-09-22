@@ -191,6 +191,15 @@ CREATE TABLE "managed_registry" (
 );
 --> statement-breakpoint
 ALTER TABLE "managed_registry" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE TABLE "managed_registry_activation_reservation" (
+	"organization_id" uuid PRIMARY KEY,
+	"bucket_id" uuid NOT NULL,
+	"region_id" uuid NOT NULL,
+	"provider_id" uuid NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+ALTER TABLE "managed_registry_activation_reservation" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "managed_registry_gc_runs" (
 	"id" uuid PRIMARY KEY,
 	"organization_id" uuid NOT NULL,
@@ -234,6 +243,16 @@ CREATE TABLE "organization_member" (
 );
 --> statement-breakpoint
 ALTER TABLE "organization_member" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE TABLE "organization_region_backup_bucket" (
+	"id" uuid PRIMARY KEY,
+	"organization_id" uuid NOT NULL,
+	"region_id" uuid NOT NULL,
+	"bucket_id" uuid NOT NULL CONSTRAINT "organization_region_backup_bucket_bucket_uidx" UNIQUE,
+	CONSTRAINT "organization_region_backup_bucket_organization_region_uidx" UNIQUE("organization_id","region_id"),
+	CONSTRAINT "organization_region_backup_bucket_id_organization_uidx" UNIQUE("id","organization_id")
+);
+--> statement-breakpoint
+ALTER TABLE "organization_region_backup_bucket" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "passkey" (
 	"id" uuid PRIMARY KEY DEFAULT pg_catalog.gen_random_uuid(),
 	"name" text,
@@ -244,7 +263,7 @@ CREATE TABLE "passkey" (
 	"device_type" text NOT NULL,
 	"backed_up" boolean NOT NULL,
 	"transports" text,
-	"created_at" timestamp DEFAULT now() NOT NULL,
+	"created_at" timestamp,
 	"aaguid" text
 );
 --> statement-breakpoint
@@ -252,6 +271,7 @@ CREATE TABLE "postgres_database" (
 	"id" uuid PRIMARY KEY,
 	"project_id" uuid NOT NULL,
 	"organization_id" uuid NOT NULL,
+	"region_id" uuid NOT NULL,
 	"default_branch_id" uuid,
 	"name" text NOT NULL
 );
@@ -262,6 +282,8 @@ CREATE TABLE "postgres_database_branch" (
 	"database_id" uuid NOT NULL,
 	"branch_id" uuid NOT NULL,
 	"organization_id" uuid NOT NULL,
+	"organization_region_backup_bucket_id" uuid NOT NULL,
+	"backup_credential_id" uuid NOT NULL CONSTRAINT "postgres_database_branch_backup_credential_id_uidx" UNIQUE,
 	"backup_retention_days" integer DEFAULT 30,
 	"cpu" text,
 	"ram" text,
@@ -418,11 +440,26 @@ CREATE TABLE "storage_bucket" (
 );
 --> statement-breakpoint
 ALTER TABLE "storage_bucket" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE TABLE "storage_bucket_name_reservation" (
+	"organization_id" uuid NOT NULL,
+	"project_id" uuid,
+	"name" text,
+	"bucket_id" uuid NOT NULL,
+	"region_id" uuid NOT NULL,
+	"provider_id" uuid NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "storage_bucket_name_reservation_pk" PRIMARY KEY("project_id","name")
+);
+--> statement-breakpoint
+ALTER TABLE "storage_bucket_name_reservation" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "two_factor" (
 	"id" uuid PRIMARY KEY DEFAULT pg_catalog.gen_random_uuid(),
 	"secret" text NOT NULL,
 	"backup_codes" text NOT NULL,
-	"user_id" uuid NOT NULL
+	"user_id" uuid NOT NULL,
+	"verified" boolean DEFAULT true,
+	"failed_verification_count" integer DEFAULT 0,
+	"locked_until" timestamp
 );
 --> statement-breakpoint
 CREATE TABLE "user" (
@@ -445,8 +482,8 @@ CREATE TABLE "verification" (
 	"identifier" text NOT NULL,
 	"value" text NOT NULL,
 	"expires_at" timestamp NOT NULL,
-	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
+	"created_at" timestamp DEFAULT now(),
+	"updated_at" timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE TABLE "worker_queue" (
@@ -525,6 +562,7 @@ CREATE INDEX "organization_invitation_email_idx" ON "organization_invitation" ("
 CREATE UNIQUE INDEX "organization_member_user_id_organization_id_uidx" ON "organization_member" ("user_id","organization_id");--> statement-breakpoint
 CREATE INDEX "organization_member_organization_id_idx" ON "organization_member" ("organization_id");--> statement-breakpoint
 CREATE INDEX "organization_member_user_id_idx" ON "organization_member" ("user_id");--> statement-breakpoint
+CREATE INDEX "organization_region_backup_bucket_region_id_idx" ON "organization_region_backup_bucket" ("region_id");--> statement-breakpoint
 CREATE INDEX "passkey_userId_idx" ON "passkey" ("user_id");--> statement-breakpoint
 CREATE INDEX "passkey_credentialID_idx" ON "passkey" ("credential_id");--> statement-breakpoint
 CREATE INDEX "postgres_database_project_id_idx" ON "postgres_database" ("project_id");--> statement-breakpoint
@@ -532,6 +570,7 @@ CREATE INDEX "postgres_database_organization_id_idx" ON "postgres_database" ("or
 CREATE INDEX "postgres_database_branch_database_id_idx" ON "postgres_database_branch" ("database_id");--> statement-breakpoint
 CREATE INDEX "postgres_database_branch_branch_id_idx" ON "postgres_database_branch" ("branch_id");--> statement-breakpoint
 CREATE INDEX "postgres_database_branch_organization_id_idx" ON "postgres_database_branch" ("organization_id");--> statement-breakpoint
+CREATE INDEX "postgres_database_branch_backup_bucket_id_idx" ON "postgres_database_branch" ("organization_region_backup_bucket_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "project_organization_id_name_uidx" ON "project" ("organization_id","name");--> statement-breakpoint
 CREATE UNIQUE INDEX "project_id_organization_id_uidx" ON "project" ("id","organization_id");--> statement-breakpoint
 CREATE INDEX "project_organization_id_idx" ON "project" ("organization_id");--> statement-breakpoint
@@ -578,6 +617,7 @@ CREATE UNIQUE INDEX "storage_bucket_project_name_uidx" ON "storage_bucket" ("pro
 CREATE UNIQUE INDEX "storage_bucket_foundation_bucket_uidx" ON "storage_bucket" ("bucket_id");--> statement-breakpoint
 CREATE INDEX "storage_bucket_project_id_idx" ON "storage_bucket" ("project_id");--> statement-breakpoint
 CREATE INDEX "storage_bucket_organization_id_idx" ON "storage_bucket" ("organization_id");--> statement-breakpoint
+CREATE INDEX "storage_bucket_name_reservation_organization_id_idx" ON "storage_bucket_name_reservation" ("organization_id");--> statement-breakpoint
 CREATE INDEX "twoFactor_secret_idx" ON "two_factor" ("secret");--> statement-breakpoint
 CREATE INDEX "twoFactor_userId_idx" ON "two_factor" ("user_id");--> statement-breakpoint
 CREATE INDEX "verification_identifier_idx" ON "verification" ("identifier");--> statement-breakpoint
@@ -611,18 +651,28 @@ ALTER TABLE "managed_registry" ADD CONSTRAINT "managed_registry_organization_id_
 ALTER TABLE "managed_registry" ADD CONSTRAINT "managed_registry_bucket_id_bucket_id_fkey" FOREIGN KEY ("bucket_id") REFERENCES "bucket"("id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "managed_registry" ADD CONSTRAINT "managed_registry_gc_active_job_id_worker_queue_id_fkey" FOREIGN KEY ("gc_active_job_id") REFERENCES "worker_queue"("id") ON DELETE SET NULL;--> statement-breakpoint
 ALTER TABLE "managed_registry" ADD CONSTRAINT "managed_registry_credential_scope_fk" FOREIGN KEY ("credential_id","organization_id") REFERENCES "credential"("id","organization_id") ON DELETE CASCADE;--> statement-breakpoint
+ALTER TABLE "managed_registry_activation_reservation" ADD CONSTRAINT "managed_registry_activation_reservation_qenxvUQcAFkp_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
+ALTER TABLE "managed_registry_activation_reservation" ADD CONSTRAINT "managed_registry_activation_reservation_Muq4RXTrygPs_fkey" FOREIGN KEY ("region_id") REFERENCES "regions"("id") ON DELETE RESTRICT;--> statement-breakpoint
+ALTER TABLE "managed_registry_activation_reservation" ADD CONSTRAINT "managed_registry_activation_reservation_AZN5cFkvc4Zf_fkey" FOREIGN KEY ("provider_id") REFERENCES "s3_providers"("id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "managed_registry_gc_runs" ADD CONSTRAINT "managed_registry_gc_runs_HPcX8IPUKZjV_fkey" FOREIGN KEY ("organization_id") REFERENCES "managed_registry"("organization_id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "organization_invitation" ADD CONSTRAINT "organization_invitation_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "organization_invitation" ADD CONSTRAINT "organization_invitation_inviter_id_user_id_fkey" FOREIGN KEY ("inviter_id") REFERENCES "user"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "organization_member" ADD CONSTRAINT "organization_member_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "organization_member" ADD CONSTRAINT "organization_member_user_id_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE CASCADE;--> statement-breakpoint
+ALTER TABLE "organization_region_backup_bucket" ADD CONSTRAINT "organization_region_backup_bucket_mkETu8268556_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE RESTRICT;--> statement-breakpoint
+ALTER TABLE "organization_region_backup_bucket" ADD CONSTRAINT "organization_region_backup_bucket_region_id_regions_id_fkey" FOREIGN KEY ("region_id") REFERENCES "regions"("id") ON DELETE RESTRICT;--> statement-breakpoint
+ALTER TABLE "organization_region_backup_bucket" ADD CONSTRAINT "organization_region_backup_bucket_bucket_id_bucket_id_fkey" FOREIGN KEY ("bucket_id") REFERENCES "bucket"("id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "passkey" ADD CONSTRAINT "passkey_user_id_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "postgres_database" ADD CONSTRAINT "postgres_database_project_id_project_id_fkey" FOREIGN KEY ("project_id") REFERENCES "project"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "postgres_database" ADD CONSTRAINT "postgres_database_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
+ALTER TABLE "postgres_database" ADD CONSTRAINT "postgres_database_region_id_regions_id_fkey" FOREIGN KEY ("region_id") REFERENCES "regions"("id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "postgres_database" ADD CONSTRAINT "postgres_database_sQcvj8ruZ82p_fkey" FOREIGN KEY ("default_branch_id") REFERENCES "postgres_database_branch"("id") ON DELETE SET NULL;--> statement-breakpoint
 ALTER TABLE "postgres_database_branch" ADD CONSTRAINT "postgres_database_branch_database_id_postgres_database_id_fkey" FOREIGN KEY ("database_id") REFERENCES "postgres_database"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "postgres_database_branch" ADD CONSTRAINT "postgres_database_branch_branch_id_project_environment_id_fkey" FOREIGN KEY ("branch_id") REFERENCES "project_environment"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "postgres_database_branch" ADD CONSTRAINT "postgres_database_branch_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
+ALTER TABLE "postgres_database_branch" ADD CONSTRAINT "postgres_database_branch_backup_bucket_scope_fk" FOREIGN KEY ("organization_region_backup_bucket_id","organization_id") REFERENCES "organization_region_backup_bucket"("id","organization_id") ON DELETE RESTRICT;--> statement-breakpoint
+ALTER TABLE "postgres_database_branch" ADD CONSTRAINT "postgres_database_branch_backup_credential_id_fkey" FOREIGN KEY ("backup_credential_id") REFERENCES "credential"("id") ON DELETE RESTRICT;--> statement-breakpoint
+ALTER TABLE "postgres_database_branch" ADD CONSTRAINT "postgres_database_branch_backup_credential_scope_fk" FOREIGN KEY ("backup_credential_id","organization_id") REFERENCES "credential"("id","organization_id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "project" ADD CONSTRAINT "project_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "project" ADD CONSTRAINT "project_default_environment_id_project_environment_id_fkey" FOREIGN KEY ("default_environment_id") REFERENCES "project_environment"("id") ON DELETE SET NULL;--> statement-breakpoint
 ALTER TABLE "project_environment" ADD CONSTRAINT "project_environment_project_id_project_id_fkey" FOREIGN KEY ("project_id") REFERENCES "project"("id") ON DELETE CASCADE;--> statement-breakpoint
@@ -653,6 +703,10 @@ ALTER TABLE "storage_access_token" ADD CONSTRAINT "storage_access_token_credenti
 ALTER TABLE "storage_bucket" ADD CONSTRAINT "storage_bucket_project_id_project_id_fkey" FOREIGN KEY ("project_id") REFERENCES "project"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "storage_bucket" ADD CONSTRAINT "storage_bucket_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "storage_bucket" ADD CONSTRAINT "storage_bucket_bucket_id_bucket_id_fkey" FOREIGN KEY ("bucket_id") REFERENCES "bucket"("id") ON DELETE RESTRICT;--> statement-breakpoint
+ALTER TABLE "storage_bucket_name_reservation" ADD CONSTRAINT "storage_bucket_name_reservation_xjbMjRAMpV29_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
+ALTER TABLE "storage_bucket_name_reservation" ADD CONSTRAINT "storage_bucket_name_reservation_project_id_project_id_fkey" FOREIGN KEY ("project_id") REFERENCES "project"("id") ON DELETE CASCADE;--> statement-breakpoint
+ALTER TABLE "storage_bucket_name_reservation" ADD CONSTRAINT "storage_bucket_name_reservation_region_id_regions_id_fkey" FOREIGN KEY ("region_id") REFERENCES "regions"("id") ON DELETE RESTRICT;--> statement-breakpoint
+ALTER TABLE "storage_bucket_name_reservation" ADD CONSTRAINT "storage_bucket_name_reservation_OTS6XASGpAQx_fkey" FOREIGN KEY ("provider_id") REFERENCES "s3_providers"("id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "two_factor" ADD CONSTRAINT "two_factor_user_id_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "worker_queue" ADD CONSTRAINT "worker_queue_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
 CREATE POLICY "active_organization_tenant_rls" ON "active_organization" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("active_organization"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("active_organization"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
@@ -667,6 +721,7 @@ CREATE POLICY "event_org_rls" ON "event" AS PERMISSIVE FOR ALL TO "app_tenant" U
 CREATE POLICY "external_registry_tenant_rls" ON "external_registry" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("external_registry"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("external_registry"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "infrastructure_audit_log_reader" ON "infrastructure_audit_log" AS PERMISSIVE FOR SELECT TO "app_audit_reader" USING (true);--> statement-breakpoint
 CREATE POLICY "managed_registry_tenant_rls" ON "managed_registry" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("managed_registry"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("managed_registry"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
+CREATE POLICY "managed_registry_activation_reservation_tenant_rls" ON "managed_registry_activation_reservation" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("managed_registry_activation_reservation"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("managed_registry_activation_reservation"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "managed_registry_gc_runs_tenant_rls" ON "managed_registry_gc_runs" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("managed_registry_gc_runs"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("managed_registry_gc_runs"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "organization_tenant_rls_select" ON "organization" AS PERMISSIVE FOR SELECT TO "app_tenant" USING ("organization"."id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "organization_tenant_rls_update" ON "organization" AS PERMISSIVE FOR UPDATE TO "app_tenant" USING ("organization"."id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("organization"."id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
@@ -674,6 +729,7 @@ CREATE POLICY "organization_tenant_rls_delete" ON "organization" AS PERMISSIVE F
 CREATE POLICY "organization_tenant_rls_insert" ON "organization" AS PERMISSIVE FOR INSERT TO "app_tenant" WITH CHECK (true);--> statement-breakpoint
 CREATE POLICY "organization_invitation_tenant_rls" ON "organization_invitation" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("organization_invitation"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("organization_invitation"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "organization_member_tenant_rls" ON "organization_member" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("organization_member"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("organization_member"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
+CREATE POLICY "organization_region_backup_bucket_tenant_rls" ON "organization_region_backup_bucket" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("organization_region_backup_bucket"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("organization_region_backup_bucket"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "postgres_database_tenant_rls" ON "postgres_database" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("postgres_database"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("postgres_database"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "postgres_database_branch_tenant_rls" ON "postgres_database_branch" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("postgres_database_branch"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("postgres_database_branch"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "project_tenant_rls" ON "project" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("project"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("project"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
@@ -691,4 +747,5 @@ CREATE POLICY "secret_platform_select_rls" ON "secret" AS PERMISSIVE FOR SELECT 
 CREATE POLICY "secret_tenant_rls" ON "secret" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("secret"."scope" = 'tenant' and "secret"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("secret"."scope" = 'tenant' and "secret"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "storage_access_token_tenant_rls" ON "storage_access_token" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("storage_access_token"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("storage_access_token"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "storage_bucket_tenant_rls" ON "storage_bucket" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("storage_bucket"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("storage_bucket"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
+CREATE POLICY "storage_bucket_name_reservation_tenant_rls" ON "storage_bucket_name_reservation" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("storage_bucket_name_reservation"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("storage_bucket_name_reservation"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));--> statement-breakpoint
 CREATE POLICY "worker_queue_tenant_rls" ON "worker_queue" AS PERMISSIVE FOR ALL TO "app_tenant" USING ("worker_queue"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))) WITH CHECK ("worker_queue"."organization_id" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[])));

@@ -5,11 +5,11 @@ use sea_orm::{
 };
 use uuid::Uuid;
 
-use crate::errors::AppError;
-use crate::models::entities::{
+use crate::entities::{
     external_registry, project, project_environment, project_revision_manifest, project_timeline,
 };
-use crate::models::manifest::RevisionManifest;
+use crate::error::AppError;
+use crate::manifest::RevisionManifest;
 
 pub async fn insert_revision(
     tx: &DatabaseTransaction,
@@ -204,7 +204,10 @@ mod tests {
             .unwrap();
         assert_eq!(revision.timeline, 2);
         let updated = project_environment::Entity::find_by_id(first.id)
-            .one(&tx).await.unwrap().unwrap();
+            .one(&tx)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(updated.draft_timeline, revision.id);
         assert_eq!(updated.deployed_timeline, original.id);
         assert_eq!(

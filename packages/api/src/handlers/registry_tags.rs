@@ -7,11 +7,8 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    errors::AppError,
-    handlers::registry::{require_managed_registry, sign_repository_access},
-    middleware::auth::AuthContext,
-    models::entities::registry_repository,
-    state::get_app_state,
+    errors::AppError, handlers::registry::require_managed_registry, middleware::auth::AuthContext,
+    models::entities::registry_repository, state::get_app_state,
 };
 
 use super::databases::{verify_org_access, verify_project_in_org};
@@ -60,13 +57,19 @@ pub async fn list_tags(
     let repository = find_repository(tx, organization_id, project_id, repository_id).await?;
     scoped.commit().await?;
 
-    let access =
-        sign_repository_access(organization_id, project_id, repository.id, &repository.name, &[
-            "pull",
-        ])
-        .await?;
+    let state = get_app_state();
+    let access = lib::services::registry::sign_repository_access(
+        state.identity_db.connection(),
+        organization_id,
+        project_id,
+        repository.id,
+        &repository.name,
+        &["pull"],
+        state.config.registry_token_ttl_seconds,
+    )
+    .await?;
     let base = registry_base_url()?;
-    let client = &get_app_state().storage_client;
+    let client = &state.storage_client;
     let mut names = Vec::new();
     let mut url = format!(
         "{base}/v2/{}/tags/list?n={TAGS_PAGE_SIZE}",
@@ -140,16 +143,19 @@ pub async fn delete_tag(
     scoped.commit().await?;
 
     require_managed_registry(organization_id).await?;
-    let access = sign_repository_access(
+    let state = get_app_state();
+    let access = lib::services::registry::sign_repository_access(
+        state.identity_db.connection(),
         organization_id,
         project_id,
         repository.id,
         &repository.name,
         &["delete"],
+        state.config.registry_token_ttl_seconds,
     )
     .await?;
     let base = registry_base_url()?;
-    let client = &get_app_state().storage_client;
+    let client = &state.storage_client;
     let response = client
         .delete(format!(
             "{base}/v2/{}/manifests/{tag}",
@@ -175,7 +181,7 @@ pub async fn delete_tag(
         )));
     }
     let scoped = tenant_db.begin_scoped_transaction().await?;
-    crate::services::events::record(
+    lib::services::events::record(
         scoped.connection(),
         organization_id,
         project_id,
@@ -203,10 +209,7 @@ async fn find_repository(
 }
 
 fn link_next(headers: &reqwest::header::HeaderMap, base: &str) -> Option<String> {
-    let link = headers
-        .get(reqwest::header::LINK)?
-        .to_str()
-        .ok()?;
+    let link = headers.get(reqwest::header::LINK)?.to_str().ok()?;
     for part in link.split(',') {
         let mut segments = part.trim().split(';');
         let target = segments.next()?.trim();
@@ -222,8 +225,7 @@ fn link_next(headers: &reqwest::header::HeaderMap, base: &str) -> Option<String>
 }
 
 fn registry_base_url() -> Result<String, AppError> {
-    let value =
-        env::var("REGISTRY_INTERNAL_URL").unwrap_or_else(|_| "http://registry:5000".into());
+    let value = env::var("REGISTRY_INTERNAL_URL").unwrap_or_else(|_| "http://registry:5000".into());
     reqwest::Url::parse(&value)
         .map_err(|_| AppError::Internal("REGISTRY_INTERNAL_URL is invalid".into()))?;
     Ok(value.trim_end_matches('/').to_string())

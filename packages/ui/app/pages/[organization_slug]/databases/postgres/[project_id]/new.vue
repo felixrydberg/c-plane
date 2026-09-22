@@ -15,13 +15,19 @@ const loading = ref(false)
 const error = ref('')
 
 const name = ref('')
+const regionId = ref('')
 const computeUnit = ref('0.5')
 const backupRetentionDays = ref<number | null>(30)
 const highAvailability = ref(false)
 const readReplicas = ref(2)
+const regionsUrl = computed(() => orgId.value ? `/api/organization/${orgId.value as ':organization_id'}/regions` as const : '')
+const { data: regions } = await useCplaneFetch(regionsUrl, {
+  default: () => [],
+  immediate: computed(() => !!orgId.value),
+})
 
 async function handleCreate() {
-  if (!orgId.value || !projectId.value || !name.value.trim()) return
+  if (!orgId.value || !projectId.value || !name.value.trim() || !regionId.value) return
   loading.value = true; error.value = ''
   const unit = computeUnitByLabel(computeUnit.value)
   try {
@@ -29,6 +35,7 @@ async function handleCreate() {
       method: 'POST',
       body: {
         name: name.value.trim(), project_id: projectId.value,
+        region_id: regionId.value,
         backup_retention_days: backupRetentionDays.value,
         cpu: `${unit?.cpu ?? 0.5}`, ram: `${Math.round((unit?.ramGib ?? 1) * 1024)}Mi`,
         high_availability: highAvailability.value,
@@ -58,6 +65,7 @@ function backUrl() { return `/${route.params.organization_slug}/databases/postgr
     <div class="grid lg:grid-cols-[minmax(0,1fr)_280px]">
       <main class="divide-y divide-default/60 lg:pr-8">
         <section class="grid gap-4 py-8 lg:grid-cols-[190px_minmax(0,1fr)]"><div><h2 class="text-sm font-semibold">Database</h2><p class="mt-1 text-xs text-muted">Choose a stable resource name.</p></div><UFormField label="Name"><UInput v-model="name" placeholder="orders-db" class="w-full" :disabled="loading" /></UFormField></section>
+        <section class="grid gap-4 py-8 lg:grid-cols-[190px_minmax(0,1fr)]"><div><h2 class="text-sm font-semibold">Placement</h2><p class="mt-1 text-xs text-muted">Choose where the database runs.</p></div><UFormField label="Region"><USelect v-model="regionId" :items="regions.map(region => ({ label: region.display_name, value: region.id }))" placeholder="Select a region" class="w-full" :disabled="loading" /></UFormField></section>
         <section class="grid gap-4 py-8 lg:grid-cols-[190px_minmax(0,1fr)]"><div><h2 class="text-sm font-semibold">Compute</h2><p class="mt-1 text-xs text-muted">CPU and RAM scale together.</p></div><UFormField label="Compute Unit" description="1 CU = 1 vCPU + 2 GB RAM. Scale from 0.25 to 32 CU."><USelect v-model="computeUnit" :items="COMPUTE_UNIT_ITEMS" class="w-full" /></UFormField></section>
         <section class="grid gap-4 py-8 lg:grid-cols-[190px_minmax(0,1fr)]"><div><h2 class="text-sm font-semibold">Backup retention</h2><p class="mt-1 text-xs text-muted">Recovery window for this database's main branch.</p></div><UFormField label="Retention period"><USelect v-model="backupRetentionDays" :items="[{ label: '1 day', value: 1 }, { label: '7 days', value: 7 }, { label: '30 days', value: 30 }]" class="w-full" /></UFormField></section>
         <section class="grid gap-4 py-8 lg:grid-cols-[190px_minmax(0,1fr)]"><div><h2 class="text-sm font-semibold">High Availability</h2><p class="mt-1 text-xs text-muted">Add replicas for resilience.</p></div><div class="space-y-4"><UFormField label="Availability mode" description="Standard: single node. HA: multi-node with automatic failover."><div class="mt-1 grid grid-cols-2 gap-2"><button type="button" class="flex flex-col items-start gap-0.5 rounded-md border-2 p-3 text-left transition-colors" :class="!highAvailability ? 'border-primary bg-primary/10' : 'border-default/40 hover:border-default/60'" @click="highAvailability = false"><span class="text-sm font-semibold">Standard</span><span class="text-xs text-muted">Single database node</span></button><button type="button" class="flex flex-col items-start gap-0.5 rounded-md border-2 p-3 text-left transition-colors" :class="highAvailability ? 'border-primary bg-primary/10' : 'border-default/40 hover:border-default/60'" @click="highAvailability = true"><span class="text-sm font-semibold">High Availability</span><span class="text-xs text-muted">Multi-node failover</span></button></div></UFormField><UFormField v-if="highAvailability" label="Read replicas" description="Number of read-only replicas for query distribution."><UInputNumber v-model="readReplicas" :min="1" :step="1" class="w-full" /></UFormField></div></section>
@@ -65,7 +73,7 @@ function backUrl() { return `/${route.params.organization_slug}/databases/postgr
       </main>
 
       <aside class="border-t border-default/60 py-8 lg:border-l lg:border-t-0 lg:pl-6">
-        <div class="sticky top-6 rounded-lg border border-dashed border-default p-5"><h2 class="text-sm font-semibold">Database Summary</h2><dl class="mt-5 space-y-4 text-sm"><div><dt class="text-xs text-muted">Project</dt><dd class="mt-1">{{ projectName }}</dd></div><div><dt class="text-xs text-muted">Name</dt><dd class="mt-1 font-mono text-xs">{{ name || 'Not set' }}</dd></div><div><dt class="text-xs text-muted">Compute</dt><dd class="mt-1">{{ computeUnit }}</dd></div><div><dt class="text-xs text-muted">Availability</dt><dd class="mt-1">{{ highAvailability ? `${readReplicas} read replicas` : 'Standard' }}</dd></div></dl><div class="mt-8 flex gap-3"><UButton variant="ghost" color="neutral" :to="backUrl()">Cancel</UButton><UButton :icon="ICONS.plus" :loading="loading" :disabled="!name.trim()" @click="handleCreate">Create Database</UButton></div></div>
+        <div class="sticky top-6 rounded-lg border border-dashed border-default p-5"><h2 class="text-sm font-semibold">Database Summary</h2><dl class="mt-5 space-y-4 text-sm"><div><dt class="text-xs text-muted">Project</dt><dd class="mt-1">{{ projectName }}</dd></div><div><dt class="text-xs text-muted">Name</dt><dd class="mt-1 font-mono text-xs">{{ name || 'Not set' }}</dd></div><div><dt class="text-xs text-muted">Region</dt><dd class="mt-1">{{ regions.find(region => region.id === regionId)?.display_name ?? 'Not set' }}</dd></div><div><dt class="text-xs text-muted">Compute</dt><dd class="mt-1">{{ computeUnit }}</dd></div><div><dt class="text-xs text-muted">Availability</dt><dd class="mt-1">{{ highAvailability ? `${readReplicas} read replicas` : 'Standard' }}</dd></div></dl><div class="mt-8 flex gap-3"><UButton variant="ghost" color="neutral" :to="backUrl()">Cancel</UButton><UButton :icon="ICONS.plus" :loading="loading" :disabled="!name.trim() || !regionId" @click="handleCreate">Create Database</UButton></div></div>
       </aside>
     </div>
   </div>

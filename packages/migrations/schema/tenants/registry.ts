@@ -6,6 +6,8 @@ import { bucket } from "../infrastructure/buckets.ts";
 import { credential } from "../infrastructure/secrets.ts";
 import { worker_queue } from "../infrastructure/worker-queue.ts";
 import { project } from "../projects/index.ts";
+import { region } from "../infrastructure/regions.ts";
+import { s3_provider } from "../infrastructure/durability.ts";
 
 export const managed_registry_status = pgEnum("managed_registry_status", ["active", "maintenance"]);
 
@@ -38,6 +40,19 @@ export const managed_registry = pgTable.withRLS("managed_registry", {
     to: app_tenant,
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
+  }),
+]);
+
+export const managed_registry_activation_reservation = pgTable.withRLS("managed_registry_activation_reservation", {
+  organization_id: uuid("organization_id").primaryKey().references(() => organization.id, { onDelete: "cascade" }),
+  bucket_id: uuid("bucket_id").notNull(),
+  region_id: uuid("region_id").notNull().references(() => region.id, { onDelete: "restrict" }),
+  provider_id: uuid("provider_id").notNull().references(() => s3_provider.id, { onDelete: "restrict" }),
+  created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  pgPolicy("managed_registry_activation_reservation_tenant_rls", {
+    as: "permissive", for: "all", to: app_tenant,
+    using: orgAllowed(table.organization_id), withCheck: orgAllowed(table.organization_id),
   }),
 ]);
 

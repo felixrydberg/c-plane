@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use crate::secrets;
 
+pub mod bucket_prefix_delete;
 pub mod foundation_bucket_delete;
 pub mod registry_gc;
 pub mod registry_repository_delete;
@@ -78,6 +79,60 @@ impl<T: Serialize> Operation<T> {
             input,
         })
     }
+
+    async fn insert_many<I>(
+        transaction: &DatabaseTransaction,
+        organization_id: Option<Uuid>,
+        queue_name: &str,
+        job_type: &str,
+        inputs: I,
+    ) -> std::result::Result<(), DbErr>
+    where
+        I: IntoIterator<Item = (Option<String>, T)>,
+    {
+        let inputs = inputs.into_iter().collect::<Vec<_>>();
+        if inputs.is_empty() {
+            return Ok(());
+        }
+
+        let mut values_sql = Vec::with_capacity(inputs.len());
+        let mut values = Vec::with_capacity(inputs.len() * 6);
+        for (index, (dedupe_key, input)) in inputs.into_iter().enumerate() {
+            let offset = index * 6;
+            values_sql.push(format!(
+                "(${0}, ${1}, ${2}, ${3}, ${4}, ${5})",
+                offset + 1,
+                offset + 2,
+                offset + 3,
+                offset + 4,
+                offset + 5,
+                offset + 6,
+            ));
+            values.push(Uuid::new_v4().into());
+            values.push(organization_id.into());
+            values.push(queue_name.to_owned().into());
+            values.push(job_type.to_owned().into());
+            values.push(dedupe_key.into());
+            values.push(
+                serde_json::to_value(input)
+                    .map_err(|error| DbErr::Custom(error.to_string()))?
+                    .into(),
+            );
+        }
+
+        let sql = format!(
+            "INSERT INTO worker_queue (id, organization_id, queue_name, job_type, dedupe_key, payload) VALUES {}",
+            values_sql.join(", ")
+        );
+        transaction
+            .execute(Statement::from_sql_and_values(
+                DatabaseBackend::Postgres,
+                &sql,
+                values,
+            ))
+            .await?;
+        Ok(())
+    }
 }
 
 impl<T: DeserializeOwned> Operation<T> {
@@ -111,6 +166,13 @@ impl Operation<JsonValue> {
             && kind == Operation::<foundation_bucket_delete::FoundationBucketDelete>::NAME
         {
             return Operation::<foundation_bucket_delete::FoundationBucketDelete>::from(self)?
+                .run(context)
+                .await;
+        }
+        if queue == Operation::<bucket_prefix_delete::BucketPrefixDelete>::QUEUE
+            && kind == Operation::<bucket_prefix_delete::BucketPrefixDelete>::NAME
+        {
+            return Operation::<bucket_prefix_delete::BucketPrefixDelete>::from(self)?
                 .run(context)
                 .await;
         }
@@ -258,5 +320,16 @@ mod tests {
             Operation::<registry_repository_delete::RegistryRepositoryDelete>::from(&operation)
                 .is_ok()
         );
+    }
+
+    #[test]
+    fn creates_typed_bucket_prefix_delete_operation() {
+        let mut operation = operation(json!({
+            "provider_id": Uuid::new_v4(),
+            "bucket_id": Uuid::new_v4(),
+            "prefix": "postgres/branch/"
+        }));
+        operation.metadata.job_type = "bucket_prefix_delete".into();
+        assert!(Operation::<bucket_prefix_delete::BucketPrefixDelete>::from(&operation).is_ok());
     }
 }

@@ -1,19 +1,16 @@
-use axum::{Json, extract::Path};
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
-use std::collections::HashMap;
+use axum::{Json, extract::Path, http::StatusCode};
 use uuid::Uuid;
 
 use super::databases::{
     CreateDatabaseBranchRequest, CreateDatabaseRequest, DatabaseBranchResponse, DatabaseResponse,
     DatabaseWithBranchesResponse, ListDatabasesQuery, UpdateDatabaseBranchRequest,
-    UpdateDatabaseRequest, validate_autoscaling, validate_backup_retention_days, validate_cpu,
-    validate_ram, validate_read_replicas, verify_org_access, verify_project_in_org,
+    UpdateDatabaseRequest,
 };
 use crate::errors::AppError;
 use crate::middleware::auth::AuthContext;
-use crate::models::entities::{postgres_database, postgres_database_branch, project_environment};
-use crate::services::{agent, events};
-use serde_json;
+use crate::models::entities::{postgres_database, postgres_database_branch};
+use crate::state::get_app_state;
+use lib::services::postgres_databases as database_service;
 
 fn db_to_response(db: &postgres_database::Model) -> DatabaseResponse {
     DatabaseResponse {
@@ -21,6 +18,7 @@ fn db_to_response(db: &postgres_database::Model) -> DatabaseResponse {
         project_id: db.project_id,
         name: db.name.clone(),
         default_branch_id: db.default_branch_id,
+        region_id: db.region_id,
     }
 }
 
@@ -38,6 +36,8 @@ fn branch_to_response(b: &postgres_database_branch::Model) -> DatabaseBranchResp
         autoscaling_enabled: b.autoscaling_enabled,
         autoscaling_min_cpu: b.autoscaling_min_cpu.clone(),
         autoscaling_max_cpu: b.autoscaling_max_cpu.clone(),
+        organization_region_backup_bucket_id: b.organization_region_backup_bucket_id,
+        backup_credential_id: b.backup_credential_id,
     }
 }
 
@@ -45,9 +45,7 @@ fn branch_to_response(b: &postgres_database_branch::Model) -> DatabaseBranchResp
     post,
     path = "/api/organization/{organization_id}/databases/postgres",
     request_body = CreateDatabaseRequest,
-    params(
-        ("organization_id" = Uuid, Path, description = "Organization ID"),
-    ),
+    params(("organization_id" = Uuid, Path, description = "Organization ID")),
     responses(
         (status = 201, description = "Database created", body = DatabaseResponse),
         (status = 404, description = "Not found"),
@@ -58,82 +56,33 @@ pub async fn create_database(
     AuthContext { tenant_db, auth }: AuthContext,
     Path(organization_id): Path<Uuid>,
     Json(body): Json<CreateDatabaseRequest>,
-) -> Result<(axum::http::StatusCode, Json<DatabaseResponse>), AppError> {
-    verify_org_access(&tenant_db, organization_id)?;
-
-    let name = body.name.trim().to_string();
-    if name.is_empty() {
-        return Err(AppError::BadRequest("Name is required".into()));
-    }
-    validate_backup_retention_days(body.backup_retention_days)?;
-    if let Some(cpu) = body.cpu.as_deref() {
-        validate_cpu(cpu)?;
-    }
-    if let Some(ram) = body.ram.as_deref() {
-        validate_ram(ram)?;
-    }
-    if let Some(read_replicas) = body.read_replicas {
-        validate_read_replicas(read_replicas)?;
-    }
-    validate_autoscaling(
-        body.autoscaling_min_cpu.as_deref(),
-        body.autoscaling_max_cpu.as_deref(),
-    )?;
-
-    let db_id = Uuid::new_v4();
-    let db_branch_id = Uuid::new_v4();
-
-    let scoped = tenant_db.begin_scoped_transaction().await?;
-    let tx = scoped.connection();
-
-    verify_project_in_org(tx, body.project_id, organization_id).await?;
-
-    let main_environment = project_environment::Entity::find()
-        .filter(project_environment::Column::ProjectId.eq(body.project_id))
-        .filter(project_environment::Column::Name.eq("main"))
-        .one(tx)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Main environment not found".into()))?;
-
-    let created: postgres_database::Model = postgres_database::ActiveModel {
-        id: Set(db_id),
-        project_id: Set(body.project_id),
-        organization_id: Set(organization_id),
-        default_branch_id: Set(None),
-        name: Set(name.clone()),
-    }
-    .insert(tx)
+) -> Result<(StatusCode, Json<DatabaseResponse>), AppError> {
+    let state = get_app_state();
+    let context = database_service::ServiceContext {
+        providers: &state.s3_providers,
+        secrets: &state.secrets,
+    };
+    let database = database_service::create_database(
+        &tenant_db,
+        organization_id,
+        auth.actor_id,
+        &context,
+        database_service::CreateDatabaseInput {
+            name: body.name,
+            project_id: body.project_id,
+            region_id: body.region_id,
+            backup_retention_days: body.backup_retention_days,
+            cpu: body.cpu,
+            ram: body.ram,
+            high_availability: body.high_availability,
+            read_replicas: body.read_replicas,
+            autoscaling_enabled: body.autoscaling_enabled,
+            autoscaling_min_cpu: body.autoscaling_min_cpu,
+            autoscaling_max_cpu: body.autoscaling_max_cpu,
+        },
+    )
     .await?;
-
-    let _db_branch: postgres_database_branch::Model = postgres_database_branch::ActiveModel {
-        id: Set(db_branch_id),
-        database_id: Set(db_id),
-        branch_id: Set(main_environment.id),
-        organization_id: Set(organization_id),
-        backup_retention_days: Set(body.backup_retention_days.or(Some(30))),
-        cpu: Set(body.cpu),
-        ram: Set(body.ram),
-        high_availability: Set(body.high_availability),
-        read_replicas: Set(body.read_replicas),
-        autoscaling_enabled: Set(body.autoscaling_enabled),
-        autoscaling_min_cpu: Set(body.autoscaling_min_cpu),
-        autoscaling_max_cpu: Set(body.autoscaling_max_cpu),
-    }
-    .insert(tx)
-    .await?;
-
-    let mut db_active: postgres_database::ActiveModel = created.clone().into();
-    db_active.default_branch_id = Set(Some(db_branch_id));
-    let updated = db_active.update(tx).await?;
-    events::record(tx, organization_id, body.project_id, "database:created", serde_json::json!({"summary": format!("Created database '{}'", name), "target_id": db_branch_id.to_string(), "branch_id": main_environment.id.to_string()}), auth.actor_id).await?;
-
-    scoped.commit().await?;
-    agent::emit_postgres_branch(db_id, organization_id, main_environment.id, db_branch_id).await?;
-
-    Ok((
-        axum::http::StatusCode::CREATED,
-        Json(db_to_response(&updated)),
-    ))
+    Ok((StatusCode::CREATED, Json(db_to_response(&database))))
 }
 
 #[utoipa::path(
@@ -151,44 +100,14 @@ pub async fn list_databases(
     Path(organization_id): Path<Uuid>,
     axum::extract::Query(query): axum::extract::Query<ListDatabasesQuery>,
 ) -> Result<Json<Vec<DatabaseWithBranchesResponse>>, AppError> {
-    verify_org_access(&tenant_db, organization_id)?;
-
-    let scoped = tenant_db.begin_scoped_transaction().await?;
-    let tx = scoped.connection();
-
-    verify_project_in_org(tx, query.project_id, organization_id).await?;
-
-    use postgres_database::{Column, Entity};
-    let dbs = Entity::find()
-        .filter(Column::ProjectId.eq(query.project_id))
-        .order_by_asc(Column::Name)
-        .all(tx)
-        .await?;
-
-    let database_ids: Vec<Uuid> = dbs.iter().map(|db| db.id).collect();
-    let branches = if database_ids.is_empty() {
-        Vec::new()
-    } else {
-        postgres_database_branch::Entity::find()
-            .filter(postgres_database_branch::Column::DatabaseId.is_in(database_ids))
-            .all(tx)
-            .await?
-    };
-    let mut branches_by_database: HashMap<Uuid, Vec<DatabaseBranchResponse>> = HashMap::new();
-    for branch in &branches {
-        branches_by_database
-            .entry(branch.database_id)
-            .or_default()
-            .push(branch_to_response(branch));
-    }
-
-    scoped.commit().await?;
-
+    let databases =
+        database_service::list_databases(&tenant_db, organization_id, query.project_id).await?;
     Ok(Json(
-        dbs.into_iter()
-            .map(|db| DatabaseWithBranchesResponse {
-                branches: branches_by_database.remove(&db.id).unwrap_or_default(),
-                database: db_to_response(&db),
+        databases
+            .into_iter()
+            .map(|(database, branches)| DatabaseWithBranchesResponse {
+                database: db_to_response(&database),
+                branches: branches.iter().map(branch_to_response).collect(),
             })
             .collect(),
     ))
@@ -211,22 +130,8 @@ pub async fn get_database(
     AuthContext { tenant_db, .. }: AuthContext,
     Path((organization_id, database_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<DatabaseResponse>, AppError> {
-    verify_org_access(&tenant_db, organization_id)?;
-
-    let scoped = tenant_db.begin_scoped_transaction().await?;
-    let tx = scoped.connection();
-
-    use postgres_database::Entity;
-    let db = Entity::find_by_id(database_id)
-        .one(tx)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Postgres database not found".into()))?;
-
-    verify_project_in_org(tx, db.project_id, organization_id).await?;
-
-    scoped.commit().await?;
-
-    Ok(Json(db_to_response(&db)))
+    let database = database_service::get_database(&tenant_db, organization_id, database_id).await?;
+    Ok(Json(db_to_response(&database)))
 }
 
 #[utoipa::path(
@@ -248,35 +153,15 @@ pub async fn update_database(
     Path((organization_id, database_id)): Path<(Uuid, Uuid)>,
     Json(body): Json<UpdateDatabaseRequest>,
 ) -> Result<Json<DatabaseResponse>, AppError> {
-    verify_org_access(&tenant_db, organization_id)?;
-
-    let scoped = tenant_db.begin_scoped_transaction().await?;
-    let tx = scoped.connection();
-
-    use postgres_database::Entity;
-    let db = Entity::find_by_id(database_id)
-        .one(tx)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Postgres database not found".into()))?;
-
-    verify_project_in_org(tx, db.project_id, organization_id).await?;
-
-    let mut active: postgres_database::ActiveModel = db.clone().into();
-    if let Some(ref name) = body.name {
-        let trimmed = name.trim().to_string();
-        if trimmed.is_empty() {
-            return Err(AppError::BadRequest("Name is required".into()));
-        }
-        active.name = Set(trimmed);
-    }
-
-    let updated = active.update(tx).await?;
-    if let Some(target_id) = updated.default_branch_id {
-        events::record(tx, organization_id, updated.project_id, "database:updated", serde_json::json!({"summary": format!("Updated database '{}'", updated.name), "target_id": target_id.to_string()}), auth.actor_id).await?;
-    }
-    scoped.commit().await?;
-
-    Ok(Json(db_to_response(&updated)))
+    let database = database_service::update_database(
+        &tenant_db,
+        organization_id,
+        auth.actor_id,
+        database_id,
+        database_service::UpdateDatabaseInput { name: body.name },
+    )
+    .await?;
+    Ok(Json(db_to_response(&database)))
 }
 
 #[utoipa::path(
@@ -296,38 +181,19 @@ pub async fn delete_database(
     AuthContext { tenant_db, auth }: AuthContext,
     Path((organization_id, database_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    verify_org_access(&tenant_db, organization_id)?;
-
-    let scoped = tenant_db.begin_scoped_transaction().await?;
-    let tx = scoped.connection();
-
-    use postgres_database::Entity;
-    let db = Entity::find_by_id(database_id)
-        .one(tx)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Postgres database not found".into()))?;
-
-    verify_project_in_org(tx, db.project_id, organization_id).await?;
-
-    let database_branches = postgres_database_branch::Entity::find()
-        .filter(postgres_database_branch::Column::DatabaseId.eq(database_id))
-        .all(tx)
-        .await?;
-    if let Some(target_id) = db.default_branch_id {
-        events::record(tx, organization_id, db.project_id, "database:deleted", serde_json::json!({"summary": format!("Deleted database '{}'", db.name), "target_id": target_id.to_string()}), auth.actor_id).await?;
-    }
-    Entity::delete_by_id(database_id).exec(tx).await?;
-    scoped.commit().await?;
-    for database_branch in database_branches {
-        agent::emit_postgres_branch(
-            database_id,
-            organization_id,
-            database_branch.branch_id,
-            database_branch.id,
-        )
-        .await?;
-    }
-
+    let state = get_app_state();
+    let context = database_service::ServiceContext {
+        providers: &state.s3_providers,
+        secrets: &state.secrets,
+    };
+    database_service::delete_database(
+        &tenant_db,
+        organization_id,
+        auth.actor_id,
+        &context,
+        database_id,
+    )
+    .await?;
     Ok(Json(serde_json::json!({ "success": true })))
 }
 
@@ -348,25 +214,8 @@ pub async fn list_database_branches(
     AuthContext { tenant_db, .. }: AuthContext,
     Path((organization_id, database_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<Vec<DatabaseBranchResponse>>, AppError> {
-    verify_org_access(&tenant_db, organization_id)?;
-
-    let scoped = tenant_db.begin_scoped_transaction().await?;
-    let tx = scoped.connection();
-
-    let db = postgres_database::Entity::find_by_id(database_id)
-        .one(tx)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Postgres database not found".into()))?;
-
-    verify_project_in_org(tx, db.project_id, organization_id).await?;
-
-    let branches = postgres_database_branch::Entity::find()
-        .filter(postgres_database_branch::Column::DatabaseId.eq(database_id))
-        .all(tx)
-        .await?;
-
-    scoped.commit().await?;
-
+    let branches =
+        database_service::list_database_branches(&tenant_db, organization_id, database_id).await?;
     Ok(Json(branches.iter().map(branch_to_response).collect()))
 }
 
@@ -390,80 +239,25 @@ pub async fn update_database_branch(
     Path((organization_id, database_id, branch_id)): Path<(Uuid, Uuid, Uuid)>,
     Json(body): Json<UpdateDatabaseBranchRequest>,
 ) -> Result<Json<DatabaseBranchResponse>, AppError> {
-    verify_org_access(&tenant_db, organization_id)?;
-
-    let scoped = tenant_db.begin_scoped_transaction().await?;
-    let tx = scoped.connection();
-
-    let db = postgres_database::Entity::find_by_id(database_id)
-        .one(tx)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Postgres database not found".into()))?;
-
-    verify_project_in_org(tx, db.project_id, organization_id).await?;
-
-    let db_branch = postgres_database_branch::Entity::find()
-        .filter(postgres_database_branch::Column::DatabaseId.eq(database_id))
-        .filter(postgres_database_branch::Column::BranchId.eq(branch_id))
-        .one(tx)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Database branch link not found".into()))?;
-
-    let mut active: postgres_database_branch::ActiveModel = db_branch.clone().into();
-    if let Some(value) = body.backup_retention_days {
-        validate_backup_retention_days(value)?;
-        if value.is_none() && db.default_branch_id == Some(db_branch.id) {
-            return Err(AppError::Conflict(
-                "The default database branch must retain backups".into(),
-            ));
-        }
-        active.backup_retention_days = Set(value);
-    }
-    if let Some(cpu) = body.cpu.as_deref() {
-        validate_cpu(cpu)?;
-    }
-    if let Some(ram) = body.ram.as_deref() {
-        validate_ram(ram)?;
-    }
-    if let Some(read_replicas) = body.read_replicas {
-        validate_read_replicas(read_replicas)?;
-    }
-    validate_autoscaling(
-        body.autoscaling_min_cpu
-            .as_deref()
-            .or(db_branch.autoscaling_min_cpu.as_deref()),
-        body.autoscaling_max_cpu
-            .as_deref()
-            .or(db_branch.autoscaling_max_cpu.as_deref()),
-    )?;
-    if body.cpu.is_some() {
-        active.cpu = Set(body.cpu);
-    }
-    if body.ram.is_some() {
-        active.ram = Set(body.ram);
-    }
-    if let Some(v) = body.high_availability {
-        active.high_availability = Set(v);
-    }
-    if body.read_replicas.is_some() {
-        active.read_replicas = Set(body.read_replicas);
-    }
-    if let Some(v) = body.autoscaling_enabled {
-        active.autoscaling_enabled = Set(v);
-    }
-    if body.autoscaling_min_cpu.is_some() {
-        active.autoscaling_min_cpu = Set(body.autoscaling_min_cpu);
-    }
-    if body.autoscaling_max_cpu.is_some() {
-        active.autoscaling_max_cpu = Set(body.autoscaling_max_cpu);
-    }
-
-    let updated = active.update(tx).await?;
-    events::record(tx, organization_id, db.project_id, "database:updated", serde_json::json!({"summary": format!("Updated '{}' branch configuration", db.name), "target_id": db_branch.id.to_string(), "branch_id": branch_id.to_string()}), auth.actor_id).await?;
-    scoped.commit().await?;
-    agent::emit_postgres_branch(database_id, organization_id, branch_id, updated.id).await?;
-
-    Ok(Json(branch_to_response(&updated)))
+    let branch = database_service::update_database_branch(
+        &tenant_db,
+        organization_id,
+        auth.actor_id,
+        database_id,
+        branch_id,
+        database_service::UpdateDatabaseBranchInput {
+            backup_retention_days: body.backup_retention_days,
+            cpu: body.cpu,
+            ram: body.ram,
+            high_availability: body.high_availability,
+            read_replicas: body.read_replicas,
+            autoscaling_enabled: body.autoscaling_enabled,
+            autoscaling_min_cpu: body.autoscaling_min_cpu,
+            autoscaling_max_cpu: body.autoscaling_max_cpu,
+        },
+    )
+    .await?;
+    Ok(Json(branch_to_response(&branch)))
 }
 
 #[utoipa::path(
@@ -485,115 +279,37 @@ pub async fn create_database_branch(
     AuthContext { tenant_db, auth }: AuthContext,
     Path((organization_id, database_id)): Path<(Uuid, Uuid)>,
     Json(body): Json<CreateDatabaseBranchRequest>,
-) -> Result<(axum::http::StatusCode, Json<DatabaseBranchResponse>), AppError> {
-    verify_org_access(&tenant_db, organization_id)?;
-
-    let scoped = tenant_db.begin_scoped_transaction().await?;
-    let tx = scoped.connection();
-
-    let db = postgres_database::Entity::find_by_id(database_id)
-        .one(tx)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Postgres database not found".into()))?;
-
-    verify_project_in_org(tx, db.project_id, organization_id).await?;
-
-    let branch = project_environment::Entity::find_by_id(body.branch_id)
-        .filter(project_environment::Column::ProjectId.eq(db.project_id))
-        .one(tx)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Branch not found in database's project".into()))?;
-
-    validate_backup_retention_days(body.backup_retention_days)?;
-
-    let existing = postgres_database_branch::Entity::find()
-        .filter(postgres_database_branch::Column::DatabaseId.eq(database_id))
-        .filter(postgres_database_branch::Column::BranchId.eq(body.branch_id))
-        .one(tx)
-        .await?;
-
-    if let Some(row) = existing {
-        return Ok((axum::http::StatusCode::OK, Json(branch_to_response(&row))));
-    }
-
-    let (
-        cpu,
-        ram,
-        high_availability,
-        read_replicas,
-        autoscaling_enabled,
-        autoscaling_min_cpu,
-        autoscaling_max_cpu,
-        backup_retention_days,
-    ) = if let Some(default_id) = db.default_branch_id {
-        let default = postgres_database_branch::Entity::find_by_id(default_id)
-            .one(tx)
-            .await?
-            .ok_or_else(|| AppError::NotFound("Default database branch not found".into()))?;
-        (
-            body.cpu.or(default.cpu),
-            body.ram.or(default.ram),
-            body.high_availability.or(Some(default.high_availability)),
-            body.read_replicas.or(default.read_replicas),
-            body.autoscaling_enabled
-                .or(Some(default.autoscaling_enabled)),
-            body.autoscaling_min_cpu.or(default.autoscaling_min_cpu),
-            body.autoscaling_max_cpu.or(default.autoscaling_max_cpu),
-            body.backup_retention_days.or(default.backup_retention_days),
-        )
-    } else {
-        (
-            body.cpu,
-            body.ram,
-            body.high_availability,
-            body.read_replicas,
-            body.autoscaling_enabled,
-            body.autoscaling_min_cpu,
-            body.autoscaling_max_cpu,
-            body.backup_retention_days,
-        )
+) -> Result<(StatusCode, Json<DatabaseBranchResponse>), AppError> {
+    let state = get_app_state();
+    let context = database_service::ServiceContext {
+        providers: &state.s3_providers,
+        secrets: &state.secrets,
     };
-
-    if let Some(cpu) = cpu.as_deref() {
-        validate_cpu(cpu)?;
-    }
-    if let Some(ram) = ram.as_deref() {
-        validate_ram(ram)?;
-    }
-    if let Some(read_replicas) = read_replicas {
-        validate_read_replicas(read_replicas)?;
-    }
-    validate_autoscaling(
-        autoscaling_min_cpu.as_deref(),
-        autoscaling_max_cpu.as_deref(),
-    )?;
-
-    let id = Uuid::new_v4();
-    let row: postgres_database_branch::Model = postgres_database_branch::ActiveModel {
-        id: Set(id),
-        database_id: Set(database_id),
-        branch_id: Set(branch.id),
-        organization_id: Set(organization_id),
-        backup_retention_days: Set(backup_retention_days),
-        cpu: Set(cpu),
-        ram: Set(ram),
-        high_availability: Set(high_availability.unwrap_or(false)),
-        read_replicas: Set(read_replicas),
-        autoscaling_enabled: Set(autoscaling_enabled.unwrap_or(false)),
-        autoscaling_min_cpu: Set(autoscaling_min_cpu),
-        autoscaling_max_cpu: Set(autoscaling_max_cpu),
-    }
-    .insert(tx)
+    let result = database_service::create_database_branch(
+        &tenant_db,
+        organization_id,
+        auth.actor_id,
+        &context,
+        database_id,
+        database_service::CreateDatabaseBranchInput {
+            branch_id: body.branch_id,
+            backup_retention_days: body.backup_retention_days,
+            cpu: body.cpu,
+            ram: body.ram,
+            high_availability: body.high_availability,
+            read_replicas: body.read_replicas,
+            autoscaling_enabled: body.autoscaling_enabled,
+            autoscaling_min_cpu: body.autoscaling_min_cpu,
+            autoscaling_max_cpu: body.autoscaling_max_cpu,
+        },
+    )
     .await?;
-    events::record(tx, organization_id, db.project_id, "database:linked", serde_json::json!({"summary": format!("Linked '{}' to branch '{}'", db.name, branch.name), "target_id": row.id.to_string(), "branch_id": branch.id.to_string()}), auth.actor_id).await?;
-
-    scoped.commit().await?;
-    agent::emit_postgres_branch(database_id, organization_id, branch.id, row.id).await?;
-
-    Ok((
-        axum::http::StatusCode::CREATED,
-        Json(branch_to_response(&row)),
-    ))
+    let status = if result.created {
+        StatusCode::CREATED
+    } else {
+        StatusCode::OK
+    };
+    Ok((status, Json(branch_to_response(&result.row))))
 }
 
 #[utoipa::path(
@@ -614,38 +330,19 @@ pub async fn delete_database_branch(
     AuthContext { tenant_db, auth }: AuthContext,
     Path((organization_id, database_id, branch_id)): Path<(Uuid, Uuid, Uuid)>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    verify_org_access(&tenant_db, organization_id)?;
-
-    let scoped = tenant_db.begin_scoped_transaction().await?;
-    let tx = scoped.connection();
-
-    let db = postgres_database::Entity::find_by_id(database_id)
-        .one(tx)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Postgres database not found".into()))?;
-
-    verify_project_in_org(tx, db.project_id, organization_id).await?;
-
-    let db_branch = postgres_database_branch::Entity::find()
-        .filter(postgres_database_branch::Column::DatabaseId.eq(database_id))
-        .filter(postgres_database_branch::Column::BranchId.eq(branch_id))
-        .one(tx)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Database branch link not found".into()))?;
-
-    if db.default_branch_id == Some(db_branch.id) {
-        return Err(AppError::Conflict(
-            "Cannot delete the default database branch".into(),
-        ));
-    }
-
-    postgres_database_branch::Entity::delete_by_id(db_branch.id)
-        .exec(tx)
-        .await?;
-    events::record(tx, organization_id, db.project_id, "database:unlinked", serde_json::json!({"summary": format!("Unlinked '{}' from this branch", db.name), "target_id": db_branch.id.to_string(), "branch_id": branch_id.to_string()}), auth.actor_id).await?;
-
-    scoped.commit().await?;
-    agent::emit_postgres_branch(database_id, organization_id, branch_id, db_branch.id).await?;
-
+    let state = get_app_state();
+    let context = database_service::ServiceContext {
+        providers: &state.s3_providers,
+        secrets: &state.secrets,
+    };
+    database_service::delete_branch(
+        &tenant_db,
+        organization_id,
+        auth.actor_id,
+        &context,
+        database_id,
+        branch_id,
+    )
+    .await?;
     Ok(Json(serde_json::json!({ "success": true })))
 }

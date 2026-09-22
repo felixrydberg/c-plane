@@ -1,10 +1,10 @@
 {
-  "id": "bb69f5e4-3ab4-4d07-bf32-c869927e23ea",
-  "prevIds": [
-    "5382cfd8-fa60-41d0-871b-fd133f5278a6"
-  ],
   "version": "8",
   "dialect": "postgres",
+  "id": "d1dd0e0b-ae36-4326-a6eb-8c9e3d868279",
+  "prevIds": [
+    "00000000-0000-0000-0000-000000000000"
+  ],
   "ddl": [
     {
       "values": [
@@ -234,6 +234,12 @@
     },
     {
       "isRlsEnabled": true,
+      "name": "managed_registry_activation_reservation",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": true,
       "name": "managed_registry_gc_runs",
       "entityType": "tables",
       "schema": "public"
@@ -253,6 +259,12 @@
     {
       "isRlsEnabled": true,
       "name": "organization_member",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": true,
+      "name": "organization_region_backup_bucket",
       "entityType": "tables",
       "schema": "public"
     },
@@ -343,6 +355,12 @@
     {
       "isRlsEnabled": true,
       "name": "storage_bucket",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": true,
+      "name": "storage_bucket_name_reservation",
       "entityType": "tables",
       "schema": "public"
     },
@@ -1938,6 +1956,71 @@
       "default": null,
       "generated": null,
       "identity": null,
+      "name": "organization_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry_activation_reservation"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "bucket_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry_activation_reservation"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "region_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry_activation_reservation"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "provider_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry_activation_reservation"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "managed_registry_activation_reservation"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
       "name": "id",
       "entityType": "columns",
       "schema": "public",
@@ -2286,6 +2369,58 @@
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "organization_region_backup_bucket"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "organization_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "organization_region_backup_bucket"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "region_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "organization_region_backup_bucket"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "bucket_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "organization_region_backup_bucket"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
       "default": "pg_catalog.gen_random_uuid()",
       "generated": null,
       "identity": null,
@@ -2401,9 +2536,9 @@
     {
       "type": "timestamp",
       "typeSchema": null,
-      "notNull": true,
+      "notNull": false,
       "dimensions": 0,
-      "default": "now()",
+      "default": null,
       "generated": null,
       "identity": null,
       "name": "created_at",
@@ -2459,6 +2594,19 @@
       "generated": null,
       "identity": null,
       "name": "organization_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "postgres_database"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "region_id",
       "entityType": "columns",
       "schema": "public",
       "table": "postgres_database"
@@ -2537,6 +2685,32 @@
       "generated": null,
       "identity": null,
       "name": "organization_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "postgres_database_branch"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "organization_region_backup_bucket_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "postgres_database_branch"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "backup_credential_id",
       "entityType": "columns",
       "schema": "public",
       "table": "postgres_database_branch"
@@ -3729,6 +3903,97 @@
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "organization_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "storage_bucket_name_reservation"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "project_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "storage_bucket_name_reservation"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "storage_bucket_name_reservation"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "bucket_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "storage_bucket_name_reservation"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "region_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "storage_bucket_name_reservation"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "provider_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "storage_bucket_name_reservation"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "storage_bucket_name_reservation"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
       "default": "pg_catalog.gen_random_uuid()",
       "generated": null,
       "identity": null,
@@ -3772,6 +4037,45 @@
       "generated": null,
       "identity": null,
       "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "two_factor"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": "true",
+      "generated": null,
+      "identity": null,
+      "name": "verified",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "two_factor"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "name": "failed_verification_count",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "two_factor"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "locked_until",
       "entityType": "columns",
       "schema": "public",
       "table": "two_factor"
@@ -3987,7 +4291,7 @@
     {
       "type": "timestamp",
       "typeSchema": null,
-      "notNull": true,
+      "notNull": false,
       "dimensions": 0,
       "default": "now()",
       "generated": null,
@@ -4000,7 +4304,7 @@
     {
       "type": "timestamp",
       "typeSchema": null,
-      "notNull": true,
+      "notNull": false,
       "dimensions": 0,
       "default": "now()",
       "generated": null,
@@ -5404,6 +5708,27 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "region_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "organization_region_backup_bucket_region_id_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "organization_region_backup_bucket"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "user_id",
           "isExpression": false,
           "asc": true,
@@ -5543,6 +5868,27 @@
       "method": "btree",
       "concurrently": false,
       "name": "postgres_database_branch_organization_id_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "postgres_database_branch"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "organization_region_backup_bucket_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "postgres_database_branch_backup_bucket_id_idx",
       "entityType": "indexes",
       "schema": "public",
       "table": "postgres_database_branch"
@@ -6594,6 +6940,27 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "organization_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "storage_bucket_name_reservation_organization_id_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "storage_bucket_name_reservation"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "secret",
           "isExpression": false,
           "asc": true,
@@ -7228,6 +7595,57 @@
         "organization_id"
       ],
       "schemaTo": "public",
+      "tableTo": "organization",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "managed_registry_activation_reservation_qenxvUQcAFkp_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "managed_registry_activation_reservation"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "region_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "regions",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "managed_registry_activation_reservation_Muq4RXTrygPs_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "managed_registry_activation_reservation"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "provider_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "s3_providers",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "managed_registry_activation_reservation_AZN5cFkvc4Zf_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "managed_registry_activation_reservation"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "organization_id"
+      ],
+      "schemaTo": "public",
       "tableTo": "managed_registry",
       "columnsTo": [
         "organization_id"
@@ -7310,6 +7728,57 @@
     {
       "nameExplicit": false,
       "columns": [
+        "organization_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "organization",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "organization_region_backup_bucket_mkETu8268556_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "organization_region_backup_bucket"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "region_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "regions",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "organization_region_backup_bucket_region_id_regions_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "organization_region_backup_bucket"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "bucket_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "bucket",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "organization_region_backup_bucket_bucket_id_bucket_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "organization_region_backup_bucket"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
         "user_id"
       ],
       "schemaTo": "public",
@@ -7354,6 +7823,23 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "postgres_database_organization_id_organization_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "postgres_database"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "region_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "regions",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "postgres_database_region_id_regions_id_fkey",
       "entityType": "fks",
       "schema": "public",
       "table": "postgres_database"
@@ -7422,6 +7908,61 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "postgres_database_branch_organization_id_organization_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "postgres_database_branch"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "organization_region_backup_bucket_id",
+        "organization_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "organization_region_backup_bucket",
+      "columnsTo": [
+        "id",
+        "organization_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "postgres_database_branch_backup_bucket_scope_fk",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "postgres_database_branch"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "backup_credential_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "credential",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "postgres_database_branch_backup_credential_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "postgres_database_branch"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "backup_credential_id",
+        "organization_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "credential",
+      "columnsTo": [
+        "id",
+        "organization_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "postgres_database_branch_backup_credential_scope_fk",
       "entityType": "fks",
       "schema": "public",
       "table": "postgres_database_branch"
@@ -7971,6 +8512,74 @@
     {
       "nameExplicit": false,
       "columns": [
+        "organization_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "organization",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "storage_bucket_name_reservation_xjbMjRAMpV29_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "storage_bucket_name_reservation"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "project_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "project",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "storage_bucket_name_reservation_project_id_project_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "storage_bucket_name_reservation"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "region_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "regions",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "storage_bucket_name_reservation_region_id_regions_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "storage_bucket_name_reservation"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "provider_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "s3_providers",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "name": "storage_bucket_name_reservation_OTS6XASGpAQx_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "storage_bucket_name_reservation"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
         "user_id"
       ],
       "schemaTo": "public",
@@ -8001,6 +8610,17 @@
       "entityType": "fks",
       "schema": "public",
       "table": "worker_queue"
+    },
+    {
+      "columns": [
+        "project_id",
+        "name"
+      ],
+      "nameExplicit": true,
+      "name": "storage_bucket_name_reservation_pk",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "storage_bucket_name_reservation"
     },
     {
       "columns": [
@@ -8154,6 +8774,16 @@
     },
     {
       "columns": [
+        "organization_id"
+      ],
+      "nameExplicit": false,
+      "name": "managed_registry_activation_reservation_pkey",
+      "schema": "public",
+      "table": "managed_registry_activation_reservation",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
         "id"
       ],
       "nameExplicit": false,
@@ -8190,6 +8820,16 @@
       "name": "organization_member_pkey",
       "schema": "public",
       "table": "organization_member",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "organization_region_backup_bucket_pkey",
+      "schema": "public",
+      "table": "organization_region_backup_bucket",
       "entityType": "pks"
     },
     {
@@ -8417,6 +9057,52 @@
       "entityType": "uniques",
       "schema": "public",
       "table": "external_registry"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "organization_id",
+        "region_id"
+      ],
+      "nullsNotDistinct": false,
+      "name": "organization_region_backup_bucket_organization_region_uidx",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "organization_region_backup_bucket"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "bucket_id"
+      ],
+      "nullsNotDistinct": false,
+      "name": "organization_region_backup_bucket_bucket_uidx",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "organization_region_backup_bucket"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "id",
+        "organization_id"
+      ],
+      "nullsNotDistinct": false,
+      "name": "organization_region_backup_bucket_id_organization_uidx",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "organization_region_backup_bucket"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "backup_credential_id"
+      ],
+      "nullsNotDistinct": false,
+      "name": "postgres_database_branch_backup_credential_id_uidx",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "postgres_database_branch"
     },
     {
       "nameExplicit": true,
@@ -8805,6 +9491,19 @@
       "roles": [
         "app_tenant"
       ],
+      "using": "\"managed_registry_activation_reservation\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+      "withCheck": "\"managed_registry_activation_reservation\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+      "name": "managed_registry_activation_reservation_tenant_rls",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "managed_registry_activation_reservation"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "ALL",
+      "roles": [
+        "app_tenant"
+      ],
       "using": "\"managed_registry_gc_runs\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
       "withCheck": "\"managed_registry_gc_runs\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
       "name": "managed_registry_gc_runs_tenant_rls",
@@ -8889,6 +9588,19 @@
       "entityType": "policies",
       "schema": "public",
       "table": "organization_member"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "ALL",
+      "roles": [
+        "app_tenant"
+      ],
+      "using": "\"organization_region_backup_bucket\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+      "withCheck": "\"organization_region_backup_bucket\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+      "name": "organization_region_backup_bucket_tenant_rls",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "organization_region_backup_bucket"
     },
     {
       "as": "PERMISSIVE",
@@ -9110,6 +9822,19 @@
       "entityType": "policies",
       "schema": "public",
       "table": "storage_bucket"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "ALL",
+      "roles": [
+        "app_tenant"
+      ],
+      "using": "\"storage_bucket_name_reservation\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+      "withCheck": "\"storage_bucket_name_reservation\".\"organization_id\" = ANY(COALESCE(NULLIF(current_setting('app.allowed_organizations', true), '')::uuid[], ARRAY[]::uuid[]))",
+      "name": "storage_bucket_name_reservation_tenant_rls",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "storage_bucket_name_reservation"
     },
     {
       "as": "PERMISSIVE",

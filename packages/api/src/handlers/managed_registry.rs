@@ -5,8 +5,8 @@ use axum::{
 };
 use chrono::{DateTime, FixedOffset};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction,
-    EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, Set, Statement,
+    ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseTransaction, EntityTrait,
+    PaginatorTrait, QueryFilter, QueryOrder, Statement,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -18,18 +18,14 @@ use crate::{
     middleware::auth::AuthContext,
     models::entities::{
         bucket, bucket_grant, credential, managed_registry, managed_registry_gc_run, project,
-        region, registry_repository, secret,
+        registry_repository, secret,
     },
-    services::buckets,
     state::get_app_state,
     utils::pagination::{PaginatedResponse, PaginationQuery},
 };
-use lib::entities::{
-    managed_registry::ManagedRegistryStatus,
-    region::{RegionRoutingMode, RegionStatus},
-    secret::SecretScope,
-};
+use lib::entities::{managed_registry::ManagedRegistryStatus, secret::SecretScope};
 use lib::operation::{Operation, registry_gc::RegistryGc};
+use lib::services::{buckets, managed_registry as managed_registry_service};
 
 use super::{
     databases::verify_org_access, registry::normalize_project_name,
@@ -37,7 +33,6 @@ use super::{
 };
 
 const REGISTRY_BUCKET_NAME: &str = "registry";
-const ACCESS_KEY_PREFIX: &str = "CP";
 
 #[derive(Deserialize, ToSchema)]
 pub struct ActivateManagedRegistryRequest {
@@ -189,7 +184,7 @@ pub async fn get_garbage_collection(
         (status = 201, description = "Managed Registry activated", body = ManagedRegistryResponse),
         (status = 200, description = "Managed Registry already active", body = ManagedRegistryResponse),
         (status = 404, description = "Organization or active region not found"),
-        (status = 409, description = "Active region has no S3 provider"),
+        (status = 409, description = "Active region has no S3 provider or registry creation is reserved (in progress or awaiting recovery)"),
     ),
     tag = "registry",
 )]
@@ -198,68 +193,25 @@ pub async fn activate_registry(
     Path(organization_id): Path<Uuid>,
     Json(body): Json<ActivateManagedRegistryRequest>,
 ) -> Result<(StatusCode, Json<ManagedRegistryResponse>), AppError> {
-    verify_org_access(&tenant_db, organization_id)?;
     let state = get_app_state();
-    let providers = state.s3_providers;
-    let scoped = tenant_db.begin_scoped_transaction().await?;
-    let tx = scoped.connection();
-    lock_organization(tx, organization_id).await?;
-
-    if let Some((existing, foundation)) = managed_registry::Entity::find_by_id(organization_id)
-        .find_also_related(bucket::Entity)
-        .one(tx)
-        .await?
-    {
-        let foundation = foundation
-            .ok_or_else(|| AppError::NotFound("Managed Registry bucket not found".into()))?;
-        let response = response(&existing, foundation.region_id);
-        scoped.commit().await?;
-        return Ok((StatusCode::OK, Json(response)));
-    }
-
-    let region = region::Entity::find_by_id(body.region_id)
-        .filter(region::Column::Status.eq(RegionStatus::Active))
-        .filter(region::Column::RoutingMode.ne(RegionRoutingMode::Disabled))
-        .one(tx)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Active region not found".into()))?;
-    let provider_id = region
-        .s3_provider_id
-        .ok_or_else(|| AppError::Conflict("Region has no S3 provider".into()))?;
-    let foundation_bucket_id =
-        buckets::create(tx, &providers, organization_id, region.id, provider_id).await?;
-    let provisioned = provision_metadata(tx, organization_id, foundation_bucket_id).await;
-    let registry = match provisioned {
-        Ok(registry) => registry,
-        Err(error) => {
-            let _ = providers
-                .delete_bucket(provider_id, foundation_bucket_id)
-                .await;
-            return Err(error);
-        }
-    };
-    if let Err(error) = record_event(
-        tx,
+    let activated = managed_registry_service::activate(
+        &tenant_db,
+        &state.s3_providers,
+        &state.secrets,
         organization_id,
         auth.actor_id,
-        "managed-registry:activated",
-        json!({ "summary": "Activated managed Registry", "target_id": organization_id }),
+        body.region_id,
     )
-    .await
-    {
-        let _ = providers
-            .delete_bucket(provider_id, foundation_bucket_id)
-            .await;
-        return Err(error);
-    }
-    let response = response(&registry, region.id);
-    if let Err(error) = scoped.commit().await {
-        let _ = providers
-            .delete_bucket(provider_id, foundation_bucket_id)
-            .await;
-        return Err(error);
-    }
-    Ok((StatusCode::CREATED, Json(response)))
+    .await?;
+    let status = if activated.created {
+        StatusCode::CREATED
+    } else {
+        StatusCode::OK
+    };
+    Ok((
+        status,
+        Json(response(&activated.registry, activated.region_id)),
+    ))
 }
 
 #[utoipa::path(
@@ -318,67 +270,6 @@ pub async fn run_garbage_collection(
     let response = garbage_collection_response(tx, &registry, 1, 10).await?;
     scoped.commit().await?;
     Ok((StatusCode::ACCEPTED, Json(response)))
-}
-
-async fn provision_metadata(
-    tx: &DatabaseTransaction,
-    organization_id: Uuid,
-    foundation_bucket_id: Uuid,
-) -> Result<managed_registry::Model, AppError> {
-    let state = get_app_state();
-    let credential_id = Uuid::new_v4();
-    let secret_id = Uuid::new_v4();
-    let access_key_id = format!("{ACCESS_KEY_PREFIX}{}", Uuid::new_v4().simple()).to_uppercase();
-    let secret_access_key = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
-    let plaintext = serde_json::to_vec(&S3SecretKey { secret_access_key })
-        .map_err(|error| AppError::Internal(error.to_string()))?;
-    let ciphertext = lib::secrets::encrypt(
-        &state.secrets,
-        &buckets::tenant_key(organization_id),
-        &plaintext,
-    )
-    .await?;
-    secret::ActiveModel {
-        id: Set(secret_id),
-        scope: Set(SecretScope::Tenant),
-        organization_id: Set(Some(organization_id)),
-        ciphertext: Set(ciphertext),
-        ..Default::default()
-    }
-    .insert(tx)
-    .await?;
-    credential::ActiveModel {
-        id: Set(credential_id),
-        organization_id: Set(Some(organization_id)),
-        access_key_id: Set(access_key_id),
-        prefix: Set(String::new()),
-        secret_id: Set(secret_id),
-        ..Default::default()
-    }
-    .insert(tx)
-    .await?;
-    bucket_grant::ActiveModel {
-        id: Set(Uuid::new_v4()),
-        credential_id: Set(credential_id),
-        bucket_id: Set(foundation_bucket_id),
-        organization_id: Set(Some(organization_id)),
-        prefix: Set(String::new()),
-        can_read: Set(true),
-        can_write: Set(true),
-        ..Default::default()
-    }
-    .insert(tx)
-    .await?;
-    Ok(managed_registry::ActiveModel {
-        organization_id: Set(organization_id),
-        bucket_id: Set(foundation_bucket_id),
-        credential_id: Set(credential_id),
-        status: Set(ManagedRegistryStatus::Active),
-        storage_revision: Set(Uuid::new_v4()),
-        ..Default::default()
-    }
-    .insert(tx)
-    .await?)
 }
 
 #[utoipa::path(

@@ -948,7 +948,6 @@ dependencies = [
 name = "c-plane"
 version = "0.1.0"
 dependencies = [
- "aws-sdk-s3",
  "axum",
  "base64",
  "chrono",
@@ -958,7 +957,6 @@ dependencies = [
  "hex",
  "jsonwebtoken",
  "lib",
- "oci-client",
  "prometheus",
  "redis",
  "reqwest 0.12.28",
@@ -999,6 +997,7 @@ dependencies = [
  "aws-sdk-s3",
  "axum",
  "base64",
+ "lib",
  "md-5 0.10.6",
  "reqwest 0.12.28",
  "s3s",
@@ -3578,12 +3577,17 @@ dependencies = [
  "axum",
  "base64",
  "chrono",
+ "jsonwebtoken",
+ "oci-client",
+ "redis",
  "reqwest 0.12.28",
  "sea-orm",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
+ "tracing",
+ "utoipa",
  "uuid",
 ]
 

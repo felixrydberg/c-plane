@@ -1,11 +1,11 @@
-use crate::errors::AppError;
-use aws_sdk_s3::config::{BehaviorVersion, Credentials, Region};
-use lib::{
+use crate::{
     buckets,
     cache::S3_PROVIDER_CREDENTIAL_CACHE_PREFIX,
     entities::{bucket, secret},
+    error::AppError,
     secrets::{self, Client, PLATFORM_KEY},
 };
+use aws_sdk_s3::config::{BehaviorVersion, Credentials, Region};
 use sea_orm::{
     ColumnTrait, ConnectionTrait, DatabaseBackend, DatabaseConnection, EntityTrait, QueryFilter,
     Statement,
@@ -187,7 +187,7 @@ impl S3ProviderClient {
             .clone()
             .unwrap_or_else(|| "us-east-1".into());
         let client = aws_sdk_s3::Client::from_conf(s3_config(&provider, &region));
-        lib::buckets::is_empty(&client, bucket_id)
+        crate::buckets::is_empty(&client, bucket_id)
             .await
             .map_err(|error| {
                 tracing::error!(%provider_id, %error, "S3 provider bucket status check failed");
@@ -218,7 +218,11 @@ impl S3ProviderClient {
                 access_keys
                     .iter()
                     .map(|access_key| {
-                        format!("{}{}", lib::cache::S3_ACCESS_TOKEN_CACHE_PREFIX, access_key)
+                        format!(
+                            "{}{}",
+                            crate::cache::S3_ACCESS_TOKEN_CACHE_PREFIX,
+                            access_key
+                        )
                     })
                     .collect::<Vec<_>>(),
             )
@@ -235,7 +239,7 @@ fn s3_bucket_operation_error(
     provider: &S3ProviderCredentials,
     region: &str,
     operation: &'static str,
-    error: &lib::buckets::Error,
+    error: &crate::buckets::Error,
     fallback: AppError,
 ) -> AppError {
     let (error_code, error_message) = buckets::error_details(error);

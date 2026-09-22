@@ -11,13 +11,12 @@ use uuid::Uuid;
 use crate::{
     errors::AppError,
     middleware::auth::AuthContext,
-    models::entities::{
-        bucket, bucket_grant, credential,
-        region::{self, RegionRoutingMode, RegionStatus},
-        storage,
-    },
-    services::buckets,
+    models::entities::{bucket, bucket_grant, credential, region, storage},
     state::get_app_state,
+};
+use lib::services::{
+    buckets,
+    storage_buckets::{self, CreateStorageBucketInput},
 };
 
 use super::databases::{verify_org_access, verify_org_owner, verify_project_in_org};
@@ -58,65 +57,23 @@ pub async fn create_bucket(
     Path(organization_id): Path<Uuid>,
     Json(body): Json<CreateBucketRequest>,
 ) -> Result<(axum::http::StatusCode, Json<BucketResponse>), AppError> {
-    verify_org_access(&tenant_db, organization_id)?;
-    let name = body.name.trim().to_ascii_lowercase();
-    if !valid_bucket_name(&name) {
-        return Err(AppError::BadRequest("Invalid bucket name".into()));
-    }
-
-    let providers = get_app_state().s3_providers;
-    let scoped = tenant_db.begin_scoped_transaction().await?;
-    let tx = scoped.connection();
-    verify_project_in_org(tx, body.project_id, organization_id).await?;
-    if storage::Entity::find()
-        .filter(storage::Column::ProjectId.eq(body.project_id))
-        .filter(storage::Column::Name.eq(&name))
-        .one(tx)
-        .await?
-        .is_some()
-    {
-        return Err(AppError::Conflict(
-            "Bucket name is already reserved in this project".into(),
-        ));
-    }
-    let region = region::Entity::find_by_id(body.region)
-        .filter(region::Column::Status.eq(RegionStatus::Active))
-        .filter(region::Column::RoutingMode.ne(RegionRoutingMode::Disabled))
-        .one(tx)
-        .await?
-        .ok_or_else(|| AppError::NotFound("Active region not found".into()))?;
-    let provider_id = region
-        .s3_provider_id
-        .ok_or_else(|| AppError::Conflict("Region has no S3 provider".into()))?;
-    let foundation_bucket_id =
-        buckets::create(tx, &providers, organization_id, region.id, provider_id).await?;
-    let created = storage::ActiveModel {
-        id: Set(Uuid::new_v4()),
-        project_id: Set(body.project_id),
-        organization_id: Set(organization_id),
-        bucket_id: Set(foundation_bucket_id),
-        name: Set(name.clone()),
-    }
-    .insert(tx)
-    .await?;
-    crate::services::events::record(
-        tx,
+    let state = get_app_state();
+    let created = storage_buckets::create(
+        &tenant_db,
+        &state.s3_providers,
+        &state.secrets,
         organization_id,
-        body.project_id,
-        "bucket:created",
-        json!({ "summary": format!("Created bucket '{name}'"), "target_id": created.id }),
         auth.actor_id,
+        CreateStorageBucketInput {
+            project_id: body.project_id,
+            name: body.name,
+            region_id: body.region,
+        },
     )
     .await?;
-    if let Err(error) = scoped.commit().await {
-        let _ = providers
-            .delete_bucket(provider_id, foundation_bucket_id)
-            .await;
-        return Err(error);
-    }
     Ok((
         axum::http::StatusCode::CREATED,
-        Json(response(&created, &region)),
+        Json(response(&created.bucket, &created.region)),
     ))
 }
 
@@ -232,7 +189,7 @@ pub async fn delete_bucket(
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
     buckets::delete(tx, bucket.bucket_id).await?;
-    crate::services::events::record(
+    lib::services::events::record(
         tx,
         organization_id,
         bucket.project_id,
@@ -254,26 +211,5 @@ fn response(bucket: &storage::Model, region: &region::Model) -> BucketResponse {
             label: region.display_name.clone(),
             slug: region.slug.clone(),
         },
-    }
-}
-
-fn valid_bucket_name(name: &str) -> bool {
-    (3..=63).contains(&name.len())
-        && !name.starts_with(['.', '-'])
-        && !name.ends_with(['.', '-'])
-        && name.bytes().all(|byte| {
-            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'-')
-        })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::valid_bucket_name;
-    #[test]
-    fn validates_s3_bucket_name_basics() {
-        assert!(valid_bucket_name("project-assets"));
-        assert!(!valid_bucket_name("UPPERCASE"));
-        assert!(!valid_bucket_name("ab"));
-        assert!(!valid_bucket_name("-assets"));
     }
 }

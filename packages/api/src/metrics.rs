@@ -100,7 +100,7 @@ pub async fn http_metrics(req: Request<Body>, next: axum::middleware::Next) -> i
     response
 }
 
-#[utoipa::path(get, path = "/metrics", responses((status = 200, description = "Prometheus metrics")))]
+#[utoipa::path(get, path = "/metrics", tag = "metrics", responses((status = 200, description = "Prometheus metrics")))]
 pub async fn endpoint() -> impl IntoResponse {
     collect_platform_metrics().await;
     let mut buffer = Vec::new();
@@ -116,11 +116,7 @@ pub async fn endpoint() -> impl IntoResponse {
     )
 }
 
-async fn count(
-    db: &DatabaseConnection,
-    entity: &str,
-    table: &str,
-) -> Result<(), sea_orm::DbErr> {
+async fn count(db: &DatabaseConnection, entity: &str, table: &str) -> Result<(), sea_orm::DbErr> {
     let filter = if entity == "active_api_keys" {
         " WHERE expires_at IS NULL OR expires_at = 0 OR created_at + make_interval(months => expires_at) > NOW()"
     } else {

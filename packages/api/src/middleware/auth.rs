@@ -95,108 +95,107 @@ where
         let identity_db = state.identity_db;
         let tenant_db_conn = state.tenant_db;
 
-        let (organization_context, request_auth) =
-            if let Some(raw_api_key) = extract_api_key_from_parts(parts).map(str::to_owned) {
-                // Routes without a declared scope deny API keys (fail-closed).
-                let api_key: ApiKeyLookup =
-                    match resolve_api_key(&identity_db, &raw_api_key, peer_ip)
-                        .await
-                        .map_err(|error| {
-                            metrics::auth("api_key", "failure");
-                            error
-                        })?
-                    {
-                        Some(key) => key,
-                        None => {
-                            metrics::auth("api_key", "failure");
-                            return Err(AppError::Unauthorized("Invalid API key".to_string()));
-                        }
-                    };
-                scoped::check_api_key(guard, &api_key.scopes).map_err(|error| {
+        let (organization_context, request_auth) = if let Some(raw_api_key) =
+            extract_api_key_from_parts(parts).map(str::to_owned)
+        {
+            // Routes without a declared scope deny API keys (fail-closed).
+            let api_key: ApiKeyLookup = match resolve_api_key(&identity_db, &raw_api_key, peer_ip)
+                .await
+                .map_err(|error| {
                     metrics::auth("api_key", "failure");
                     error
-                })?;
-                metrics::auth("api_key", "success");
-                (
-                    OrganizationContext {
-                        allowed_organizations: vec![api_key.organization_id],
-                        organization_roles: HashMap::new(),
-                        api_key_organization_id: Some(api_key.organization_id),
-                    },
-                    RequestAuthContext {
-                        actor_id: api_key.id,
-                        roles: HashMap::new(),
-                    },
-                )
-            } else {
-                let cookie_header = parts
-                    .headers
-                    .get("cookie")
-                    .and_then(|h| h.to_str().ok())
-                    .ok_or_else(|| {
-                        metrics::auth("session", "failure");
-                        AppError::Unauthorized("Missing session cookie".to_string())
-                    })?;
-                let actor_id = resolve_user_from_cookie(cookie_header)
-                    .await
-                    .map_err(|error| {
-                        metrics::auth("session", "failure");
-                        error
-                    })?;
-                let memberships = resolve_user_memberships(&identity_db, actor_id)
-                    .await
-                    .map_err(|error| {
-                        metrics::auth("session", "failure");
-                        error
-                    })?;
-
-                if memberships.is_empty() {
-                    metrics::auth("session", "failure");
-                    return Err(AppError::Forbidden(
-                        "User has no organization access".to_string(),
-                    ));
+                })? {
+                Some(key) => key,
+                None => {
+                    metrics::auth("api_key", "failure");
+                    return Err(AppError::Unauthorized("Invalid API key".to_string()));
                 }
-
-                let mut roles = HashMap::with_capacity(memberships.len());
-                for (organization_id, role) in &memberships {
-                    roles.insert(*organization_id, Role::parse(role));
-                }
-                let request_auth = RequestAuthContext { actor_id, roles };
-
-                if let Some(guard) = guard {
-                    scoped::check_role(guard, organization_id, &request_auth.roles).map_err(
-                        |error| {
-                            metrics::auth("session", "failure");
-                            error
-                        },
-                    )?;
-                }
-
-                metrics::auth("session", "success");
-                (
-                    OrganizationContext {
-                        // Scope tenant queries to the organization in the
-                        // request path, not every org the user belongs to.
-                        // Falls back to full memberships only when the route
-                        // has no {organization_id} segment.
-                        allowed_organizations: match organization_id {
-                            Some(path_org) => vec![path_org],
-                            None => memberships
-                                .iter()
-                                .map(|(organization_id, _)| *organization_id)
-                                .collect(),
-                        },
-                        // Raw better-auth strings for verify_org_owner-style
-                        // checks; parsed ranks live on request_auth.roles.
-                        organization_roles: memberships
-                            .iter()
-                            .map(|(organization_id, role)| (*organization_id, role.clone()))
-                            .collect(),
-                        api_key_organization_id: None,
-                    },
-                    request_auth,
-                )
             };
+            scoped::check_api_key(guard, &api_key.scopes).map_err(|error| {
+                metrics::auth("api_key", "failure");
+                error
+            })?;
+            metrics::auth("api_key", "success");
+            (
+                OrganizationContext {
+                    allowed_organizations: vec![api_key.organization_id],
+                    organization_roles: HashMap::new(),
+                    api_key_organization_id: Some(api_key.organization_id),
+                },
+                RequestAuthContext {
+                    actor_id: api_key.id,
+                    roles: HashMap::new(),
+                },
+            )
+        } else {
+            let cookie_header = parts
+                .headers
+                .get("cookie")
+                .and_then(|h| h.to_str().ok())
+                .ok_or_else(|| {
+                    metrics::auth("session", "failure");
+                    AppError::Unauthorized("Missing session cookie".to_string())
+                })?;
+            let actor_id = resolve_user_from_cookie(cookie_header)
+                .await
+                .map_err(|error| {
+                    metrics::auth("session", "failure");
+                    error
+                })?;
+            let memberships = resolve_user_memberships(&identity_db, actor_id)
+                .await
+                .map_err(|error| {
+                    metrics::auth("session", "failure");
+                    error
+                })?;
+
+            if memberships.is_empty() {
+                metrics::auth("session", "failure");
+                return Err(AppError::Forbidden(
+                    "User has no organization access".to_string(),
+                ));
+            }
+
+            let mut roles = HashMap::with_capacity(memberships.len());
+            for (organization_id, role) in &memberships {
+                roles.insert(*organization_id, Role::parse(role));
+            }
+            let request_auth = RequestAuthContext { actor_id, roles };
+
+            if let Some(guard) = guard {
+                scoped::check_role(guard, organization_id, &request_auth.roles).map_err(
+                    |error| {
+                        metrics::auth("session", "failure");
+                        error
+                    },
+                )?;
+            }
+
+            metrics::auth("session", "success");
+            (
+                OrganizationContext {
+                    // Scope tenant queries to the organization in the
+                    // request path, not every org the user belongs to.
+                    // Falls back to full memberships only when the route
+                    // has no {organization_id} segment.
+                    allowed_organizations: match organization_id {
+                        Some(path_org) => vec![path_org],
+                        None => memberships
+                            .iter()
+                            .map(|(organization_id, _)| *organization_id)
+                            .collect(),
+                    },
+                    // Raw better-auth strings for verify_org_owner-style
+                    // checks; parsed ranks live on request_auth.roles.
+                    organization_roles: memberships
+                        .iter()
+                        .map(|(organization_id, role)| (*organization_id, role.clone()))
+                        .collect(),
+                    api_key_organization_id: None,
+                },
+                request_auth,
+            )
+        };
 
         let tenant_db = TenantDatabase::new(tenant_db_conn, organization_context);
 

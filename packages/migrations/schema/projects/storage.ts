@@ -1,9 +1,11 @@
-import { index, pgPolicy, pgTable, text, timestamp, unique, uniqueIndex, uuid, foreignKey } from "drizzle-orm/pg-core";
+import { index, pgPolicy, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid, foreignKey } from "drizzle-orm/pg-core";
 import { project } from "./index.ts";
 import { organization } from "../tenants/organization.ts";
 import { app_tenant, orgAllowed } from "../rls.ts";
 import { bucket } from "../infrastructure/buckets.ts";
 import { credential } from "../infrastructure/secrets.ts";
+import { region } from "../infrastructure/regions.ts";
+import { s3_provider } from "../infrastructure/durability.ts";
 
 export const storage_bucket = pgTable.withRLS('storage_bucket', {
   id: uuid("id").primaryKey(),
@@ -27,6 +29,23 @@ export const storage_bucket = pgTable.withRLS('storage_bucket', {
     to: app_tenant,
     using: orgAllowed(table.organization_id),
     withCheck: orgAllowed(table.organization_id),
+  }),
+]);
+
+export const storage_bucket_name_reservation = pgTable.withRLS('storage_bucket_name_reservation', {
+  organization_id: uuid("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  project_id: uuid("project_id").notNull().references(() => project.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  bucket_id: uuid("bucket_id").notNull(),
+  region_id: uuid("region_id").notNull().references(() => region.id, { onDelete: "restrict" }),
+  provider_id: uuid("provider_id").notNull().references(() => s3_provider.id, { onDelete: "restrict" }),
+  created_at: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  primaryKey({ name: "storage_bucket_name_reservation_pk", columns: [table.project_id, table.name] }),
+  index("storage_bucket_name_reservation_organization_id_idx").on(table.organization_id),
+  pgPolicy("storage_bucket_name_reservation_tenant_rls", {
+    as: "permissive", for: "all", to: app_tenant,
+    using: orgAllowed(table.organization_id), withCheck: orgAllowed(table.organization_id),
   }),
 ]);
 

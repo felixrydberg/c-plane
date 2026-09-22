@@ -307,7 +307,7 @@ async fn load_container_configs(
         .await?
         .into_iter()
         .map(|row| {
-            if row.schema_version != crate::models::manifest::MANIFEST_SCHEMA_VERSION {
+            if row.schema_version != lib::manifest::MANIFEST_SCHEMA_VERSION {
                 return Err(AppError::Conflict(
                     "Unsupported revision manifest schema version".into(),
                 ));

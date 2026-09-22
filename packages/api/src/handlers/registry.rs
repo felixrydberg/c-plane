@@ -66,11 +66,6 @@ struct RegistryIdentity {
     project_id: Uuid,
 }
 
-pub(crate) struct SignedRepositoryAccess {
-    pub token: String,
-    pub repository_name: String,
-}
-
 pub(crate) fn normalize_project_name(name: &str) -> String {
     let mut normalized = String::new();
     let mut pending_separator = false;
@@ -104,26 +99,6 @@ async fn registry_project_name(
         .await?
         .map(|project| normalize_project_name(&project.name))
         .ok_or_else(|| AppError::NotFound("Project not found".into()))
-}
-
-pub(crate) async fn resolve_registry_project_id(
-    organization_id: Uuid,
-    project_name: &str,
-) -> Result<Uuid, AppError> {
-    let projects = project::Entity::find()
-        .filter(project::Column::OrganizationId.eq(organization_id))
-        .all(get_app_state().identity_db.connection())
-        .await?;
-    let matching_projects = projects
-        .into_iter()
-        .filter(|project| normalize_project_name(&project.name) == project_name)
-        .collect::<Vec<_>>();
-    match matching_projects.as_slice() {
-        [project] => Ok(project.id),
-        _ => Err(AppError::BadRequest(
-            "Internal registry image has an invalid project name".into(),
-        )),
-    }
 }
 
 #[utoipa::path(
@@ -201,41 +176,6 @@ pub async fn issue_token(
         expires_in: token_ttl_seconds,
         issued_at: now.to_rfc3339(),
     }))
-}
-
-pub(crate) async fn sign_repository_access(
-    organization_id: Uuid,
-    project_id: Uuid,
-    repository_id: Uuid,
-    repository_name: &str,
-    actions: &[&str],
-) -> Result<SignedRepositoryAccess, AppError> {
-    let organization_slug = organization_slug(organization_id).await?;
-    let project_name = registry_project_name(organization_id, project_id).await?;
-    let repository_name = format!("{organization_slug}/{project_name}/{repository_name}");
-    let token_ttl_seconds = get_app_state().config.registry_token_ttl_seconds;
-    let now = chrono::Utc::now();
-    let issued_at = now.timestamp() as u64;
-    let token = sign_registry_claims(&RegistryClaims {
-        iss: env::var("REGISTRY_TOKEN_ISSUER").unwrap_or_else(|_| "cplane-registry".into()),
-        sub: "cplane-control-plane".into(),
-        aud: env::var("REGISTRY_HOST").unwrap_or_else(|_| "localhost:5000".into()),
-        exp: registry_token_exp(issued_at, token_ttl_seconds)?,
-        nbf: issued_at.saturating_sub(5),
-        iat: issued_at,
-        jti: Uuid::new_v4().to_string(),
-        organization_id,
-        access: vec![RegistryAccess {
-            resource_type: "repository",
-            name: repository_name.clone(),
-            actions: actions.iter().map(|action| (*action).into()).collect(),
-            repository_id: Some(repository_id),
-        }],
-    })?;
-    Ok(SignedRepositoryAccess {
-        token,
-        repository_name,
-    })
 }
 
 fn sign_registry_claims(claims: &RegistryClaims) -> Result<String, AppError> {
@@ -433,10 +373,7 @@ pub(crate) async fn registry_is_active(organization_id: Uuid) -> Result<bool, Ap
 }
 
 /// During maintenance only pull grants are issued; push/delete scopes are dropped.
-fn restrict_to_reads(
-    mut access: RegistryAccess,
-    reads_only: bool,
-) -> Option<RegistryAccess> {
+fn restrict_to_reads(mut access: RegistryAccess, reads_only: bool) -> Option<RegistryAccess> {
     if reads_only {
         access.actions.retain(|action| action == "pull");
         if access.actions.is_empty() {
@@ -480,8 +417,8 @@ fn registry_signing_secret() -> Result<Vec<u8>, AppError> {
 mod tests {
     use super::{
         RegistryAccess, RegistryClaims, access_for_scope, apply_repository_grant,
-        normalize_project_name, parse_registry_token_query, registry_token_exp,
-        restrict_to_reads, sign_registry_claims_with_secret,
+        normalize_project_name, parse_registry_token_query, registry_token_exp, restrict_to_reads,
+        sign_registry_claims_with_secret,
     };
     use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
     use serde_json::Value;

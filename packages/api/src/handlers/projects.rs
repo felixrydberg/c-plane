@@ -13,17 +13,14 @@ use super::databases::{verify_org_access, verify_org_owner};
 use crate::errors::AppError;
 use crate::middleware::auth::AuthContext;
 use crate::models::entities::{
-    credential, project, project_environment, project_timeline, secret, storage,
+    credential, postgres_database, project, project_environment, project_timeline, secret, storage,
     storage_access_token,
 };
 use crate::models::manifest::RevisionManifest;
-use crate::services::agent;
-use crate::services::buckets;
-use crate::services::events;
-use crate::services::revisions;
 use crate::state::get_app_state;
 use crate::utils::pagination::{PaginatedResponse, PaginationQuery};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use lib::services::{agent, buckets, events, postgres_databases as database_service, revisions};
 
 #[derive(Deserialize, ToSchema)]
 pub struct CreateProjectRequest {
@@ -555,6 +552,11 @@ pub async fn delete_project(
 ) -> Result<Json<serde_json::Value>, AppError> {
     verify_org_access(&tenant_db, organization_id)?;
     verify_org_owner(&tenant_db, organization_id)?;
+    let state = get_app_state();
+    let context = database_service::ServiceContext {
+        providers: &state.s3_providers,
+        secrets: &state.secrets,
+    };
 
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
@@ -587,6 +589,24 @@ pub async fn delete_project(
         .filter(secret::Column::Id.is_in(secret_ids))
         .exec(tx)
         .await?;
+    let databases = postgres_database::Entity::find()
+        .filter(postgres_database::Column::ProjectId.eq(project_id))
+        .order_by_asc(postgres_database::Column::Id)
+        .all(tx)
+        .await?;
+    let mut deleted_databases = Vec::with_capacity(databases.len());
+    for database in databases {
+        deleted_databases.push(
+            database_service::delete_database_in_transaction(
+                tx,
+                organization_id,
+                auth.actor_id,
+                &context,
+                database.id,
+            )
+            .await?,
+        );
+    }
     let storage_buckets = storage::Entity::find()
         .filter(storage::Column::ProjectId.eq(project_id))
         .all(tx)
@@ -609,13 +629,15 @@ pub async fn delete_project(
     )
     .await?;
     scoped.commit().await?;
-    if let Err(error) = get_app_state()
-        .s3_providers
+    if let Err(error) = context
+        .providers
         .invalidate_access_token_caches(&access_keys)
         .await
     {
         tracing::warn!(%error, %project_id, "project cache invalidation failed after deletion");
     }
+    database_service::finalize_deleted_databases(&context, organization_id, &deleted_databases)
+        .await?;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }
@@ -1092,6 +1114,12 @@ pub async fn delete_environment(
     verify_org_access(&tenant_db, organization_id)?;
     verify_org_owner(&tenant_db, organization_id)?;
 
+    let state = get_app_state();
+    let context = database_service::ServiceContext {
+        providers: &state.s3_providers,
+        secrets: &state.secrets,
+    };
+
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
 
@@ -1115,6 +1143,14 @@ pub async fn delete_environment(
         .ok_or_else(|| AppError::NotFound("Environment not found".into()))?;
 
     revisions::lock_project(tx, project_id).await?;
+    let deleted_databases = database_service::delete_environment_branches_in_transaction(
+        tx,
+        organization_id,
+        project_id,
+        environment_id,
+        &context,
+    )
+    .await?;
     project_timeline::Entity::update_many()
         .col_expr(
             project_timeline::Column::EnvironmentId,
@@ -1143,6 +1179,8 @@ pub async fn delete_environment(
     .await?;
 
     scoped.commit().await?;
+    database_service::finalize_deleted_databases(&context, organization_id, &deleted_databases)
+        .await?;
 
     Ok(Json(serde_json::json!({ "success": true })))
 }

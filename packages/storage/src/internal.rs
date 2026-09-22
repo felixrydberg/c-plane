@@ -1,6 +1,6 @@
 use aws_sdk_s3::{
     config::{BehaviorVersion, Credentials, Region},
-    types::{Delete, Object, ObjectIdentifier},
+    types::Object,
 };
 use axum::{
     Json,
@@ -317,83 +317,16 @@ async fn delete_prefix(
     prefix: &str,
     continuation_token: Option<String>,
 ) -> Result<DeletePrefixResult, StatusCode> {
-    let prefix = folder_prefix(prefix);
-    let mut continuation_token = continuation_token;
-    let mut deleted = 0;
-    let mut pages = 0;
-
-    loop {
-        let output = client
-            .list_objects_v2()
-            .bucket(bucket)
-            .prefix(&prefix)
-            .set_continuation_token(continuation_token)
-            .send()
-            .await
-            .map_err(|_error| {
-                tracing::error!(bucket_id = %bucket_id, prefix, operation = "ListObjectsV2", "storage gateway operation failed while deleting prefix");
-                StatusCode::BAD_GATEWAY
-            })?;
-
-        let identifiers = output
-            .contents()
-            .iter()
-            .filter_map(|object| object.key())
-            .map(|key| {
-                ObjectIdentifier::builder()
-                    .key(key)
-                    .build()
-                    .map_err(|_error| {
-                        tracing::error!(bucket_id = %bucket_id, prefix, operation = "DeleteObjects", "failed to build object delete request");
-                        StatusCode::BAD_GATEWAY
-                    })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
-        if !identifiers.is_empty() {
-            let batch_size = identifiers.len();
-            let delete = Delete::builder()
-                .set_objects(Some(identifiers))
-                .quiet(true)
-                .build()
-                .map_err(|_error| {
-                    tracing::error!(bucket_id = %bucket_id, prefix, operation = "DeleteObjects", "failed to build object delete request");
-                    StatusCode::BAD_GATEWAY
-                })?;
-            let response = client
-                .delete_objects()
-                .bucket(bucket)
-                .delete(delete)
-                .send()
-                .await
-                .map_err(|_error| {
-                    tracing::error!(bucket_id = %bucket_id, prefix, operation = "DeleteObjects", "storage gateway operation failed");
-                    StatusCode::BAD_GATEWAY
-                })?;
-            if !response.errors().is_empty() {
-                tracing::error!(bucket_id = %bucket_id, prefix, error_count = response.errors().len(), operation = "DeleteObjects", "storage provider returned delete errors");
-                return Err(StatusCode::BAD_GATEWAY);
-            }
-            deleted += batch_size;
-        }
-
-        continuation_token = output.next_continuation_token().map(str::to_owned);
-        pages += 1;
-        if continuation_token.is_none() || pages == MAX_DELETE_PAGES {
-            return Ok(DeletePrefixResult {
-                deleted,
-                next_continuation_token: continuation_token,
-            });
-        }
-    }
-}
-
-fn folder_prefix(prefix: &str) -> String {
-    if prefix.ends_with('/') {
-        prefix.to_owned()
-    } else {
-        format!("{prefix}/")
-    }
+    let result = lib::buckets::delete_prefix(client, bucket, prefix, continuation_token, MAX_DELETE_PAGES)
+        .await
+        .map_err(|_error| {
+            tracing::error!(bucket_id = %bucket_id, prefix, operation = "DeletePrefix", "storage gateway operation failed while deleting prefix");
+            StatusCode::BAD_GATEWAY
+        })?;
+    Ok(DeletePrefixResult {
+        deleted: result.deleted,
+        next_continuation_token: result.next_continuation_token,
+    })
 }
 
 fn is_folder_marker(object: &Object) -> bool {
@@ -427,11 +360,5 @@ mod tests {
         assert!(!storage.authorized(&headers));
         headers.insert("x-cplane-token", HeaderValue::from_static("correct"));
         assert!(storage.authorized(&headers));
-    }
-
-    #[test]
-    fn normalizes_folder_prefixes() {
-        assert_eq!(super::folder_prefix("folder"), "folder/");
-        assert_eq!(super::folder_prefix("folder/"), "folder/");
     }
 }
