@@ -19,6 +19,7 @@ pub struct TenantDatabase {
     pub context: OrganizationContext,
 }
 
+#[must_use = "call commit() to persist changes; dropping the transaction rolls them back"]
 pub struct ScopedTenantTransaction {
     tx: DatabaseTransaction,
 }

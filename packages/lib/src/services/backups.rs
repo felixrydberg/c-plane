@@ -10,9 +10,11 @@ use crate::entities::{
     s3_provider,
 };
 use crate::error::AppError;
+use crate::retry::{Retry, RetryError};
 use crate::secrets::Client;
 use crate::services::{buckets, s3_providers::S3ProviderClient};
 use crate::tenant::TenantDatabase;
+use std::time::Duration;
 
 pub struct BackupBucket {
     pub mapping_id: Uuid,
@@ -26,6 +28,7 @@ pub async fn ensure_backup_bucket(
     providers: &S3ProviderClient,
     secrets: &Client,
 ) -> Result<BackupBucket, AppError> {
+    let bucket_id = Uuid::new_v4();
     let scoped = tenant_db.begin_scoped_transaction().await?;
     let tx = scoped.connection();
     lock_region(tx, organization_id, region_id).await?;
@@ -69,16 +72,52 @@ pub async fn ensure_backup_bucket(
         scoped.commit().await?;
         return Ok(backup_bucket);
     }
-
-    let bucket_id = buckets::create(
-        tx,
-        providers,
-        secrets,
-        organization_id,
-        region_id,
-        provider_id,
-    )
-    .await?;
+    scoped.commit().await?;
+    let scoped = Retry::new(3, Duration::from_secs(10), Duration::from_millis(250))
+        .run(
+            || {
+                buckets::create(
+                    tenant_db,
+                    providers,
+                    secrets,
+                    organization_id,
+                    region_id,
+                    provider_id,
+                    bucket_id,
+                )
+            },
+            |_| true,
+        )
+        .await
+        .map_err(|error| match error {
+            RetryError::Failed(error) => error,
+            RetryError::TimedOut => {
+                AppError::ServiceUnavailable("Bucket creation timed out".into())
+            }
+        })?;
+    let tx = scoped.connection();
+    lock_region(tx, organization_id, region_id).await?;
+    if let Some(mapping) = organization_region_backup_bucket::Entity::find()
+        .filter(organization_region_backup_bucket::Column::OrganizationId.eq(organization_id))
+        .filter(organization_region_backup_bucket::Column::RegionId.eq(region_id))
+        .one(tx)
+        .await?
+    {
+        let foundation = bucket::Entity::find_by_id(mapping.bucket_id)
+            .one(tx)
+            .await?
+            .ok_or_else(|| AppError::Conflict("Backup bucket not found".into()))?;
+        let backup_bucket = BackupBucket {
+            mapping_id: mapping.id,
+            bucket_id: mapping.bucket_id,
+        };
+        drop(scoped);
+        compensate_created_bucket(providers, provider_id, bucket_id).await;
+        if foundation.status != bucket::BucketStatus::Active {
+            return Err(AppError::Conflict("Backup bucket is not active".into()));
+        }
+        return Ok(backup_bucket);
+    }
     let mapping = match (organization_region_backup_bucket::ActiveModel {
         id: Set(Uuid::new_v4()),
         organization_id: Set(organization_id),

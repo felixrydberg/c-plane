@@ -6,27 +6,30 @@ use crate::{
     error::AppError,
     secrets::Client,
     services::s3_providers::S3ProviderClient,
+    tenant::{ScopedTenantTransaction, TenantDatabase},
 };
 
 pub async fn create(
-    tx: &DatabaseTransaction,
+    tenant_db: &TenantDatabase,
     providers: &S3ProviderClient,
     secrets: &Client,
     organization_id: Uuid,
     region_id: Uuid,
     provider_id: Uuid,
-) -> Result<Uuid, AppError> {
-    let bucket_id = Uuid::new_v4();
+    bucket_id: Uuid,
+) -> Result<ScopedTenantTransaction, AppError> {
     providers.create_bucket(provider_id, bucket_id).await?;
-    if let Err(error) =
-        crate::buckets::create_foundation(tx, secrets, organization_id, region_id, bucket_id).await
-    {
-        if let Err(delete_error) = providers.delete_bucket(provider_id, bucket_id).await {
-            tracing::warn!(%provider_id, %bucket_id, %delete_error, "failed to compensate bucket after foundation error");
-        }
-        return Err(AppError::Internal(error.to_string()));
-    }
-    Ok(bucket_id)
+    let scoped = tenant_db.begin_scoped_transaction().await?;
+    crate::buckets::create_foundation(
+        scoped.connection(),
+        secrets,
+        organization_id,
+        region_id,
+        bucket_id,
+    )
+    .await
+    .map_err(|error| AppError::Internal(error.to_string()))?;
+    Ok(scoped)
 }
 
 pub async fn delete(tx: &DatabaseTransaction, bucket_id: Uuid) -> Result<(), AppError> {

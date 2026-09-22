@@ -84,21 +84,34 @@ pub async fn create(
     region: Option<&str>,
     bucket_id: Uuid,
 ) -> Result<()> {
-    let request = client
+    match client
+        .head_bucket()
+        .bucket(physical_bucket_name(bucket_id))
+        .send()
+        .await
+    {
+        Ok(_) => return Ok(()),
+        Err(error)
+            if error
+                .raw_response()
+                .is_some_and(|response| response.status().as_u16() == 404) => {}
+        Err(error) => return Err(s3_provider_error(error)),
+    }
+    let mut request = client
         .create_bucket()
         .bucket(physical_bucket_name(bucket_id));
     if let Some(region) = region.filter(|region| *region != "us-east-1") {
-        request
-            .create_bucket_configuration(
-                CreateBucketConfiguration::builder()
-                    .location_constraint(BucketLocationConstraint::from(region))
-                    .build(),
-            )
-            .send()
-            .await
-            .map_err(s3_provider_error)?;
-    } else {
-        request.send().await.map_err(s3_provider_error)?;
+        request = request.create_bucket_configuration(
+            CreateBucketConfiguration::builder()
+                .location_constraint(BucketLocationConstraint::from(region))
+                .build(),
+        );
+    }
+    if let Err(error) = request.send().await
+        && error.as_service_error().and_then(|error| error.code())
+            != Some("BucketAlreadyOwnedByYou")
+    {
+        return Err(s3_provider_error(error));
     }
     Ok(())
 }
@@ -110,6 +123,13 @@ pub async fn create_foundation(
     region_id: Uuid,
     bucket_id: Uuid,
 ) -> Result<()> {
+    if bucket::Entity::find_by_id(bucket_id)
+        .one(connection)
+        .await?
+        .is_some()
+    {
+        return Ok(());
+    }
     let secret_id = Uuid::new_v4();
     let first = Uuid::new_v4();
     let second = Uuid::new_v4();
@@ -344,7 +364,77 @@ pub async fn delete(client: &aws_sdk_s3::Client, bucket_id: Uuid) -> Result<()> 
 #[cfg(test)]
 mod tests {
     use super::{is_credentials_error_code, normalize_prefix, physical_bucket_name};
+    use axum::{
+        Router,
+        http::{Method, StatusCode, Uri},
+        routing::any,
+    };
+    use std::sync::{Arc, Mutex};
     use uuid::Uuid;
+
+    async fn s3_client(app: Router) -> (aws_sdk_s3::Client, tokio::task::JoinHandle<()>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let config = aws_sdk_s3::config::Builder::new()
+            .behavior_version_latest()
+            .region(aws_sdk_s3::config::Region::new("us-east-1"))
+            .endpoint_url(format!("http://{address}"))
+            .credentials_provider(aws_sdk_s3::config::Credentials::new(
+                "test", "test", None, None, "test",
+            ))
+            .force_path_style(true)
+            .build();
+        (aws_sdk_s3::Client::from_conf(config), server)
+    }
+
+    #[tokio::test]
+    async fn repeated_creation_reuses_the_physical_bucket() {
+        let bucket_id = Uuid::new_v4();
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let captured = requests.clone();
+        let app = Router::new().fallback(any(move |method: Method, uri: Uri| {
+            assert_eq!(
+                uri.path().trim_end_matches('/'),
+                format!("/{}", physical_bucket_name(bucket_id))
+            );
+            let mut requests = captured.lock().unwrap();
+            requests.push(method);
+            let status = if requests.len() == 1 {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::OK
+            };
+            async move { status }
+        }));
+        let (client, server) = s3_client(app).await;
+        super::create(&client, Some("us-east-1"), bucket_id)
+            .await
+            .unwrap();
+        super::create(&client, Some("us-east-1"), bucket_id)
+            .await
+            .unwrap();
+        server.abort();
+        assert_eq!(
+            *requests.lock().unwrap(),
+            [Method::HEAD, Method::PUT, Method::HEAD]
+        );
+    }
+
+    #[tokio::test]
+    async fn denied_bucket_lookup_does_not_create_a_bucket() {
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let captured = requests.clone();
+        let app = Router::new().fallback(any(move |method: Method| {
+            captured.lock().unwrap().push(method);
+            async { StatusCode::FORBIDDEN }
+        }));
+        let (client, server) = s3_client(app).await;
+        let result = super::create(&client, Some("us-east-1"), Uuid::new_v4()).await;
+        server.abort();
+        assert!(result.is_err());
+        assert_eq!(*requests.lock().unwrap(), [Method::HEAD]);
+    }
 
     #[test]
     fn normalizes_folder_prefixes() {
