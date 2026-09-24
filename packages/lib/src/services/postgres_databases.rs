@@ -12,7 +12,7 @@ use crate::operation::{
 };
 
 use crate::entities::{
-    credential, organization_region_backup_bucket, postgres_database, postgres_database_branch,
+    credential, event, organization_region_backup_bucket, postgres_database, postgres_database_branch,
     project, project_environment, region, secret,
 };
 use crate::error::AppError;
@@ -457,6 +457,89 @@ pub async fn delete_database_in_transaction(
         id: database.id,
         branches: deleted_branches,
     })
+}
+
+pub async fn delete_project_in_transaction(
+    tx: &DatabaseTransaction,
+    organization_id: Uuid,
+    actor_id: Uuid,
+    context: &ServiceContext<'_>,
+    project_id: Uuid,
+) -> Result<Vec<DeletedPostgresDatabase>, AppError> {
+    let databases = postgres_database::Entity::find()
+        .filter(postgres_database::Column::OrganizationId.eq(organization_id))
+        .filter(postgres_database::Column::ProjectId.eq(project_id))
+        .order_by_asc(postgres_database::Column::Id)
+        .lock_exclusive()
+        .all(tx)
+        .await?;
+    let database_ids = databases
+        .iter()
+        .map(|database| database.id)
+        .collect::<Vec<_>>();
+    if database_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let branches = postgres_database_branch::Entity::find()
+        .filter(postgres_database_branch::Column::OrganizationId.eq(organization_id))
+        .filter(postgres_database_branch::Column::DatabaseId.is_in(database_ids.clone()))
+        .find_also_related(credential::Entity)
+        .all(tx)
+        .await?;
+    let database_by_branch = branches
+        .iter()
+        .map(|(branch, _)| (branch.id, branch.database_id))
+        .collect::<HashMap<_, _>>();
+    let deleted_branches =
+        delete_database_branches_in_transaction(tx, organization_id, context, &branches).await?;
+    let mut branches_by_database = HashMap::<Uuid, Vec<DeletedPostgresBranch>>::new();
+    for branch in deleted_branches {
+        if let Some(database_id) = database_by_branch.get(&branch.id) {
+            branches_by_database
+                .entry(*database_id)
+                .or_default()
+                .push(branch);
+        }
+    }
+
+    postgres_database::Entity::delete_many()
+        .filter(postgres_database::Column::OrganizationId.eq(organization_id))
+        .filter(postgres_database::Column::Id.is_in(database_ids))
+        .exec(tx)
+        .await?;
+    let deleted_events = databases
+        .iter()
+        .filter_map(|database| {
+            database
+                .default_branch_id
+                .map(|target_id| event::ActiveModel {
+                    id: Set(Uuid::new_v4()),
+                    organization_id: Set(organization_id),
+                    project_id: Set(Some(project_id)),
+                    event_type: Set("database:deleted".into()),
+                    payload: Set(json!({
+                        "summary": format!("Deleted database '{}'", database.name),
+                        "target_id": target_id.to_string(),
+                    })),
+                    system: Set(false),
+                    actor_id: Set(Some(actor_id)),
+                    created_at: Set(chrono::Utc::now().fixed_offset()),
+                })
+        })
+        .collect::<Vec<_>>();
+    if !deleted_events.is_empty() {
+        event::Entity::insert_many(deleted_events).exec(tx).await?;
+    }
+    Ok(databases
+        .into_iter()
+        .map(|database| DeletedPostgresDatabase {
+            id: database.id,
+            branches: branches_by_database
+                .remove(&database.id)
+                .unwrap_or_default(),
+        })
+        .collect())
 }
 
 pub async fn delete_environment_branches_in_transaction(
@@ -945,32 +1028,57 @@ async fn delete_database_branches_in_transaction(
     )
     .await?;
 
-    for mapping in mappings_by_id.values() {
-        let remaining_branch = postgres_database_branch::Entity::find()
-            .filter(
-                postgres_database_branch::Column::OrganizationRegionBackupBucketId.eq(mapping.id),
-            )
-            .filter(postgres_database_branch::Column::OrganizationId.eq(organization_id))
-            .one(tx)
+    let remaining_mapping_ids = postgres_database_branch::Entity::find()
+        .filter(
+            postgres_database_branch::Column::OrganizationRegionBackupBucketId
+                .is_in(mapping_ids.iter().copied()),
+        )
+        .filter(postgres_database_branch::Column::OrganizationId.eq(organization_id))
+        .select_only()
+        .column(postgres_database_branch::Column::OrganizationRegionBackupBucketId)
+        .into_tuple::<Uuid>()
+        .all(tx)
+        .await?
+        .into_iter()
+        .collect::<HashSet<_>>();
+    let unused_mappings = mappings_by_id
+        .values()
+        .filter(|mapping| !remaining_mapping_ids.contains(&mapping.id))
+        .collect::<Vec<_>>();
+    if !unused_mappings.is_empty() {
+        let unused_ids = unused_mappings
+            .iter()
+            .map(|mapping| mapping.id)
+            .collect::<Vec<_>>();
+        organization_region_backup_bucket::Entity::delete_many()
+            .filter(organization_region_backup_bucket::Column::OrganizationId.eq(organization_id))
+            .filter(organization_region_backup_bucket::Column::Id.is_in(unused_ids))
+            .exec(tx)
             .await?;
-        if remaining_branch.is_none() {
-            organization_region_backup_bucket::Entity::delete_by_id(mapping.id)
-                .exec(tx)
-                .await?;
-            crate::buckets::delete_foundation(tx, mapping.bucket_id).await?;
-            Operation::<FoundationBucketDelete>::new(
-                tx,
-                organization_id,
-                mapping.bucket_id.to_string(),
-                FoundationBucketDelete {
-                    bucket_id: mapping.bucket_id,
-                    provider_id: *provider_ids_by_mapping.get(&mapping.id).ok_or_else(|| {
-                        AppError::Internal("Postgres backup provider not found".into())
-                    })?,
-                },
-            )
-            .await?;
-        }
+        let bucket_ids = unused_mappings
+            .iter()
+            .map(|mapping| mapping.bucket_id)
+            .collect::<Vec<_>>();
+        crate::buckets::delete_foundations(tx, &bucket_ids).await?;
+        Operation::<FoundationBucketDelete>::new_many(
+            tx,
+            organization_id,
+            unused_mappings.into_iter().map(|mapping| {
+                let provider_id = provider_ids_by_mapping.get(&mapping.id).copied();
+                provider_id.map(|provider_id| {
+                    (
+                        mapping.bucket_id.to_string(),
+                        FoundationBucketDelete {
+                            bucket_id: mapping.bucket_id,
+                            provider_id,
+                        },
+                    )
+                })
+            }).collect::<Option<Vec<_>>>().ok_or_else(|| {
+                AppError::Internal("Postgres backup provider not found".into())
+            })?,
+        )
+        .await?;
     }
 
     Ok(deleted)

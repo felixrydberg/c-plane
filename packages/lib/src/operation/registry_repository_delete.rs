@@ -36,6 +36,33 @@ impl Operation<RegistryRepositoryDelete> {
         .await
     }
 
+    pub async fn new_many<I>(
+        transaction: &DatabaseTransaction,
+        organization_id: Uuid,
+        project_id: Uuid,
+        repository_ids: I,
+    ) -> std::result::Result<(), DbErr>
+    where
+        I: IntoIterator<Item = Uuid>,
+    {
+        Self::insert_many(
+            transaction,
+            Some(organization_id),
+            Self::QUEUE,
+            Self::NAME,
+            repository_ids.into_iter().map(|repository_id| {
+                (
+                    Some(repository_id.to_string()),
+                    RegistryRepositoryDelete {
+                        project_id,
+                        repository_id,
+                    },
+                )
+            }),
+        )
+        .await
+    }
+
     pub async fn run(&self, context: &Context<'_>) -> Result<()> {
         let organization_id = self.metadata.organization_id.ok_or_else(|| {
             Box::new(std::io::Error::other(

@@ -123,6 +123,25 @@ pub async fn create_foundation(
     region_id: Uuid,
     bucket_id: Uuid,
 ) -> Result<()> {
+    create_foundation_for_project(
+        connection,
+        secrets_client,
+        organization_id,
+        None,
+        region_id,
+        bucket_id,
+    )
+    .await
+}
+
+pub async fn create_foundation_for_project(
+    connection: &DatabaseTransaction,
+    secrets_client: &secrets::Client,
+    organization_id: Uuid,
+    project_id: Option<Uuid>,
+    region_id: Uuid,
+    bucket_id: Uuid,
+) -> Result<()> {
     if bucket::Entity::find_by_id(bucket_id)
         .one(connection)
         .await?
@@ -144,6 +163,7 @@ pub async fn create_foundation(
         id: Set(secret_id),
         scope: Set(secret::SecretScope::Tenant),
         organization_id: Set(Some(organization_id)),
+        project_id: Set(project_id),
         ciphertext: Set(ciphertext),
         ..Default::default()
     }
@@ -151,6 +171,7 @@ pub async fn create_foundation(
     .await?;
     bucket::ActiveModel {
         id: Set(bucket_id),
+        project_id: Set(project_id),
         region_id: Set(region_id),
         sse_secret_id: Set(secret_id),
         status: Set(bucket::BucketStatus::Active),
@@ -348,6 +369,43 @@ pub async fn delete_foundation(
     Ok(true)
 }
 
+pub async fn delete_foundations(
+    connection: &DatabaseTransaction,
+    bucket_ids: &[Uuid],
+) -> std::result::Result<(), sea_orm::DbErr> {
+    if bucket_ids.is_empty() {
+        return Ok(());
+    }
+    let foundations = bucket::Entity::find()
+        .filter(bucket::Column::Id.is_in(bucket_ids.iter().copied()))
+        .all(connection)
+        .await?;
+    let ids = foundations
+        .iter()
+        .map(|foundation| foundation.id)
+        .collect::<Vec<_>>();
+    if ids.is_empty() {
+        return Ok(());
+    }
+    bucket_grant::Entity::delete_many()
+        .filter(bucket_grant::Column::BucketId.is_in(ids.clone()))
+        .exec(connection)
+        .await?;
+    bucket::Entity::delete_many()
+        .filter(bucket::Column::Id.is_in(ids))
+        .exec(connection)
+        .await?;
+    let secret_ids = foundations
+        .into_iter()
+        .map(|foundation| foundation.sse_secret_id)
+        .collect::<Vec<_>>();
+    secret::Entity::delete_many()
+        .filter(secret::Column::Id.is_in(secret_ids))
+        .exec(connection)
+        .await?;
+    Ok(())
+}
+
 pub async fn delete(client: &aws_sdk_s3::Client, bucket_id: Uuid) -> Result<()> {
     if let Err(error) = client
         .delete_bucket()
@@ -468,6 +526,7 @@ pub mod credentials {
         pub id: Uuid,
         pub secret_id: Uuid,
         pub organization_id: Option<Uuid>,
+        pub project_id: Option<Uuid>,
         pub name: String,
         pub prefix: String,
         pub ciphertext: String,
@@ -480,6 +539,17 @@ pub mod credentials {
         prefix: impl Into<String>,
         value: &T,
     ) -> Result<Credential> {
+        create_for_project(client, organization_id, None, name, prefix, value).await
+    }
+
+    pub async fn create_for_project<T: Serialize>(
+        client: &secrets::Client,
+        organization_id: Option<Uuid>,
+        project_id: Option<Uuid>,
+        name: impl Into<String>,
+        prefix: impl Into<String>,
+        value: &T,
+    ) -> Result<Credential> {
         let plaintext = serde_json::to_vec(value)?;
         let key = transit_key(organization_id);
         let ciphertext = secrets::encrypt(client, &key, &plaintext).await?;
@@ -487,6 +557,7 @@ pub mod credentials {
             id: Uuid::new_v4(),
             secret_id: Uuid::new_v4(),
             organization_id,
+            project_id,
             name: name.into(),
             prefix: prefix.into(),
             ciphertext,
@@ -501,12 +572,13 @@ pub mod credentials {
         };
         connection
             .execute(statement(
-                "WITH inserted_secret AS (INSERT INTO secret (id, scope, organization_id, ciphertext) VALUES ($1, $2::secret_scope, $3, $4)) INSERT INTO credential (id, organization_id, access_key_id, secret_id, prefix) VALUES ($5, $3, $6, $1, $7)",
+                "WITH inserted_secret AS (INSERT INTO secret (id, scope, organization_id, project_id, ciphertext) VALUES ($1, $2::secret_scope, $3, $5, $4)) INSERT INTO credential (id, organization_id, project_id, access_key_id, secret_id, prefix) VALUES ($6, $3, $5, $7, $1, $8)",
                 vec![
                     credential.secret_id.into(),
                     scope.into(),
                     credential.organization_id.into(),
                     credential.ciphertext.clone().into(),
+                    credential.project_id.into(),
                     credential.id.into(),
                     credential.name.clone().into(),
                     credential.prefix.clone().into(),

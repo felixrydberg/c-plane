@@ -18,12 +18,11 @@
     }
   },
   "scripts": {
-    "migrate:generate": "drizzle-kit generate --config=drizzle.config.ts",
+    "migrate:generate": "drizzle-kit generate --config=drizzle.generate.config.ts",
     "migrate:clean": "deno run --allow-read --allow-write --allow-run --allow-env ./clean-migrations.ts",
     "migrate": "drizzle-kit migrate --config=drizzle.config.ts",
     "migrate:push": "drizzle-kit push --config=drizzle.config.ts",
-    "better-auth:generate:ui": "auth generate --config ../ui/server/utils/auth.ts --yes --output ./schema/tenants/auth.ts",
-    "better-auth:generate": "deno task --env-file=../ui/.env better-auth:generate:ui"
+    "better-auth:generate:ui": "auth generate --config ../ui/server/utils/auth-schema.ts --adapter drizzle --dialect postgresql --yes --output ./schema/tenants/auth.ts"
   },
   "peerDependencies": {
     "better-auth": "1.7.5",

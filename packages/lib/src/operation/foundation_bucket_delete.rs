@@ -48,6 +48,25 @@ impl Operation<FoundationBucketDelete> {
         .await
     }
 
+    pub async fn new_many<I>(
+        transaction: &DatabaseTransaction,
+        organization_id: Uuid,
+        jobs: I,
+    ) -> std::result::Result<(), DbErr>
+    where
+        I: IntoIterator<Item = (String, FoundationBucketDelete)>,
+    {
+        Self::insert_many(
+            transaction,
+            Some(organization_id),
+            Self::QUEUE,
+            Self::NAME,
+            jobs.into_iter()
+                .map(|(dedupe_key, input)| (Some(dedupe_key), input)),
+        )
+        .await
+    }
+
     pub async fn run(&self, context: &Context<'_>) -> Result<()> {
         let job = self;
         let client = provider_client(context, job.input.provider_id).await?;

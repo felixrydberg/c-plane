@@ -7,6 +7,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: Uuid,
     pub organization_id: Option<Uuid>,
+    pub project_id: Option<Uuid>,
     pub access_key_id: String,
     pub prefix: String,
     pub secret_id: Uuid,

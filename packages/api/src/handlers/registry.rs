@@ -354,15 +354,6 @@ fn apply_repository_grant(
     access
 }
 
-pub(crate) async fn require_managed_registry(organization_id: Uuid) -> Result<(), AppError> {
-    if !registry_is_active(organization_id).await? {
-        return Err(AppError::ServiceUnavailable(
-            "Managed Registry is unavailable during maintenance".into(),
-        ));
-    }
-    Ok(())
-}
-
 pub(crate) async fn registry_is_active(organization_id: Uuid) -> Result<bool, AppError> {
     use crate::models::entities::managed_registry;
     let registry = managed_registry::Entity::find_by_id(organization_id)
